@@ -1,0 +1,12 @@
+[app]
+debug = true
+currency = "INR"
+db_path = "./expenses.db"
+
+[openai]
+base_url = "https://api.groq.com/openai/v1"
+model = "llama3-70b-8192"
+token = ""
+
+[telegram]
+token = ""
