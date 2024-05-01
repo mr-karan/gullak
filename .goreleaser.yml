@@ -1,0 +1,73 @@
+env:
+  - GO111MODULE=on
+  - CGO_ENABLED=1
+
+builds:
+  - binary: expenseai.bin
+    id: expenseai
+    goos:
+      - windows
+      - darwin
+      - linux
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w -X "main.buildString={{ .Tag }} ({{ .ShortCommit }} {{ .Date }})"
+    dir: ./
+
+archives:
+  - format: tar.gz
+    files:
+      - README.md
+      - LICENSE
+      - config.sample.toml
+
+dockers:
+  - # ID of the image, needed if you want to filter by it later on (e.g. on custom publishers).
+    id: expenseai
+
+    # GOOS of the built binaries/packages that should be used.
+    goos: linux
+
+    # GOARCH of the built binaries/packages that should be used.
+    goarch: amd64
+
+    # IDs to filter the binaries/packages.
+    ids:
+      - expenseai
+
+    # Templates of the Docker image names.
+    image_templates:
+      - "ghcr.io/mr-karan/expenseai:{{ .Tag }}"
+      - "ghcr.io/mr-karan/expenseai:latest"
+
+    # Skips the docker push.
+    # Could be useful if you also do draft releases.
+    #
+    # If set to auto, the release will not be pushed to the Docker repository
+    #  in case there is an indicator of a prerelease in the tag, e.g. v1.0.0-rc1.
+    #
+    # Defaults to false.
+    skip_push: false
+
+    # Path to the Dockerfile (from the project root).
+    dockerfile: Dockerfile
+
+    # Set the "backend" for the Docker pipe.
+    # Valid options are: docker, buildx, podman, buildpacks
+    # podman is a GoReleaser Pro feature and is only available on Linux.
+    # Defaults to docker.
+    use: docker
+
+    # Template of the docker build flags.
+    build_flag_templates:
+      - "--pull"
+      - "--label=org.opencontainers.image.created={{.Date}}"
+      - "--label=org.opencontainers.image.title={{.ProjectName}}"
+      - "--label=org.opencontainers.image.revision={{.FullCommit}}"
+      - "--label=org.opencontainers.image.version={{.Version}}"
+      - "--platform=linux/amd64"
+    
+    extra_files:
+      - config.sample.toml

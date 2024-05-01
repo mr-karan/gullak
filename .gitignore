@@ -23,5 +23,7 @@ go.work
 # Custom
 config.toml
 *.env
-*.bin
+bin/
 *.db
+dist/
+*.bin
