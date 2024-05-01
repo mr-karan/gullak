@@ -6,12 +6,9 @@ builds:
   - binary: expenseai.bin
     id: expenseai
     goos:
-      - windows
-      - darwin
       - linux
     goarch:
       - amd64
-      - arm64
     ldflags:
       - -s -w -X "main.buildString={{ .Tag }} ({{ .ShortCommit }} {{ .Date }})"
     dir: ./
