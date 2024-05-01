@@ -30,7 +30,7 @@ func initDB(dbPath string) (*sql.Stmt, error) {
 		return nil, fmt.Errorf("error creating tables: %v", err)
 	}
 
-	stmt, err := db.Prepare("INSERT INTO transactions (created_at, amount, currency, category, description) VALUES (?, ?, ?, ?, ?)")
+	stmt, err := db.Prepare("INSERT INTO transactions (created_at, amount, currency, category, description, mode) VALUES (?, ?, ?, ?, ?, ?)")
 	if err != nil {
 		return nil, fmt.Errorf("error preparing SQL statement: %v", err)
 	}
@@ -42,7 +42,7 @@ func initDB(dbPath string) (*sql.Stmt, error) {
 // saveTransactions saves the transactions to the database.
 func (a *App) saveTransactions(transactions Transactions) error {
 	for _, transaction := range transactions.Transactions {
-		_, err := a.stmt.Exec(time.Now(), transaction.Amount, transaction.Currency, transaction.Category, transaction.Description)
+		_, err := a.stmt.Exec(time.Now(), transaction.Amount, transaction.Currency, transaction.Category, transaction.Description, transaction.Mode)
 		if err != nil {
 			return err
 		}

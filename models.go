@@ -5,6 +5,7 @@ type Item struct {
 	Amount      float64 `json:"amount"`
 	Category    string  `json:"category"`
 	Description string  `json:"description"`
+	Mode        string  `json:"mode"`
 }
 
 type Transactions struct {

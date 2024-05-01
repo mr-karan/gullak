@@ -46,8 +46,12 @@ func (a *App) parseExpenses(msg string) (Transactions, error) {
 								Type:        jsonschema.String,
 								Description: "Concise and short description of the item",
 							},
+							"mode": {
+								Type:        jsonschema.String,
+								Description: "Payment mode of the transaction (e.g., cash, card, upi, netbanking). Default is cash unless specified otherwise",
+							},
 						},
-						Required: []string{"currency", "amount", "category", "description"},
+						Required: []string{"currency", "amount", "category", "description", "mode"},
 					},
 				},
 			},

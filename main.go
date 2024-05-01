@@ -9,6 +9,10 @@ import (
 	"github.com/sashabaranov/go-openai"
 )
 
+var (
+	buildString = "unknwown"
+)
+
 const (
 	DEFAULT_CURRENCY = "INR"
 )
@@ -65,6 +69,6 @@ func main() {
 		model:        ko.MustString("openai.model"),
 	}
 
-	slog.Info("Starting the app", "model", app.model, "endpoint", cfg.BaseURL)
+	slog.Info("Starting the app", "version", buildString, "model", app.model, "endpoint", cfg.BaseURL)
 	app.Start()
 }
