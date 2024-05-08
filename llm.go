@@ -91,5 +91,5 @@ func (a *App) parseExpenses(msg string) (Transactions, error) {
 		}
 	}
 
-	return Transactions{}, fmt.Errorf("error parsing the response")
+	return Transactions{}, fmt.Errorf("no valid transactions found in response")
 }

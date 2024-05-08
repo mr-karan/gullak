@@ -1,11 +1,15 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"log/slog"
 	"os"
+	"os/signal"
+	"syscall"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+
 	"github.com/sashabaranov/go-openai"
 )
 
@@ -44,16 +48,6 @@ func main() {
 	}
 	client := openai.NewClientWithConfig(cfg)
 
-	// Initialize the Telegram bot.
-	bot, err := tgbotapi.NewBotAPI(ko.MustString("telegram.token"))
-	if err != nil {
-		slog.Error("Error initializing bot", "error", err)
-		os.Exit(1)
-	}
-	if ko.Bool("app.debug") {
-		bot.Debug = true
-	}
-
 	// Initialize the database.
 	db, err := initDB(ko.MustString("app.db_path"))
 	if err != nil {
@@ -61,14 +55,49 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Create a context that is cancelled on SIGTERM or SIGINT
+	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer cancel()
+
 	// Start the app.
 	app := &App{
 		openaiClient: client,
-		botClient:    bot,
 		stmt:         db,
 		model:        ko.MustString("openai.model"),
 	}
 
 	slog.Info("Starting the app", "version", buildString, "model", app.model, "endpoint", cfg.BaseURL)
-	app.Start()
+	if ko.Bool("http.enabled") {
+		slog.Info("HTTP mode enabled", "addr", ko.MustString("http.address"), "timeout", ko.MustDuration("http.timeout"))
+		go func() {
+			if err := app.initHTTP(ctx, ko.MustString("http.address"), ko.MustDuration("http.timeout")); err != nil {
+				slog.Error("Error starting HTTP server", "error", err)
+				os.Exit(1)
+			}
+		}()
+	}
+
+	// Initialize the Telegram bot.
+	if ko.Bool("telegram.enabled") {
+		slog.Info("telegram mode enabled")
+		bot, err := tgbotapi.NewBotAPI(ko.MustString("telegram.token"))
+		if err != nil {
+			slog.Error("Error initializing bot", "error", err)
+			os.Exit(1)
+		}
+		if ko.Bool("app.debug") {
+			bot.Debug = true
+		}
+
+		// Initialize the bot client.
+		app.botClient = bot
+
+		if err := app.initTelegram(ctx); err != nil {
+			slog.Error("Error starting telegram bot", "error", err)
+			os.Exit(1)
+		}
+	}
+
+	<-ctx.Done() // Wait for SIGINT or SIGTERM
+	slog.Info("Shutting down!")
 }
