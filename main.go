@@ -8,17 +8,14 @@ import (
 	"os/signal"
 	"syscall"
 
-	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
-
-	"github.com/sashabaranov/go-openai"
+	"github.com/mr-karan/expenseai/internal/db"
+	"github.com/mr-karan/expenseai/internal/http"
+	"github.com/mr-karan/expenseai/internal/llm"
+	tg "github.com/mr-karan/expenseai/internal/telegram"
 )
 
 var (
 	buildString = "unknwown"
-)
-
-const (
-	DEFAULT_CURRENCY = "INR"
 )
 
 func main() {
@@ -39,61 +36,49 @@ func main() {
 	if ko.Bool("app.debug") {
 		lgrOpts.Level = slog.LevelDebug
 	}
-	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stdout, lgrOpts)))
-
-	// Initialize the OpenAI client.
-	cfg := openai.DefaultConfig(ko.MustString("openai.token"))
-	if ko.String("openai.base_url") != "" {
-		cfg.BaseURL = ko.String("openai.base_url")
-	}
-	client := openai.NewClientWithConfig(cfg)
+	logger := slog.New(slog.NewTextHandler(os.Stdout, lgrOpts))
 
 	// Initialize the database.
-	db, err := initDB(ko.MustString("app.db_path"))
+	dbMgr, err := db.New(ko.MustString("app.db_path"), logger)
 	if err != nil {
-		slog.Error("Error initializing database", "error", err)
+		logger.Error("Error initializing database", "error", err)
 		os.Exit(1)
 	}
+	logger.Info("Successfully connected to the database and tables created", "path", ko.MustString("app.db_path"))
+
+	// Initialize the OpenAI client.
+	llmMgr, err := llm.New(ko.MustString("openai.token"), ko.String("openai.base_url"), ko.MustString("openai.model"), logger)
+	if err != nil {
+		logger.Error("Error initializing llm", "error", err)
+		os.Exit(1)
+	}
+	logger.Info("Successfully initialized OpenAI client", "model", ko.MustString("openai.model"))
 
 	// Create a context that is cancelled on SIGTERM or SIGINT
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
 
-	// Start the app.
-	app := &App{
-		openaiClient: client,
-		stmt:         db,
-		model:        ko.MustString("openai.model"),
-	}
+	logger.Info("Starting the app", "version", buildString)
 
-	slog.Info("Starting the app", "version", buildString, "model", app.model, "endpoint", cfg.BaseURL)
-	if ko.Bool("http.enabled") {
-		slog.Info("HTTP mode enabled", "addr", ko.MustString("http.address"), "timeout", ko.MustDuration("http.timeout"))
-		go func() {
-			if err := app.initHTTP(ctx, ko.MustString("http.address"), ko.MustDuration("http.timeout")); err != nil {
-				slog.Error("Error starting HTTP server", "error", err)
-				os.Exit(1)
-			}
-		}()
-	}
-
-	// Initialize the Telegram bot.
+	// Initalise Telegram bot if enabled.
 	if ko.Bool("telegram.enabled") {
-		slog.Info("telegram mode enabled")
-		bot, err := tgbotapi.NewBotAPI(ko.MustString("telegram.token"))
+		logger.Info("Telegram mode enabled")
+		tgBot, err := tg.New(ko.MustString("telegram.token"), ko.Strings("telegram.allowed_users"), llmMgr, dbMgr, ko.Bool("telegram.debug"), logger)
 		if err != nil {
-			slog.Error("Error initializing bot", "error", err)
+			logger.Error("Error initializing telegram bot", "error", err)
 			os.Exit(1)
 		}
-		if ko.Bool("app.debug") {
-			bot.Debug = true
+		if err := tgBot.Start(ctx); err != nil {
+			logger.Error("Error starting telegram bot", "error", err)
+			os.Exit(1)
 		}
+	}
 
-		// Initialize the bot client.
-		app.botClient = bot
-
-		if err := app.initTelegram(ctx); err != nil {
-			slog.Error("Error starting telegram bot", "error", err)
+	if ko.Bool("http.enabled") {
+		logger.Info("HTTP mode enabled", "addr", ko.MustString("http.address"), "timeout", ko.MustDuration("http.timeout"))
+		http := http.New(ko.MustString("http.address"), ko.MustDuration("http.timeout"), dbMgr, llmMgr, logger)
+		if err := http.Start(ctx); err != nil {
+			logger.Error("Error starting http server", "error", err)
 			os.Exit(1)
 		}
 	}

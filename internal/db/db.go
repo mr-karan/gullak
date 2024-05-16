@@ -1,4 +1,4 @@
-package main
+package db
 
 import (
 	"database/sql"
@@ -9,13 +9,19 @@ import (
 	"log/slog"
 
 	_ "github.com/mattn/go-sqlite3"
+	"github.com/mr-karan/expenseai/pkg/models"
 )
 
 //go:embed schema.sql
 var schema embed.FS
 
-func initDB(dbPath string) (*sql.Stmt, error) {
-	db, err := sql.Open("sqlite3", dbPath)
+type Manager struct {
+	log  *slog.Logger
+	stmt *sql.Stmt
+}
+
+func New(path string, log *slog.Logger) (*Manager, error) {
+	db, err := sql.Open("sqlite3", path)
 	if err != nil {
 		return nil, fmt.Errorf("error opening database: %v", err)
 	}
@@ -35,14 +41,25 @@ func initDB(dbPath string) (*sql.Stmt, error) {
 		return nil, fmt.Errorf("error preparing SQL statement: %v", err)
 	}
 
-	slog.Info("Successfully connected to the database and tables created")
-	return stmt, nil
+	return &Manager{
+		log:  log,
+		stmt: stmt,
+	}, nil
 }
 
 // saveTransactions saves the transactions to the database.
-func (a *App) saveTransactions(transactions Transactions) error {
+func (db *Manager) Save(transactions models.Transactions) error {
 	for _, transaction := range transactions.Transactions {
-		_, err := a.stmt.Exec(time.Now(), transaction.Amount, transaction.Currency, transaction.Category, transaction.Description, transaction.Mode)
+		if transaction.Date == "" {
+			transaction.Date = time.Now().Format("2006-01-02")
+		} else {
+			_, err := time.Parse("2006-01-02", transaction.Date)
+			if err != nil {
+				db.log.Warn("Invalid date format", "date", transaction.Date, "error", err, "description", transaction.Description)
+				transaction.Date = time.Now().Format("2006-01-02")
+			}
+		}
+		_, err := db.stmt.Exec(transaction.Date, transaction.Amount, transaction.Currency, transaction.Category, transaction.Description, transaction.Mode)
 		if err != nil {
 			return err
 		}

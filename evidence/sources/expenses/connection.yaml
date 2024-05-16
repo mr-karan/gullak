@@ -1,5 +1,0 @@
-# This file was automatically generated
-name: expenses
-type: sqlite
-options:
-  filename: expenses.db

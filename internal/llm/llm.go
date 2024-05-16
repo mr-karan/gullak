@@ -1,20 +1,50 @@
-package main
+package llm
 
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
+	"time"
+
+	"github.com/mr-karan/expenseai/pkg/models"
 
 	"github.com/sashabaranov/go-openai"
 	"github.com/sashabaranov/go-openai/jsonschema"
 )
 
+type Manager struct {
+	log    *slog.Logger
+	client *openai.Client
+	model  string
+}
+
+func New(token, baseURL, model string, log *slog.Logger) (*Manager, error) {
+	// Initialize the OpenAI client.
+	cfg := openai.DefaultConfig(token)
+	if baseURL != "" {
+		cfg.BaseURL = baseURL
+	}
+	client := openai.NewClientWithConfig(cfg)
+
+	return &Manager{
+		client: client,
+		model:  model,
+		log:    log,
+	}, nil
+
+}
+
 // Parse the message and extract the expenses.
-func (a *App) parseExpenses(msg string) (Transactions, error) {
-	slog.Debug("Parsing expenses", "message", msg)
+func (m *Manager) Parse(msg string) (models.Transactions, error) {
+	if msg == "" {
+		return models.Transactions{}, errors.New("empty message")
+	}
+
+	m.log.Debug("Parsing expenses", "message", msg)
 	dialogue := []openai.ChatCompletionMessage{
-		{Role: openai.ChatMessageRoleSystem, Content: "Categorize my expenses"},
+		{Role: openai.ChatMessageRoleSystem, Content: fmt.Sprintf("Categorize my expenses. Today's date is %s", time.Now().Format("2006-01-02"))},
 		{Role: openai.ChatMessageRoleUser, Content: msg},
 	}
 
@@ -30,6 +60,10 @@ func (a *App) parseExpenses(msg string) (Transactions, error) {
 					Items: &jsonschema.Definition{
 						Type: jsonschema.Object,
 						Properties: map[string]jsonschema.Definition{
+							"date": {
+								Type:        jsonschema.String,
+								Description: "Date of transaction in ISO 8601 format (e.g., 2021-09-01) if specified else today's date.",
+							},
 							"currency": {
 								Type:        jsonschema.String,
 								Description: "Currency of the amount (e.g. INR, USD, EUR). Default is INR unless specified otherwise",
@@ -51,7 +85,7 @@ func (a *App) parseExpenses(msg string) (Transactions, error) {
 								Description: "Payment mode of the transaction (e.g., cash, card, upi, netbanking). Default is cash unless specified otherwise",
 							},
 						},
-						Required: []string{"currency", "amount", "category", "description", "mode"},
+						Required: []string{"date", "amount", "category", "description", "mode"},
 					},
 				},
 			},
@@ -64,32 +98,47 @@ func (a *App) parseExpenses(msg string) (Transactions, error) {
 		Function: &fnCategorizeExpenses,
 	}
 
-	resp, err := a.openaiClient.CreateChatCompletion(context.TODO(),
+	resp, err := m.client.CreateChatCompletion(context.TODO(),
 		openai.ChatCompletionRequest{
-			Model:    a.model,
+			Model:    m.model,
 			Messages: dialogue,
 			Tools:    []openai.Tool{t},
 		},
 	)
 
 	if err != nil || len(resp.Choices) != 1 {
-		slog.Error("Completion error", "error", err, "choices", len(resp.Choices))
-		return Transactions{}, fmt.Errorf("error completing the request")
+		m.log.Error("Completion error", "error", err, "choices", len(resp.Choices))
+		return models.Transactions{}, fmt.Errorf("error completing the request")
 	}
 
-	var transactions Transactions
+	var transactions models.Transactions
 
 	for _, choice := range resp.Choices {
 		for _, toolCall := range choice.Message.ToolCalls {
 			if toolCall.Function.Name == fnCategorizeExpenses.Name {
 				if err := json.Unmarshal([]byte(toolCall.Function.Arguments), &transactions); err != nil {
-					return Transactions{}, fmt.Errorf("error unmarshalling response: %s", err)
+					return models.Transactions{}, fmt.Errorf("error unmarshalling response: %s", err)
 				}
-
 				return transactions, nil
 			}
 		}
 	}
 
-	return Transactions{}, fmt.Errorf("no valid transactions found in response")
+	if len(transactions.Transactions) == 0 {
+		for _, choice := range resp.Choices {
+			if choice.FinishReason == "stop" {
+				return models.Transactions{}, &NoValidTransactionError{Message: choice.Message.Content}
+			}
+		}
+	}
+
+	return models.Transactions{}, fmt.Errorf("no valid transactions found in response")
+}
+
+type NoValidTransactionError struct {
+	Message string
+}
+
+func (e *NoValidTransactionError) Error() string {
+	return e.Message
 }
