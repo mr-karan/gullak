@@ -1,29 +1,22 @@
-<script setup>
-</script>
+<script setup></script>
 
 <template>
-    <header class="top-nav">
-        <div class="logo">Money Manager</div>
-        <nav class="nav-links">
-            <router-link to="/dashboard">Dashboard</router-link>
-            <router-link to="/transactions">Transactions</router-link>
-            <router-link to="/reports">Reports</router-link>
-            <router-link to="/settings">Settings</router-link>
-        </nav>
-    </header>
+  <header class="bg-white border-b border-gray-200 py-4">
+    <div class="container mx-auto flex justify-between items-center">
+      <div class="flex items-center">
+        <div class="font-bold text-lg">Money Manager</div>
+      </div>
+      <nav class="flex items-center space-x-6">
+        <router-link to="/transactions" class="text-gray-600 hover:text-gray-900"
+          >Transactions</router-link
+        >
+        <router-link to="/reports" class="text-gray-600 hover:text-gray-900">Reports</router-link>
+        <router-link to="/" class="bg-yellow-400 text-white px-4 py-2 rounded-md">Add</router-link>
+      </nav>
+    </div>
+  </header>
 </template>
 
 <style scoped>
-.top-nav {
-    display: flex;
-    justify-content: space-between;
-    padding: 10px 20px;
-    background-color: #f8f9fa;
-}
-
-.nav-links a {
-    margin-right: 10px;
-    text-decoration: none;
-    color: black;
-}
+/* No custom styles needed since Tailwind CSS handles styling */
 </style>
