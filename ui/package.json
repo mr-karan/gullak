@@ -12,12 +12,14 @@
   },
   "dependencies": {
     "autoprefixer": "^10.4.19",
+    "axios": "^1.7.2",
     "buefy": "^0.9.29",
     "pinia": "^2.1.7",
     "postcss": "^8.4.38",
     "tailwindcss": "^3.4.3",
     "vue": "^3.4.21",
-    "vue-router": "^4.3.0"
+    "vue-router": "^4.3.0",
+    "vue-toastification": "^2.0.0-rc.5"
   },
   "devDependencies": {
     "@rushstack/eslint-patch": "^1.8.0",

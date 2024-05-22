@@ -9,9 +9,7 @@ import (
 	"syscall"
 
 	"github.com/mr-karan/expenseai/internal/db"
-	"github.com/mr-karan/expenseai/internal/http"
 	"github.com/mr-karan/expenseai/internal/llm"
-	tg "github.com/mr-karan/expenseai/internal/telegram"
 )
 
 var (
@@ -60,27 +58,11 @@ func main() {
 
 	logger.Info("Starting the app", "version", buildString)
 
-	// Initalise Telegram bot if enabled.
-	if ko.Bool("telegram.enabled") {
-		logger.Info("Telegram mode enabled")
-		tgBot, err := tg.New(ko.MustString("telegram.token"), ko.Strings("telegram.allowed_users"), llmMgr, dbMgr, ko.Bool("telegram.debug"), logger)
-		if err != nil {
-			logger.Error("Error initializing telegram bot", "error", err)
-			os.Exit(1)
-		}
-		if err := tgBot.Start(ctx); err != nil {
-			logger.Error("Error starting telegram bot", "error", err)
-			os.Exit(1)
-		}
-	}
-
-	if ko.Bool("http.enabled") {
-		logger.Info("HTTP mode enabled", "addr", ko.MustString("http.address"), "timeout", ko.MustDuration("http.timeout"))
-		http := http.New(ko.MustString("http.address"), ko.MustDuration("http.timeout"), dbMgr, llmMgr, logger)
-		if err := http.Start(ctx); err != nil {
-			logger.Error("Error starting http server", "error", err)
-			os.Exit(1)
-		}
+	logger.Info("HTTP mode enabled", "addr", ko.MustString("http.address"), "timeout", ko.MustDuration("http.timeout"))
+	app := initApp(ko.MustString("http.address"), ko.MustDuration("http.timeout"), dbMgr, llmMgr, logger)
+	if err := app.Start(ctx); err != nil {
+		logger.Error("Error starting http server", "error", err)
+		os.Exit(1)
 	}
 
 	<-ctx.Done() // Wait for SIGINT or SIGTERM

@@ -26,6 +26,7 @@ func New(token, baseURL, model string, log *slog.Logger) (*Manager, error) {
 	if baseURL != "" {
 		cfg.BaseURL = baseURL
 	}
+	cfg.HTTPClient.Timeout = 10 * time.Second
 	client := openai.NewClientWithConfig(cfg)
 
 	return &Manager{

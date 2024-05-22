@@ -1,6 +1,18 @@
 - [ ] Default currency
 - [ ] Explore groq and API more
+- [ ] Create a nice UI
+- [ ] Add `?confirm=true|false` in the API
+- [ ] Add separate handler for confirmation
+- [ ] Add settings table in sqlite
+- [ ] Add charts
+- [ ] Create handlers for getting past data
+- [ ] sqlite best practices for golang
+- [ ] Shadcn/ui or DaisyUI
+- [ ] Description can be a bit more descriptive? Fine tune the model
+- [ ] Configure different model in the UI?
+- [ ]
 
+```
 	if _, err := db.Exec(`
 		PRAGMA busy_timeout       = 10000;
 		PRAGMA journal_mode       = WAL;
@@ -11,4 +23,4 @@
 		PRAGMA cache_size         = -16000;
 	`); err != nil {
 		panic(err)
-
+```

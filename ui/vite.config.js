@@ -1,26 +1,35 @@
-import { fileURLToPath, URL } from 'node:url'
 import { defineConfig, loadEnv } from 'vite'
 import vue from '@vitejs/plugin-vue'
+import { fileURLToPath, URL } from 'node:url'
 
-// https://vitejs.dev/config/
+// Export a function to use dynamic configurations based on the environment
 export default defineConfig(({ mode }) => {
-  // Load env variables based on the current mode from the project root directory
   const env = loadEnv(mode, process.cwd(), '')
+  const API_URL = env.API_URL || 'http://localhost:3333';
+
+  console.log('API URL:', API_URL); // This will show you what URL is being loaded
 
   return {
-    plugins: [vue()],
+    plugins: [
+      vue(),
+    ],
     resolve: {
       alias: {
         '@': fileURLToPath(new URL('./src', import.meta.url))
       }
     },
     server: {
-      // Optionally use an environment variable to configure the server
-      port: env.PORT ? parseInt(env.PORT, 10) : 3000
+      proxy: {
+        '/api': {
+          target: API_URL,
+          // changeOrigin: true,
+          // secure: false,
+          // rewrite: path => path.replace(/^\/api/, '')
+        }
+      }
     },
-    // Use environment variables to set global constants which will be replaced during build
     define: {
-      APP_URL: JSON.stringify(env.APP_URL) // Use this in your application to access `APP_ENV`
+      __APP_ENV__: JSON.stringify(env.APP_ENV)
     }
   }
-})
+});
