@@ -27,3 +27,5 @@ bin/
 *.db
 dist/
 *.bin
+*.db-shm
+*.db-wal

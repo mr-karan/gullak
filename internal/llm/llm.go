@@ -61,7 +61,7 @@ func (m *Manager) Parse(msg string) (models.Transactions, error) {
 					Items: &jsonschema.Definition{
 						Type: jsonschema.Object,
 						Properties: map[string]jsonschema.Definition{
-							"date": {
+							"transaction_date": {
 								Type:        jsonschema.String,
 								Description: "Date of transaction in ISO 8601 format (e.g., 2021-09-01) if specified else today's date.",
 							},
@@ -86,7 +86,7 @@ func (m *Manager) Parse(msg string) (models.Transactions, error) {
 								Description: "Payment mode of the transaction (e.g., cash, card, upi, netbanking). Default is cash unless specified otherwise",
 							},
 						},
-						Required: []string{"date", "amount", "category", "description", "mode"},
+						Required: []string{"transaction_date", "amount", "category", "description", "mode"},
 					},
 				},
 			},

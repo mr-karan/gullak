@@ -15,14 +15,14 @@ import (
 // TODO: Fix the API response to return the correct status codes and messages with content types.
 
 type App struct {
-	srv  *echo.Echo
-	log  *slog.Logger
-	addr string
-	llm  *llm.Manager
-	db   *db.Manager
+	srv     *echo.Echo
+	log     *slog.Logger
+	addr    string
+	llm     *llm.Manager
+	queries *db.Queries
 }
 
-func initApp(addr string, timeout time.Duration, dbMgr *db.Manager, llmMgr *llm.Manager, log *slog.Logger) *App {
+func initApp(addr string, timeout time.Duration, queries *db.Queries, llmMgr *llm.Manager, log *slog.Logger) *App {
 	e := echo.New()
 	e.HideBanner = true
 
@@ -33,14 +33,19 @@ func initApp(addr string, timeout time.Duration, dbMgr *db.Manager, llmMgr *llm.
 
 	// Register handlers.
 	e.GET("/api/", handleIndex)
-	e.POST("/api/ingest", handleIngest)
+	e.POST("/api/transactions", handleCreateTransaction)
+	e.POST("/api/transactions/confirm", handleConfirmTransactions)
+	e.GET("/api/transactions", handleListTransactions)
+	e.GET("/api/transactions/:id", handleGetTransaction)
+	e.PUT("/api/transactions/:id", handleUpdateTransaction)
+	e.DELETE("/api/transactions/:id", handleDeleteTransaction)
 
 	return &App{
-		srv:  e,
-		log:  log,
-		addr: addr,
-		db:   dbMgr,
-		llm:  llmMgr,
+		srv:     e,
+		log:     log,
+		addr:    addr,
+		queries: queries,
+		llm:     llmMgr,
 	}
 }
 

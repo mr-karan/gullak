@@ -10,11 +10,12 @@ import (
 )
 
 type Transaction struct {
-	ID          int64          `json:"id"`
-	CreatedAt   time.Time      `json:"created_at"`
-	Currency    string         `json:"currency"`
-	Amount      float64        `json:"amount"`
-	Category    string         `json:"category"`
-	Mode        string         `json:"mode"`
-	Description sql.NullString `json:"description"`
+	ID              int64          `json:"id"`
+	CreatedAt       time.Time      `json:"created_at"`
+	TransactionDate time.Time      `json:"transaction_date"`
+	Currency        string         `json:"currency"`
+	Amount          float64        `json:"amount"`
+	Category        string         `json:"category"`
+	Mode            string         `json:"mode"`
+	Description     sql.NullString `json:"description"`
 }

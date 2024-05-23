@@ -8,7 +8,6 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/mr-karan/expenseai/internal/db"
 	"github.com/mr-karan/expenseai/internal/llm"
 )
 
@@ -37,7 +36,7 @@ func main() {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, lgrOpts))
 
 	// Initialize the database.
-	dbMgr, err := db.Init(ko.MustString("app.db_path"), logger)
+	db, err := initDB(ko.MustString("app.db_path"))
 	if err != nil {
 		logger.Error("Error initializing database", "error", err)
 		os.Exit(1)
@@ -56,10 +55,15 @@ func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
 
-	logger.Info("Starting the app", "version", buildString)
+	logger.Info("Starting the app", "version", buildString, "addr", ko.MustString("http.address"), "timeout", ko.MustDuration("http.timeout"))
 
-	logger.Info("HTTP mode enabled", "addr", ko.MustString("http.address"), "timeout", ko.MustDuration("http.timeout"))
-	app := initApp(ko.MustString("http.address"), ko.MustDuration("http.timeout"), dbMgr, llmMgr, logger)
+	app := initApp(
+		ko.MustString("http.address"),
+		ko.MustDuration("http.timeout"),
+		db,
+		llmMgr,
+		logger,
+	)
 	if err := app.Start(ctx); err != nil {
 		logger.Error("Error starting http server", "error", err)
 		os.Exit(1)

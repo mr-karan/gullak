@@ -12,23 +12,25 @@ import (
 )
 
 const createTransaction = `-- name: CreateTransaction :exec
-INSERT INTO transactions (created_at, amount, currency, category, description, mode)
-VALUES (?, ?, ?, ?, ?, ?)
+INSERT INTO transactions (created_at, transaction_date, amount, currency, category, description, mode)
+VALUES (?, ?, ?, ?, ?, ?, ?)
 `
 
 type CreateTransactionParams struct {
-	CreatedAt   time.Time      `json:"created_at"`
-	Amount      float64        `json:"amount"`
-	Currency    string         `json:"currency"`
-	Category    string         `json:"category"`
-	Description sql.NullString `json:"description"`
-	Mode        string         `json:"mode"`
+	CreatedAt       time.Time      `json:"created_at"`
+	TransactionDate time.Time      `json:"transaction_date"`
+	Amount          float64        `json:"amount"`
+	Currency        string         `json:"currency"`
+	Category        string         `json:"category"`
+	Description     sql.NullString `json:"description"`
+	Mode            string         `json:"mode"`
 }
 
 // Inserts a new transaction into the database.
 func (q *Queries) CreateTransaction(ctx context.Context, arg CreateTransactionParams) error {
-	_, err := q.db.ExecContext(ctx, createTransaction,
+	_, err := q.exec(ctx, q.createTransactionStmt, createTransaction,
 		arg.CreatedAt,
+		arg.TransactionDate,
 		arg.Amount,
 		arg.Currency,
 		arg.Category,
@@ -38,13 +40,44 @@ func (q *Queries) CreateTransaction(ctx context.Context, arg CreateTransactionPa
 	return err
 }
 
+const deleteTransaction = `-- name: DeleteTransaction :exec
+DELETE FROM transactions WHERE id = ?
+`
+
+// Deletes a transaction by ID.
+func (q *Queries) DeleteTransaction(ctx context.Context, id int64) error {
+	_, err := q.exec(ctx, q.deleteTransactionStmt, deleteTransaction, id)
+	return err
+}
+
+const getTransaction = `-- name: GetTransaction :one
+SELECT id, created_at, transaction_date, currency, amount, category, mode, description FROM transactions WHERE id = ?
+`
+
+// Retrieves a single transaction by ID.
+func (q *Queries) GetTransaction(ctx context.Context, id int64) (Transaction, error) {
+	row := q.queryRow(ctx, q.getTransactionStmt, getTransaction, id)
+	var i Transaction
+	err := row.Scan(
+		&i.ID,
+		&i.CreatedAt,
+		&i.TransactionDate,
+		&i.Currency,
+		&i.Amount,
+		&i.Category,
+		&i.Mode,
+		&i.Description,
+	)
+	return i, err
+}
+
 const listTransactions = `-- name: ListTransactions :many
-SELECT id, created_at, currency, amount, category, mode, description FROM transactions
+SELECT id, created_at, transaction_date, currency, amount, category, mode, description FROM transactions ORDER BY created_at DESC
 `
 
 // Retrieves all transactions from the database.
 func (q *Queries) ListTransactions(ctx context.Context) ([]Transaction, error) {
-	rows, err := q.db.QueryContext(ctx, listTransactions)
+	rows, err := q.query(ctx, q.listTransactionsStmt, listTransactions)
 	if err != nil {
 		return nil, err
 	}
@@ -55,6 +88,7 @@ func (q *Queries) ListTransactions(ctx context.Context) ([]Transaction, error) {
 		if err := rows.Scan(
 			&i.ID,
 			&i.CreatedAt,
+			&i.TransactionDate,
 			&i.Currency,
 			&i.Amount,
 			&i.Category,
@@ -72,4 +106,32 @@ func (q *Queries) ListTransactions(ctx context.Context) ([]Transaction, error) {
 		return nil, err
 	}
 	return items, nil
+}
+
+const updateTransaction = `-- name: UpdateTransaction :exec
+UPDATE transactions
+SET amount = ?, currency = ?, category = ?, description = ?, mode = ?
+WHERE id = ?
+`
+
+type UpdateTransactionParams struct {
+	Amount      float64        `json:"amount"`
+	Currency    string         `json:"currency"`
+	Category    string         `json:"category"`
+	Description sql.NullString `json:"description"`
+	Mode        string         `json:"mode"`
+	ID          int64          `json:"id"`
+}
+
+// Updates a transaction by ID.
+func (q *Queries) UpdateTransaction(ctx context.Context, arg UpdateTransactionParams) error {
+	_, err := q.exec(ctx, q.updateTransactionStmt, updateTransaction,
+		arg.Amount,
+		arg.Currency,
+		arg.Category,
+		arg.Description,
+		arg.Mode,
+		arg.ID,
+	)
+	return err
 }
