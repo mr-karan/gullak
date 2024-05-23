@@ -22,3 +22,7 @@ clean: ## Remove temporary files and the `bin` folder.
 
 .PHONY: fresh
 fresh: build run
+
+.PHONY: gen-sql
+gen-sql: ## Generate SQL queries using sqlc.
+	sqlc generate

@@ -37,7 +37,7 @@ func main() {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, lgrOpts))
 
 	// Initialize the database.
-	dbMgr, err := db.New(ko.MustString("app.db_path"), logger)
+	dbMgr, err := db.Init(ko.MustString("app.db_path"), logger)
 	if err != nil {
 		logger.Error("Error initializing database", "error", err)
 		os.Exit(1)
