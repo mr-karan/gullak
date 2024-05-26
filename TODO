@@ -10,3 +10,8 @@
 - [ ] Shadcn/ui or DaisyUI
 - [ ] Description can be a bit more descriptive? Fine tune the model
 - [ ] Configure different model in the UI?
+- [ ] Rename to Gullak
+- [ ] Payment mode
+- [ ] Fix loading state in create
+- [x] Fix description.String issue
+- [ ] Error message in Frontend

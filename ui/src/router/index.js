@@ -5,9 +5,20 @@ const router = createRouter({
   routes: [
     {
       path: '/',
-      name: 'dashboard',
-      component: () => import('../views/Dashboard.vue')
-  },
+      component: () => import('../views/Base.vue'),
+      children: [
+        {
+          path: '/',
+          name: 'dashboard',
+          component: () => import('../views/Dashboard.vue')
+        },
+        {
+          path: '/transactions',
+          name: 'transactions',
+          component: () => import('../views/Transactions.vue')
+        }
+      ]
+    }
   ]
 })
 

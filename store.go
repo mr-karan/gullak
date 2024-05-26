@@ -39,7 +39,9 @@ func initDB(path string) (*db.Queries, error) {
 }
 
 // SaveTransactions saves the transactions to the database using the generated CreateTransaction method.
-func (a *App) Save(transactions models.Transactions) error {
+func (a *App) Save(transactions models.Transactions) ([]db.Transaction, error) {
+	var savedTransactions []db.Transaction
+
 	for _, item := range transactions.Transactions {
 		var transactDate time.Time
 		var err error
@@ -60,14 +62,54 @@ func (a *App) Save(transactions models.Transactions) error {
 			Amount:          item.Amount,
 			Currency:        item.Currency,
 			Category:        item.Category,
-			Description:     sql.NullString{String: item.Description, Valid: item.Description != ""},
+			Description:     item.Description,
 			Mode:            item.Mode,
 		}
 
-		if err := a.queries.CreateTransaction(context.TODO(), arg); err != nil {
-			return fmt.Errorf("error saving in db: %w", err)
+		savedTx, err := a.queries.CreateTransaction(context.TODO(), arg)
+		if err != nil {
+			return nil, fmt.Errorf("error saving in db: %w", err)
 		}
+		savedTransactions = append(savedTransactions, savedTx...)
 	}
+	return savedTransactions, nil
+}
+
+// Get retrieves a single transaction by ID.
+func (a *App) Get(id int64) (models.Item, error) {
+	transaction, err := a.queries.GetTransaction(context.TODO(), id)
+	if err != nil {
+		return models.Item{}, fmt.Errorf("error getting transaction: %w", err)
+	}
+
+	return models.Item{
+		CreatedAt:       transaction.CreatedAt.Format(time.RFC3339),
+		TransactionDate: transaction.TransactionDate.Format("2006-01-02"),
+		Currency:        transaction.Currency,
+		Amount:          transaction.Amount,
+		Category:        transaction.Category,
+		Description:     transaction.Description,
+		Mode:            transaction.Mode,
+		Confirm:         transaction.Confirm,
+	}, nil
+}
+
+// Update updates a transaction in the database.
+func (a *App) Update(id int64, transaction models.Item) error {
+	arg := db.UpdateTransactionParams{
+		Amount:      transaction.Amount,
+		Currency:    transaction.Currency,
+		Category:    transaction.Category,
+		Description: transaction.Description,
+		Mode:        transaction.Mode,
+		Confirm:     transaction.Confirm,
+		ID:          id,
+	}
+
+	if err := a.queries.UpdateTransaction(context.TODO(), arg); err != nil {
+		return fmt.Errorf("error updating transaction: %w", err)
+	}
+
 	return nil
 }
 

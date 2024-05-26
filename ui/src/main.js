@@ -19,8 +19,4 @@ app.use(Toast, {
     newestOnTop: true
 })
 
-// Set global variables
-app.config.globalProperties.$apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3333';
-
-
 app.mount('#app')

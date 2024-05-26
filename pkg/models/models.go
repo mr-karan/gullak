@@ -1,6 +1,7 @@
 package models
 
 type Item struct {
+	ID              int64   `json:"id"`
 	CreatedAt       string  `json:"created_at"`
 	TransactionDate string  `json:"transaction_date"`
 	Currency        string  `json:"currency"`
@@ -8,6 +9,7 @@ type Item struct {
 	Category        string  `json:"category"`
 	Description     string  `json:"description"`
 	Mode            string  `json:"mode"`
+	Confirm         bool    `json:"confirm"`
 }
 
 type Transactions struct {

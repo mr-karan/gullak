@@ -1,156 +1,114 @@
 <!DOCTYPE html>
-<html>
+<html data-theme="lofi" lang="en">
   <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Editable Table Example</title>
     <link
-      href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css"
+      href="https://cdn.jsdelivr.net/npm/daisyui@2.51.6/dist/full.css"
       rel="stylesheet"
+      type="text/css"
+    />
+    <link
+      href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2/dist/tailwind.min.css"
+      rel="stylesheet"
+      type="text/css"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css"
     />
   </head>
   <body>
-    <div class="bg-gray-100 min-h-screen">
-      <div class="py-6 sm:px-6 lg:px-8">
-        <div class="px-4 py-6 sm:px-0 flex items-center justify-between">
-          <h3 class="text-lg leading-6 font-medium text-gray-900">
-            Money Manager
-          </h3>
-          <nav class="flex space-x-4" aria-label="Tabs">
-            <a
-              href="#"
-              class="px-3 py-2 font-medium text-sm text-gray-700 rounded-md hover:text-gray-900 hover:bg-gray-100"
-              >Overview</a
+    <div id="app">
+      <div class="overflow-x-auto">
+        <table class="table">
+          <thead>
+            <tr>
+              <th></th>
+              <th>Name</th>
+              <th>Job</th>
+              <th>Favorite Color</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr
+              v-for="(row, index) in rows"
+              :key="index"
+              :class="{ 'bg-base-200': index % 2 === 0 }"
             >
-            <a
-              href="#"
-              class="px-3 py-2 font-medium text-sm text-gray-700 rounded-md hover:text-gray-900 hover:bg-gray-100"
-              >Transactions</a
-            >
-            <a
-              href="#"
-              class="px-3 py-2 font-medium text-sm text-gray-700 rounded-md hover:text-gray-900 hover:bg-gray-100"
-              >Budgets</a
-            >
-            <a
-              href="#"
-              class="px-3 py-2 font-medium text-sm text-gray-700 rounded-md hover:text-gray-900 hover:bg-gray-100"
-              >Reports</a
-            >
-            <a
-              href="#"
-              class="px-3 py-2 font-medium text-sm text-gray-700 rounded-md hover:text-gray-900 hover:bg-gray-100"
-              >Bills</a
-            >
-            <a
-              href="#"
-              class="px-3 py-2 font-medium text-sm text-yellow-600 bg-yellow-100 rounded-md"
-              >Add</a
-            >
-          </nav>
-        </div>
-
-        <div class="mt-10 sm:mt-0">
-          <div class="md:grid md:grid-cols-3 md:gap-6">
-            <div class="mt-5 md:mt-0 md:col-span-3">
-              <form action="#" method="POST">
-                <div class="shadow overflow-hidden sm:rounded-md">
-                  <div class="px-4 py-5 bg-white sm:p-6">
-                    <h3
-                      class="text-lg leading-6 mb-4 font-medium text-gray-900"
-                    >
-                      Add a new transaction
-                    </h3>
-                    <div class="mb-4">
-                      <label
-                        for="description"
-                        class="block text-sm font-medium text-gray-700"
-                      >
-                        Type something like '20.00 for groceries'
-                      </label>
-                      <input
-                        type="text"
-                        name="description"
-                        id="description"
-                        class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-yellow-500 focus:border-yellow-500 sm:text-sm"
-                      />
-                    </div>
-                    <div class="text-right">
-                      <button
-                        type="submit"
-                        class="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-yellow-600 hover:bg-yellow-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500"
-                      >
-                        Save transaction
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </form>
-            </div>
-          </div>
-        </div>
-
-        <div class="mt-10 sm:mt-0">
-          <div class="md:grid md:grid-cols-3 md:gap-6">
-            <div class="mt-5 md:mt-0 md:col-span-3">
-              <div class="shadow overflow-hidden sm:rounded-md">
-                <div class="px-4 py-5 bg-white sm:p-6">
-                  <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">
-                    Recent transactions
-                  </h3>
-                  <ul class="divide-y divide-gray-200">
-                    <li class="py-4 flex justify-between">
-                      <div>
-                        <p class="text-sm text-gray-500">Groceries</p>
-                      </div>
-                      <div>
-                        <p class="text-sm font-medium text-gray-900">$20.00</p>
-                      </div>
-                      <div class="flex items-center">
-                        <svg
-                          class="w-5 h-5 text-green-500"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                          xmlns="http://www.w3.org/2000/svg"
-                        >
-                          <path
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            stroke-width="2"
-                            d="M5 13l4 4L19 7"
-                          ></path>
-                        </svg>
-                      </div>
-                    </li>
-                    <li class="py-4 flex justify-between">
-                      <div>
-                        <p class="text-sm text-gray-500">Gas</p>
-                      </div>
-                      <div>
-                        <p class="text-sm font-medium text-gray-900">$50.00</p>
-                      </div>
-                      <div class="flex items-center">
-                        <svg
-                          class="w-5 h-5 text-green-500"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                          xmlns="http://www.w3.org/2000/svg"
-                        >
-                          <path
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            stroke-width="2"
-                            d="M5 13l4 4L19 7"
-                          ></path>
-                        </svg>
-                      </div>
-                    </li>
-                  </ul>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+              <th>{{ index + 1 }}</th>
+              <td>
+                <input
+                  type="text"
+                  v-model="row.name"
+                  :disabled="!row.editable"
+                  class="input input-bordered"
+                />
+              </td>
+              <td>
+                <input
+                  type="text"
+                  v-model="row.job"
+                  :disabled="!row.editable"
+                  class="input input-bordered"
+                />
+              </td>
+              <td>
+                <input
+                  type="text"
+                  v-model="row.color"
+                  :disabled="!row.editable"
+                  class="input input-bordered"
+                />
+              </td>
+              <td>
+                <button class="btn btn-sm" @click="toggleEdit(row)">
+                  <i class="fas fa-pencil-alt"></i>
+                </button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
       </div>
     </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/vue@3.2.47/dist/vue.global.min.js"></script>
+    <script>
+      const app = Vue.createApp({
+        data() {
+          return {
+            rows: [
+              {
+                name: "Cy Ganderton",
+                job: "Quality Control Specialist",
+                color: "Blue",
+                editable: false,
+              },
+              {
+                name: "Hart Hagerty",
+                job: "Desktop Support Technician",
+                color: "Purple",
+                editable: false,
+              },
+              {
+                name: "Brice Swyre",
+                job: "Tax Accountant",
+                color: "Red",
+                editable: false,
+              },
+            ],
+          };
+        },
+        methods: {
+          toggleEdit(row) {
+            row.editable = !row.editable;
+          },
+        },
+      });
+
+      app.mount("#app");
+    </script>
   </body>
 </html>

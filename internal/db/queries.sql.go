@@ -7,28 +7,29 @@ package db
 
 import (
 	"context"
-	"database/sql"
 	"time"
 )
 
-const createTransaction = `-- name: CreateTransaction :exec
-INSERT INTO transactions (created_at, transaction_date, amount, currency, category, description, mode)
-VALUES (?, ?, ?, ?, ?, ?, ?)
+const createTransaction = `-- name: CreateTransaction :many
+INSERT INTO transactions (created_at, transaction_date, amount, currency, category, description, mode, confirm)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+RETURNING id, created_at, transaction_date, currency, amount, category, mode, description, confirm
 `
 
 type CreateTransactionParams struct {
-	CreatedAt       time.Time      `json:"created_at"`
-	TransactionDate time.Time      `json:"transaction_date"`
-	Amount          float64        `json:"amount"`
-	Currency        string         `json:"currency"`
-	Category        string         `json:"category"`
-	Description     sql.NullString `json:"description"`
-	Mode            string         `json:"mode"`
+	CreatedAt       time.Time `json:"created_at"`
+	TransactionDate time.Time `json:"transaction_date"`
+	Amount          float64   `json:"amount"`
+	Currency        string    `json:"currency"`
+	Category        string    `json:"category"`
+	Description     string    `json:"description"`
+	Mode            string    `json:"mode"`
+	Confirm         bool      `json:"confirm"`
 }
 
 // Inserts a new transaction into the database.
-func (q *Queries) CreateTransaction(ctx context.Context, arg CreateTransactionParams) error {
-	_, err := q.exec(ctx, q.createTransactionStmt, createTransaction,
+func (q *Queries) CreateTransaction(ctx context.Context, arg CreateTransactionParams) ([]Transaction, error) {
+	rows, err := q.query(ctx, q.createTransactionStmt, createTransaction,
 		arg.CreatedAt,
 		arg.TransactionDate,
 		arg.Amount,
@@ -36,8 +37,37 @@ func (q *Queries) CreateTransaction(ctx context.Context, arg CreateTransactionPa
 		arg.Category,
 		arg.Description,
 		arg.Mode,
+		arg.Confirm,
 	)
-	return err
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Transaction{}
+	for rows.Next() {
+		var i Transaction
+		if err := rows.Scan(
+			&i.ID,
+			&i.CreatedAt,
+			&i.TransactionDate,
+			&i.Currency,
+			&i.Amount,
+			&i.Category,
+			&i.Mode,
+			&i.Description,
+			&i.Confirm,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const deleteTransaction = `-- name: DeleteTransaction :exec
@@ -51,7 +81,7 @@ func (q *Queries) DeleteTransaction(ctx context.Context, id int64) error {
 }
 
 const getTransaction = `-- name: GetTransaction :one
-SELECT id, created_at, transaction_date, currency, amount, category, mode, description FROM transactions WHERE id = ?
+SELECT id, created_at, transaction_date, currency, amount, category, mode, description, confirm FROM transactions WHERE id = ?
 `
 
 // Retrieves a single transaction by ID.
@@ -67,15 +97,16 @@ func (q *Queries) GetTransaction(ctx context.Context, id int64) (Transaction, er
 		&i.Category,
 		&i.Mode,
 		&i.Description,
+		&i.Confirm,
 	)
 	return i, err
 }
 
 const listTransactions = `-- name: ListTransactions :many
-SELECT id, created_at, transaction_date, currency, amount, category, mode, description FROM transactions ORDER BY created_at DESC
+SELECT id, created_at, transaction_date, currency, amount, category, mode, description, confirm FROM transactions ORDER BY created_at DESC
 `
 
-// Retrieves all transactions from the database.
+// Retrieves all transactions from the database. Confirm value is either true or false.
 func (q *Queries) ListTransactions(ctx context.Context) ([]Transaction, error) {
 	rows, err := q.query(ctx, q.listTransactionsStmt, listTransactions)
 	if err != nil {
@@ -94,6 +125,45 @@ func (q *Queries) ListTransactions(ctx context.Context) ([]Transaction, error) {
 			&i.Category,
 			&i.Mode,
 			&i.Description,
+			&i.Confirm,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listTransactionsByConfirm = `-- name: ListTransactionsByConfirm :many
+SELECT id, created_at, transaction_date, currency, amount, category, mode, description, confirm FROM transactions WHERE confirm=? ORDER BY created_at DESC
+`
+
+// Retrieves all transactions from the database. Confirm value is either true or false.
+func (q *Queries) ListTransactionsByConfirm(ctx context.Context, confirm bool) ([]Transaction, error) {
+	rows, err := q.query(ctx, q.listTransactionsByConfirmStmt, listTransactionsByConfirm, confirm)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Transaction{}
+	for rows.Next() {
+		var i Transaction
+		if err := rows.Scan(
+			&i.ID,
+			&i.CreatedAt,
+			&i.TransactionDate,
+			&i.Currency,
+			&i.Amount,
+			&i.Category,
+			&i.Mode,
+			&i.Description,
+			&i.Confirm,
 		); err != nil {
 			return nil, err
 		}
@@ -110,17 +180,18 @@ func (q *Queries) ListTransactions(ctx context.Context) ([]Transaction, error) {
 
 const updateTransaction = `-- name: UpdateTransaction :exec
 UPDATE transactions
-SET amount = ?, currency = ?, category = ?, description = ?, mode = ?
+SET amount = ?, currency = ?, category = ?, description = ?, mode = ?, confirm = ?
 WHERE id = ?
 `
 
 type UpdateTransactionParams struct {
-	Amount      float64        `json:"amount"`
-	Currency    string         `json:"currency"`
-	Category    string         `json:"category"`
-	Description sql.NullString `json:"description"`
-	Mode        string         `json:"mode"`
-	ID          int64          `json:"id"`
+	Amount      float64 `json:"amount"`
+	Currency    string  `json:"currency"`
+	Category    string  `json:"category"`
+	Description string  `json:"description"`
+	Mode        string  `json:"mode"`
+	Confirm     bool    `json:"confirm"`
+	ID          int64   `json:"id"`
 }
 
 // Updates a transaction by ID.
@@ -131,6 +202,7 @@ func (q *Queries) UpdateTransaction(ctx context.Context, arg UpdateTransactionPa
 		arg.Category,
 		arg.Description,
 		arg.Mode,
+		arg.Confirm,
 		arg.ID,
 	)
 	return err
