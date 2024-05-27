@@ -9,15 +9,6 @@ module.exports = {
     './app/**/*.{js,jsx,vue}',
     './src/**/*.{js,jsx,vue}'
   ],
-  daisyui: {
-    styled: true, // if you want daisyUI to apply its styles
-    themes: ['lofi'], // specify only 'light' theme
-    base: true, // if you want to use daisyUI base styles
-    utils: true, // if you want to use daisyUI utility classes
-    logs: true, // if you want to see daisyUI logs in the console
-    rtl: false, // set to true if you're using Right to Left language
-    prefix: '' // if you want to set a prefix to daisyUI classes
-  },
   prefix: '',
   theme: {
     container: {
@@ -47,5 +38,5 @@ module.exports = {
       }
     }
   },
-  plugins: [animate, require('daisyui')]
+  plugins: [animate]
 }
