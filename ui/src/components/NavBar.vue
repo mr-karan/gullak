@@ -1,23 +1,29 @@
 <script setup></script>
 
 <template>
-  <header class="bg-white border-b border-gray-200 py-4">
-    <div class="container mx-auto flex justify-between items-center">
-      <div class="flex items-center">
-        <div class="font-bold text-lg">
-          <router-link to="/" class="font-bold text-lg no-underline text-gray-900 hover:text-blue-500">Money
-            Manager</router-link>
+  <nav class="border-b">
+    <div class="navbar bg-base-100">
+      <div class="navbar-start">
+        <div class="dropdown">
+          <label tabindex="0" class="btn btn-ghost lg:hidden">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24"
+              stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h8m-8 6h16" />
+            </svg>
+          </label>
+          <ul tabindex="0" class="menu menu-compact dropdown-content mt-3 p-2 shadow bg-base-100 rounded-box w-52">
+            <li><router-link to="/transactions">Transactions</router-link></li>
+            <li><router-link to="/reports">Reports</router-link></li>
+          </ul>
         </div>
+        <router-link to="/" class="btn btn-ghost normal-case text-xl">Gullak</router-link>
       </div>
-      <nav class="flex items-center space-x-6">
-        <router-link to="/transactions" class="text-gray-600 hover:text-gray-900">Transactions</router-link>
-        <router-link to="/reports" class="text-gray-600 hover:text-gray-900">Reports</router-link>
-        <router-link to="/" class="bg-yellow-400 text-white px-4 py-2 rounded-md">Add</router-link>
-      </nav>
+      <div class="navbar-end hidden lg:flex">
+        <ul class="menu menu-horizontal px-1">
+          <li><router-link to="/transactions">Transactions</router-link></li>
+          <li><router-link to="/reports">Reports</router-link></li>
+        </ul>
+      </div>
     </div>
-  </header>
+  </nav>
 </template>
-
-<style scoped>
-/* No custom styles needed since Tailwind CSS handles styling */
-</style>

@@ -11,12 +11,19 @@
     "format": "prettier --write src/"
   },
   "dependencies": {
+    "@vueuse/core": "^10.9.0",
     "autoprefixer": "^10.4.19",
     "axios": "^1.7.2",
     "buefy": "^0.9.29",
+    "class-variance-authority": "^0.7.0",
+    "clsx": "^2.1.1",
+    "lucide-vue-next": "^0.379.0",
     "pinia": "^2.1.7",
     "postcss": "^8.4.38",
+    "radix-vue": "^1.8.2",
+    "tailwind-merge": "^2.3.0",
     "tailwindcss": "^3.4.3",
+    "tailwindcss-animate": "^1.0.7",
     "vue": "^3.4.21",
     "vue-router": "^4.3.0",
     "vue-toastification": "^2.0.0-rc.5"
@@ -25,9 +32,11 @@
     "@rushstack/eslint-patch": "^1.8.0",
     "@vitejs/plugin-vue": "^5.0.4",
     "@vue/eslint-config-prettier": "^9.0.0",
+    "daisyui": "^4.11.1",
     "eslint": "^8.57.0",
     "eslint-plugin-vue": "^9.23.0",
     "prettier": "^3.2.5",
     "vite": "^5.2.8"
-  }
+  },
+  "packageManager": "yarn@1.22.22+sha512.a6b2f7906b721bba3d67d4aff083df04dad64c399707841b7acf00f6b133b7ac24255f2652fa22ae3534329dc6180534e98d17432037ff6fd140556e2bb3137e"
 }

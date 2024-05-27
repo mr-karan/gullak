@@ -3,7 +3,7 @@ import NewTransaction from '../components/NewTransaction.vue'
 </script>
 
 <template>
-  <main>
+  <main class="container">
     <NewTransaction />
   </main>
 </template>
