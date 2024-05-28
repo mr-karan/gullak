@@ -42,6 +42,14 @@ export const useTransactionStore = defineStore('transaction', () => {
     transactions.value = transactions.value.filter((t) => t.id !== transactionId)
   }
 
+  async function updateTransaction(transaction) {
+    await axios.put(`${API_BASE_URL}/${transaction.id}`, transaction)
+    const index = transactions.value.findIndex((t) => t.id === transaction.id)
+    if (index !== -1) {
+      transactions.value.splice(index, 1, transaction)
+    }
+  }
+
   return {
     transactions,
     isLoading,
@@ -49,6 +57,7 @@ export const useTransactionStore = defineStore('transaction', () => {
     fetchConfirmedTransactions,
     createTransaction,
     confirmTransaction,
-    deleteTransaction
+    deleteTransaction,
+    updateTransaction
   }
 })
