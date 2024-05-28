@@ -1,5 +1,5 @@
 <script setup>
-import { cn } from "@/utils";
+import { cn } from "@/utils/utils";
 
 const props = defineProps({
   class: { type: null, required: false },

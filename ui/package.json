@@ -11,7 +11,11 @@
     "format": "prettier --write src/"
   },
   "dependencies": {
-    "@vueuse/core": "^10.9.0",
+    "@internationalized/date": "^3.5.4",
+    "@tanstack/vue-table": "^8.17.3",
+    "@unovis/ts": "^1.4.1",
+    "@unovis/vue": "^1.4.1",
+    "@vueuse/core": "^10.10.0",
     "autoprefixer": "^10.4.19",
     "axios": "^1.7.2",
     "class-variance-authority": "^0.7.0",

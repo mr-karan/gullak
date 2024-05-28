@@ -1,18 +1,15 @@
 - [ ] Default currency
+- [ ] Payment mode
 - [ ] Explore groq and API more
-- [ ] Create a nice UI
+- [x] Create a nice UI
 - [x] Add `?confirm=true|false` in the API
 - [x] Add separate handler for confirmation
-- [ ] Add settings table in sqlite
 - [x] Create handlers for getting past data
 - [x] sqlite best practices for golang
-- [ ] Shadcn/ui or DaisyUI
+- [x] Shadcn/ui or DaisyUI
 - [ ] Description can be a bit more descriptive? Fine tune the model for mode, currency and category.
-- [ ] Configure different model in the UI?
 - [ ] Rename to Gullak
-- [ ] Payment mode
 - [x] Fix loading state in create
 - [x] Fix description.String issue
 - [ ] Error message in Frontend
 - [ ] Add charts
-- [ ] Add datatable

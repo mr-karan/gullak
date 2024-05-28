@@ -1,7 +1,7 @@
 <script setup>
 import { computed } from "vue";
 import { DialogDescription } from "radix-vue";
-import { cn } from "@/utils";
+import { cn } from "@/utils/utils";
 
 const props = defineProps({
   asChild: { type: Boolean, required: false },
@@ -18,7 +18,7 @@ const delegatedProps = computed(() => {
 
 <template>
   <DialogDescription
-    :class="cn('text-sm text-slate-500 dark:text-slate-400', props.class)"
+    :class="cn('text-sm text-muted-foreground', props.class)"
     v-bind="delegatedProps"
   >
     <slot />

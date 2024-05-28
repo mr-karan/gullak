@@ -1,32 +1,54 @@
+// transactions.js
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
+import axios from 'axios'
+
+const API_BASE_URL = '/api/transactions'
 
 export const useTransactionStore = defineStore('transaction', () => {
   const transactions = ref([])
   const isLoading = ref(false)
 
-  function addTransaction(transaction) {
-    transactions.value.push(transaction)
+  async function fetchUnconfirmedTransactions() {
+    const response = await axios.get(`${API_BASE_URL}?confirm=false`)
+    transactions.value = response.data.data
   }
 
-  function addTransactions(newTransactions) {
-    transactions.value.push(...newTransactions)
+  async function fetchConfirmedTransactions() {
+    const response = await axios.get(`${API_BASE_URL}?confirm=true`)
+    transactions.value = response.data.data
   }
 
-  function setTransactions(newTransactions) {
-    transactions.value = newTransactions
+  async function createTransaction(line) {
+    isLoading.value = true
+    const response = await axios.post(API_BASE_URL, {
+      line,
+      confirm: false
+    })
+    transactions.value.push(...response.data.data)
+    isLoading.value = false
   }
 
-  function updateTransaction(updatedTransaction) {
-    const index = transactions.value.findIndex(t => t.id === updatedTransaction.id);
+  async function confirmTransaction(transaction) {
+    await axios.post(`${API_BASE_URL}/confirm`, { ...transaction, confirm: true })
+    const index = transactions.value.findIndex((t) => t.id === transaction.id)
     if (index !== -1) {
-      transactions.value[index] = updatedTransaction;
+      transactions.value.splice(index, 1)
     }
   }
 
-  function removeTransaction(transactionId) {
-    transactions.value = transactions.value.filter(t => t.id !== transactionId)
+  async function deleteTransaction(transactionId) {
+    await axios.delete(`${API_BASE_URL}/${transactionId}`)
+    transactions.value = transactions.value.filter((t) => t.id !== transactionId)
   }
 
-  return { transactions, addTransaction, addTransactions, setTransactions, updateTransaction, removeTransaction, isLoading }
-});
+  return {
+    transactions,
+    isLoading,
+    fetchUnconfirmedTransactions,
+    fetchConfirmedTransactions,
+    createTransaction,
+    confirmTransaction,
+    deleteTransaction
+  }
+})
