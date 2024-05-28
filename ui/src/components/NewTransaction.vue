@@ -4,6 +4,8 @@ import axios from 'axios'
 import { useToast } from 'vue-toastification'
 import { useTransactionStore } from '@/stores/transactions'
 import { formatDate } from '@/utils/utils'
+import { Textarea } from '@/components/ui/textarea'
+import { Button } from '@/components/ui/button'
 
 const toast = useToast()
 const inputValue = ref('')
@@ -61,32 +63,21 @@ const confirmTransaction = async (transaction) => {
 
 <template>
   <section class="new p-6">
-    <div class="info mb-4 space-y-4">
+    <div class="info mb-6">
       <h1 class="text-2xl font-bold">Add a new transaction</h1>
       <p class="text-gray-400">
         You can add a small description of your expenses and even add multiple expenses...
       </p>
     </div>
     <div class="form">
-      <form @submit.prevent="handleSubmit" class="flex flex-col items-center">
-        <textarea
-          class="w-full textarea textarea-bordered"
-          placeholder="Type something like '420 for groceries, 800 for phone bill'"
-          v-model="inputValue"
-          minlength="5"
-          maxlength="1000"
-          required
-        >
-        </textarea>
-        <button
-          type="submit"
-          class="btn btn-active btn-neutral btn-wide mt-4 hover:bg-neutral-800 hover:text-white"
-          :disabled="isLoading"
-        >
-          <span v-if="isLoading" class="loading loading-spinner"></span>
-          <span v-if="isLoading">Loading...</span>
-          <span v-else>Save transaction</span>
-        </button>
+      <form @submit.prevent="handleSubmit" class="flex flex-col items-center space-y-4">
+        <Textarea class="w-full textarea textarea-bordered"
+          placeholder="Type something like '420 for groceries, 800 for phone bill'" v-model="inputValue" minlength="5"
+          maxlength="1000" required />
+        <Button class="bg-orange-600" :disabled="isLoading">
+          <LucideSpinner v-if="isLoading" class="mr-2 h-4 w-4 animate-spin" />
+          Save transaction
+        </Button>
       </form>
     </div>
   </section>
@@ -114,41 +105,27 @@ const confirmTransaction = async (transaction) => {
               <span class="badge badge-accent">{{ transaction.category }}</span>
             </td>
             <td>
-              <input
-                v-if="editingTransaction && editingTransaction.id === transaction.id"
-                v-model="editingTransaction.description"
-                class="input input-bordered input-sm"
-              />
+              <input v-if="editingTransaction && editingTransaction.id === transaction.id"
+                v-model="editingTransaction.description" class="input input-bordered input-sm" />
               <span v-else>{{ transaction.description }}</span>
             </td>
             <td>
-              <input
-                v-if="editingTransaction && editingTransaction.id === transaction.id"
-                v-model="editingTransaction.mode"
-                class="input input-bordered input-sm"
-              />
+              <input v-if="editingTransaction && editingTransaction.id === transaction.id"
+                v-model="editingTransaction.mode" class="input input-bordered input-sm" />
               <span v-else>{{ transaction.mode }}</span>
             </td>
             <td>
               <div class="flex space-x-2">
-                <button
-                  v-if="editingTransaction && editingTransaction.id === transaction.id"
-                  class="btn btn-ghost btn-sm hover:bg-neutral-800 hover:text-white"
-                  @click="cancelEdit"
-                >
+                <button v-if="editingTransaction && editingTransaction.id === transaction.id"
+                  class="btn btn-ghost btn-sm hover:bg-neutral-800 hover:text-white" @click="cancelEdit">
                   Cancel
                 </button>
-                <button
-                  v-else
-                  class="btn btn-ghost btn-sm hover:bg-neutral-800 hover:text-white"
-                  @click="editTransaction(transaction)"
-                >
+                <button v-else class="btn btn-ghost btn-sm hover:bg-neutral-800 hover:text-white"
+                  @click="editTransaction(transaction)">
                   Edit
                 </button>
-                <button
-                  class="btn btn-primary btn-sm hover:bg-neutral-800 hover:text-white"
-                  @click="confirmTransaction(editingTransaction || transaction)"
-                >
+                <button class="btn btn-primary btn-sm hover:bg-neutral-800 hover:text-white"
+                  @click="confirmTransaction(editingTransaction || transaction)">
                   Confirm
                 </button>
               </div>
