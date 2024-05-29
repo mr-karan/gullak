@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { ref, watch, onMounted } from 'vue'
 import { formatDate } from '@/utils/utils'
 import TransactionActions from '@/components/Actions.vue'
@@ -7,6 +7,16 @@ import { useTransactionStore } from '@/stores/transactions'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { getCategoryColor } from '@/utils/utils'
+import { Calendar as CalendarIcon } from 'lucide-vue-next'
+import { Calendar } from '@/components/ui/calendar'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { cn } from '@/utils/utils'
+import {
+  DateFormatter,
+  type DateValue,
+  getLocalTimeZone,
+  today,
+} from '@internationalized/date'
 
 import {
   Table,
@@ -36,6 +46,9 @@ const emit = defineEmits(['edit'])
 
 const transactionStore = useTransactionStore()
 const localEditingTransaction = ref(null)
+const df = new DateFormatter('en-US', {
+  dateStyle: 'long',
+})
 
 onMounted(async () => {
   if (props.showConfirmButton) {
@@ -51,7 +64,12 @@ watch(
         (t) => t.id === localEditingTransaction.value.id
       )
       if (updatedTransaction) {
-        localEditingTransaction.value = { ...updatedTransaction }
+        const transactionDate = new Date(updatedTransaction.transaction_date)
+        const dateValue = today(getLocalTimeZone())
+        dateValue.year = transactionDate.getFullYear()
+        dateValue.month = transactionDate.getMonth() + 1
+        dateValue.day = transactionDate.getDate()
+        localEditingTransaction.value = { ...updatedTransaction, transaction_date: dateValue }
       } else {
         localEditingTransaction.value = null
       }
@@ -61,7 +79,12 @@ watch(
 )
 
 const editTransaction = (transaction) => {
-  localEditingTransaction.value = { ...transaction }
+  const transactionDate = new Date(transaction.transaction_date)
+  const dateValue = today(getLocalTimeZone())
+  dateValue.year = transactionDate.getFullYear()
+  dateValue.month = transactionDate.getMonth() + 1
+  dateValue.day = transactionDate.getDate()
+  localEditingTransaction.value = { ...transaction, transaction_date: dateValue }
   emit('edit', transaction)
 }
 
@@ -71,9 +94,17 @@ const cancelEdit = () => {
 
 const confirmTransaction = (transaction) => {
   console.log('Confirming transaction:', transaction);
+
   // Check if localEditingTransaction is not set, then use the provided transaction
   const transactionToConfirm = localEditingTransaction.value || transaction;
-  props.onConfirm(transactionToConfirm);
+
+  // Format the transaction_date to YYYY-MM-DD before confirming
+  const formattedTransaction = {
+    ...transactionToConfirm,
+    transaction_date: formatDate(transactionToConfirm.transaction_date.toDate(getLocalTimeZone())),
+  };
+
+  props.onConfirm(formattedTransaction);
   localEditingTransaction.value = null;  // Clear the editing state
 }
 
@@ -83,7 +114,13 @@ const saveTransaction = () => {
     return;
   }
 
-  props.onSave(localEditingTransaction.value);
+  // Format the transaction_date to YYYY-MM-DD before saving
+  const formattedTransaction = {
+    ...localEditingTransaction.value,
+    transaction_date: formatDate(localEditingTransaction.value.transaction_date.toDate(getLocalTimeZone())),
+  };
+
+  props.onSave(formattedTransaction);
   localEditingTransaction.value = null;
 }
 
@@ -104,7 +141,23 @@ const saveTransaction = () => {
     <TableBody>
       <TableRow v-for="transaction in transactionStore.transactions" :key="transaction.id">
         <TableCell>
-          <span>{{ formatDate(transaction.transaction_date) }}</span>
+          <Popover v-if="localEditingTransaction && localEditingTransaction.id === transaction.id">
+            <PopoverTrigger as-child>
+              <Button variant="outline" :class="cn(
+                'w-[280px] justify-start text-left font-normal',
+                !localEditingTransaction.transaction_date && 'text-muted-foreground',
+              )">
+                <CalendarIcon class="mr-2 h-4 w-4" />
+                {{ localEditingTransaction.transaction_date ?
+                  df.format(localEditingTransaction.transaction_date.toDate(getLocalTimeZone())) :
+                  "Pick a date" }}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent class="w-auto p-0">
+              <Calendar v-model="localEditingTransaction.transaction_date" initial-focus />
+            </PopoverContent>
+          </Popover>
+          <span v-else>{{ formatDate(transaction.transaction_date) }}</span>
         </TableCell>
         <TableCell>
           <Input type="number" step="0.01" class="w-3/4"
