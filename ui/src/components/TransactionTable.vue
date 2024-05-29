@@ -15,7 +15,7 @@ import {
   DateFormatter,
   type DateValue,
   getLocalTimeZone,
-  today,
+  parseDate as originalParseDate
 } from '@internationalized/date'
 
 import {
@@ -34,11 +34,11 @@ const props = defineProps({
   },
   onConfirm: {
     type: Function,
-    default: () => { }
+    default: () => {}
   },
   onSave: {
     type: Function,
-    default: () => { }
+    default: () => {}
   }
 })
 
@@ -47,8 +47,14 @@ const emit = defineEmits(['edit'])
 const transactionStore = useTransactionStore()
 const localEditingTransaction = ref(null)
 const df = new DateFormatter('en-US', {
-  dateStyle: 'long',
+  dateStyle: 'long'
 })
+
+// Utility function to parse date string and ensure it's in the correct format
+const parseDate = (dateString) => {
+  const dateOnlyString = dateString.split('T')[0]
+  return originalParseDate(dateOnlyString)
+}
 
 onMounted(async () => {
   if (props.showConfirmButton) {
@@ -64,12 +70,10 @@ watch(
         (t) => t.id === localEditingTransaction.value.id
       )
       if (updatedTransaction) {
-        const transactionDate = new Date(updatedTransaction.transaction_date)
-        const dateValue = today(getLocalTimeZone())
-        dateValue.year = transactionDate.getFullYear()
-        dateValue.month = transactionDate.getMonth() + 1
-        dateValue.day = transactionDate.getDate()
-        localEditingTransaction.value = { ...updatedTransaction, transaction_date: dateValue }
+        localEditingTransaction.value = {
+          ...updatedTransaction,
+          transaction_date: parseDate(updatedTransaction.transaction_date)
+        }
       } else {
         localEditingTransaction.value = null
       }
@@ -79,12 +83,11 @@ watch(
 )
 
 const editTransaction = (transaction) => {
-  const transactionDate = new Date(transaction.transaction_date)
-  const dateValue = today(getLocalTimeZone())
-  dateValue.year = transactionDate.getFullYear()
-  dateValue.month = transactionDate.getMonth() + 1
-  dateValue.day = transactionDate.getDate()
-  localEditingTransaction.value = { ...transaction, transaction_date: dateValue }
+  console.log('edit', transaction.transaction_date)
+  localEditingTransaction.value = {
+    ...transaction,
+    transaction_date: parseDate(transaction.transaction_date)
+  }
   emit('edit', transaction)
 }
 
@@ -93,37 +96,36 @@ const cancelEdit = () => {
 }
 
 const confirmTransaction = (transaction) => {
-  console.log('Confirming transaction:', transaction);
+  console.log('Confirming transaction:', transaction)
 
   // Check if localEditingTransaction is not set, then use the provided transaction
-  const transactionToConfirm = localEditingTransaction.value || transaction;
+  const transactionToConfirm = localEditingTransaction.value || transaction
 
   // Format the transaction_date to YYYY-MM-DD before confirming
   const formattedTransaction = {
     ...transactionToConfirm,
-    transaction_date: formatDate(transactionToConfirm.transaction_date.toDate(getLocalTimeZone())),
-  };
+    transaction_date: transactionToConfirm.transaction_date.toString() // Use .toString() to get YYYY-MM-DD format
+  }
 
-  props.onConfirm(formattedTransaction);
-  localEditingTransaction.value = null;  // Clear the editing state
+  props.onConfirm(formattedTransaction)
+  localEditingTransaction.value = null // Clear the editing state
 }
 
 const saveTransaction = () => {
   if (!localEditingTransaction.value) {
-    console.error('No transaction is currently being edited.');
-    return;
+    console.error('No transaction is currently being edited.')
+    return
   }
 
   // Format the transaction_date to YYYY-MM-DD before saving
   const formattedTransaction = {
     ...localEditingTransaction.value,
-    transaction_date: formatDate(localEditingTransaction.value.transaction_date.toDate(getLocalTimeZone())),
-  };
+    transaction_date: localEditingTransaction.value.transaction_date.toString() // Use .toString() to get YYYY-MM-DD format
+  }
 
-  props.onSave(formattedTransaction);
-  localEditingTransaction.value = null;
+  props.onSave(formattedTransaction)
+  localEditingTransaction.value = null
 }
-
 </script>
 
 <template>
@@ -143,14 +145,21 @@ const saveTransaction = () => {
         <TableCell>
           <Popover v-if="localEditingTransaction && localEditingTransaction.id === transaction.id">
             <PopoverTrigger as-child>
-              <Button variant="outline" :class="cn(
-                'w-[280px] justify-start text-left font-normal',
-                !localEditingTransaction.transaction_date && 'text-muted-foreground',
-              )">
+              <Button
+                variant="outline"
+                :class="
+                  cn(
+                    'w-[280px] justify-start text-left font-normal',
+                    !localEditingTransaction.transaction_date && 'text-muted-foreground'
+                  )
+                "
+              >
                 <CalendarIcon class="mr-2 h-4 w-4" />
-                {{ localEditingTransaction.transaction_date ?
-                  df.format(localEditingTransaction.transaction_date.toDate(getLocalTimeZone())) :
-                  "Pick a date" }}
+                {{
+                  localEditingTransaction.transaction_date
+                    ? df.format(new Date(localEditingTransaction.transaction_date.toString()))
+                    : 'Pick a date'
+                }}
               </Button>
             </PopoverTrigger>
             <PopoverContent class="w-auto p-0">
@@ -160,37 +169,58 @@ const saveTransaction = () => {
           <span v-else>{{ formatDate(transaction.transaction_date) }}</span>
         </TableCell>
         <TableCell>
-          <Input type="number" step="0.01" class="w-3/4"
+          <Input
+            type="number"
+            step="0.01"
+            class="w-3/4"
             v-if="localEditingTransaction && localEditingTransaction.id === transaction.id"
-            v-model="localEditingTransaction.amount" />
+            v-model="localEditingTransaction.amount"
+          />
           <span v-else>{{ transaction.currency }}{{ transaction.amount.toFixed(2) }}</span>
         </TableCell>
         <TableCell>
-          <Input class="w-3/4" v-if="localEditingTransaction && localEditingTransaction.id === transaction.id"
-            v-model="localEditingTransaction.category" />
+          <Input
+            class="w-3/4"
+            v-if="localEditingTransaction && localEditingTransaction.id === transaction.id"
+            v-model="localEditingTransaction.category"
+          />
           <Badge :class="getCategoryColor(transaction.category)" v-else>
             {{ transaction.category }}
           </Badge>
         </TableCell>
         <TableCell>
-          <Input class="w-3/4" v-if="localEditingTransaction && localEditingTransaction.id === transaction.id"
-            v-model="localEditingTransaction.description" />
+          <Input
+            class="w-3/4"
+            v-if="localEditingTransaction && localEditingTransaction.id === transaction.id"
+            v-model="localEditingTransaction.description"
+          />
           <span v-else>{{ transaction.description }}</span>
         </TableCell>
         <TableCell>
-          <Input class="w-3/4" v-if="localEditingTransaction && localEditingTransaction.id === transaction.id"
-            v-model="localEditingTransaction.mode" />
+          <Input
+            class="w-3/4"
+            v-if="localEditingTransaction && localEditingTransaction.id === transaction.id"
+            v-model="localEditingTransaction.mode"
+          />
           <span v-else>{{ transaction.mode }}</span>
         </TableCell>
         <TableCell v-if="showConfirmButton">
-          <Button variant="secondary" size="sm" @click="confirmTransaction(localEditingTransaction || transaction)">
+          <Button
+            variant="secondary"
+            size="sm"
+            @click="confirmTransaction(localEditingTransaction || transaction)"
+          >
             Confirm
           </Button>
         </TableCell>
         <TableCell>
-          <TransactionActions :transaction="transaction"
+          <TransactionActions
+            :transaction="transaction"
             :is-editing="localEditingTransaction && localEditingTransaction.id === transaction.id"
-            @edit="editTransaction" @cancel="cancelEdit" @save="saveTransaction" />
+            @edit="editTransaction"
+            @cancel="cancelEdit"
+            @save="saveTransaction"
+          />
         </TableCell>
       </TableRow>
     </TableBody>
