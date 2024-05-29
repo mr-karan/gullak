@@ -1,5 +1,5 @@
 <script setup>
-import { MoreHorizontal, Edit, Trash, X } from 'lucide-vue-next'
+import { MoreHorizontal, Edit, Trash, X, Save } from 'lucide-vue-next'
 import {
   DropdownMenu,
   DropdownMenuContent,

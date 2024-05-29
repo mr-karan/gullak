@@ -24,11 +24,11 @@ const props = defineProps({
   },
   onConfirm: {
     type: Function,
-    default: () => {}
+    default: () => { }
   },
   onSave: {
     type: Function,
-    default: () => {}
+    default: () => { }
   }
 })
 
@@ -70,12 +70,23 @@ const cancelEdit = () => {
 }
 
 const confirmTransaction = (transaction) => {
-  props.onConfirm(transaction)
+  console.log('Confirming transaction:', transaction);
+  // Check if localEditingTransaction is not set, then use the provided transaction
+  const transactionToConfirm = localEditingTransaction.value || transaction;
+  props.onConfirm(transactionToConfirm);
+  localEditingTransaction.value = null;  // Clear the editing state
 }
 
-const saveTransaction = (transaction) => {
-  props.onSave(transaction)
+const saveTransaction = () => {
+  if (!localEditingTransaction.value) {
+    console.error('No transaction is currently being edited.');
+    return;
+  }
+
+  props.onSave(localEditingTransaction.value);
+  localEditingTransaction.value = null;
 }
+
 </script>
 
 <template>
@@ -96,58 +107,37 @@ const saveTransaction = (transaction) => {
           <span>{{ formatDate(transaction.transaction_date) }}</span>
         </TableCell>
         <TableCell>
-          <Input
-            type="number"
-            step="0.01"
-            class="w-3/4"
+          <Input type="number" step="0.01" class="w-3/4"
             v-if="localEditingTransaction && localEditingTransaction.id === transaction.id"
-            v-model="localEditingTransaction.amount"
-          />
+            v-model="localEditingTransaction.amount" />
           <span v-else>{{ transaction.currency }}{{ transaction.amount.toFixed(2) }}</span>
         </TableCell>
         <TableCell>
-          <Input
-            class="w-3/4"
-            v-if="localEditingTransaction && localEditingTransaction.id === transaction.id"
-            v-model="localEditingTransaction.category"
-          />
+          <Input class="w-3/4" v-if="localEditingTransaction && localEditingTransaction.id === transaction.id"
+            v-model="localEditingTransaction.category" />
           <Badge :class="getCategoryColor(transaction.category)" v-else>
             {{ transaction.category }}
           </Badge>
         </TableCell>
         <TableCell>
-          <Input
-            class="w-3/4"
-            v-if="localEditingTransaction && localEditingTransaction.id === transaction.id"
-            v-model="localEditingTransaction.description"
-          />
+          <Input class="w-3/4" v-if="localEditingTransaction && localEditingTransaction.id === transaction.id"
+            v-model="localEditingTransaction.description" />
           <span v-else>{{ transaction.description }}</span>
         </TableCell>
         <TableCell>
-          <Input
-            class="w-3/4"
-            v-if="localEditingTransaction && localEditingTransaction.id === transaction.id"
-            v-model="localEditingTransaction.mode"
-          />
+          <Input class="w-3/4" v-if="localEditingTransaction && localEditingTransaction.id === transaction.id"
+            v-model="localEditingTransaction.mode" />
           <span v-else>{{ transaction.mode }}</span>
         </TableCell>
         <TableCell v-if="showConfirmButton">
-          <Button
-            variant="secondary"
-            size="sm"
-            @click="confirmTransaction(localEditingTransaction || transaction)"
-          >
+          <Button variant="secondary" size="sm" @click="confirmTransaction(localEditingTransaction || transaction)">
             Confirm
           </Button>
         </TableCell>
         <TableCell>
-          <TransactionActions
-            :transaction="transaction"
+          <TransactionActions :transaction="transaction"
             :is-editing="localEditingTransaction && localEditingTransaction.id === transaction.id"
-            @edit="editTransaction"
-            @cancel="cancelEdit"
-            @save="saveTransaction"
-          />
+            @edit="editTransaction" @cancel="cancelEdit" @save="saveTransaction" />
         </TableCell>
       </TableRow>
     </TableBody>

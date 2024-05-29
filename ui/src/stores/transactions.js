@@ -1,6 +1,5 @@
-// transactions.js
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import axios from 'axios'
 
 const API_BASE_URL = '/api/transactions'
@@ -9,24 +8,39 @@ export const useTransactionStore = defineStore('transaction', () => {
   const transactions = ref([])
   const isLoading = ref(false)
 
+  // Computed property to check for unconfirmed transactions
+  const hasUnconfirmedTransactions = computed(() => {
+    return transactions.value.some((transaction) => !transaction.confirmed)
+  })
+
   async function fetchUnconfirmedTransactions() {
-    const response = await axios.get(`${API_BASE_URL}?confirm=false`)
-    transactions.value = response.data.data
+    isLoading.value = true
+    try {
+      const response = await axios.get(`${API_BASE_URL}?confirm=false`)
+      transactions.value = response.data.data
+    } finally {
+      isLoading.value = false
+    }
   }
 
   async function fetchConfirmedTransactions() {
-    const response = await axios.get(`${API_BASE_URL}?confirm=true`)
-    transactions.value = response.data.data
+    isLoading.value = true
+    try {
+      const response = await axios.get(`${API_BASE_URL}?confirm=true`)
+      transactions.value = response.data.data
+    } finally {
+      isLoading.value = false
+    }
   }
 
   async function createTransaction(line) {
     isLoading.value = true
-    const response = await axios.post(API_BASE_URL, {
-      line,
-      confirm: false
-    })
-    transactions.value.push(...response.data.data)
-    isLoading.value = false
+    try {
+      const response = await axios.post(API_BASE_URL, { line, confirm: false })
+      transactions.value.push(...response.data.data)
+    } finally {
+      isLoading.value = false
+    }
   }
 
   async function confirmTransaction(transaction) {
@@ -53,6 +67,7 @@ export const useTransactionStore = defineStore('transaction', () => {
   return {
     transactions,
     isLoading,
+    hasUnconfirmedTransactions,
     fetchUnconfirmedTransactions,
     fetchConfirmedTransactions,
     createTransaction,

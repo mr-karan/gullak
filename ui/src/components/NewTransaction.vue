@@ -30,6 +30,7 @@ const confirmTransactionHandler = async (transaction) => {
     toast.error('Error confirming transaction: ' + error.message)
   }
 }
+
 </script>
 
 <template>
