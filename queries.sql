@@ -19,7 +19,7 @@ SELECT * FROM transactions WHERE id = ?;
 -- name: UpdateTransaction :exec
 -- Updates a transaction by ID.
 UPDATE transactions
-SET amount = ?, currency = ?, category = ?, description = ?, mode = ?, confirm = ?
+SET amount = ?, currency = ?, category = ?, description = ?, mode = ?, confirm = ?, transaction_date = ?
 WHERE id = ?;
 
 -- name: DeleteTransaction :exec

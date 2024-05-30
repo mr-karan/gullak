@@ -34,7 +34,6 @@ func initApp(addr string, timeout time.Duration, queries *db.Queries, llmMgr *ll
 	// Register handlers.
 	e.GET("/api/", handleIndex)
 	e.POST("/api/transactions", handleCreateTransaction)
-	e.POST("/api/transactions/confirm", handleConfirmTransaction)
 	e.GET("/api/transactions", handleListTransactions)
 	e.GET("/api/transactions/:id", handleGetTransaction)
 	e.PUT("/api/transactions/:id", handleUpdateTransaction)

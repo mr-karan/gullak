@@ -56,6 +56,15 @@ const parseDate = (dateString) => {
   return originalParseDate(dateOnlyString)
 }
 
+const formatTransactionDate = (date) => {
+  if (date instanceof Date) {
+    return date.toISOString().split('T')[0] // Format Date object to YYYY-MM-DD
+  } else if (typeof date === 'string') {
+    return date.split('T')[0] // Extract date part from string
+  }
+  return date // Return as is if it's already in the desired format
+}
+
 onMounted(async () => {
   if (props.showConfirmButton) {
     await transactionStore.fetchUnconfirmedTransactions()
@@ -96,7 +105,7 @@ const cancelEdit = () => {
 }
 
 const confirmTransaction = (transaction) => {
-  console.log('Confirming transaction:', transaction)
+  console.log('Confirming transaction:', transaction.transaction_date)
 
   // Check if localEditingTransaction is not set, then use the provided transaction
   const transactionToConfirm = localEditingTransaction.value || transaction
@@ -104,7 +113,8 @@ const confirmTransaction = (transaction) => {
   // Format the transaction_date to YYYY-MM-DD before confirming
   const formattedTransaction = {
     ...transactionToConfirm,
-    transaction_date: transactionToConfirm.transaction_date.toString() // Use .toString() to get YYYY-MM-DD format
+    transaction_date: formatTransactionDate(transactionToConfirm.transaction_date), // Ensure date is in YYYY-MM-DD format
+    confirm: true // Ensure the confirm field is updated as well
   }
 
   props.onConfirm(formattedTransaction)
@@ -120,7 +130,7 @@ const saveTransaction = () => {
   // Format the transaction_date to YYYY-MM-DD before saving
   const formattedTransaction = {
     ...localEditingTransaction.value,
-    transaction_date: localEditingTransaction.value.transaction_date.toString() // Use .toString() to get YYYY-MM-DD format
+    transaction_date: formatTransactionDate(localEditingTransaction.value.transaction_date) // Ensure date is in YYYY-MM-DD format
   }
 
   props.onSave(formattedTransaction)

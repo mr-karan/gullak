@@ -180,18 +180,19 @@ func (q *Queries) ListTransactionsByConfirm(ctx context.Context, confirm bool) (
 
 const updateTransaction = `-- name: UpdateTransaction :exec
 UPDATE transactions
-SET amount = ?, currency = ?, category = ?, description = ?, mode = ?, confirm = ?
+SET amount = ?, currency = ?, category = ?, description = ?, mode = ?, confirm = ?, transaction_date = ?
 WHERE id = ?
 `
 
 type UpdateTransactionParams struct {
-	Amount      float64 `json:"amount"`
-	Currency    string  `json:"currency"`
-	Category    string  `json:"category"`
-	Description string  `json:"description"`
-	Mode        string  `json:"mode"`
-	Confirm     bool    `json:"confirm"`
-	ID          int64   `json:"id"`
+	Amount          float64   `json:"amount"`
+	Currency        string    `json:"currency"`
+	Category        string    `json:"category"`
+	Description     string    `json:"description"`
+	Mode            string    `json:"mode"`
+	Confirm         bool      `json:"confirm"`
+	TransactionDate time.Time `json:"transaction_date"`
+	ID              int64     `json:"id"`
 }
 
 // Updates a transaction by ID.
@@ -203,6 +204,7 @@ func (q *Queries) UpdateTransaction(ctx context.Context, arg UpdateTransactionPa
 		arg.Description,
 		arg.Mode,
 		arg.Confirm,
+		arg.TransactionDate,
 		arg.ID,
 	)
 	return err

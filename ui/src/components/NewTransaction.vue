@@ -24,13 +24,17 @@ const handleSubmit = async () => {
 
 const confirmTransactionHandler = async (transaction) => {
   try {
-    await transactionStore.confirmTransaction(transaction)
+    await transactionStore.updateTransaction(transaction)
+    // Remove the confirmed transaction from the store
+    const index = transactionStore.transactions.findIndex((t) => t.id === transaction.id)
+    if (index !== -1) {
+      transactionStore.transactions.splice(index, 1)
+    }
     toast.success('Transaction confirmed!')
   } catch (error) {
     toast.error('Error confirming transaction: ' + error.message)
   }
 }
-
 </script>
 
 <template>
@@ -43,9 +47,14 @@ const confirmTransactionHandler = async (transaction) => {
     </div>
     <div class="form">
       <form @submit.prevent="handleSubmit" class="flex flex-col items-center space-y-4">
-        <Textarea class="w-full textarea textarea-bordered"
-          placeholder="Type something like '420 for groceries, 800 for phone bill'" v-model="inputValue" minlength="5"
-          maxlength="1000" required />
+        <Textarea
+          class="w-full textarea textarea-bordered"
+          placeholder="Type something like '420 for groceries, 800 for phone bill'"
+          v-model="inputValue"
+          minlength="5"
+          maxlength="1000"
+          required
+        />
         <Button :disabled="transactionStore.isLoading">
           <Loader v-if="transactionStore.isLoading" class="mr-2 h-4 w-4 animate-spin" />
           Save transaction

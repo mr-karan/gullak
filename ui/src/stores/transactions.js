@@ -43,14 +43,6 @@ export const useTransactionStore = defineStore('transaction', () => {
     }
   }
 
-  async function confirmTransaction(transaction) {
-    await axios.post(`${API_BASE_URL}/confirm`, { ...transaction, confirm: true })
-    const index = transactions.value.findIndex((t) => t.id === transaction.id)
-    if (index !== -1) {
-      transactions.value.splice(index, 1)
-    }
-  }
-
   async function deleteTransaction(transactionId) {
     await axios.delete(`${API_BASE_URL}/${transactionId}`)
     transactions.value = transactions.value.filter((t) => t.id !== transactionId)
@@ -71,7 +63,6 @@ export const useTransactionStore = defineStore('transaction', () => {
     fetchUnconfirmedTransactions,
     fetchConfirmedTransactions,
     createTransaction,
-    confirmTransaction,
     deleteTransaction,
     updateTransaction
   }

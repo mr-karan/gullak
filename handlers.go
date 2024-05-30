@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/labstack/echo/v4"
 	"github.com/mr-karan/expenseai/internal/db"
@@ -71,54 +72,6 @@ func handleCreateTransaction(c echo.Context) error {
 	return c.JSON(http.StatusOK, Resp{
 		Message: "Expenses saved",
 		Data:    savedTransactions,
-	})
-}
-
-func handleConfirmTransaction(c echo.Context) error {
-	m := c.Get("app").(*App)
-	var transaction models.Item
-	if err := c.Bind(&transaction); err != nil {
-		m.log.Error("Error binding input", "error", err)
-		return c.JSON(http.StatusBadRequest, Resp{
-			Error: "Invalid input",
-		})
-	}
-
-	if transaction == (models.Item{}) {
-		m.log.Error("Empty transaction", "error", errors.New("empty transaction"))
-		return c.JSON(http.StatusBadRequest, Resp{
-			Error: "Empty transaction",
-		})
-	}
-
-	// Retrieve the transaction from the database
-	existingTransaction, err := m.Get(transaction.ID)
-	if err != nil {
-		m.log.Error("Error getting transaction", "error", err)
-		return c.JSON(http.StatusInternalServerError, Resp{
-			Error: "Error getting transaction",
-		})
-	}
-
-	// Update the fields of the existing transaction with the incoming data
-	existingTransaction.Amount = transaction.Amount
-	existingTransaction.Currency = transaction.Currency
-	existingTransaction.Category = transaction.Category
-	existingTransaction.Description = transaction.Description
-	existingTransaction.Mode = transaction.Mode
-	existingTransaction.Confirm = true
-
-	// Update the transaction in the database
-	if err := m.Update(transaction.ID, existingTransaction); err != nil {
-		m.log.Error("Error updating transaction", "error", err)
-		return c.JSON(http.StatusInternalServerError, Resp{
-			Error: "Error updating transaction",
-		})
-	}
-
-	return c.JSON(http.StatusOK, Resp{
-		Message: "Transaction updated and confirmed",
-		Data:    existingTransaction,
 	})
 }
 
@@ -190,7 +143,7 @@ func handleUpdateTransaction(c echo.Context) error {
 		})
 	}
 
-	var input db.UpdateTransactionParams
+	var input models.Item // Ensure models.Item has the appropriate fields
 	if err := c.Bind(&input); err != nil {
 		m.log.Error("Error binding input", "error", err)
 		return c.JSON(http.StatusBadRequest, Resp{
@@ -198,9 +151,27 @@ func handleUpdateTransaction(c echo.Context) error {
 		})
 	}
 
-	input.ID = id
+	// Ensure transaction_date is in the correct format
+	transactionDate, err := time.Parse("2006-01-02", input.TransactionDate)
+	if err != nil {
+		m.log.Error("Error parsing transaction date", "error", err)
+		return c.JSON(http.StatusBadRequest, Resp{
+			Error: "Invalid transaction date",
+		})
+	}
 
-	if err := m.queries.UpdateTransaction(context.Background(), input); err != nil {
+	params := db.UpdateTransactionParams{
+		Amount:          input.Amount,
+		Currency:        input.Currency,
+		Category:        input.Category,
+		Description:     input.Description,
+		Mode:            input.Mode,
+		Confirm:         input.Confirm,
+		TransactionDate: transactionDate,
+		ID:              id,
+	}
+
+	if err := m.queries.UpdateTransaction(context.Background(), params); err != nil {
 		m.log.Error("Error updating transaction", "error", err)
 		return c.JSON(http.StatusInternalServerError, Resp{
 			Error: "Error updating transaction",
@@ -209,6 +180,7 @@ func handleUpdateTransaction(c echo.Context) error {
 
 	return c.JSON(http.StatusOK, Resp{
 		Message: "Transaction updated",
+		Data:    params,
 	})
 }
 
