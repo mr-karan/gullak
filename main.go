@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"embed"
 	"flag"
+	"io/fs"
 	"log/slog"
 	"os"
 	"os/signal"
@@ -15,6 +17,9 @@ var (
 	buildString = "unknwown"
 )
 
+//go:embed ui/dist/*
+var content embed.FS
+
 func main() {
 	cfgPath := flag.String("config", "config.toml", "File path to the config file")
 	flag.Parse()
@@ -23,6 +28,14 @@ func main() {
 	ko, err := initConfig(*cfgPath)
 	if err != nil {
 		slog.Error("Error initializing config", "error", err)
+		os.Exit(1)
+	}
+
+	// Create a sub filesystem from the embedded files to directly access dist contents
+	// We do this so that `ui/dist/` becomes the root directory for the file server.
+	subFS, err := fs.Sub(content, "ui/dist")
+	if err != nil {
+		slog.Error("Failed to create sub filesystem", "error", err)
 		os.Exit(1)
 	}
 
@@ -60,6 +73,7 @@ func main() {
 	app := initApp(
 		ko.MustString("http.address"),
 		ko.MustDuration("http.timeout"),
+		subFS,
 		db,
 		llmMgr,
 		logger,

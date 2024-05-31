@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"io/fs"
 	"log/slog"
 	"net/http"
 	"time"
@@ -22,7 +23,7 @@ type App struct {
 	queries *db.Queries
 }
 
-func initApp(addr string, timeout time.Duration, queries *db.Queries, llmMgr *llm.Manager, log *slog.Logger) *App {
+func initApp(addr string, timeout time.Duration, static fs.FS, queries *db.Queries, llmMgr *llm.Manager, log *slog.Logger) *App {
 	e := echo.New()
 	e.HideBanner = true
 
@@ -32,12 +33,21 @@ func initApp(addr string, timeout time.Duration, queries *db.Queries, llmMgr *ll
 	}))
 
 	// Register handlers.
+
 	e.GET("/api/", handleIndex)
 	e.POST("/api/transactions", handleCreateTransaction)
 	e.GET("/api/transactions", handleListTransactions)
 	e.GET("/api/transactions/:id", handleGetTransaction)
 	e.PUT("/api/transactions/:id", handleUpdateTransaction)
 	e.DELETE("/api/transactions/:id", handleDeleteTransaction)
+
+	// Middleware to serve the static files.
+	e.Use(middleware.StaticWithConfig(middleware.StaticConfig{
+		Root:       "/",
+		Index:      "index.html",
+		HTML5:      true, // This kicks in client side routing.
+		Filesystem: http.FS(static),
+	}))
 
 	return &App{
 		srv:     e,
