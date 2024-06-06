@@ -13,3 +13,5 @@
 - [x] Fix description.String issue
 - [ ] Error message in Frontend
 - [ ] Add charts
+- [ ] Misc category
+- [ ] Drop shadcn for naiveui
