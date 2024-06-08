@@ -286,8 +286,8 @@ func handleTopExpenseCategories(c echo.Context) error {
 	}
 
 	params := db.TopExpenseCategoriesParams{
-		FromTransactionDate: startDate,
-		ToTransactionDate:   endDate,
+		StartDate: startDate,
+		EndDate:   endDate,
 	}
 
 	rawCategories, err := m.queries.TopExpenseCategories(context.Background(), params)
@@ -352,8 +352,8 @@ func handleDailySpending(c echo.Context) error {
 	}
 
 	params := db.DailySpendingParams{
-		FromTransactionDate: startDate,
-		ToTransactionDate:   endDate,
+		StartDate: startDate,
+		EndDate:   endDate,
 	}
 
 	rawSpending, err := m.queries.DailySpending(context.Background(), params)

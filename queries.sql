@@ -11,7 +11,7 @@ FROM transactions
 WHERE (:confirm IS NULL OR confirm = :confirm)
   AND (:start_date IS NULL OR transaction_date >= :start_date)
   AND (:end_date IS NULL OR transaction_date <= :end_date)
-ORDER BY created_at DESC;
+ORDER BY transaction_date DESC;
 
 
 -- name: GetTransaction :one
@@ -28,17 +28,18 @@ WHERE id = ?;
 -- Deletes a transaction by ID.
 DELETE FROM transactions WHERE id = ?;
 
-
 -- name: TopExpenseCategories :many
 -- Retrieves the top expense categories over a specified period.
+-- Uses parameters: confirm, startDate, endDate to filter by transaction date range.
 SELECT
     category,
     SUM(amount) AS total_spent
 FROM transactions
-WHERE transaction_date BETWEEN ? AND ?  -- User specifies the start and end date
+WHERE transaction_date BETWEEN :startDate AND :endDate AND confirm = 1
 GROUP BY category
 ORDER BY total_spent DESC
-LIMIT 5;  -- Can be adjusted to show more or fewer categories
+LIMIT 5;-- Can be adjusted to show more or fewer categories
+
 
 -- name: DailySpending :many
 -- Retrieves the sum total of all transactions for each day within a specified date range.
@@ -46,11 +47,11 @@ SELECT
     transaction_date,
     SUM(amount) AS total_spent
 FROM transactions
-WHERE transaction_date BETWEEN ? AND ?
+WHERE transaction_date BETWEEN :startDate AND :endDate AND confirm = 1
 GROUP BY transaction_date
 ORDER BY transaction_date ASC;
 
-
+-- TODO: This is not live yet.
 -- name: MonthlySpendingSummary :many
 -- Returns the total spending grouped by month and category.
 SELECT

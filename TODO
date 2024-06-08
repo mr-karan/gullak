@@ -1,17 +1,17 @@
-- [ ] Default currency
-- [ ] Payment mode
-- [ ] Explore groq and API more
 - [x] Create a nice UI
 - [x] Add `?confirm=true|false` in the API
 - [x] Add separate handler for confirmation
 - [x] Create handlers for getting past data
 - [x] sqlite best practices for golang
 - [x] Shadcn/ui or DaisyUI
-- [ ] Description can be a bit more descriptive? Fine tune the model for mode, currency and category.
-- [ ] Rename to Gullak
 - [x] Fix loading state in create
 - [x] Fix description.String issue
-- [ ] Error message in Frontend
-- [ ] Add charts
+- [x] Add charts
 - [ ] Misc category
-- [ ] Drop shadcn for naiveui
+- [ ] Detect 0 data, and show appropriate errors
+- [ ] Toast should be shadcn component
+- [ ] Default currency
+- [ ] Payment mode
+- [ ] Description can be a bit more descriptive? Fine tune the model for mode, currency and category.
+- [ ] Rename to Gullak
+- [ ] Error message in Frontend

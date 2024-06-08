@@ -73,18 +73,19 @@ func (q *Queries) CreateTransaction(ctx context.Context, arg CreateTransactionPa
 
 const dailySpending = `-- name: DailySpending :many
 
+
 SELECT
     transaction_date,
     SUM(amount) AS total_spent
 FROM transactions
-WHERE transaction_date BETWEEN ? AND ?
+WHERE transaction_date BETWEEN ?1 AND ?2 AND confirm = 1
 GROUP BY transaction_date
 ORDER BY transaction_date ASC
 `
 
 type DailySpendingParams struct {
-	FromTransactionDate time.Time `json:"from_transaction_date"`
-	ToTransactionDate   time.Time `json:"to_transaction_date"`
+	StartDate time.Time `json:"startDate"`
+	EndDate   time.Time `json:"endDate"`
 }
 
 type DailySpendingRow struct {
@@ -95,7 +96,7 @@ type DailySpendingRow struct {
 // Can be adjusted to show more or fewer categories
 // Retrieves the sum total of all transactions for each day within a specified date range.
 func (q *Queries) DailySpending(ctx context.Context, arg DailySpendingParams) ([]DailySpendingRow, error) {
-	rows, err := q.query(ctx, q.dailySpendingStmt, dailySpending, arg.FromTransactionDate, arg.ToTransactionDate)
+	rows, err := q.query(ctx, q.dailySpendingStmt, dailySpending, arg.StartDate, arg.EndDate)
 	if err != nil {
 		return nil, err
 	}
@@ -155,7 +156,7 @@ FROM transactions
 WHERE (?1 IS NULL OR confirm = ?1)
   AND (?2 IS NULL OR transaction_date >= ?2)
   AND (?3 IS NULL OR transaction_date <= ?3)
-ORDER BY created_at DESC
+ORDER BY transaction_date DESC
 `
 
 type ListTransactionsParams struct {
@@ -216,6 +217,7 @@ type MonthlySpendingSummaryRow struct {
 	TotalSpent sql.NullFloat64 `json:"total_spent"`
 }
 
+// TODO: This is not live yet.
 // Returns the total spending grouped by month and category.
 func (q *Queries) MonthlySpendingSummary(ctx context.Context) ([]MonthlySpendingSummaryRow, error) {
 	rows, err := q.query(ctx, q.monthlySpendingSummaryStmt, monthlySpendingSummary)
@@ -250,15 +252,15 @@ SELECT
     category,
     SUM(amount) AS total_spent
 FROM transactions
-WHERE transaction_date BETWEEN ? AND ?  -- User specifies the start and end date
+WHERE transaction_date BETWEEN ?1 AND ?2 AND confirm = 1
 GROUP BY category
 ORDER BY total_spent DESC
 LIMIT 5
 `
 
 type TopExpenseCategoriesParams struct {
-	FromTransactionDate time.Time `json:"from_transaction_date"`
-	ToTransactionDate   time.Time `json:"to_transaction_date"`
+	StartDate time.Time `json:"startDate"`
+	EndDate   time.Time `json:"endDate"`
 }
 
 type TopExpenseCategoriesRow struct {
@@ -267,8 +269,9 @@ type TopExpenseCategoriesRow struct {
 }
 
 // Retrieves the top expense categories over a specified period.
+// Uses parameters: confirm, startDate, endDate to filter by transaction date range.
 func (q *Queries) TopExpenseCategories(ctx context.Context, arg TopExpenseCategoriesParams) ([]TopExpenseCategoriesRow, error) {
-	rows, err := q.query(ctx, q.topExpenseCategoriesStmt, topExpenseCategories, arg.FromTransactionDate, arg.ToTransactionDate)
+	rows, err := q.query(ctx, q.topExpenseCategoriesStmt, topExpenseCategories, arg.StartDate, arg.EndDate)
 	if err != nil {
 		return nil, err
 	}
