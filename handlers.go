@@ -23,6 +23,16 @@ type Resp struct {
 	Data    interface{} `json:"data"`
 }
 
+type CategorySummary struct {
+	Category   string  `json:"category"`
+	TotalSpent float64 `json:"total_spent"`
+}
+
+type DailySpendingSummary struct {
+	TransactionDate string  `json:"transaction_date"`
+	TotalSpent      float64 `json:"total_spent"`
+}
+
 func handleIndex(c echo.Context) error {
 	return c.JSON(http.StatusOK, Resp{
 		Message: "Welcome to ExpenseAI. POST to /api/transactions to save expenses.",
@@ -78,25 +88,57 @@ func handleCreateTransaction(c echo.Context) error {
 func handleListTransactions(c echo.Context) error {
 	m := c.Get("app").(*App)
 
-	confirmStr := c.QueryParam("confirm")
+	var params db.ListTransactionsParams
 
-	var transactions []db.Transaction
-	var err error
-
-	switch confirmStr {
-	case "false":
-		transactions, err = m.queries.ListTransactionsByConfirm(context.Background(), false)
-	case "true":
-		transactions, err = m.queries.ListTransactionsByConfirm(context.Background(), true)
-	default:
-		transactions, err = m.queries.ListTransactions(context.Background())
+	if confirmStr := c.QueryParam("confirm"); confirmStr != "" {
+		// Convert and check the confirm parameter
+		confirm, err := strconv.ParseBool(confirmStr)
+		if err != nil {
+			return c.JSON(http.StatusBadRequest, Resp{Error: "Invalid confirm value"})
+		}
+		params.Confirm = confirm
+	} else {
+		params.Confirm = nil // Explicitly setting as nil if not provided
 	}
 
+	startDateStr := c.QueryParam("start_date")
+	endDateStr := c.QueryParam("end_date")
+	var startDate, endDate time.Time
+	var err error
+
+	if startDateStr != "" {
+		startDate, err = time.Parse("2006-01-02", startDateStr)
+		if err != nil {
+			return c.JSON(http.StatusBadRequest, Resp{Error: "Invalid start date format"})
+		}
+		params.StartDate = startDate
+	} else {
+		params.StartDate = nil // Explicitly setting as nil if not provided
+	}
+
+	if endDateStr != "" {
+		endDate, err = time.Parse("2006-01-02", endDateStr)
+		if err != nil {
+			return c.JSON(http.StatusBadRequest, Resp{Error: "Invalid end date format"})
+		}
+		params.EndDate = endDate
+	} else {
+		params.EndDate = nil // Explicitly setting as nil if not provided
+	}
+
+	// Validate the date range if both dates are provided
+	if startDateStr != "" && endDateStr != "" {
+		if err := validateDateRange(startDate, endDate); err != nil {
+			return c.JSON(http.StatusBadRequest, Resp{
+				Error: err.Error(),
+			})
+		}
+	}
+
+	transactions, err := m.queries.ListTransactions(context.Background(), params)
 	if err != nil {
 		m.log.Error("Error retrieving transactions", "error", err)
-		return c.JSON(http.StatusInternalServerError, Resp{
-			Error: "Error retrieving transactions",
-		})
+		return c.JSON(http.StatusInternalServerError, Resp{Error: "Error retrieving transactions"})
 	}
 
 	return c.JSON(http.StatusOK, Resp{
@@ -206,4 +248,145 @@ func handleDeleteTransaction(c echo.Context) error {
 	return c.JSON(http.StatusOK, Resp{
 		Message: "Transaction deleted",
 	})
+}
+
+func handleTopExpenseCategories(c echo.Context) error {
+	m := c.Get("app").(*App)
+	startDateStr := c.QueryParam("start_date")
+	endDateStr := c.QueryParam("end_date")
+
+	if startDateStr == "" || endDateStr == "" {
+		return c.JSON(http.StatusBadRequest, Resp{
+			Error: "Missing required parameters: start_date, end_date",
+		})
+	}
+
+	// Parse start date and end date strings into time.Time
+	startDate, err := time.Parse("2006-01-02", startDateStr)
+	if err != nil {
+		m.log.Error("Invalid start date", "error", err)
+		return c.JSON(http.StatusBadRequest, Resp{
+			Error: "Invalid start date format, use YYYY-MM-DD",
+		})
+	}
+
+	endDate, err := time.Parse("2006-01-02", endDateStr)
+	if err != nil {
+		m.log.Error("Invalid end date", "error", err)
+		return c.JSON(http.StatusBadRequest, Resp{
+			Error: "Invalid end date format, use YYYY-MM-DD",
+		})
+	}
+
+	// Validate the date range
+	if err := validateDateRange(startDate, endDate); err != nil {
+		return c.JSON(http.StatusBadRequest, Resp{
+			Error: err.Error(),
+		})
+	}
+
+	params := db.TopExpenseCategoriesParams{
+		FromTransactionDate: startDate,
+		ToTransactionDate:   endDate,
+	}
+
+	rawCategories, err := m.queries.TopExpenseCategories(context.Background(), params)
+	if err != nil {
+		m.log.Error("Error retrieving top expense categories", "error", err)
+		return c.JSON(http.StatusInternalServerError, Resp{
+			Error: "Error retrieving top expense categories",
+		})
+	}
+
+	// Transform into client-friendly structure
+	categories := make([]CategorySummary, len(rawCategories))
+	for i, cat := range rawCategories {
+		totalSpent := 0.0
+		if cat.TotalSpent.Valid {
+			totalSpent = cat.TotalSpent.Float64
+		}
+		categories[i] = CategorySummary{
+			Category:   cat.Category,
+			TotalSpent: totalSpent,
+		}
+	}
+
+	return c.JSON(http.StatusOK, Resp{
+		Data:    categories,
+		Message: "Top expense categories retrieved",
+	})
+}
+
+func handleDailySpending(c echo.Context) error {
+	m := c.Get("app").(*App)
+	startDateStr := c.QueryParam("start_date")
+	endDateStr := c.QueryParam("end_date")
+
+	if startDateStr == "" || endDateStr == "" {
+		return c.JSON(http.StatusBadRequest, Resp{
+			Error: "Missing required parameters: start_date, end_date",
+		})
+	}
+
+	startDate, err := time.Parse("2006-01-02", startDateStr)
+	if err != nil {
+		m.log.Error("Invalid start date", "error", err)
+		return c.JSON(http.StatusBadRequest, Resp{
+			Error: "Invalid start date format, use YYYY-MM-DD",
+		})
+	}
+
+	endDate, err := time.Parse("2006-01-02", endDateStr)
+	if err != nil {
+		m.log.Error("Invalid end date", "error", err)
+		return c.JSON(http.StatusBadRequest, Resp{
+			Error: "Invalid end date format, use YYYY-MM-DD",
+		})
+	}
+
+	// Validate the date range
+	if err := validateDateRange(startDate, endDate); err != nil {
+		return c.JSON(http.StatusBadRequest, Resp{
+			Error: err.Error(),
+		})
+	}
+
+	params := db.DailySpendingParams{
+		FromTransactionDate: startDate,
+		ToTransactionDate:   endDate,
+	}
+
+	rawSpending, err := m.queries.DailySpending(context.Background(), params)
+	if err != nil {
+		m.log.Error("Error retrieving daily spending", "error", err)
+		return c.JSON(http.StatusInternalServerError, Resp{
+			Error: "Error retrieving daily spending",
+		})
+	}
+
+	// Transform into client-friendly structure
+	spendingSummaries := make([]DailySpendingSummary, len(rawSpending))
+	for i, daily := range rawSpending {
+		totalSpent := 0.0
+		if daily.TotalSpent.Valid {
+			totalSpent = daily.TotalSpent.Float64
+		}
+		spendingSummaries[i] = DailySpendingSummary{
+			TransactionDate: daily.TransactionDate.Format("2006-01-02"),
+			TotalSpent:      totalSpent,
+		}
+	}
+
+	return c.JSON(http.StatusOK, Resp{
+		Data:    spendingSummaries,
+		Message: "Daily spending totals retrieved successfully",
+	})
+}
+
+// validateDateRange ensures that the start date is before or the same as the end date.
+func validateDateRange(startDate, endDate time.Time) error {
+	if startDate.After(endDate) {
+		return errors.New("start date must be on or before end date")
+	}
+	return nil
 }

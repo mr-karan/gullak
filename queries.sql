@@ -5,12 +5,14 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING *;
 
 -- name: ListTransactions :many
--- Retrieves all transactions from the database. Confirm value is either true or false.
-SELECT * FROM transactions ORDER BY created_at DESC;
+-- Retrieves transactions optionally filtered by confirmation status and date range.
+SELECT *
+FROM transactions
+WHERE (:confirm IS NULL OR confirm = :confirm)
+  AND (:start_date IS NULL OR transaction_date >= :start_date)
+  AND (:end_date IS NULL OR transaction_date <= :end_date)
+ORDER BY created_at DESC;
 
--- name: ListTransactionsByConfirm :many
--- Retrieves all transactions from the database. Confirm value is either true or false.
-SELECT * FROM transactions WHERE confirm=? ORDER BY created_at DESC;
 
 -- name: GetTransaction :one
 -- Retrieves a single transaction by ID.
@@ -25,3 +27,37 @@ WHERE id = ?;
 -- name: DeleteTransaction :exec
 -- Deletes a transaction by ID.
 DELETE FROM transactions WHERE id = ?;
+
+
+-- name: TopExpenseCategories :many
+-- Retrieves the top expense categories over a specified period.
+SELECT
+    category,
+    SUM(amount) AS total_spent
+FROM transactions
+WHERE transaction_date BETWEEN ? AND ?  -- User specifies the start and end date
+GROUP BY category
+ORDER BY total_spent DESC
+LIMIT 5;  -- Can be adjusted to show more or fewer categories
+
+-- name: DailySpending :many
+-- Retrieves the sum total of all transactions for each day within a specified date range.
+SELECT
+    transaction_date,
+    SUM(amount) AS total_spent
+FROM transactions
+WHERE transaction_date BETWEEN ? AND ?
+GROUP BY transaction_date
+ORDER BY transaction_date ASC;
+
+
+-- name: MonthlySpendingSummary :many
+-- Returns the total spending grouped by month and category.
+SELECT
+    strftime('%Y', transaction_date) AS year,
+    strftime('%m', transaction_date) AS month,
+    category,
+    SUM(amount) AS total_spent
+FROM transactions
+GROUP BY year, month, category
+ORDER BY year DESC, month DESC, total_spent DESC;

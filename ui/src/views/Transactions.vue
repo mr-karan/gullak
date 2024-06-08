@@ -1,9 +1,9 @@
 <script setup>
-import Transactions from '../components/Transactions.vue'
+import Overview from '../components/Overview.vue'
 </script>
 
 <template>
     <main>
-        <Transactions />
+        <Overview />
     </main>
 </template>

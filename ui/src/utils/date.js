@@ -26,3 +26,27 @@ export function formatDateForApi(date) {
   if (!date) return ''
   return date.toISOString().split('T')[0]
 }
+
+// utils.js
+
+/**
+ * Formats a JavaScript Date object into a string in YYYY-MM-DD format.
+ * @param {Date} date - The Date object to format.
+ * @return {string} The formatted date string.
+ */
+export function formatDateV2(date) {
+  if (!(date instanceof Date)) {
+    throw new Error("Provided value is not a valid Date object.");
+  }
+
+  let month = '' + (date.getMonth() + 1),
+    day = '' + date.getDate(),
+    year = date.getFullYear();
+
+  if (month.length < 2)
+    month = '0' + month;
+  if (day.length < 2)
+    day = '0' + day;
+
+  return [year, month, day].join('-');
+}

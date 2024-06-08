@@ -34,12 +34,15 @@ func initApp(addr string, timeout time.Duration, static fs.FS, queries *db.Queri
 
 	// Register handlers.
 
-	e.GET("/api/", handleIndex)
-	e.POST("/api/transactions", handleCreateTransaction)
-	e.GET("/api/transactions", handleListTransactions)
-	e.GET("/api/transactions/:id", handleGetTransaction)
-	e.PUT("/api/transactions/:id", handleUpdateTransaction)
-	e.DELETE("/api/transactions/:id", handleDeleteTransaction)
+	e.GET("/api", handleIndex)                                               // Simple welcome message or API status
+	e.POST("/api/transactions", handleCreateTransaction)                     // Creates a new transaction
+	e.GET("/api/transactions", handleListTransactions)                       // Lists all transactions, with optional filters
+	e.GET("/api/transactions/:id", handleGetTransaction)                     // Retrieves a specific transaction by ID
+	e.PUT("/api/transactions/:id", handleUpdateTransaction)                  // Updates a specific transaction by ID
+	e.DELETE("/api/transactions/:id", handleDeleteTransaction)               // Deletes a specific transaction by ID
+	e.GET("/api/reports/top-expense-categories", handleTopExpenseCategories) // Retrieves top expense categories
+	e.GET("/api/reports/daily-spending", handleDailySpending)                // Retrieves spending for a specific day
+	// e.GET("/api/reports/monthly-spending-summary", handleMonthlySpendingSummary) // Retrieves spending summary by month
 
 	// Middleware to serve the static files.
 	e.Use(middleware.StaticWithConfig(middleware.StaticConfig{

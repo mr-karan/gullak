@@ -23,10 +23,10 @@ export const useTransactionStore = defineStore('transaction', () => {
     }
   }
 
-  async function fetchConfirmedTransactions() {
+  async function fetchConfirmedTransactions(startDate, endDate) {
     isLoading.value = true
     try {
-      const response = await axios.get(`${API_BASE_URL}?confirm=true`)
+      const response = await axios.get(`${API_BASE_URL}?start_date=${startDate}&end_date=${endDate}`);
       transactions.value = response.data.data
     } finally {
       isLoading.value = false
@@ -56,6 +56,34 @@ export const useTransactionStore = defineStore('transaction', () => {
     }
   }
 
+  async function fetchTopExpenseCategories(startDate, endDate) {
+    isLoading.value = true;
+    try {
+      const response = await axios.get('/api/reports/top-expense-categories', {
+        params: {
+          start_date: startDate,
+          end_date: endDate,
+        },
+      });
+      return response.data.data;
+    } finally {
+      isLoading.value = false;
+    }
+  }
+
+  // Add this function in your existing store
+  async function fetchDailySpending(startDate, endDate) {
+    isLoading.value = true;
+    try {
+      const response = await axios.get('/api/reports/daily-spending', {
+        params: { start_date: startDate, end_date: endDate },
+      });
+      return response.data.data; // this should return data formatted as { transaction_date: "YYYY-MM-DD", total_spent: Number }
+    } finally {
+      isLoading.value = false;
+    }
+  }
+
   return {
     transactions,
     isLoading,
@@ -64,6 +92,8 @@ export const useTransactionStore = defineStore('transaction', () => {
     fetchConfirmedTransactions,
     createTransaction,
     deleteTransaction,
-    updateTransaction
+    updateTransaction,
+    fetchTopExpenseCategories,
+    fetchDailySpending
   }
 })

@@ -7,6 +7,7 @@ package db
 
 import (
 	"context"
+	"database/sql"
 	"time"
 )
 
@@ -70,6 +71,52 @@ func (q *Queries) CreateTransaction(ctx context.Context, arg CreateTransactionPa
 	return items, nil
 }
 
+const dailySpending = `-- name: DailySpending :many
+
+SELECT
+    transaction_date,
+    SUM(amount) AS total_spent
+FROM transactions
+WHERE transaction_date BETWEEN ? AND ?
+GROUP BY transaction_date
+ORDER BY transaction_date ASC
+`
+
+type DailySpendingParams struct {
+	FromTransactionDate time.Time `json:"from_transaction_date"`
+	ToTransactionDate   time.Time `json:"to_transaction_date"`
+}
+
+type DailySpendingRow struct {
+	TransactionDate time.Time       `json:"transaction_date"`
+	TotalSpent      sql.NullFloat64 `json:"total_spent"`
+}
+
+// Can be adjusted to show more or fewer categories
+// Retrieves the sum total of all transactions for each day within a specified date range.
+func (q *Queries) DailySpending(ctx context.Context, arg DailySpendingParams) ([]DailySpendingRow, error) {
+	rows, err := q.query(ctx, q.dailySpendingStmt, dailySpending, arg.FromTransactionDate, arg.ToTransactionDate)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []DailySpendingRow{}
+	for rows.Next() {
+		var i DailySpendingRow
+		if err := rows.Scan(&i.TransactionDate, &i.TotalSpent); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const deleteTransaction = `-- name: DeleteTransaction :exec
 DELETE FROM transactions WHERE id = ?
 `
@@ -103,12 +150,23 @@ func (q *Queries) GetTransaction(ctx context.Context, id int64) (Transaction, er
 }
 
 const listTransactions = `-- name: ListTransactions :many
-SELECT id, created_at, transaction_date, currency, amount, category, mode, description, confirm FROM transactions ORDER BY created_at DESC
+SELECT id, created_at, transaction_date, currency, amount, category, mode, description, confirm
+FROM transactions
+WHERE (?1 IS NULL OR confirm = ?1)
+  AND (?2 IS NULL OR transaction_date >= ?2)
+  AND (?3 IS NULL OR transaction_date <= ?3)
+ORDER BY created_at DESC
 `
 
-// Retrieves all transactions from the database. Confirm value is either true or false.
-func (q *Queries) ListTransactions(ctx context.Context) ([]Transaction, error) {
-	rows, err := q.query(ctx, q.listTransactionsStmt, listTransactions)
+type ListTransactionsParams struct {
+	Confirm   interface{} `json:"confirm"`
+	StartDate interface{} `json:"start_date"`
+	EndDate   interface{} `json:"end_date"`
+}
+
+// Retrieves transactions optionally filtered by confirmation status and date range.
+func (q *Queries) ListTransactions(ctx context.Context, arg ListTransactionsParams) ([]Transaction, error) {
+	rows, err := q.query(ctx, q.listTransactionsStmt, listTransactions, arg.Confirm, arg.StartDate, arg.EndDate)
 	if err != nil {
 		return nil, err
 	}
@@ -140,31 +198,85 @@ func (q *Queries) ListTransactions(ctx context.Context) ([]Transaction, error) {
 	return items, nil
 }
 
-const listTransactionsByConfirm = `-- name: ListTransactionsByConfirm :many
-SELECT id, created_at, transaction_date, currency, amount, category, mode, description, confirm FROM transactions WHERE confirm=? ORDER BY created_at DESC
+const monthlySpendingSummary = `-- name: MonthlySpendingSummary :many
+SELECT
+    strftime('%Y', transaction_date) AS year,
+    strftime('%m', transaction_date) AS month,
+    category,
+    SUM(amount) AS total_spent
+FROM transactions
+GROUP BY year, month, category
+ORDER BY year DESC, month DESC, total_spent DESC
 `
 
-// Retrieves all transactions from the database. Confirm value is either true or false.
-func (q *Queries) ListTransactionsByConfirm(ctx context.Context, confirm bool) ([]Transaction, error) {
-	rows, err := q.query(ctx, q.listTransactionsByConfirmStmt, listTransactionsByConfirm, confirm)
+type MonthlySpendingSummaryRow struct {
+	Year       interface{}     `json:"year"`
+	Month      interface{}     `json:"month"`
+	Category   string          `json:"category"`
+	TotalSpent sql.NullFloat64 `json:"total_spent"`
+}
+
+// Returns the total spending grouped by month and category.
+func (q *Queries) MonthlySpendingSummary(ctx context.Context) ([]MonthlySpendingSummaryRow, error) {
+	rows, err := q.query(ctx, q.monthlySpendingSummaryStmt, monthlySpendingSummary)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []Transaction{}
+	items := []MonthlySpendingSummaryRow{}
 	for rows.Next() {
-		var i Transaction
+		var i MonthlySpendingSummaryRow
 		if err := rows.Scan(
-			&i.ID,
-			&i.CreatedAt,
-			&i.TransactionDate,
-			&i.Currency,
-			&i.Amount,
+			&i.Year,
+			&i.Month,
 			&i.Category,
-			&i.Mode,
-			&i.Description,
-			&i.Confirm,
+			&i.TotalSpent,
 		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const topExpenseCategories = `-- name: TopExpenseCategories :many
+SELECT
+    category,
+    SUM(amount) AS total_spent
+FROM transactions
+WHERE transaction_date BETWEEN ? AND ?  -- User specifies the start and end date
+GROUP BY category
+ORDER BY total_spent DESC
+LIMIT 5
+`
+
+type TopExpenseCategoriesParams struct {
+	FromTransactionDate time.Time `json:"from_transaction_date"`
+	ToTransactionDate   time.Time `json:"to_transaction_date"`
+}
+
+type TopExpenseCategoriesRow struct {
+	Category   string          `json:"category"`
+	TotalSpent sql.NullFloat64 `json:"total_spent"`
+}
+
+// Retrieves the top expense categories over a specified period.
+func (q *Queries) TopExpenseCategories(ctx context.Context, arg TopExpenseCategoriesParams) ([]TopExpenseCategoriesRow, error) {
+	rows, err := q.query(ctx, q.topExpenseCategoriesStmt, topExpenseCategories, arg.FromTransactionDate, arg.ToTransactionDate)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []TopExpenseCategoriesRow{}
+	for rows.Next() {
+		var i TopExpenseCategoriesRow
+		if err := rows.Scan(&i.Category, &i.TotalSpent); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
