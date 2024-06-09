@@ -21,7 +21,11 @@ const fetchUnconfirmedTransactions = async () => {
   try {
     unconfirmedTransactions.value = await transactionStore.fetchTransactions(false)
   } catch (error) {
-    toast.error('Error loading unconfirmed transactions: ' + error.message)
+    if (error.response && error.response.data && error.response.data.error) {
+      toast.error(error.response.data.error);
+    } else {
+      toast.error('Error loading transactions: ' + error.message);
+    }
   }
 }
 
@@ -32,7 +36,6 @@ const handleSubmit = async () => {
     toast.success('Transaction saved. Please confirm!');
     inputValue.value = '';
   } catch (error) {
-    console.log(error);
     if (error.response && error.response.data && error.response.data.error) {
       toast.error(error.response.data.error);
     } else {
@@ -48,7 +51,11 @@ const confirmTransactionHandler = async (transaction) => {
     await fetchUnconfirmedTransactions()
     toast.success('Transaction confirmed!')
   } catch (error) {
-    toast.error('Error confirming transaction: ' + error.message)
+    if (error.response && error.response.data && error.response.data.error) {
+      toast.error(error.response.data.error);
+    } else {
+      toast.error('Error confirming transaction: ' + error.message);
+    }
   }
 }
 
@@ -58,7 +65,11 @@ const deleteTransactionHandler = async (transaction) => {
     await fetchUnconfirmedTransactions()
     toast.success('Transaction deleted!')
   } catch (error) {
-    toast.error('Error deleting transaction: ' + error.message)
+    if (error.response && error.response.data && error.response.data.error) {
+      toast.error(error.response.data.error);
+    } else {
+      toast.error('Error deleting transaction: ' + error.message);
+    }
   }
 }
 

@@ -59,8 +59,11 @@ const fetchData = async () => {
         }));
         transactions.value = transData;
     } catch (error) {
-        console.error("Error fetching data:", error);
-        toast.error('Error fetching data: ' + error.message);
+        if (error.response && error.response.data && error.response.data.error) {
+            toast.error(error.response.data.error);
+        } else {
+            toast.error('Error fetching data: ' + error.message);
+        }
     }
 }
 
@@ -70,7 +73,11 @@ const saveTransactionHandler = async (transaction) => {
         toast.success('Transaction updated successfully!');
         fetchData();
     } catch (error) {
-        toast.error('Error updating transaction: ' + error.message);
+        if (error.response && error.response.data && error.response.data.error) {
+            toast.error(error.response.data.error);
+        } else {
+            toast.error('Error updating transaction: ' + error.message);
+        }
     }
 }
 

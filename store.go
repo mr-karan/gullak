@@ -39,6 +39,7 @@ func initDB(path string, currency string) (*db.Queries, error) {
 	if err != nil {
 		return nil, fmt.Errorf("error opening database: %w", err)
 	}
+	defer conn.Close()
 
 	if currency == "" {
 		currency = DEFAULT_CURRENCY

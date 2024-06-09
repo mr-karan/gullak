@@ -7,14 +7,16 @@
 - [x] Fix loading state in create
 - [x] Fix description.String issue
 - [x] Add charts
-- [ ] Misc category
-- [ ] Detect 0 data, and show appropriate errors
-- [ ] Toast should be shadcn component
-- [ ] Default currency
-- [ ] Payment mode
-- [ ] Description can be a bit more descriptive? Fine tune the model for mode, currency and category.
-- [ ] Rename to Gullak
-- [ ] Error message in Frontend
-- [ ] Fix common store being used for transactions and unconfirmed ones.
+- [x] Misc category
+- [x] Fix common store being used for transactions and unconfirmed ones.
+- [x] Default currency
 - [ ] Date, human readable in charts
-- [ ]
+- [ ] Toast should be shadcn component
+- [x] Error message in Frontend
+- [ ] Detect 0 data, and show appropriate errors
+- [ ] Rename to Gullak
+- [ ] README/Docs
+- [ ] Blog
+- [ ] Self Host
+- [ ] Demo
+- [ ] Apple Shortcuts
