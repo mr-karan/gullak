@@ -49,7 +49,9 @@ func main() {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, lgrOpts))
 
 	// Initialize the database.
-	db, err := initDB(ko.MustString("app.db_path"))
+	db, err := initDB(ko.MustString("app.db_path"), ko.String(
+		"app.currency",
+	))
 	if err != nil {
 		logger.Error("Error initializing database", "error", err)
 		os.Exit(1)

@@ -26,7 +26,8 @@ const props = defineProps({
   },
   showConfirmButton: Boolean,
   onConfirm: Function,
-  onSave: Function
+  onSave: Function,
+  onDelete: Function,
 });
 
 const emit = defineEmits(['edit']);
@@ -70,9 +71,16 @@ const cancelEdit = () => {
 
 const confirmTransaction = (transaction) => {
   const transactionToConfirm = localEditingTransaction.value || transaction;
-  transactionToConfirm.transaction_date = transactionToConfirm.transaction_date.toString();
+  const isoDate = new Date(transactionToConfirm.transaction_date);
+  const formattedDate = isoDate.toISOString().split('T')[0]; // Splits the ISO string by 'T' and takes the first part (date)
+  transactionToConfirm.transaction_date = formattedDate;
   props.onConfirm(transactionToConfirm);
   localEditingTransaction.value = null;
+};
+
+const deleteTransaction = (transaction) => {
+  console.log("deleteTransaction:", transaction);
+  props.onDelete(transaction);
 };
 
 const saveTransaction = () => {
@@ -92,7 +100,6 @@ const saveTransaction = () => {
         <TableHead>Amount</TableHead>
         <TableHead>Category</TableHead>
         <TableHead>Description</TableHead>
-        <TableHead>Mode</TableHead>
         <TableHead>Actions</TableHead>
       </TableRow>
     </TableHeader>
@@ -130,11 +137,6 @@ const saveTransaction = () => {
             v-model="localEditingTransaction.description" />
           <span v-else>{{ transaction.description }}</span>
         </TableCell>
-        <TableCell>
-          <Input class="w-3/4" v-if="localEditingTransaction && localEditingTransaction.id === transaction.id"
-            v-model="localEditingTransaction.mode" />
-          <span v-else>{{ transaction.mode }}</span>
-        </TableCell>
         <TableCell v-if="showConfirmButton">
           <Button variant="secondary" size="sm" @click="confirmTransaction(localEditingTransaction || transaction)">
             Confirm
@@ -143,7 +145,7 @@ const saveTransaction = () => {
         <TableCell>
           <TransactionActions :transaction="transaction"
             :is-editing="localEditingTransaction && localEditingTransaction.id === transaction.id"
-            @edit="editTransaction" @cancel="cancelEdit" @save="saveTransaction" />
+            @edit="editTransaction" @delete="deleteTransaction" @cancel="cancelEdit" @save="saveTransaction" />
         </TableCell>
       </TableRow>
     </TableBody>

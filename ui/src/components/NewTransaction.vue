@@ -27,22 +27,38 @@ const fetchUnconfirmedTransactions = async () => {
 
 const handleSubmit = async () => {
   try {
-    await transactionStore.createTransaction(inputValue.value)
-    await fetchUnconfirmedTransactions()
-    toast.success('Transaction saved. Please confirm!')
-    inputValue.value = ''
+    await transactionStore.createTransaction(inputValue.value);
+    await fetchUnconfirmedTransactions();
+    toast.success('Transaction saved. Please confirm!');
+    inputValue.value = '';
   } catch (error) {
-    toast.error('Error saving transaction: ' + error.message)
+    console.log(error);
+    if (error.response && error.response.data && error.response.data.error) {
+      toast.error(error.response.data.error);
+    } else {
+      toast.error('Error saving transaction: ' + error.message);
+    }
   }
-}
+};
 
 const confirmTransactionHandler = async (transaction) => {
+  transaction.confirm = true
   try {
     await transactionStore.updateTransaction(transaction)
     await fetchUnconfirmedTransactions()
     toast.success('Transaction confirmed!')
   } catch (error) {
     toast.error('Error confirming transaction: ' + error.message)
+  }
+}
+
+const deleteTransactionHandler = async (transaction) => {
+  try {
+    await transactionStore.deleteTransaction(transaction.id)
+    await fetchUnconfirmedTransactions()
+    toast.success('Transaction deleted!')
+  } catch (error) {
+    toast.error('Error deleting transaction: ' + error.message)
   }
 }
 
@@ -71,6 +87,6 @@ const confirmTransactionHandler = async (transaction) => {
   <section class="unconfirmed p-6">
     <h2 class="text-xl font-semibold mb-4">Unconfirmed Transactions</h2>
     <TransactionTable :transactions="unconfirmedTransactions" :show-confirm-button="true"
-      :on-confirm="confirmTransactionHandler" />
+      :on-confirm="confirmTransactionHandler" :on-delete="deleteTransactionHandler" />
   </section>
 </template>

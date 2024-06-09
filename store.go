@@ -12,19 +12,40 @@ import (
 	"github.com/mr-karan/expenseai/pkg/models"
 )
 
-//go:embed schema.sql
-var ddl string
+const (
+	DEFAULT_CURRENCY = "INR"
+)
 
 //go:embed pragmas.sql
 var pragmas string
 
-func initDB(path string) (*db.Queries, error) {
+func createTableSQL(currency string) string {
+	return fmt.Sprintf(`
+        CREATE TABLE IF NOT EXISTS transactions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            created_at DATETIME NOT NULL DEFAULT (datetime('now')),
+            transaction_date DATE NOT NULL,
+            currency TEXT NOT NULL DEFAULT '%s',
+            amount FLOAT NOT NULL,
+            category TEXT NOT NULL,
+            description TEXT NOT NULL DEFAULT '',
+            confirm BOOLEAN NOT NULL DEFAULT false
+        );
+    `, currency)
+}
+
+func initDB(path string, currency string) (*db.Queries, error) {
 	conn, err := sql.Open("sqlite3", path)
 	if err != nil {
 		return nil, fmt.Errorf("error opening database: %w", err)
 	}
 
-	if _, err = conn.Exec(ddl); err != nil {
+	if currency == "" {
+		currency = DEFAULT_CURRENCY
+	}
+
+	// Create the table if it doesn't exist.
+	if _, err = conn.Exec(createTableSQL(currency)); err != nil {
 		return nil, fmt.Errorf("error creating tables: %w", err)
 	}
 
@@ -63,7 +84,6 @@ func (a *App) Save(transactions models.Transactions) ([]db.Transaction, error) {
 			Currency:        item.Currency,
 			Category:        item.Category,
 			Description:     item.Description,
-			Mode:            item.Mode,
 		}
 
 		savedTx, err := a.queries.CreateTransaction(context.TODO(), arg)
@@ -89,7 +109,6 @@ func (a *App) Get(id int64) (models.Item, error) {
 		Amount:          transaction.Amount,
 		Category:        transaction.Category,
 		Description:     transaction.Description,
-		Mode:            transaction.Mode,
 		Confirm:         transaction.Confirm,
 	}, nil
 }
@@ -101,7 +120,6 @@ func (a *App) Update(id int64, transaction models.Item) error {
 		Currency:    transaction.Currency,
 		Category:    transaction.Category,
 		Description: transaction.Description,
-		Mode:        transaction.Mode,
 		Confirm:     transaction.Confirm,
 		ID:          id,
 	}

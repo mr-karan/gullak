@@ -207,7 +207,6 @@ func handleUpdateTransaction(c echo.Context) error {
 		Currency:        input.Currency,
 		Category:        input.Category,
 		Description:     input.Description,
-		Mode:            input.Mode,
 		Confirm:         input.Confirm,
 		TransactionDate: transactionDate,
 		ID:              id,

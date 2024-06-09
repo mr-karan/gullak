@@ -45,13 +45,14 @@ func (m *Manager) Parse(msg string) (models.Transactions, error) {
 
 	m.log.Debug("Parsing expenses", "message", msg)
 	dialogue := []openai.ChatCompletionMessage{
-		{Role: openai.ChatMessageRoleSystem, Content: fmt.Sprintf("Categorize my expenses. Today's date is %s", time.Now().Format("2006-01-02"))},
+		{Role: openai.ChatMessageRoleSystem, Content: fmt.Sprintf("Categorize my expenses. If the message is unrelated to their transactions, return an error. Today's date is %s", time.Now().Format("2006-01-02"))},
+		// {Role: openai.ChatMessageRoleSystem, Content: fmt.Sprintf("The user will input their spends on various things, you need to split the expenses in the correct categories. The amount and a short description must be enough for you to parse the expenses correctly. If the message from user does not contain any details about their spends, return a valid error. Assume transaction date to be today's date if unspecified. Today's date is %s", time.Now().Format("2006-01-02"))},
 		{Role: openai.ChatMessageRoleUser, Content: msg},
 	}
 
 	fnCategorizeExpenses := openai.FunctionDefinition{
 		Name:        "categorize_expense",
-		Description: "Categorize expenses from the given input",
+		Description: "Categorize expenses from the given input.",
 		Parameters: jsonschema.Definition{
 			Type: jsonschema.Object,
 			Properties: map[string]jsonschema.Definition{
@@ -65,10 +66,6 @@ func (m *Manager) Parse(msg string) (models.Transactions, error) {
 								Type:        jsonschema.String,
 								Description: "Date of transaction in ISO 8601 format (e.g., 2021-09-01) if specified else today's date.",
 							},
-							"currency": {
-								Type:        jsonschema.String,
-								Description: "Currency of the amount (e.g. INR, USD, EUR). Default is INR unless specified otherwise",
-							},
 							"amount": {
 								Type:        jsonschema.Number,
 								Description: "Amount of the item",
@@ -81,12 +78,8 @@ func (m *Manager) Parse(msg string) (models.Transactions, error) {
 								Type:        jsonschema.String,
 								Description: "Concise and short description of the item",
 							},
-							"mode": {
-								Type:        jsonschema.String,
-								Description: "Payment mode of the transaction (e.g., cash, card, upi, netbanking). Default is cash unless specified otherwise",
-							},
 						},
-						Required: []string{"transaction_date", "amount", "category", "description", "mode"},
+						Required: []string{"transaction_date", "amount", "category", "description"},
 					},
 				},
 			},

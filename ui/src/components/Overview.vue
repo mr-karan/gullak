@@ -68,14 +68,15 @@ const saveTransactionHandler = async (transaction) => {
     try {
         await transactionStore.updateTransaction(transaction);
         toast.success('Transaction updated successfully!');
+        fetchData();
     } catch (error) {
         toast.error('Error updating transaction: ' + error.message);
     }
 }
 
+// When the date range is updated, fetch new data.
 const handleDateRangeUpdate = (newDates) => {
     dateRange.value = { ...dateRange.value, start: newDates.start, end: newDates.end };
-    // Fetch data when dates change.
     fetchData();
 };
 

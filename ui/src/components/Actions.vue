@@ -6,8 +6,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
-import { useTransactionStore } from '@/stores/transactions'
-import { useToast } from 'vue-toastification'
 
 const props = defineProps({
   transaction: {
@@ -20,10 +18,7 @@ const props = defineProps({
   }
 })
 
-const emit = defineEmits(['edit', 'cancel', 'save'])
-
-const transactionStore = useTransactionStore()
-const toast = useToast()
+const emit = defineEmits(['edit', 'cancel', 'save', 'delete'])
 
 const editTransaction = () => {
   emit('edit', props.transaction)
@@ -33,13 +28,8 @@ const saveTransaction = () => {
   emit('save', props.transaction)
 }
 
-const deleteTransactionHandler = async () => {
-  try {
-    await transactionStore.deleteTransaction(props.transaction.id)
-    toast.success('Transaction deleted!')
-  } catch (error) {
-    toast.error('Error deleting transaction: ' + error.message)
-  }
+const deleteTransaction = () => {
+  emit('delete', props.transaction)
 }
 
 const cancelEdit = () => {
@@ -65,7 +55,7 @@ const cancelEdit = () => {
         <Save class="mr-2 h-4 w-4" />
         Save
       </DropdownMenuItem>
-      <DropdownMenuItem @click="deleteTransactionHandler">
+      <DropdownMenuItem @click="deleteTransaction">
         <Trash class="mr-2 h-4 w-4" />
         Delete
       </DropdownMenuItem>
