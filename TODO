@@ -15,3 +15,6 @@
 - [ ] Description can be a bit more descriptive? Fine tune the model for mode, currency and category.
 - [ ] Rename to Gullak
 - [ ] Error message in Frontend
+- [ ] Fix common store being used for transactions and unconfirmed ones.
+- [ ] Date, human readable in charts
+- [ ]

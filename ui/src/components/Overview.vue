@@ -10,7 +10,8 @@
             </div>
             <div class="w-full md:w-1/2 p-2">
                 <AreaChart :data="dailyData" index="transaction_date" :categories="['total_spent']"
-                    class="w-full h-[200px]" :curve-type="CurveType.Linear" />
+                    class="w-full h-[200px]" :show-grid-line="false" :show-legend="false"
+                    :curve-type="CurveType.Basis" />
             </div>
         </div>
         <div class="transactions mt-4">
@@ -44,7 +45,6 @@ const dateRange = ref({
 });
 
 const fetchData = async () => {
-    console.log("Fetching data for range:", dateRange.value.start, dateRange.value.end);
     try {
         const dailySpending = await transactionStore.fetchDailySpending(dateRange.value.start, dateRange.value.end);
         dailyData.value = dailySpending.map(day => ({
@@ -74,7 +74,6 @@ const saveTransactionHandler = async (transaction) => {
 }
 
 const handleDateRangeUpdate = (newDates) => {
-    console.log("New dates received:", newDates.start, newDates.end);
     dateRange.value = { ...dateRange.value, start: newDates.start, end: newDates.end };
     fetchData(); // Fetch data when dates change
 };
