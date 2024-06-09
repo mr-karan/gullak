@@ -1,39 +1,15 @@
-<template>
-    <section class="p-6">
-        <div class="flex flex-wrap items-center justify-between py-4">
-            <h1 class="text-2xl font-semibold text-gray-800 flex-1">Dashboard Overview</h1>
-            <DateRangePicker v-model="dateRange" @update:dateRange="handleDateRangeUpdate" class="flex-initial" />
-        </div>
-        <div class="charts mt-4 flex flex-wrap justify-center items-stretch">
-            <div class="w-full md:w-1/2 p-2">
-                <DonutChart :data="categoriesData" index="name" :category="'total'" class="w-full h-full" />
-            </div>
-            <div class="w-full md:w-1/2 p-2">
-                <AreaChart :data="dailyData" index="transaction_date" :categories="['total_spent']"
-                    class="w-full h-[200px]" :show-grid-line="false" :show-legend="false"
-                    :curve-type="CurveType.Basis" />
-            </div>
-        </div>
-        <div class="transactions mt-4">
-            <h2 class="text-2xl font-semibold text-gray-800 mb-4">Transactions Log</h2>
-            <TransactionTable :transactions="transactions" :on-save="saveTransactionHandler" />
-        </div>
-    </section>
-</template>
-
-<script setup>
+<script setup lang="ts">
 import { ref, onMounted, watch } from 'vue';
 import { DonutChart } from '@/components/ui/chart-donut';
 import { AreaChart } from '@/components/ui/chart-area'
 import { CurveType } from '@unovis/ts';
-import { useToast } from 'vue-toastification';
+import { showToast } from '@/utils/common'
+import { Toaster } from '@/components/ui/toast'
 import DateRangePicker from '@/components/DateRangePicker.vue';
 import TransactionTable from '@/components/TransactionTable.vue';
 import { useTransactionStore } from '@/stores/transactions';
 
-const toast = useToast();
 const transactionStore = useTransactionStore();
-
 const categoriesData = ref([]);
 const dailyData = ref([]);
 const transactions = ref([]);
@@ -59,25 +35,17 @@ const fetchData = async () => {
         }));
         transactions.value = transData;
     } catch (error) {
-        if (error.response && error.response.data && error.response.data.error) {
-            toast.error(error.response.data.error);
-        } else {
-            toast.error('Error fetching data: ' + error.message);
-        }
+        showToast('Error fetching data.', error.response?.data?.error || error.message, true);
     }
 }
 
 const saveTransactionHandler = async (transaction) => {
     try {
         await transactionStore.updateTransaction(transaction);
-        toast.success('Transaction updated successfully!');
+        showToast('Transaction updated successfully!', '', false);
         fetchData();
     } catch (error) {
-        if (error.response && error.response.data && error.response.data.error) {
-            toast.error(error.response.data.error);
-        } else {
-            toast.error('Error updating transaction: ' + error.message);
-        }
+        showToast('Error updating transaction.', error.response?.data?.error || error.message, true);
     }
 }
 
@@ -90,3 +58,27 @@ const handleDateRangeUpdate = (newDates) => {
 onMounted(fetchData);
 watch(dateRange, fetchData, { deep: true });
 </script>
+
+<template>
+    <Toaster />
+    <section class="p-6">
+        <div class="flex flex-wrap items-center justify-between py-4">
+            <h1 class="text-2xl font-semibold text-gray-800 flex-1">Dashboard Overview</h1>
+            <DateRangePicker v-model="dateRange" @update:dateRange="handleDateRangeUpdate" class="flex-initial" />
+        </div>
+        <div class="charts mt-4 flex flex-wrap justify-center items-stretch">
+            <div class="w-full md:w-1/2 p-2">
+                <DonutChart :data="categoriesData" index="name" :category="'total'" class="w-full h-full" />
+            </div>
+            <div class="w-full md:w-1/2 p-2">
+                <AreaChart :data="dailyData" index="transaction_date" :categories="['total_spent']"
+                    class="w-full h-[200px]" :show-grid-line="false" :show-legend="false"
+                    :curve-type="CurveType.Basis" />
+            </div>
+        </div>
+        <div class="transactions mt-4">
+            <h2 class="text-2xl font-semibold text-gray-800 mb-4">Transactions Log</h2>
+            <TransactionTable :transactions="transactions" :on-save="saveTransactionHandler" />
+        </div>
+    </section>
+</template>

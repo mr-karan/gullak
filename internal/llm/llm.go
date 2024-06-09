@@ -45,7 +45,7 @@ func (m *Manager) Parse(msg string) (models.Transactions, error) {
 
 	m.log.Debug("Parsing expenses", "message", msg)
 	dialogue := []openai.ChatCompletionMessage{
-		{Role: openai.ChatMessageRoleSystem, Content: fmt.Sprintf("Categorize my expenses. If the message is unrelated to their transactions, return an error. Today's date is %s", time.Now().Format("2006-01-02"))},
+		{Role: openai.ChatMessageRoleSystem, Content: fmt.Sprintf("Categorize my expenses. Make a best case effort to deduce the nature of expenses from the given description even if a little ambiguous or vague. Ignore any messages not related to user's spends and return a valid error. Today's date is %s", time.Now().Format("2006-01-02"))},
 		// {Role: openai.ChatMessageRoleSystem, Content: fmt.Sprintf("The user will input their spends on various things, you need to split the expenses in the correct categories. The amount and a short description must be enough for you to parse the expenses correctly. If the message from user does not contain any details about their spends, return a valid error. Assume transaction date to be today's date if unspecified. Today's date is %s", time.Now().Format("2006-01-02"))},
 		{Role: openai.ChatMessageRoleUser, Content: msg},
 	}

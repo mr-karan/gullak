@@ -11,12 +11,13 @@
 - [x] Fix common store being used for transactions and unconfirmed ones.
 - [x] Default currency
 - [ ] Date, human readable in charts
-- [ ] Toast should be shadcn component
+- [x] Toast should be shadcn component
 - [x] Error message in Frontend
-- [ ] Detect 0 data, and show appropriate errors
+- [x] Detect 0 data, and show appropriate errors
 - [ ] Rename to Gullak
 - [ ] README/Docs
 - [ ] Blog
 - [ ] Self Host
 - [ ] Demo
 - [ ] Apple Shortcuts
+- [ ] Confirm transactions and then a bug prevents to load the charts. Some vue issue.

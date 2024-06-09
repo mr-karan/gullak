@@ -1,3 +1,7 @@
+import { useToast } from '@/components/ui/toast/use-toast'
+
+const { toast } = useToast()
+
 const categoryColors = {
   food: 'bg-green-500',
   entertainment: 'bg-blue-500',
@@ -14,3 +18,11 @@ export function getCategoryColor(category) {
   const lowerCaseCategory = category.toLowerCase()
   return categoryColors[lowerCaseCategory] || 'bg-gray-500' // default color if category is not found
 }
+
+export const showToast = (title, description, isError = false) => {
+  toast({
+    title: title,
+    description: description,
+    variant: isError ? 'destructive' : 'default'  // Use 'destructive' for errors, 'default' otherwise
+  });
+};

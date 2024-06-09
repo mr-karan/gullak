@@ -3,7 +3,7 @@ import type { Component, VNode } from 'vue'
 import type { ToastProps } from '.'
 
 const TOAST_LIMIT = 1
-const TOAST_REMOVE_DELAY = 1000000
+const TOAST_REMOVE_DELAY = 5000 // 5 seconds
 
 export type StringOrVNode =
   | string
@@ -103,9 +103,9 @@ function dispatch(action: Action) {
       state.value.toasts = state.value.toasts.map(t =>
         t.id === toastId || toastId === undefined
           ? {
-              ...t,
-              open: false,
-            }
+            ...t,
+            open: false,
+          }
           : t,
       )
       break
