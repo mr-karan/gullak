@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref, onMounted, watch, defineProps, defineEmits } from 'vue';
-import { CalendarDate, DateFormatter, parseDate } from '@internationalized/date';
+import { ref, watch, defineProps, defineEmits } from 'vue';
+import { DateFormatter, parseDate } from '@internationalized/date';
 import TransactionActions from '@/components/Actions.vue';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -16,17 +16,20 @@ import {
 import { Calendar as CalendarIcon } from 'lucide-vue-next';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { cn, getCategoryColor } from '@/utils/utils';
-import { useTransactionStore } from '@/stores/transactions';
+import { cn } from '@/utils/utils';
+import { getCategoryColor } from '@/utils/common';
 
 const props = defineProps({
+  transactions: {
+    type: Array,
+    required: true
+  },
   showConfirmButton: Boolean,
   onConfirm: Function,
   onSave: Function
 });
 
 const emit = defineEmits(['edit']);
-const transactionStore = useTransactionStore();
 const localEditingTransaction = ref(null);
 const dateFormatter = new DateFormatter('en-US', { dateStyle: 'long' });
 
@@ -38,16 +41,7 @@ const parseIsoToDate = (isoString) => {
 };
 
 
-// Convert CalendarDate to ISO string for display
-// const formatDateForDisplay = (calendarDate) => {
-//   return dateFormatter.format(calendarDate.toDate()); // Convert CalendarDate to native Date for formatting
-// };
-
-// onMounted(async () => {
-//   await transactionStore.fetchConfirmedTransactions();
-// });
-
-watch(transactionStore.transactions, (newTransactions) => {
+watch(() => props.transactions, (newTransactions) => {
   if (localEditingTransaction.value) {
     const updatedTransaction = newTransactions.find(t => t.id === localEditingTransaction.value.id);
     if (updatedTransaction) {
@@ -60,6 +54,7 @@ watch(transactionStore.transactions, (newTransactions) => {
     }
   }
 }, { deep: true });
+
 
 const editTransaction = (transaction) => {
   localEditingTransaction.value = {
@@ -102,7 +97,7 @@ const saveTransaction = () => {
       </TableRow>
     </TableHeader>
     <TableBody>
-      <TableRow v-for="transaction in transactionStore.transactions" :key="transaction.id">
+      <TableRow v-for="transaction in transactions" :key="transaction.id">
         <TableCell>
           <Popover v-if="localEditingTransaction && localEditingTransaction.id === transaction.id">
             <PopoverTrigger as-child>
@@ -140,12 +135,15 @@ const saveTransaction = () => {
             v-model="localEditingTransaction.mode" />
           <span v-else>{{ transaction.mode }}</span>
         </TableCell>
+        <TableCell v-if="showConfirmButton">
+          <Button variant="secondary" size="sm" @click="confirmTransaction(localEditingTransaction || transaction)">
+            Confirm
+          </Button>
+        </TableCell>
         <TableCell>
           <TransactionActions :transaction="transaction"
             :is-editing="localEditingTransaction && localEditingTransaction.id === transaction.id"
             @edit="editTransaction" @cancel="cancelEdit" @save="saveTransaction" />
-          <Button variant="secondary" size="sm" @click="confirmTransaction(transaction)"
-            v-if="showConfirmButton">Confirm</Button>
         </TableCell>
       </TableRow>
     </TableBody>

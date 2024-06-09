@@ -16,8 +16,7 @@
         </div>
         <div class="transactions mt-4">
             <h2 class="text-2xl font-semibold text-gray-800 mb-4">Transactions Log</h2>
-            <TransactionTable :transactions="transactions" :show-confirm-button="false"
-                :on-save="saveTransactionHandler" />
+            <TransactionTable :transactions="transactions" :on-save="saveTransactionHandler" />
         </div>
     </section>
 </template>
@@ -38,7 +37,6 @@ const transactionStore = useTransactionStore();
 const categoriesData = ref([]);
 const dailyData = ref([]);
 const transactions = ref([]);
-
 const dateRange = ref({
     start: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),  // 30 days ago
     end: new Date().toISOString().slice(0, 10)  // Today
@@ -46,17 +44,19 @@ const dateRange = ref({
 
 const fetchData = async () => {
     try {
-        const dailySpending = await transactionStore.fetchDailySpending(dateRange.value.start, dateRange.value.end);
+        const [dailySpending, categories, transData] = await Promise.all([
+            transactionStore.fetchDailySpending(dateRange.value.start, dateRange.value.end),
+            transactionStore.fetchTopExpenseCategories(dateRange.value.start, dateRange.value.end),
+            transactionStore.fetchTransactions(true, dateRange.value.start, dateRange.value.end)
+        ]);
         dailyData.value = dailySpending.map(day => ({
             transaction_date: day.transaction_date,
             total_spent: day.total_spent
         }));
-        const categories = await transactionStore.fetchTopExpenseCategories(dateRange.value.start, dateRange.value.end);
         categoriesData.value = categories.map(item => ({
             name: item.category,
             total: item.total_spent
         }));
-        const transData = await transactionStore.fetchConfirmedTransactions(dateRange.value.start, dateRange.value.end);
         transactions.value = transData;
     } catch (error) {
         console.error("Error fetching data:", error);
@@ -75,7 +75,8 @@ const saveTransactionHandler = async (transaction) => {
 
 const handleDateRangeUpdate = (newDates) => {
     dateRange.value = { ...dateRange.value, start: newDates.start, end: newDates.end };
-    fetchData(); // Fetch data when dates change
+    // Fetch data when dates change.
+    fetchData();
 };
 
 onMounted(fetchData);
