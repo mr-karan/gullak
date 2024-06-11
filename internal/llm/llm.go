@@ -8,7 +8,7 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/mr-karan/expenseai/pkg/models"
+	"github.com/mr-karan/gullak/pkg/models"
 
 	"github.com/sashabaranov/go-openai"
 	"github.com/sashabaranov/go-openai/jsonschema"

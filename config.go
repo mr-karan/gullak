@@ -16,9 +16,9 @@ func initConfig(cfgPath string) (*koanf.Koanf, error) {
 		return nil, fmt.Errorf("error loading config: %v", err)
 	}
 
-	k.Load(env.Provider("EXPENSE_AI_", ".", func(s string) string {
+	k.Load(env.Provider("GULLAK_", ".", func(s string) string {
 		return strings.Replace(strings.ToLower(
-			strings.TrimPrefix(s, "EXPENSE_AI_")), "_", ".", -1)
+			strings.TrimPrefix(s, "GULLAK_")), "_", ".", -1)
 	}), nil)
 
 	return k, nil

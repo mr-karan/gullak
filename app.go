@@ -9,8 +9,8 @@ import (
 
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
-	"github.com/mr-karan/expenseai/internal/db"
-	"github.com/mr-karan/expenseai/internal/llm"
+	"github.com/mr-karan/gullak/internal/db"
+	"github.com/mr-karan/gullak/internal/llm"
 )
 
 // TODO: Fix the API response to return the correct status codes and messages with content types.
@@ -27,7 +27,7 @@ func initApp(addr string, timeout time.Duration, static fs.FS, queries *db.Queri
 	e := echo.New()
 	e.HideBanner = true
 
-	e.Use(middleware.Logger())
+	// e.Use(middleware.Logger()) -> Too noisy for now.
 	e.Use(middleware.TimeoutWithConfig(middleware.TimeoutConfig{
 		Timeout: timeout,
 	}))

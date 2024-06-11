@@ -1,9 +1,8 @@
-module github.com/mr-karan/expenseai
+module github.com/mr-karan/gullak
 
 go 1.22.0
 
 require (
-	github.com/go-telegram-bot-api/telegram-bot-api/v5 v5.5.1
 	github.com/knadh/koanf/parsers/toml v0.1.0
 	github.com/knadh/koanf/providers/env v0.1.0
 	github.com/knadh/koanf/providers/file v0.1.0

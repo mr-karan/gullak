@@ -1,16 +1,22 @@
 env:
   - GO111MODULE=on
-  - CGO_ENABLED=1
+  - CGO_ENABLED=1 # For the sqlite dependency
+
+before:
+  hooks:
+    - make build-ui
 
 builds:
-  - binary: expenseai.bin
-    id: expenseai
+  - binary: gullak.bin
+    id: gullak
     goos:
       - linux
     goarch:
       - amd64
-    ldflags:
-      - -s -w -X "main.buildString={{ .Tag }} ({{ .ShortCommit }} {{ .Date }})"
+    hooks:
+      pre: make build
+    # ldflags:
+    #   - -s -w -X "main.buildString={{ .Tag }} ({{ .ShortCommit }} {{ .Date }})"
     dir: ./
 
 archives:
@@ -22,7 +28,7 @@ archives:
 
 dockers:
   - # ID of the image, needed if you want to filter by it later on (e.g. on custom publishers).
-    id: expenseai
+    id: gullak
 
     # GOOS of the built binaries/packages that should be used.
     goos: linux
@@ -32,12 +38,12 @@ dockers:
 
     # IDs to filter the binaries/packages.
     ids:
-      - expenseai
+      - gullak
 
     # Templates of the Docker image names.
     image_templates:
-      - "ghcr.io/mr-karan/expenseai:{{ .Tag }}"
-      - "ghcr.io/mr-karan/expenseai:latest"
+      - "ghcr.io/mr-karan/gullak:{{ .Tag }}"
+      - "ghcr.io/mr-karan/gullak:latest"
 
     # Skips the docker push.
     # Could be useful if you also do draft releases.
@@ -65,6 +71,6 @@ dockers:
       - "--label=org.opencontainers.image.revision={{.FullCommit}}"
       - "--label=org.opencontainers.image.version={{.Version}}"
       - "--platform=linux/amd64"
-    
+
     extra_files:
       - config.sample.toml

@@ -8,8 +8,8 @@ import (
 	"time"
 
 	_ "github.com/mattn/go-sqlite3"
-	"github.com/mr-karan/expenseai/internal/db"
-	"github.com/mr-karan/expenseai/pkg/models"
+	"github.com/mr-karan/gullak/internal/db"
+	"github.com/mr-karan/gullak/pkg/models"
 )
 
 const (

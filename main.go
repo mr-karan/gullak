@@ -10,7 +10,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/mr-karan/expenseai/internal/llm"
+	"github.com/mr-karan/gullak/internal/llm"
 )
 
 var (
@@ -48,6 +48,14 @@ func main() {
 	}
 	logger := slog.New(slog.NewTextHandler(os.Stdout, lgrOpts))
 
+	// Initialize the OpenAI client.
+	llmMgr, err := llm.New(ko.MustString("openai.token"), ko.String("openai.base_url"), ko.MustString("openai.model"), logger)
+	if err != nil {
+		logger.Error("Error initializing llm", "error", err)
+		os.Exit(1)
+	}
+	logger.Info("Successfully initialized OpenAI client", "model", ko.MustString("openai.model"))
+
 	// Initialize the database.
 	db, err := initDB(ko.MustString("app.db_path"), ko.String(
 		"app.currency",
@@ -57,14 +65,6 @@ func main() {
 		os.Exit(1)
 	}
 	logger.Info("Successfully connected to the database and tables created", "path", ko.MustString("app.db_path"))
-
-	// Initialize the OpenAI client.
-	llmMgr, err := llm.New(ko.MustString("openai.token"), ko.String("openai.base_url"), ko.MustString("openai.model"), logger)
-	if err != nil {
-		logger.Error("Error initializing llm", "error", err)
-		os.Exit(1)
-	}
-	logger.Info("Successfully initialized OpenAI client", "model", ko.MustString("openai.model"))
 
 	// Create a context that is cancelled on SIGTERM or SIGINT
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)

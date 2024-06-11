@@ -8,9 +8,9 @@ import (
 	"time"
 
 	"github.com/labstack/echo/v4"
-	"github.com/mr-karan/expenseai/internal/db"
-	"github.com/mr-karan/expenseai/internal/llm"
-	"github.com/mr-karan/expenseai/pkg/models"
+	"github.com/mr-karan/gullak/internal/db"
+	"github.com/mr-karan/gullak/internal/llm"
+	"github.com/mr-karan/gullak/pkg/models"
 )
 
 type ExpenseInput struct {
@@ -35,7 +35,7 @@ type DailySpendingSummary struct {
 
 func handleIndex(c echo.Context) error {
 	return c.JSON(http.StatusOK, Resp{
-		Message: "Welcome to ExpenseAI. POST to /api/transactions to save expenses.",
+		Message: "Welcome to Gullak. POST to /api/transactions to save expenses.",
 	})
 }
 
