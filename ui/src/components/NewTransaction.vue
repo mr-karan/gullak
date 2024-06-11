@@ -2,7 +2,6 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { showToast } from '@/utils/common'
-import { Toaster } from '@/components/ui/toast'
 import { useTransactionStore } from '@/stores/transactions'
 import { Textarea } from '@/components/ui/textarea'
 import { Button } from '@/components/ui/button'
@@ -59,7 +58,6 @@ const deleteTransactionHandler = async (transaction) => {
 </script>
 
 <template>
-  <Toaster />
   <section class="new p-6">
     <div class="info mb-6">
       <h1 class="text-2xl font-bold">Add a new transaction</h1>

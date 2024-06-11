@@ -29,7 +29,7 @@
     "tailwindcss-animate": "^1.0.7",
     "typescript": "^5.4.5",
     "vue": "^3.4.21",
-    "vue-router": "^4.3.0",
+    "vue-router": "^4.3.0"
   },
   "devDependencies": {
     "@rushstack/eslint-patch": "^1.8.0",

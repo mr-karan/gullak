@@ -4,11 +4,11 @@ import { DonutChart } from '@/components/ui/chart-donut';
 import { AreaChart } from '@/components/ui/chart-area'
 import { CurveType } from '@unovis/ts';
 import { showToast } from '@/utils/common'
-import { Toaster } from '@/components/ui/toast'
 import DateRangePicker from '@/components/DateRangePicker.vue';
 import TransactionTable from '@/components/TransactionTable.vue';
 import { useTransactionStore } from '@/stores/transactions';
 
+const isMounted = ref(false);
 const transactionStore = useTransactionStore();
 const categoriesData = ref([]);
 const dailyData = ref([]);
@@ -49,6 +49,16 @@ const saveTransactionHandler = async (transaction) => {
     }
 }
 
+const deleteTransactionHandler = async (transaction) => {
+    try {
+        await transactionStore.deleteTransaction(transaction.id);
+        showToast('Transaction deleted successfully!', '', false);
+        fetchData();
+    } catch (error) {
+        showToast('Error deleting transaction.', error.response?.data?.error || error.message, true);
+    }
+}
+
 // When the date range is updated, fetch new data.
 const handleDateRangeUpdate = (newDates) => {
     dateRange.value = { ...dateRange.value, start: newDates.start, end: newDates.end };
@@ -60,7 +70,6 @@ watch(dateRange, fetchData, { deep: true });
 </script>
 
 <template>
-    <Toaster />
     <section class="p-6">
         <div class="flex flex-wrap items-center justify-between py-4">
             <h1 class="text-2xl font-semibold text-gray-800 flex-1">Dashboard Overview</h1>
@@ -78,7 +87,8 @@ watch(dateRange, fetchData, { deep: true });
         </div>
         <div class="transactions mt-4">
             <h2 class="text-2xl font-semibold text-gray-800 mb-4">Transactions Log</h2>
-            <TransactionTable :transactions="transactions" :on-save="saveTransactionHandler" />
+            <TransactionTable :transactions="transactions" :on-delete="deleteTransactionHandler"
+                :on-save="saveTransactionHandler" />
         </div>
     </section>
 </template>
