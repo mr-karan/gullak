@@ -18,41 +18,41 @@ onMounted(async () => {
 
 const fetchUnconfirmedTransactions = async () => {
   try {
-    unconfirmedTransactions.value = await transactionStore.fetchTransactions(false);
+    unconfirmedTransactions.value = await transactionStore.fetchTransactions(false)
   } catch (error) {
-    showToast('Error loading transactions.', error.response?.data?.error || error.message, true);
+    showToast('Error loading transactions.', error.response?.data?.error || error.message, true)
   }
-};
+}
 
 const handleSubmit = async () => {
   try {
-    await transactionStore.createTransaction(inputValue.value);
-    await fetchUnconfirmedTransactions();
-    showToast('Transaction saved. Please confirm!', '', false);
-    inputValue.value = '';
+    await transactionStore.createTransaction(inputValue.value)
+    await fetchUnconfirmedTransactions()
+    showToast('Transaction saved. Please confirm!', '', false)
+    inputValue.value = ''
   } catch (error) {
-    showToast('Error saving transaction.', error.response?.data?.error || error.message, true);
+    showToast('Error saving transaction.', error.response?.data?.error || error.message, true)
   }
-};
+}
 
 const confirmTransactionHandler = async (transaction) => {
-  transaction.confirm = true;
+  transaction.confirm = true
   try {
-    await transactionStore.updateTransaction(transaction);
-    await fetchUnconfirmedTransactions();
-    showToast('Transaction confirmed!', '', false);
+    await transactionStore.updateTransaction(transaction)
+    await fetchUnconfirmedTransactions()
+    showToast('Transaction confirmed!', '', false)
   } catch (error) {
-    showToast('Error confirming transaction.', error.response?.data?.error || error.message, true);
+    showToast('Error confirming transaction.', error.response?.data?.error || error.message, true)
   }
 }
 
 const deleteTransactionHandler = async (transaction) => {
   try {
-    await transactionStore.deleteTransaction(transaction.id);
-    await fetchUnconfirmedTransactions();
-    showToast('Transaction deleted!', '', false);
+    await transactionStore.deleteTransaction(transaction.id)
+    await fetchUnconfirmedTransactions()
+    showToast('Transaction deleted!', '', false)
   } catch (error) {
-    showToast('Error deleting transaction.', error.response?.data?.error || error.message, true);
+    showToast('Error deleting transaction.', error.response?.data?.error || error.message, true)
   }
 }
 </script>
@@ -67,9 +67,14 @@ const deleteTransactionHandler = async (transaction) => {
     </div>
     <div class="form">
       <form @submit.prevent="handleSubmit" class="flex flex-col items-center space-y-4">
-        <Textarea class="w-full textarea textarea-bordered"
-          placeholder="Type something like '420 for groceries, 800 for phone bill'" v-model="inputValue" minlength="5"
-          maxlength="1000" required />
+        <Textarea
+          class="w-full textarea textarea-bordered"
+          placeholder="Spent 400 on groceries, 500 on eating out, 1000 for petrol."
+          v-model="inputValue"
+          minlength="5"
+          maxlength="1000"
+          required
+        />
         <Button :disabled="transactionStore.isLoading">
           <Loader v-if="transactionStore.isLoading" class="mr-2 h-4 w-4 animate-spin" />
           Save transaction
@@ -79,7 +84,11 @@ const deleteTransactionHandler = async (transaction) => {
   </section>
   <section class="unconfirmed p-6" v-if="unconfirmedTransactions.length > 0">
     <h2 class="text-xl font-semibold mb-4">Unconfirmed Transactions</h2>
-    <TransactionTable :transactions="unconfirmedTransactions" :show-confirm-button="true"
-      :on-confirm="confirmTransactionHandler" :on-delete="deleteTransactionHandler" />
+    <TransactionTable
+      :transactions="unconfirmedTransactions"
+      :show-confirm-button="true"
+      :on-confirm="confirmTransactionHandler"
+      :on-delete="deleteTransactionHandler"
+    />
   </section>
 </template>

@@ -1,8 +1,10 @@
 # Gullak - Expense Tracking App
 
-Gullak is a simple, no-frills expense tracking application designed to make expense management as intuitive and effortless as possible. Input your expenses in natural language, and let the integrated AI handle categorization and analysis. With Gullak, you can easily view reports and logs of your historical transactions, providing you with daily and monthly summaries to better understand your spending habits.
+_A no-frills expense tracker app enabling quick logging of expenses in natural language, using LLMs for parsing and categorization._
 
-![Gullak Dashboard](link-to-image.png)
+![recording](./screenshots/gullak.gif)
+
+Gullak is an expense tracker designed to make expense management as intuitive and effortless as possible. Input your expenses in natural language, and let the integrated AI handle categorization and analysis. With Gullak, you can easily view reports and logs of your historical transactions, providing you with daily and monthly summaries to better understand your spending habits.
 
 ## Why Gullak?
 
@@ -15,6 +17,12 @@ I originally developed Gullak for personal use. I had a habit of recording my ex
 - **Visual Reports**: Generates visual summaries of expenses, providing insights into spending patterns over time.
 - **Historical Data**: Access and review past entries with detailed logs and reports.
 
+## Screenshots
+
+![Gullak Dashboard Screenshot](./screenshots/dashboard.png)
+![Gullak Reports Screenshot](./screenshots/reports.png)
+![Gullak Transaction Log Screenshot](./screenshots/log.png)
+
 ## Self Hosting
 
 To self host Gullak yourself, you can use the provided Docker image. Here are the steps to get it up and running:
@@ -25,28 +33,29 @@ docker run --name gullak-app -v gullak-data:/app/expenses.db -p 3333:3333 -d ghc
 
 This setup will expose Gullak on port 3333, storing the SQLite database at the specified volume location.
 
-Apple Shortcut Integration
+## Apple Shortcut Integration
+
+[Download Shortcut](https://www.icloud.com/shortcuts/f9039ea721ca4cdeac31fb9b7983450a)
 
 Gullak supports integration with Apple Shortcuts, enabling you to log expenses quickly and effortlessly using Siri. This workflow is especially useful for hands-free operation, such as logging expenses on the go.
-Setting Up the Apple Shortcut
 
-To quickly begin logging expenses using Siri via Gullak, you can use a pre-published shortcut. Follow these steps to configure it:
+### Setting Up the Apple Shortcut
 
-    Download the published shortcut:
-        Access the shortcut link provided by Gullak. (Note: Replace this placeholder with the actual link to the shortcut.)
-        Add the shortcut to your library in the Shortcuts app on your iOS device.
+Follow these steps to configure it:
 
-    Customize the GULLAK_API endpoint:
-        Open the Shortcuts app and find the newly added Gullak expense logger.
-        Tap on the shortcut to open the editing interface.
-        Look for the GULLAK_API variable within the actions list.
-        Edit the variable to point to your specific Gullak API endpoint (e.g., http://<your-server-address>/api/expense).
+### Download the published shortcut:
 
-    Run the shortcut via Siri:
-        After setting up, invoke Siri and use the shortcut by saying a phrase like "Log my expense."
-        Narrate the details of your expense, such as "Spent 150 Rs on groceries."
+- Download a copy of the shortcut from [here](https://www.icloud.com/shortcuts/f9039ea721ca4cdeac31fb9b7983450a).
+- Add the shortcut to your library in the Shortcuts app on your iOS device.
+- Customize the GULLAK_API endpoint.
+  - Open the Shortcuts app and find the newly added shortcut.
+  - Tap on the shortcut to open the editing interface.
+  - Look for the `gullak_api_endpoint` variable within the actions list.
+  - Edit the variable to point to your specific Gullak self hosted installation.
 
-This configuration allows you to utilize the existing shortcut to directly log expenses into your Gullak system with minimal setup, using voice commands through Siri. This makes it convenient and quick to track expenses without needing to manually enter data, ideal for on-the-go situations.
+- Run the shortcut via Siri:
+  - After setting up, invoke Siri and use the shortcut by saying a phrase like "Log expense."
+  - Narrate the details of your expense, such as "Spent 150 Rs on groceries."
 
 ### Configuration
 
