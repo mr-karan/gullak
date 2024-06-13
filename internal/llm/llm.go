@@ -20,13 +20,20 @@ type Manager struct {
 	model  string
 }
 
-func New(token, baseURL, model string, log *slog.Logger) (*Manager, error) {
+func New(token, baseURL, model string, timeout time.Duration, log *slog.Logger) (*Manager, error) {
 	// Initialize the OpenAI client.
 	cfg := openai.DefaultConfig(token)
 	if baseURL != "" {
 		cfg.BaseURL = baseURL
 	}
-	cfg.HTTPClient.Timeout = 10 * time.Second
+
+	if timeout > 0 {
+		cfg.HTTPClient.Timeout = timeout
+	} else {
+		// Set a default timeout of 10 seconds.
+		cfg.HTTPClient.Timeout = 10 * time.Second
+	}
+
 	client := openai.NewClientWithConfig(cfg)
 
 	return &Manager{

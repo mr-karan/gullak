@@ -49,7 +49,11 @@ func main() {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, lgrOpts))
 
 	// Initialize the OpenAI client.
-	llmMgr, err := llm.New(ko.MustString("openai.token"), ko.String("openai.base_url"), ko.MustString("openai.model"), logger)
+	llmMgr, err := llm.New(
+		ko.MustString("openai.token"),
+		ko.String("openai.base_url"), ko.MustString("openai.model"),
+		ko.Duration("openai.timeout"),
+		logger)
 	if err != nil {
 		logger.Error("Error initializing llm", "error", err)
 		os.Exit(1)

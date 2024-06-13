@@ -4,9 +4,8 @@ currency = "INR"
 db_path = "./expenses.db"
 
 [openai]
-base_url = "https://api.groq.com/openai/v1"
-model = "llama3-70b-8192"
-token = ""
+token = "redacted"
+timeout = "10s"
 
 [telegram]
 token = ""
