@@ -13,7 +13,7 @@ build-ui:
 
 .PHONY: build
 build: build-ui
-	CGO_ENABLED=1 go build -o ${BIN} -ldflags="-X 'main.buildString=${BUILDSTR}'" .
+	CGO_ENABLED=0 go build -o ${BIN} -ldflags="-X 'main.buildString=${BUILDSTR}'" .
 
 .PHONY: run
 run: build ## Run binary.

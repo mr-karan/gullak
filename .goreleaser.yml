@@ -1,6 +1,6 @@
 env:
   - GO111MODULE=on
-  - CGO_ENABLED=1 # For the sqlite dependency
+  - CGO_ENABLED=0 # For the sqlite dependency
 
 before:
   hooks:

@@ -7,9 +7,9 @@ import (
 	"fmt"
 	"time"
 
-	_ "github.com/mattn/go-sqlite3"
 	"github.com/mr-karan/gullak/internal/db"
 	"github.com/mr-karan/gullak/pkg/models"
+	_ "modernc.org/sqlite"
 )
 
 const (
@@ -35,7 +35,7 @@ func createTableSQL(currency string) string {
 }
 
 func initDB(path string, currency string) (*db.Queries, error) {
-	conn, err := sql.Open("sqlite3", path)
+	conn, err := sql.Open("sqlite", path)
 	if err != nil {
 		return nil, fmt.Errorf("error opening database: %w", err)
 	}
