@@ -130,15 +130,3 @@ func (a *App) Update(id int64, transaction models.Item) error {
 
 	return nil
 }
-
-// Useful to check if the PRAGMA statements are working as expected.
-// func checkPragma(conn *sql.DB, pragmaName string) (string, error) {
-// 	query := fmt.Sprintf("PRAGMA %s;", pragmaName)
-// 	var result string
-// 	row := conn.QueryRow(query)
-// 	err := row.Scan(&result)
-// 	if err != nil {
-// 		return "", fmt.Errorf("error checking PRAGMA %s: %w", pragmaName, err)
-// 	}
-// 	return result, nil
-// }

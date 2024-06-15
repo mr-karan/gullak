@@ -51,7 +51,8 @@ func main() {
 	// Initialize the OpenAI client.
 	llmMgr, err := llm.New(
 		ko.MustString("openai.token"),
-		ko.String("openai.base_url"), ko.MustString("openai.model"),
+		ko.String("openai.base_url"),
+		ko.MustString("openai.model"),
 		ko.Duration("openai.timeout"),
 		logger)
 	if err != nil {
@@ -61,9 +62,7 @@ func main() {
 	logger.Info("Successfully initialized OpenAI client", "model", ko.MustString("openai.model"))
 
 	// Initialize the database.
-	db, err := initDB(ko.MustString("app.db_path"), ko.String(
-		"app.currency",
-	))
+	db, err := initDB(ko.MustString("app.db_path"), ko.String("app.currency"))
 	if err != nil {
 		logger.Error("Error initializing database", "error", err)
 		os.Exit(1)
@@ -75,7 +74,6 @@ func main() {
 	defer cancel()
 
 	logger.Info("Starting the app", "version", buildString, "addr", ko.MustString("http.address"), "timeout", ko.MustDuration("http.timeout"))
-
 	app := initApp(
 		ko.MustString("http.address"),
 		ko.MustDuration("http.timeout"),
@@ -89,6 +87,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	<-ctx.Done() // Wait for SIGINT or SIGTERM
+	<-ctx.Done() // Wait for SIGINT or SIGTERM.
 	slog.Info("Shutting down!")
 }

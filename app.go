@@ -2,18 +2,36 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"io/fs"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
+	"github.com/knadh/koanf/parsers/toml"
+	"github.com/knadh/koanf/providers/env"
+	"github.com/knadh/koanf/providers/file"
+	"github.com/knadh/koanf/v2"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	"github.com/mr-karan/gullak/internal/db"
 	"github.com/mr-karan/gullak/internal/llm"
 )
 
-// TODO: Fix the API response to return the correct status codes and messages with content types.
+func initConfig(cfgPath string) (*koanf.Koanf, error) {
+	k := koanf.New(".")
+	if err := k.Load(file.Provider(cfgPath), toml.Parser()); err != nil {
+		return nil, fmt.Errorf("error loading config: %v", err)
+	}
+
+	k.Load(env.Provider("GULLAK_", ".", func(s string) string {
+		return strings.Replace(strings.ToLower(
+			strings.TrimPrefix(s, "GULLAK_")), "_", ".", -1)
+	}), nil)
+
+	return k, nil
+}
 
 type App struct {
 	srv     *echo.Echo
