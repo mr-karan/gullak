@@ -7,5 +7,3 @@ services:
       dockerfile: Dockerfile
     ports:
       - 3333:3333
-    depends_on:
-      - frontend
