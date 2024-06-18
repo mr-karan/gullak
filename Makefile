@@ -1,6 +1,6 @@
 .PHONY: build run
 
-BIN := /usr/local/bin/gullak.bin
+BIN := bin/gullak.bin
 
 LAST_COMMIT := $(shell git rev-parse --short HEAD)
 LAST_COMMIT_DATE := $(shell git show -s --format=%ci ${LAST_COMMIT})

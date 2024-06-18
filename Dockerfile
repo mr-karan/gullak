@@ -31,7 +31,7 @@ USER appuser
 WORKDIR /app
 
 # Copy the binary
-COPY --from=builder /usr/local/bin/gullak.bin ./gullak.bin
+COPY --from=builder /app/build/bin/gullak.bin ./gullak.bin
 COPY config.sample.toml config.toml
 
 # Set the entrypoint
