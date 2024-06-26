@@ -76,6 +76,10 @@ func (m *Manager) Parse(msg string) (models.Transactions, error) {
 								Type:        jsonschema.Number,
 								Description: "Amount of the item",
 							},
+							"location" : {
+								Type : 		jsonschema.String, 
+								Description : "This would be the location of expense, if user hasn't given you the location; mark it as empty string",
+							},
 							"category": {
 								Type:        jsonschema.String,
 								Description: "One word category of the expense (e.g., food, travel, entertainment)",

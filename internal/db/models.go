@@ -16,5 +16,6 @@ type Transaction struct {
 	Amount          float64   `json:"amount"`
 	Category        string    `json:"category"`
 	Description     string    `json:"description"`
+	Location        string    `json:"location"`
 	Confirm         bool      `json:"confirm"`
 }

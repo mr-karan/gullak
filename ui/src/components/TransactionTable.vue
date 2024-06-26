@@ -100,6 +100,7 @@ const saveTransaction = () => {
         <TableHead>Amount</TableHead>
         <TableHead>Category</TableHead>
         <TableHead>Description</TableHead>
+        <TableHead>Location</TableHead>
         <TableHead>Actions</TableHead>
       </TableRow>
     </TableHeader>
@@ -136,6 +137,11 @@ const saveTransaction = () => {
           <Input class="w-3/4" v-if="localEditingTransaction && localEditingTransaction.id === transaction.id"
             v-model="localEditingTransaction.description" />
           <span v-else>{{ transaction.description }}</span>
+        </TableCell>
+        <TableCell>
+          <Input class="w-3/4" v-if="localEditingTransaction && localEditingTransaction.id === transaction.id"
+            v-model="localEditingTransaction.location" />
+          <span v-else>{{ transaction.location }}</span>
         </TableCell>
         <TableCell v-if="showConfirmButton">
           <Button variant="secondary" size="sm" @click="confirmTransaction(localEditingTransaction || transaction)">

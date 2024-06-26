@@ -9,6 +9,7 @@ type Item struct {
 	Category        string  `json:"category"`
 	Description     string  `json:"description"`
 	Confirm         bool    `json:"confirm"`
+	Location 		string	 `json:"location"`
 }
 
 type Transactions struct {

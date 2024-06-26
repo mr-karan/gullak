@@ -29,3 +29,6 @@ dist/
 *.bin
 *.db-shm
 *.db-wal
+
+# Config File
+config.sample.toml

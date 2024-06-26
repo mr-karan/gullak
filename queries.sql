@@ -1,7 +1,7 @@
 -- name: CreateTransaction :many
 -- Inserts a new transaction into the database.
-INSERT INTO transactions (created_at, transaction_date, amount, currency, category, description, confirm)
-VALUES (?, ?, ?, ?, ?, ?, ?)
+INSERT INTO transactions (created_at, transaction_date, amount, currency, category, description, location, confirm)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING *;
 
 -- name: ListTransactions :many
@@ -20,7 +20,7 @@ SELECT * FROM transactions WHERE id = ?;
 -- name: UpdateTransaction :exec
 -- Updates a transaction by ID.
 UPDATE transactions
-SET amount = ?, currency = ?, category = ?, description = ?, confirm = ?, transaction_date = ?
+SET amount = ?, currency = ?, category = ?, description = ?, location = ?,  confirm = ?, transaction_date = ?
 WHERE id = ?;
 
 -- name: DeleteTransaction :exec
