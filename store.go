@@ -85,7 +85,7 @@ func (a *App) Save(transactions models.Transactions) ([]db.Transaction, error) {
 			Currency:        item.Currency,
 			Category:        item.Category,
 			Description:     item.Description,
-			Location: 			item.Location,
+			Location:        item.Location,
 		}
 
 		savedTx, err := a.queries.CreateTransaction(context.TODO(), arg)
@@ -111,7 +111,7 @@ func (a *App) Get(id int64) (models.Item, error) {
 		Amount:          transaction.Amount,
 		Category:        transaction.Category,
 		Description:     transaction.Description,
-		Location: 			transaction.Location, 
+		Location:        transaction.Location,
 		Confirm:         transaction.Confirm,
 	}, nil
 }
@@ -124,7 +124,7 @@ func (a *App) Update(id int64, transaction models.Item) error {
 		Category:    transaction.Category,
 		Description: transaction.Description,
 		Confirm:     transaction.Confirm,
-		Location: 	transaction.Location, 
+		Location:    transaction.Location,
 		ID:          id,
 	}
 

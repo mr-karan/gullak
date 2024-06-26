@@ -210,7 +210,7 @@ func handleUpdateTransaction(c echo.Context) error {
 		Confirm:         input.Confirm,
 		TransactionDate: transactionDate,
 		ID:              id,
-		Location : 		 input.Location,
+		Location:        input.Location,
 	}
 
 	if err := m.queries.UpdateTransaction(context.Background(), params); err != nil {
