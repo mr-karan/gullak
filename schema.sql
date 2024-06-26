@@ -6,5 +6,6 @@ CREATE TABLE IF NOT EXISTS transactions (
     amount FLOAT NOT NULL,
     category TEXT NOT NULL,
     description TEXT NOT NULL DEFAULT '',
+    location TEXT NOT NULL DEFAULT '', 
     confirm BOOLEAN NOT NULL DEFAULT false
 );
