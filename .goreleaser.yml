@@ -13,6 +13,7 @@ builds:
       - linux
     goarch:
       - amd64
+      - arm64
     hooks:
       pre: make build
     # ldflags:
@@ -74,3 +75,29 @@ dockers:
 
     extra_files:
       - config.sample.toml
+  - id: gullak-arm64
+    goos: linux
+    goarch: arm64
+    ids:
+      - gullak
+    image_templates:
+      - "ghcr.io/mr-karan/gullak:{{ .Tag }}-arm64"
+      - "ghcr.io/mr-karan/gullak:latest-arm64"
+    dockerfile: Dockerfile
+    use: docker
+    build_flag_templates:
+      - "--pull"
+      - "--label=org.opencontainers.image.created={{.Date}}"
+      - "--label=org.opencontainers.image.title={{.ProjectName}}"
+      - "--label=org.opencontainers.image.revision={{.FullCommit}}"
+      - "--label=org.opencontainers.image.version={{.Version}}"
+      - "--platform=linux/arm64"
+    extra_files:
+      - config.sample.toml
+
+# simply pull gullak:latest and Docker automatically selects the right architecture
+docker_manifests:
+  - name_template: ghcr.io/mr-karan/gullak:latest
+    image_templates:
+      - ghcr.io/mr-karan/gullak:latest-amd64
+      - ghcr.io/mr-karan/gullak:latest-arm64
