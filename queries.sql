@@ -61,3 +61,7 @@ SELECT
 FROM transactions
 GROUP BY year, month, category
 ORDER BY year DESC, month DESC, total_spent DESC;
+
+-- name: GetTransactionByDescription :one
+-- Retrieves transaction with description.
+SELECT * FROM transactions WHERE description = ? LIMIT 1;

@@ -9,7 +9,6 @@ import (
 
 	"github.com/labstack/echo/v4"
 	"github.com/mr-karan/gullak/internal/db"
-	"github.com/mr-karan/gullak/internal/llm"
 	"github.com/mr-karan/gullak/pkg/models"
 )
 
@@ -41,35 +40,46 @@ func handleIndex(c echo.Context) error {
 
 func handleCreateTransaction(c echo.Context) error {
 	m := c.Get("app").(*App)
-	var input ExpenseInput
+	var input models.Item
 	if err := c.Bind(&input); err != nil {
 		m.log.Error("Error binding input", "error", err)
 		return c.JSON(http.StatusBadRequest, Resp{
-			Error: "Error saving expenses",
+			Error: "Invalid input",
 		})
 	}
 
-	if input.Line == "" {
+	if input.Amount == 0 || input.Description == "" {
 		m.log.Error("Empty input", "error", errors.New("empty input"))
 		return c.JSON(http.StatusBadRequest, Resp{
 			Error: "Empty input",
 		})
 	}
 
-	transactions, err := m.llm.Parse(input.Line)
+	category, err := m.GetCategoryWithDescription(input.Description)
 	if err != nil {
-		var noTxErr *llm.NoValidTransactionError
-		if errors.As(err, &noTxErr) {
-			m.log.Error("No valid transactions found", "error", noTxErr)
-			return c.JSON(http.StatusBadRequest, Resp{
-				Error: noTxErr.Error(),
-			})
-		}
-		m.log.Error("Error parsing expenses", "error", err)
-		return c.JSON(http.StatusBadRequest, Resp{
-			Error: "Error parsing expenses",
-		})
+		m.log.Error("Failed to get category with description", "error", err)
 	}
+
+	input.Category = category
+
+	transactions := models.Transactions{
+		Transactions: []models.Item{input},
+	}
+
+	//transactions, err := m.llm.Parse(input.Line)
+	//if err != nil {
+	//var noTxErr *llm.NoValidTransactionError
+	//if errors.As(err, &noTxErr) {
+	//m.log.Error("No valid transactions found", "error", noTxErr)
+	//return c.JSON(http.StatusBadRequest, Resp{
+	//Error: noTxErr.Error(),
+	//})
+	//}
+	//m.log.Error("Error parsing expenses", "error", err)
+	//return c.JSON(http.StatusBadRequest, Resp{
+	//Error: "Error parsing expenses",
+	//})
+	//}
 
 	savedTransactions, err := m.Save(transactions)
 	if err != nil {

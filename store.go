@@ -113,6 +113,15 @@ func (a *App) Get(id int64) (models.Item, error) {
 	}, nil
 }
 
+func (a *App) GetCategoryWithDescription(description string) (string, error) {
+	transaction, err := a.queries.GetTransactionByDescription(context.TODO(), description)
+	if err != nil {
+		return "", fmt.Errorf("error getting transaction: %w", err)
+	}
+
+	return transaction.Category, nil
+}
+
 // Update updates a transaction in the database.
 func (a *App) Update(id int64, transaction models.Item) error {
 	arg := db.UpdateTransactionParams{

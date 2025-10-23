@@ -13,11 +13,22 @@ import {
   TableHeader,
   TableRow
 } from '@/components/ui/table';
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { Calendar as CalendarIcon } from 'lucide-vue-next';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/utils/utils';
 import { getCategoryColor } from '@/utils/common';
+
+const categories = ['food', 'transport', 'entertainment', 'shopping', 'bills', 'stay', 'groceries', 'gift', 'misc'];
 
 const props = defineProps({
   transactions: {
@@ -128,8 +139,26 @@ const saveTransaction = () => {
           <span v-else>{{ transaction.currency }}{{ transaction.amount.toFixed(2) }}</span>
         </TableCell>
         <TableCell>
-          <Input class="w-3/4" v-if="localEditingTransaction && localEditingTransaction.id === transaction.id"
-            v-model="localEditingTransaction.category" />
+    			<Select 
+    			  v-if="localEditingTransaction && localEditingTransaction.id === transaction.id"
+    			  v-model="localEditingTransaction.category"
+    			>
+    			  <SelectTrigger class="w-full">
+    			    <SelectValue placeholder="Select category" />
+    			  </SelectTrigger>
+    			  <SelectContent>
+    			    <SelectGroup>
+    			      <SelectLabel>Categories</SelectLabel>
+    			      <SelectItem 
+    			        v-for="category in categories" 
+    			        :key="category" 
+    			        :value="category"
+    			      >
+    			        {{ category }}
+    			      </SelectItem>
+    			    </SelectGroup>
+    			  </SelectContent>
+    			</Select>
           <Badge :class="getCategoryColor(transaction.category)" v-else>{{ transaction.category }}</Badge>
         </TableCell>
         <TableCell>
