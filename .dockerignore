@@ -1,0 +1,34 @@
+# Git
+.git
+.gitignore
+
+# CI/CD
+.github
+
+# Documentation
+*.md
+screenshots/
+
+# Development files
+.env
+.env.*
+!.env.sample
+
+# Build artifacts
+dist/
+bin/
+*.bin
+node_modules/
+
+# Database files
+*.db
+*.db-shm
+*.db-wal
+data/
+
+# macOS
+.DS_Store
+
+# IDE
+.vscode/
+.idea/

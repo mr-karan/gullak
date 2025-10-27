@@ -1,9 +1,37 @@
----
-version: "3.8"
 services:
-  backend:
-    build:
-      context: .
-      dockerfile: Dockerfile
+  gullak:
+    image: ghcr.io/mr-karan/gullak:latest
+    container_name: gullak
+    restart: unless-stopped
     ports:
-      - 3333:3333
+      - "3333:3333"
+    volumes:
+      # Persist the SQLite database
+      - ./data:/app/data
+      # Optional: Mount custom config file
+      # - ./config.toml:/app/config.toml:ro
+    environment:
+      # Database path - ensure it's in the mounted volume
+      - GULLAK_APP_DB_PATH=/app/data/expenses.db
+
+      # Currency settings (INR, USD, EUR, GBP, etc.)
+      - GULLAK_APP_CURRENCY=INR
+
+      # Debug mode
+      - GULLAK_APP_DEBUG=false
+
+      # OpenAI API Configuration
+      # Use OpenAI directly:
+      - GULLAK_OPENAI_BASE_URL=https://api.openai.com
+      - GULLAK_OPENAI_MODEL=gpt-4o-mini
+      - GULLAK_OPENAI_TOKEN=${OPENAI_TOKEN}
+
+      # Or use Groq (uncomment to use):
+      # - GULLAK_OPENAI_BASE_URL=https://api.groq.com/openai/v1
+      # - GULLAK_OPENAI_MODEL=llama3-70b-8192
+      # - GULLAK_OPENAI_TOKEN=${GROQ_TOKEN}
+
+      # HTTP Server Settings
+      - GULLAK_HTTP_ADDRESS=:3333
+      - GULLAK_HTTP_TIMEOUT=30s
+      - GULLAK_OPENAI_TIMEOUT=10s

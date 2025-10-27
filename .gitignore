@@ -30,6 +30,7 @@ dist/
 *.db-shm
 *.db-wal
 gullak
+data/
 
 # macOS
 .DS_Store

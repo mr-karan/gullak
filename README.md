@@ -36,13 +36,41 @@ This keeps Gullak lean, fast, and focused on its core purpose.
 
 ## Self Hosting
 
-To self host Gullak yourself, you can use the provided Docker image. Here are the steps to get it up and running:
+Gullak is easy to self-host using Docker. Multi-architecture images are available for both `amd64` and `arm64` platforms.
+
+### Using Docker Compose (Recommended)
+
+1. Create a `.env` file with your API keys:
 
 ```bash
-docker run --name gullak-app -v gullak-data:/app/expenses.db -p 3333:3333 -d ghcr.io/mr-karan/gullak:latest
+cp .env.sample .env
+# Edit .env and add your OpenAI or Groq API token
 ```
 
-This setup will expose Gullak on port 3333, storing the SQLite database at the specified volume location.
+2. Start Gullak:
+
+```bash
+docker-compose up -d
+```
+
+3. Access Gullak at `http://localhost:3333`
+
+The database will be persisted in the `./data` directory. You can customize the configuration by editing environment variables in `docker-compose.yml` or by mounting a custom `config.toml` file.
+
+### Using Docker CLI
+
+For a quick setup without docker-compose:
+
+```bash
+docker run --name gullak \
+  -e GULLAK_OPENAI_TOKEN=your-api-key-here \
+  -e GULLAK_APP_DB_PATH=/app/data/expenses.db \
+  -v gullak-data:/app/data \
+  -p 3333:3333 \
+  -d ghcr.io/mr-karan/gullak:latest
+```
+
+This setup will expose Gullak on port 3333, storing the SQLite database in a named volume.
 
 ## Apple Shortcut Integration
 
@@ -97,15 +125,25 @@ model = "llama3-70b-8192"
 token = ""
 ```
 
-### Env Variables
+### Environment Variables
 
-Gullak supports configuration overrides using environment variables. This can be especially useful when deploying to different environments or when you need to secure sensitive data like API tokens. Environment variables must be prefixed with `GULLAK_`.
+Gullak supports configuration overrides using environment variables. This is the recommended approach for Docker deployments to keep sensitive data like API tokens secure. All environment variables must be prefixed with `GULLAK_`.
 
-Here’s an example on how to set the OpenAI token using an environment variable:
+Common environment variables (see `docker-compose.yml` for complete list):
 
 ```bash
-export GULLAK_OPENAI_TOKEN=your_openai_api_token_here
+# Required: LLM API Configuration
+GULLAK_OPENAI_TOKEN=your_api_token_here
+GULLAK_OPENAI_MODEL=gpt-4o-mini
+GULLAK_OPENAI_BASE_URL=https://api.openai.com
+
+# Optional: App Settings
+GULLAK_APP_CURRENCY=INR
+GULLAK_APP_DB_PATH=/app/data/expenses.db
+GULLAK_APP_DEBUG=false
 ```
+
+You can also override any config.toml setting using environment variables with the pattern `GULLAK_<SECTION>_<KEY>`. For example, `http.timeout` becomes `GULLAK_HTTP_TIMEOUT`.
 
 ## Local Dev Setup
 
