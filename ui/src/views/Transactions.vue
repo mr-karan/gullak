@@ -13,7 +13,6 @@
             </h1>
           </div>
           <div class="navbar-center hidden sm:flex">
-            <h2 class="text-sm font-semibold text-base-content/70">Expense Logger</h2>
           </div>
           <div class="navbar-end gap-2">
             <router-link to="/settings" class="btn btn-ghost btn-sm btn-circle">
