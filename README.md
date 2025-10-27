@@ -2,7 +2,7 @@
 
 _A minimalist expense tracker enabling quick logging of expenses in natural language, using LLMs for parsing and categorization._
 
-![recording](./screenshots/gullak.gif)
+![Gullak Transaction Logger](./screenshots/log.png)
 
 Gullak is a minimalist expense tracker designed to make logging expenses effortless. Input your expenses in natural language, and let the integrated AI handle categorization. Gullak focuses on quick expense logging with the ability to export to CSV for analysis in tools like Actual Budget.
 
@@ -21,15 +21,12 @@ I originally developed Gullak for personal use. I had a habit of recording my ex
 - **CSV Export**: Export filtered transactions for analysis in Actual Budget or similar tools.
 - **Dense Table UI**: Compact, fast interface focused on efficiency.
 
-## Screenshots
-
-![Gullak Transaction Logger](./screenshots/log.png)
-
 ## Philosophy
 
 Gullak is designed as a "log and forget" expense tracker. Instead of trying to be an all-in-one budgeting tool with charts and analytics, it focuses on what it does best: making expense logging fast and effortless.
 
 The workflow is simple:
+
 1. **Log** expenses quickly using natural language
 2. **Confirm** transactions with a single click
 3. **Export** to CSV when ready
@@ -62,6 +59,7 @@ Follow these steps to configure it:
 - Download a copy of the shortcut from [here](https://www.icloud.com/shortcuts/f9039ea721ca4cdeac31fb9b7983450a).
 - Add the shortcut to your library in the Shortcuts app on your iOS device.
 - Customize the GULLAK_API endpoint.
+
   - Open the Shortcuts app and find the newly added shortcut.
   - Tap on the shortcut to open the editing interface.
   - Look for the `gullak_api_endpoint` variable within the actions list.
