@@ -1,41 +1,20 @@
-FROM golang:1.22.4 AS builder
-WORKDIR /app/build
-COPY go.mod ${WORKDIR}
-COPY go.sum ${WORKDIR}
-RUN go mod download && go mod verify 
-
-# Downloading Node now
-RUN curl -fsSL https://deb.nodesource.com/setup_18.x -o nodesource_setup.sh
-RUN sh nodesource_setup.sh
-RUN apt-get install -y nodejs 
-RUN node -v && npm -v
-
-# Now create gullak.bin
-RUN npm install -g yarn
-COPY . .
-RUN make build
-
-
 FROM ubuntu:24.04
-# Update and install necessary packages
-RUN apt-get update && \
-    apt-get install -y ca-certificates && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
+RUN apt-get -y update && apt install -y ca-certificates
 
-# Create a non-root user and switch to it
-RUN useradd -m appuser
-USER appuser
-
-# Set working directory
 WORKDIR /app
 
-# Copy the binary
-COPY --from=builder /app/build/bin/gullak.bin ./gullak.bin
+COPY gullak.bin .
 COPY config.sample.toml config.toml
 
-# Set the entrypoint
+ARG GULLAK_GID="999"
+ARG GULLAK_UID="999"
+
+RUN addgroup --system --gid $GULLAK_GID gullak && \
+    adduser --uid $GULLAK_UID --system --ingroup gullak gullak && \
+    chown -R gullak:gullak /app
+
+USER gullak
 EXPOSE 3333
-RUN ls -lahtr
-ENTRYPOINT ["/app/gullak.bin"]
+
+ENTRYPOINT [ "./gullak.bin" ]
 CMD ["--config", "config.toml"]
