@@ -15,6 +15,20 @@
           <div class="navbar-center hidden sm:flex">
           </div>
           <div class="navbar-end gap-2">
+            <div class="dropdown dropdown-end">
+              <button tabindex="0" class="btn btn-ghost btn-sm btn-circle" title="Change Theme">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" />
+                </svg>
+              </button>
+              <ul tabindex="0" class="dropdown-content z-50 menu p-2 shadow bg-base-100 rounded-box w-36">
+                <li v-for="theme in themes" :key="theme">
+                  <a @click="setTheme(theme)" :class="{ 'active': currentTheme === theme }">
+                    {{ theme.charAt(0).toUpperCase() + theme.slice(1) }}
+                  </a>
+                </li>
+              </ul>
+            </div>
             <router-link to="/settings" class="btn btn-ghost btn-sm btn-circle">
               <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
@@ -424,7 +438,11 @@ import { useTransactions } from '@/composables/useTransactions'
 import { useDebounce } from '@/composables/useDebounce'
 import { useExport } from '@/composables/useExport'
 import { useNotifications } from '@/composables/useNotifications'
+import { useTheme } from '@/composables/useTheme'
 import type { Transaction } from '@/types/api'
+
+// Theme
+const { currentTheme, setTheme, themes } = useTheme()
 
 const showExpenseModal = ref(false)
 const showDeleteModal = ref(false)

@@ -15,7 +15,21 @@
           <div class="navbar-center hidden sm:flex">
             <h2 class="text-sm font-semibold text-base-content/70">Settings</h2>
           </div>
-          <div class="navbar-end">
+          <div class="navbar-end gap-2">
+            <div class="dropdown dropdown-end">
+              <button tabindex="0" class="btn btn-ghost btn-sm btn-circle" title="Change Theme">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" />
+                </svg>
+              </button>
+              <ul tabindex="0" class="dropdown-content z-50 menu p-2 shadow bg-base-100 rounded-box w-36">
+                <li v-for="theme in themes" :key="theme">
+                  <a @click="setTheme(theme)" :class="{ 'active': currentTheme === theme }">
+                    {{ theme.charAt(0).toUpperCase() + theme.slice(1) }}
+                  </a>
+                </li>
+              </ul>
+            </div>
             <router-link to="/" class="btn btn-ghost btn-sm">
               <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
@@ -139,7 +153,11 @@
 import { ref, computed, onMounted } from 'vue'
 import { apiService } from '@/services/api'
 import { useNotifications } from '@/composables/useNotifications'
+import { useTheme } from '@/composables/useTheme'
 import type { Settings } from '@/types/api'
+
+// Theme
+const { currentTheme, setTheme, themes } = useTheme()
 
 const loading = ref(true)
 const saving = ref(false)
