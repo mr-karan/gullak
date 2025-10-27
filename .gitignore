@@ -29,3 +29,7 @@ dist/
 *.bin
 *.db-shm
 *.db-wal
+gullak
+
+# macOS
+.DS_Store
