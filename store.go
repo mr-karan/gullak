@@ -77,11 +77,17 @@ func (a *App) Save(transactions models.Transactions) ([]db.Transaction, error) {
 			}
 		}
 
+		// Set default currency if not provided
+		currency := item.Currency
+		if currency == "" {
+			currency = a.currency
+		}
+
 		arg := db.CreateTransactionParams{
 			CreatedAt:       time.Now(),
 			TransactionDate: transactDate,
 			Amount:          item.Amount,
-			Currency:        item.Currency,
+			Currency:        currency,
 			Category:        item.Category,
 			Description:     item.Description,
 		}

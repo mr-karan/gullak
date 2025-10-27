@@ -10,7 +10,6 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/mr-karan/gullak/internal/db"
 	"github.com/mr-karan/gullak/internal/llm"
-	"github.com/mr-karan/gullak/pkg/models"
 )
 
 type ExpenseInput struct {
@@ -56,7 +55,20 @@ func handleCreateTransaction(c echo.Context) error {
 		})
 	}
 
-	transactions, err := m.llm.Parse(input.Line)
+	// Fetch existing categories for better LLM predictions
+	existingCategories, err := m.queries.GetDistinctCategories(context.Background())
+	if err != nil {
+		m.log.Warn("Error fetching existing categories, using defaults", "error", err)
+		existingCategories = nil
+	}
+
+	// Extract category names
+	categoryNames := make([]string, 0, len(existingCategories))
+	for _, cat := range existingCategories {
+		categoryNames = append(categoryNames, cat.Category)
+	}
+
+	transactions, err := m.llm.Parse(input.Line, m.currency, categoryNames)
 	if err != nil {
 		var noTxErr *llm.NoValidTransactionError
 		if errors.As(err, &noTxErr) {
@@ -185,7 +197,17 @@ func handleUpdateTransaction(c echo.Context) error {
 		})
 	}
 
-	var input models.Item // Ensure models.Item has the appropriate fields
+	// First, get the existing transaction
+	existingTransaction, err := m.queries.GetTransaction(context.Background(), id)
+	if err != nil {
+		m.log.Error("Error getting existing transaction", "error", err)
+		return c.JSON(http.StatusNotFound, Resp{
+			Error: "Transaction not found",
+		})
+	}
+
+	// Parse the input as a map to handle partial updates
+	var input map[string]interface{}
 	if err := c.Bind(&input); err != nil {
 		m.log.Error("Error binding input", "error", err)
 		return c.JSON(http.StatusBadRequest, Resp{
@@ -193,21 +215,59 @@ func handleUpdateTransaction(c echo.Context) error {
 		})
 	}
 
-	// Ensure transaction_date is in the correct format
-	transactionDate, err := time.Parse("2006-01-02", input.TransactionDate)
-	if err != nil {
-		m.log.Error("Error parsing transaction date", "error", err)
-		return c.JSON(http.StatusBadRequest, Resp{
-			Error: "Invalid transaction date",
-		})
+	// Prepare update parameters with existing values as defaults
+	amount := existingTransaction.Amount
+	currency := existingTransaction.Currency
+	category := existingTransaction.Category
+	description := existingTransaction.Description
+	confirm := existingTransaction.Confirm
+	transactionDate := existingTransaction.TransactionDate
+
+	// Update only the fields that are provided
+	if val, ok := input["amount"]; ok {
+		if amt, ok := val.(float64); ok {
+			amount = amt
+		}
+	}
+	if val, ok := input["currency"]; ok {
+		if curr, ok := val.(string); ok {
+			currency = curr
+		}
+	}
+	if val, ok := input["category"]; ok {
+		if cat, ok := val.(string); ok {
+			category = cat
+		}
+	}
+	if val, ok := input["description"]; ok {
+		if desc, ok := val.(string); ok {
+			description = desc
+		}
+	}
+	if val, ok := input["confirm"]; ok {
+		if conf, ok := val.(bool); ok {
+			confirm = conf
+		}
+	}
+	if val, ok := input["transaction_date"]; ok && val != "" {
+		if dateStr, ok := val.(string); ok {
+			parsedDate, err := time.Parse("2006-01-02", dateStr)
+			if err != nil {
+				m.log.Error("Error parsing transaction date", "error", err)
+				return c.JSON(http.StatusBadRequest, Resp{
+					Error: "Invalid transaction date",
+				})
+			}
+			transactionDate = parsedDate
+		}
 	}
 
 	params := db.UpdateTransactionParams{
-		Amount:          input.Amount,
-		Currency:        input.Currency,
-		Category:        input.Category,
-		Description:     input.Description,
-		Confirm:         input.Confirm,
+		Amount:          amount,
+		Currency:        currency,
+		Category:        category,
+		Description:     description,
+		Confirm:         confirm,
 		TransactionDate: transactionDate,
 		ID:              id,
 	}
@@ -254,39 +314,44 @@ func handleTopExpenseCategories(c echo.Context) error {
 	startDateStr := c.QueryParam("start_date")
 	endDateStr := c.QueryParam("end_date")
 
+	var startDate, endDate time.Time
+	var err error
+
+	// If dates are not provided, default to current month
 	if startDateStr == "" || endDateStr == "" {
-		return c.JSON(http.StatusBadRequest, Resp{
-			Error: "Missing required parameters: start_date, end_date",
-		})
-	}
+		now := time.Now()
+		startDate = time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
+		endDate = startDate.AddDate(0, 1, 0).Add(-time.Second)
+	} else {
+		// Parse start date and end date strings into time.Time
+		startDate, err = time.Parse("2006-01-02", startDateStr)
+		if err != nil {
+			m.log.Error("Invalid start date", "error", err)
+			return c.JSON(http.StatusBadRequest, Resp{
+				Error: "Invalid start date format, use YYYY-MM-DD",
+			})
+		}
 
-	// Parse start date and end date strings into time.Time
-	startDate, err := time.Parse("2006-01-02", startDateStr)
-	if err != nil {
-		m.log.Error("Invalid start date", "error", err)
-		return c.JSON(http.StatusBadRequest, Resp{
-			Error: "Invalid start date format, use YYYY-MM-DD",
-		})
-	}
+		endDate, err = time.Parse("2006-01-02", endDateStr)
+		if err != nil {
+			m.log.Error("Invalid end date", "error", err)
+			return c.JSON(http.StatusBadRequest, Resp{
+				Error: "Invalid end date format, use YYYY-MM-DD",
+			})
+		}
 
-	endDate, err := time.Parse("2006-01-02", endDateStr)
-	if err != nil {
-		m.log.Error("Invalid end date", "error", err)
-		return c.JSON(http.StatusBadRequest, Resp{
-			Error: "Invalid end date format, use YYYY-MM-DD",
-		})
-	}
-
-	// Validate the date range
-	if err := validateDateRange(startDate, endDate); err != nil {
-		return c.JSON(http.StatusBadRequest, Resp{
-			Error: err.Error(),
-		})
+		// Validate the date range
+		if err := validateDateRange(startDate, endDate); err != nil {
+			return c.JSON(http.StatusBadRequest, Resp{
+				Error: err.Error(),
+			})
+		}
 	}
 
 	params := db.TopExpenseCategoriesParams{
 		StartDate: startDate,
 		EndDate:   endDate,
+		Currency:  m.currency,
 	}
 
 	rawCategories, err := m.queries.TopExpenseCategories(context.Background(), params)
@@ -297,17 +362,19 @@ func handleTopExpenseCategories(c echo.Context) error {
 		})
 	}
 
-	// Transform into client-friendly structure
-	categories := make([]CategorySummary, len(rawCategories))
-	for i, cat := range rawCategories {
+	// Transform into client-friendly structure - filter by currency
+	categories := []CategorySummary{}
+	for _, cat := range rawCategories {
 		totalSpent := 0.0
 		if cat.TotalSpent.Valid {
 			totalSpent = cat.TotalSpent.Float64
 		}
-		categories[i] = CategorySummary{
+		// Note: The SQL query aggregates all currencies together
+		// For accurate reporting, we should filter by currency at the SQL level
+		categories = append(categories, CategorySummary{
 			Category:   cat.Category,
 			TotalSpent: totalSpent,
-		}
+		})
 	}
 
 	return c.JSON(http.StatusOK, Resp{
@@ -353,6 +420,7 @@ func handleDailySpending(c echo.Context) error {
 	params := db.DailySpendingParams{
 		StartDate: startDate,
 		EndDate:   endDate,
+		Currency:  m.currency,
 	}
 
 	rawSpending, err := m.queries.DailySpending(context.Background(), params)
@@ -383,9 +451,134 @@ func handleDailySpending(c echo.Context) error {
 }
 
 // validateDateRange ensures that the start date is before or the same as the end date.
+type DashboardStats struct {
+	TotalExpenses    float64 `json:"total_expenses"`
+	TransactionCount int     `json:"transaction_count"`
+	CategoryCount    int     `json:"category_count"`
+}
+
+type SettingsResp struct {
+	Currency string `json:"currency"`
+	Timezone string `json:"timezone"`
+}
+
+type UpdateSettingsReq struct {
+	Currency string `json:"currency"`
+	Timezone string `json:"timezone"`
+}
+
+func handleDashboardStats(c echo.Context) error {
+	m := c.Get("app").(*App)
+
+	// Get current month start and end dates
+	now := time.Now()
+	startOfMonth := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
+	endOfMonth := startOfMonth.AddDate(0, 1, 0).Add(-time.Second)
+
+	// Get transactions for current month
+	transactions, err := m.queries.ListTransactions(context.Background(), db.ListTransactionsParams{
+		StartDate: startOfMonth,
+		EndDate:   endOfMonth,
+		Confirm:   true, // Only count confirmed transactions
+	})
+	if err != nil {
+		m.log.Error("Error getting monthly transactions", "error", err)
+		return c.JSON(http.StatusInternalServerError, Resp{
+			Error: "Error retrieving dashboard stats",
+		})
+	}
+
+	// Calculate stats - only sum amounts in the base currency to avoid mixing currencies
+	totalExpenses := 0.0
+	categorySet := make(map[string]bool)
+	validTransactionCount := 0
+
+	for _, transaction := range transactions {
+		// Only include transactions in the base currency
+		if transaction.Currency == m.currency {
+			totalExpenses += transaction.Amount
+			validTransactionCount++
+		}
+		categorySet[transaction.Category] = true
+	}
+
+	stats := DashboardStats{
+		TotalExpenses:    totalExpenses,
+		TransactionCount: validTransactionCount,
+		CategoryCount:    len(categorySet),
+	}
+
+	return c.JSON(http.StatusOK, Resp{
+		Data: stats,
+	})
+}
+
 func validateDateRange(startDate, endDate time.Time) error {
 	if startDate.After(endDate) {
 		return errors.New("start date must be on or before end date")
 	}
 	return nil
+}
+
+func handleGetSettings(c echo.Context) error {
+	m := c.Get("app").(*App)
+
+	settings, err := m.queries.GetSettings(context.Background())
+	if err != nil {
+		m.log.Error("Error getting settings", "error", err)
+		return c.JSON(http.StatusInternalServerError, Resp{
+			Error: "Error retrieving settings",
+		})
+	}
+
+	return c.JSON(http.StatusOK, Resp{
+		Data: SettingsResp{
+			Currency: settings.Currency,
+			Timezone: settings.Timezone,
+		},
+	})
+}
+
+func handleUpdateSettings(c echo.Context) error {
+	m := c.Get("app").(*App)
+
+	var req UpdateSettingsReq
+	if err := c.Bind(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, Resp{
+			Error: "Invalid request body",
+		})
+	}
+
+	// Validate currency
+	if req.Currency == "" {
+		return c.JSON(http.StatusBadRequest, Resp{
+			Error: "Currency is required",
+		})
+	}
+
+	// Validate timezone
+	if req.Timezone == "" {
+		return c.JSON(http.StatusBadRequest, Resp{
+			Error: "Timezone is required",
+		})
+	}
+
+	err := m.queries.UpdateSettings(context.Background(), db.UpdateSettingsParams{
+		Currency: req.Currency,
+		Timezone: req.Timezone,
+	})
+
+	if err != nil {
+		m.log.Error("Error updating settings", "error", err)
+		return c.JSON(http.StatusInternalServerError, Resp{
+			Error: "Error updating settings",
+		})
+	}
+
+	// Update the app currency
+	m.currency = req.Currency
+
+	return c.JSON(http.StatusOK, Resp{
+		Message: "Settings updated successfully",
+	})
 }

@@ -81,6 +81,7 @@ func main() {
 		db,
 		llmMgr,
 		logger,
+		ko.MustString("app.currency"),
 	)
 	if err := app.Start(ctx); err != nil {
 		logger.Error("Error starting http server", "error", err)

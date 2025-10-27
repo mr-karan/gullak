@@ -34,14 +34,15 @@ func initConfig(cfgPath string) (*koanf.Koanf, error) {
 }
 
 type App struct {
-	srv     *echo.Echo
-	log     *slog.Logger
-	addr    string
-	llm     *llm.Manager
-	queries *db.Queries
+	srv      *echo.Echo
+	log      *slog.Logger
+	addr     string
+	llm      *llm.Manager
+	queries  *db.Queries
+	currency string
 }
 
-func initApp(addr string, timeout time.Duration, static fs.FS, queries *db.Queries, llmMgr *llm.Manager, log *slog.Logger) *App {
+func initApp(addr string, timeout time.Duration, static fs.FS, queries *db.Queries, llmMgr *llm.Manager, log *slog.Logger, currency string) *App {
 	e := echo.New()
 	e.HideBanner = true
 
@@ -58,9 +59,11 @@ func initApp(addr string, timeout time.Duration, static fs.FS, queries *db.Queri
 	e.GET("/api/transactions/:id", handleGetTransaction)                     // Retrieves a specific transaction by ID
 	e.PUT("/api/transactions/:id", handleUpdateTransaction)                  // Updates a specific transaction by ID
 	e.DELETE("/api/transactions/:id", handleDeleteTransaction)               // Deletes a specific transaction by ID
+	e.GET("/api/dashboard/stats", handleDashboardStats)                      // Retrieves dashboard statistics
 	e.GET("/api/reports/top-expense-categories", handleTopExpenseCategories) // Retrieves top expense categories
 	e.GET("/api/reports/daily-spending", handleDailySpending)                // Retrieves spending for a specific day
-	// e.GET("/api/reports/monthly-spending-summary", handleMonthlySpendingSummary) // Retrieves spending summary by month
+	e.GET("/api/settings", handleGetSettings)                                // Retrieves user settings
+	e.PUT("/api/settings", handleUpdateSettings)                             // Updates user settings
 
 	// Middleware to serve the static files.
 	e.Use(middleware.StaticWithConfig(middleware.StaticConfig{
@@ -71,11 +74,12 @@ func initApp(addr string, timeout time.Duration, static fs.FS, queries *db.Queri
 	}))
 
 	return &App{
-		srv:     e,
-		log:     log,
-		addr:    addr,
-		queries: queries,
-		llm:     llmMgr,
+		srv:      e,
+		log:      log,
+		addr:     addr,
+		queries:  queries,
+		llm:      llmMgr,
+		currency: currency,
 	}
 }
 

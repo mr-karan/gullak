@@ -5,7 +5,7 @@ db_path = "./expenses.db"
 
 [openai]
 token = "redacted"
-timeout = "10s"
+timeout = "60s"
 
 [telegram]
 token = ""

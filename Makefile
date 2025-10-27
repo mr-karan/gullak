@@ -9,7 +9,7 @@ BUILDSTR := ${VERSION} (Commit: ${LAST_COMMIT_DATE} (${LAST_COMMIT}), Build: $(s
 
 .PHONY: build-ui
 build-ui:
-	cd ui && yarn install && yarn build
+	cd ui && pnpm install && pnpm build
 
 .PHONY: build
 build: build-ui

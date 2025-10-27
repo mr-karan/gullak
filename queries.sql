@@ -29,12 +29,12 @@ DELETE FROM transactions WHERE id = ?;
 
 -- name: TopExpenseCategories :many
 -- Retrieves the top expense categories over a specified period.
--- Uses parameters: confirm, startDate, endDate to filter by transaction date range.
+-- Uses parameters: confirm, startDate, endDate, currency to filter by transaction date range.
 SELECT
     category,
     SUM(amount) AS total_spent
 FROM transactions
-WHERE transaction_date BETWEEN :startDate AND :endDate AND confirm = 1
+WHERE transaction_date BETWEEN :startDate AND :endDate AND confirm = 1 AND currency = :currency
 GROUP BY category
 ORDER BY total_spent DESC
 LIMIT 5;-- Can be adjusted to show more or fewer categories
@@ -46,9 +46,26 @@ SELECT
     transaction_date,
     SUM(amount) AS total_spent
 FROM transactions
-WHERE transaction_date BETWEEN :startDate AND :endDate AND confirm = 1
+WHERE transaction_date BETWEEN :startDate AND :endDate AND confirm = 1 AND currency = :currency
 GROUP BY transaction_date
 ORDER BY transaction_date ASC;
+
+-- name: GetDistinctCategories :many
+-- Retrieves all unique categories from transactions ordered by usage frequency
+SELECT category, COUNT(*) as usage_count
+FROM transactions
+GROUP BY category
+ORDER BY usage_count DESC;
+
+-- name: GetSettings :one
+-- Retrieves user settings (singleton pattern)
+SELECT * FROM settings WHERE id = 1;
+
+-- name: UpdateSettings :exec
+-- Updates user settings
+UPDATE settings
+SET currency = ?, timezone = ?, updated_at = datetime('now')
+WHERE id = 1;
 
 -- TODO: This is not live yet.
 -- name: MonthlySpendingSummary :many
