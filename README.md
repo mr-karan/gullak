@@ -1,27 +1,41 @@
 # Gullak - Expense Tracking App
 
-_A no-frills expense tracker app enabling quick logging of expenses in natural language, using LLMs for parsing and categorization._
+_A minimalist expense tracker enabling quick logging of expenses in natural language, using LLMs for parsing and categorization._
 
 ![recording](./screenshots/gullak.gif)
 
-Gullak is an expense tracker designed to make expense management as intuitive and effortless as possible. Input your expenses in natural language, and let the integrated AI handle categorization and analysis. With Gullak, you can easily view reports and logs of your historical transactions, providing you with daily and monthly summaries to better understand your spending habits.
+Gullak is a minimalist expense tracker designed to make logging expenses effortless. Input your expenses in natural language, and let the integrated AI handle categorization. Gullak focuses on quick expense logging with the ability to export to CSV for analysis in tools like Actual Budget.
 
 ## Why Gullak?
 
-I originally developed Gullak for personal use. I had a habit of recording my expenses on Apple Notes — a quick and simple method that just got the job done. However, I needed a tool that could not only store these entries but also parse and visualize them effectively. While Gullak was created out of my own necessity, I decided to open source it to help others who might be seeking similar solutions.
+I originally developed Gullak for personal use. I had a habit of recording my expenses on Apple Notes — a quick and simple method that just got the job done. However, I needed a tool that could not only store these entries but also parse and organize them effectively. Gullak is designed as a "log and forget" expense tracker that focuses on making expense logging fast and effortless, then exporting to CSV for analysis in dedicated budgeting tools. While Gullak was created out of my own necessity, I decided to open source it to help others who might be seeking similar solutions.
 
 ## Features
 
 - **Natural Language Input**: Simply type your expenses as you would in a notebook or notes app.
-- **Automatic Categorization**: Utilizes AI to categorize expenses based on the input text.
-- **Visual Reports**: Generates visual summaries of expenses, providing insights into spending patterns over time.
-- **Historical Data**: Access and review past entries with detailed logs and reports.
+- **Smart Categorization**: AI learns from your categories and maintains consistency across transactions.
+- **Multi-Currency Support**: Automatically detects currency from context ($, ₹, €, £) - perfect for travel.
+- **Quick Confirmation**: Inline checkbox to confirm transactions instantly without modals.
+- **Bulk Operations**: Select multiple transactions to edit, confirm, or delete at once.
+- **Advanced Filters**: Filter by date ranges, amounts, and categories before export.
+- **CSV Export**: Export filtered transactions for analysis in Actual Budget or similar tools.
+- **Dense Table UI**: Compact, fast interface focused on efficiency.
 
 ## Screenshots
 
-![Gullak Dashboard Screenshot](./screenshots/dashboard.png)
-![Gullak Reports Screenshot](./screenshots/reports.png)
-![Gullak Transaction Log Screenshot](./screenshots/log.png)
+![Gullak Transaction Logger](./screenshots/log.png)
+
+## Philosophy
+
+Gullak is designed as a "log and forget" expense tracker. Instead of trying to be an all-in-one budgeting tool with charts and analytics, it focuses on what it does best: making expense logging fast and effortless.
+
+The workflow is simple:
+1. **Log** expenses quickly using natural language
+2. **Confirm** transactions with a single click
+3. **Export** to CSV when ready
+4. **Analyze** in dedicated tools like Actual Budget
+
+This keeps Gullak lean, fast, and focused on its core purpose.
 
 ## Self Hosting
 
