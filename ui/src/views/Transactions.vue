@@ -507,11 +507,14 @@ const filteredTransactions = computed(() => {
     const matchesCategory = !filters.value.category ||
       transaction.category === filters.value.category
 
+    // Extract date part from transaction_date for comparison
+    const transactionDate = transaction.transaction_date.split('T')[0]
+
     const matchesDateFrom = !filters.value.dateFrom ||
-      transaction.transaction_date >= filters.value.dateFrom
+      transactionDate >= filters.value.dateFrom
 
     const matchesDateTo = !filters.value.dateTo ||
-      transaction.transaction_date <= filters.value.dateTo
+      transactionDate <= filters.value.dateTo
 
     const matchesAmountMin = !filters.value.amountMin ||
       transaction.amount >= parseFloat(filters.value.amountMin)
