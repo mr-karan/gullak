@@ -16,3 +16,6 @@ CREATE TABLE IF NOT EXISTS settings (
     created_at DATETIME NOT NULL DEFAULT (datetime('now')),
     updated_at DATETIME NOT NULL DEFAULT (datetime('now'))
 );
+
+-- Insert default settings
+INSERT OR IGNORE INTO settings (id, currency, timezone) VALUES (1, 'INR', 'Asia/Kolkata');

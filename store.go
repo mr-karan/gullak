@@ -19,20 +19,8 @@ const (
 //go:embed pragmas.sql
 var pragmas string
 
-func createTableSQL(currency string) string {
-	return fmt.Sprintf(`
-        CREATE TABLE IF NOT EXISTS transactions (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            created_at DATETIME NOT NULL DEFAULT (datetime('now')),
-            transaction_date DATE NOT NULL,
-            currency TEXT NOT NULL DEFAULT '%s',
-            amount FLOAT NOT NULL,
-            category TEXT NOT NULL,
-            description TEXT NOT NULL DEFAULT '',
-            confirm BOOLEAN NOT NULL DEFAULT false
-        );
-    `, currency)
-}
+//go:embed schema.sql
+var schema string
 
 func initDB(path string, currency string) (*db.Queries, error) {
 	conn, err := sql.Open("sqlite", path)
@@ -44,8 +32,9 @@ func initDB(path string, currency string) (*db.Queries, error) {
 		currency = DEFAULT_CURRENCY
 	}
 
-	// Create the table if it doesn't exist.
-	if _, err = conn.Exec(createTableSQL(currency)); err != nil {
+	// Create the tables if they don't exist (transactions + settings).
+	// This also inserts default settings.
+	if _, err = conn.Exec(schema); err != nil {
 		return nil, fmt.Errorf("error creating tables: %w", err)
 	}
 

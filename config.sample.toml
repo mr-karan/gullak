@@ -3,9 +3,15 @@ debug = true
 currency = "INR"
 db_path = "./expenses.db"
 
+[http]
+address = ":3333"
+timeout = "30s"
+
 [openai]
 token = "redacted"
-timeout = "60s"
+base_url = "https://api.openai.com"
+model = "gpt-4o-mini"
+timeout = "10s"
 
 [telegram]
 token = ""
