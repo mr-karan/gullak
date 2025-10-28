@@ -109,7 +109,7 @@ Gullak allows you to customize various settings through a configuration file in 
 | http    | enabled  | true                     | Enables the HTTP server to run.                                               |
 |         | address  | ":3333"                  | The address and port on which the server listens.                             |
 |         | timeout  | "30s"                    | The timeout duration for HTTP requests.                                       |
-| openai  | base_url | "https://api.openai.com" | The base URL for the OpenAI API. Change this if you use a different endpoint. |
+| openai  | base_url | "https://api.openai.com/v1" | The base URL for the OpenAI API. Change this if you use a different endpoint. |
 |         | token    | "REDACTED"               | Your OpenAI API token for accessing models.                                   |
 |         | model    | "gpt-4o"                 | Specifies the OpenAI model used for processing inputs.                        |
 |         | timeout  | "10s"                    | The timeout duration for OpenAI API requests.                                 |
@@ -135,7 +135,7 @@ Common environment variables (see `docker-compose.yml` for complete list):
 # Required: LLM API Configuration
 GULLAK_OPENAI_TOKEN=your_api_token_here
 GULLAK_OPENAI_MODEL=gpt-4o-mini
-GULLAK_OPENAI_BASE_URL=https://api.openai.com
+GULLAK_OPENAI_BASE_URL=https://api.openai.com/v1
 
 # Optional: App Settings
 GULLAK_APP_CURRENCY=INR
