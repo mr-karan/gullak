@@ -57,6 +57,12 @@ docker-compose up -d
 
 The database will be persisted in the `./data` directory. You can customize the configuration by editing environment variables in `docker-compose.yml` or by mounting a custom `config.toml` file.
 
+**Production notes:**
+
+- The healthcheck monitors container health by checking the HTTP endpoint every 30 seconds
+- Customize the `TZ` environment variable to set your timezone (default: Asia/Kolkata)
+- Consider pinning to a specific version tag instead of `latest` for production deployments
+
 ### Using Docker CLI
 
 For a quick setup without docker-compose:

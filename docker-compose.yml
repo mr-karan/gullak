@@ -11,6 +11,9 @@ services:
       # Optional: Mount custom config file
       # - ./config.toml:/app/config.toml:ro
     environment:
+      # Timezone setting
+      - TZ=Asia/Kolkata
+
       # Database path - ensure it's in the mounted volume
       - GULLAK_APP_DB_PATH=/app/data/expenses.db
 
@@ -35,3 +38,10 @@ services:
       - GULLAK_HTTP_ADDRESS=:3333
       - GULLAK_HTTP_TIMEOUT=30s
       - GULLAK_OPENAI_TIMEOUT=10s
+
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3333"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
