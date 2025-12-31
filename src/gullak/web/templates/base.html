@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="gullak">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Gullak{% endblock %}</title>
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <!-- Alpine.js -->
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+
+    <!-- Tailwind CSS + DaisyUI v5 -->
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@5/themes.css" rel="stylesheet" type="text/css" />
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@5" rel="stylesheet" type="text/css" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    },
+                },
+            },
+        }
+    </script>
+
+    <!-- Custom styles -->
+    <style>
+        /* Custom Gullak theme - DaisyUI v5 format */
+        [data-theme="gullak"] {
+            /* Base colors - warm white background */
+            --color-base-100: oklch(98% 0.01 90);
+            --color-base-200: oklch(95% 0.01 90);
+            --color-base-300: oklch(92% 0.01 60);
+            --color-base-content: oklch(25% 0.02 60);
+
+            /* Primary - dark charcoal */
+            --color-primary: oklch(25% 0.02 60);
+            --color-primary-content: oklch(98% 0.01 90);
+
+            /* Secondary - golden yellow */
+            --color-secondary: oklch(75% 0.18 85);
+            --color-secondary-content: oklch(25% 0.02 60);
+
+            /* Accent - green */
+            --color-accent: oklch(55% 0.15 155);
+            --color-accent-content: oklch(98% 0.01 90);
+
+            /* Neutral */
+            --color-neutral: oklch(45% 0.02 60);
+            --color-neutral-content: oklch(98% 0.01 90);
+
+            /* Semantic colors */
+            --color-info: oklch(70% 0.15 230);
+            --color-info-content: oklch(20% 0.02 230);
+            --color-success: oklch(65% 0.15 155);
+            --color-success-content: oklch(20% 0.02 155);
+            --color-warning: oklch(80% 0.18 85);
+            --color-warning-content: oklch(25% 0.02 85);
+            --color-error: oklch(65% 0.20 25);
+            --color-error-content: oklch(98% 0.01 25);
+
+            /* Design tokens */
+            --radius-selector: 0.5rem;
+            --radius-field: 0.5rem;
+            --radius-box: 0.75rem;
+            --size-selector: 0.25rem;
+            --size-field: 0.25rem;
+            --border: 1px;
+            --depth: 1;
+            --noise: 0;
+
+            color-scheme: light;
+        }
+
+        [data-theme="gullak-dark"] {
+            /* Base colors - dark warm background */
+            --color-base-100: oklch(18% 0.02 60);
+            --color-base-200: oklch(22% 0.02 60);
+            --color-base-300: oklch(26% 0.02 60);
+            --color-base-content: oklch(90% 0.02 90);
+
+            /* Primary - golden */
+            --color-primary: oklch(75% 0.18 85);
+            --color-primary-content: oklch(20% 0.02 60);
+
+            /* Secondary - light */
+            --color-secondary: oklch(90% 0.02 90);
+            --color-secondary-content: oklch(20% 0.02 60);
+
+            /* Accent - green */
+            --color-accent: oklch(65% 0.18 155);
+            --color-accent-content: oklch(20% 0.02 60);
+
+            /* Neutral */
+            --color-neutral: oklch(30% 0.02 60);
+            --color-neutral-content: oklch(90% 0.02 90);
+
+            /* Semantic colors */
+            --color-info: oklch(70% 0.15 230);
+            --color-info-content: oklch(20% 0.02 230);
+            --color-success: oklch(65% 0.15 155);
+            --color-success-content: oklch(20% 0.02 155);
+            --color-warning: oklch(80% 0.18 85);
+            --color-warning-content: oklch(25% 0.02 85);
+            --color-error: oklch(65% 0.20 25);
+            --color-error-content: oklch(98% 0.01 25);
+
+            /* Design tokens */
+            --radius-selector: 0.5rem;
+            --radius-field: 0.5rem;
+            --radius-box: 0.75rem;
+            --size-selector: 0.25rem;
+            --size-field: 0.25rem;
+            --border: 1px;
+            --depth: 1;
+            --noise: 0;
+
+            color-scheme: dark;
+        }
+
+        body {
+            font-family: 'Inter', system-ui, sans-serif;
+        }
+
+        /* Ledger syntax highlighting */
+        .ledger-preview {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.875rem;
+            line-height: 1.6;
+        }
+        .ledger-date { color: var(--color-primary); font-weight: 500; }
+        .ledger-payee { color: var(--color-accent); font-weight: 500; }
+        .ledger-account { color: var(--color-secondary); }
+        .ledger-amount { color: var(--color-error); font-weight: 500; }
+        .ledger-comment { opacity: 0.6; font-style: italic; }
+
+        /* Chat bubble animation */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .chat-bubble-animate {
+            animation: fadeIn 0.15s ease-out;
+        }
+
+        /* Scrollbar styling */
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: var(--color-base-content);
+            opacity: 0.2;
+            border-radius: 3px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            opacity: 0.3;
+        }
+
+        /* Smooth transitions */
+        * {
+            transition-property: background-color, border-color, color, fill, stroke;
+            transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+            transition-duration: 150ms;
+        }
+
+        /* Better focus states */
+        .btn:focus-visible, .input:focus-visible {
+            outline: 2px solid var(--color-primary);
+            outline-offset: 2px;
+        }
+
+        /* Hide elements until Alpine.js is ready */
+        [x-cloak] {
+            display: none !important;
+        }
+
+        /* Toast animation */
+        @keyframes fade-in {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        .animate-fade-in {
+            animation: fade-in 0.2s ease-out;
+        }
+    </style>
+
+    {% block head %}{% endblock %}
+</head>
+<body class="min-h-screen bg-base-100 text-base-content">
+    {% block content %}{% endblock %}
+
+    <!-- App JavaScript -->
+    <script src="/static/js/app.js"></script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

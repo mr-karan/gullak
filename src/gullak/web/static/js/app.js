@@ -1,0 +1,514 @@
+/**
+ * Gullak - Alpine.js Application
+ */
+
+function gullakApp() {
+    return {
+        // View state
+        view: 'chat',
+        theme: localStorage.getItem('theme') || 'gullak',
+
+        // Setup state
+        setupComplete: true,
+        setupStep: 'welcome',
+        setupOptions: null,
+        setupData: {
+            currency: 'INR',
+            timezone: 'Asia/Kolkata',
+            bank_accounts: [],
+            credit_cards: [],
+            categories: [],
+        },
+        setupLoading: false,
+
+        // Chat state
+        messages: [],
+        input: '',
+        streaming: false,
+        streamingText: '',
+
+        // Preview state
+        pendingTransaction: null,
+        previewMode: 'table',
+        confirming: false,
+
+        // Transactions state
+        transactions: [],
+
+        // Initialize
+        async init() {
+            // Apply theme
+            document.documentElement.setAttribute('data-theme', this.theme);
+
+            // Check setup status first
+            await this.checkSetupStatus();
+
+            // Only focus chat input if setup is complete
+            if (this.setupComplete) {
+                this.$nextTick(() => {
+                    if (this.$refs.chatInput) {
+                        this.$refs.chatInput.focus();
+                    }
+                });
+
+                // Load any pending transactions
+                this.loadPending();
+            }
+        },
+
+        // Check if setup has been completed
+        async checkSetupStatus() {
+            try {
+                const response = await fetch('/api/setup/status');
+                const status = await response.json();
+
+                this.setupComplete = status.is_complete;
+                this.setupStep = status.current_step;
+
+                // Load existing preferences from ledger
+                if (status.preferences) {
+                    this.setupData.currency = status.preferences.currency || 'INR';
+                    this.setupData.timezone = status.preferences.timezone || 'Asia/Kolkata';
+                    this.setupData.bank_accounts = status.preferences.bank_accounts || [];
+                    this.setupData.credit_cards = status.preferences.credit_cards || [];
+                    this.setupData.categories = status.preferences.expense_categories || [];
+                    this.setupData.income_sources = status.preferences.income_sources || [];
+                }
+
+                if (!this.setupComplete) {
+                    this.view = 'setup';
+                    await this.loadSetupOptions();
+                }
+            } catch (error) {
+                console.error('Failed to check setup status:', error);
+                // Assume setup is complete on error to not block the user
+                this.setupComplete = true;
+            }
+        },
+
+        // Load setup options (currencies, timezones, etc.)
+        async loadSetupOptions() {
+            try {
+                const response = await fetch('/api/setup/options');
+                this.setupOptions = await response.json();
+            } catch (error) {
+                console.error('Failed to load setup options:', error);
+            }
+        },
+
+        // Handle setup step submission
+        async submitSetupStep() {
+            this.setupLoading = true;
+
+            try {
+                let data = {};
+
+                if (this.setupStep === 'welcome') {
+                    data = {
+                        currency: this.setupData.currency,
+                        timezone: this.setupData.timezone,
+                    };
+                } else if (this.setupStep === 'accounts') {
+                    data = {
+                        bank_accounts: this.setupData.bank_accounts,
+                        credit_cards: this.setupData.credit_cards,
+                    };
+                } else if (this.setupStep === 'categories') {
+                    data = {
+                        categories: this.setupData.categories.length > 0
+                            ? this.setupData.categories
+                            : this.setupOptions?.default_expense_accounts || [],
+                    };
+                }
+
+                const response = await fetch('/api/setup/step', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ step: this.setupStep, data }),
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    if (result.next_step === 'complete') {
+                        // Mark setup as complete in backend, then switch to chat
+                        await this.markSetupComplete();
+                        this.notify('success', result.message);
+                    } else if (result.next_step) {
+                        this.setupStep = result.next_step;
+                        this.notify('success', result.message);
+                    } else {
+                        // No next step means we're done
+                        this.completeSetup();
+                        this.notify('success', result.message);
+                    }
+                } else {
+                    this.notify('error', result.message);
+                }
+            } catch (error) {
+                console.error('Setup step error:', error);
+                this.notify('error', 'Failed to save setup step');
+            } finally {
+                this.setupLoading = false;
+            }
+        },
+
+        // Skip setup and use defaults
+        async skipSetup() {
+            this.setupLoading = true;
+
+            try {
+                const response = await fetch('/api/setup/skip', {
+                    method: 'POST',
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    this.completeSetup();
+                    this.notify('info', result.message);
+                }
+            } catch (error) {
+                console.error('Skip setup error:', error);
+                this.notify('error', 'Failed to skip setup');
+            } finally {
+                this.setupLoading = false;
+            }
+        },
+
+        // Mark setup as complete in backend
+        async markSetupComplete() {
+            try {
+                await fetch('/api/setup/step', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ step: 'complete', data: {} }),
+                });
+            } catch (error) {
+                console.error('Failed to mark setup complete:', error);
+            }
+            this.completeSetup();
+        },
+
+        // Complete setup and switch to chat view
+        completeSetup() {
+            this.setupComplete = true;
+            this.view = 'chat';
+
+            this.$nextTick(() => {
+                if (this.$refs.chatInput) {
+                    this.$refs.chatInput.focus();
+                }
+            });
+        },
+
+        // Add bank account to setup
+        addBankAccount(name) {
+            if (name && !this.setupData.bank_accounts.includes(name)) {
+                this.setupData.bank_accounts.push(name);
+            }
+        },
+
+        // Remove bank account from setup
+        removeBankAccount(name) {
+            this.setupData.bank_accounts = this.setupData.bank_accounts.filter(b => b !== name);
+        },
+
+        // Add credit card to setup
+        addCreditCard(name) {
+            if (name && !this.setupData.credit_cards.includes(name)) {
+                this.setupData.credit_cards.push(name);
+            }
+        },
+
+        // Remove credit card from setup
+        removeCreditCard(name) {
+            this.setupData.credit_cards = this.setupData.credit_cards.filter(c => c !== name);
+        },
+
+        // Save accounts to ledger (for settings mode)
+        async saveAccountsToLedger() {
+            if (!this.setupComplete) return; // Only in settings mode
+
+            try {
+                await fetch('/api/setup/step', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        step: 'accounts',
+                        data: {
+                            bank_accounts: this.setupData.bank_accounts,
+                            credit_cards: this.setupData.credit_cards,
+                        }
+                    }),
+                });
+            } catch (error) {
+                console.error('Failed to save accounts:', error);
+                this.notify('error', 'Failed to save');
+            }
+        },
+
+        // Open settings view
+        async openSettings() {
+            await this.checkSetupStatus(); // Refresh data from ledger
+            await this.loadSetupOptions();
+            this.view = 'setup';
+        },
+
+        // Theme toggle
+        toggleTheme() {
+            this.theme = this.theme === 'gullak' ? 'gullak-dark' : 'gullak';
+            document.documentElement.setAttribute('data-theme', this.theme);
+            localStorage.setItem('theme', this.theme);
+        },
+
+        // Check if dark mode
+        isDark() {
+            return this.theme === 'gullak-dark';
+        },
+
+        // Send chat message
+        async sendMessage() {
+            if (!this.input.trim() || this.streaming) return;
+
+            const userMessage = this.input.trim();
+            this.input = '';
+            this.streaming = true;
+            this.streamingText = '';
+
+            // Add user message
+            this.messages.push({
+                id: Date.now(),
+                role: 'user',
+                content: userMessage
+            });
+
+            // Scroll to bottom
+            this.scrollToBottom();
+
+            try {
+                const response = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message: userMessage })
+                });
+
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let buffer = '';
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+
+                    buffer += decoder.decode(value, { stream: true });
+                    const lines = buffer.split('\n');
+                    buffer = lines.pop() || '';
+
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            try {
+                                const data = JSON.parse(line.slice(6));
+                                this.handleEvent(data);
+                            } catch (e) {
+                                console.error('Parse error:', e, line);
+                            }
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error('Chat error:', error);
+                this.messages.push({
+                    id: Date.now(),
+                    role: 'assistant',
+                    content: 'Sorry, something went wrong. Please try again.'
+                });
+                this.notify('error', 'Connection error. Please try again.');
+            } finally {
+                this.streaming = false;
+                if (this.streamingText) {
+                    this.messages.push({
+                        id: Date.now(),
+                        role: 'assistant',
+                        content: this.streamingText
+                    });
+                    this.streamingText = '';
+                }
+                this.scrollToBottom();
+            }
+        },
+
+        // Handle SSE event
+        handleEvent(event) {
+            switch (event.type) {
+                case 'text':
+                    this.streamingText += event.content;
+                    this.scrollToBottom();
+                    break;
+
+                case 'preview':
+                    this.pendingTransaction = event;
+                    break;
+
+                case 'thinking':
+                    // Could show a thinking indicator
+                    break;
+
+                case 'tool_result':
+                    // Tool results are usually followed by text
+                    break;
+
+                case 'done':
+                    // Processing complete
+                    break;
+
+                case 'error':
+                    this.notify('error', event.content || 'An error occurred');
+                    break;
+            }
+        },
+
+        // Confirm pending transaction
+        async confirmTransaction() {
+            if (!this.pendingTransaction || this.confirming) return;
+
+            this.confirming = true;
+
+            try {
+                const response = await fetch('/api/chat/confirm', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        transaction_id: this.pendingTransaction.data.id
+                    })
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    this.messages.push({
+                        id: Date.now(),
+                        role: 'assistant',
+                        content: '✓ ' + result.message
+                    });
+                    this.notify('success', 'Transaction saved!');
+                    this.pendingTransaction = null;
+                } else {
+                    this.notify('error', result.message || 'Failed to save transaction');
+                }
+            } catch (error) {
+                console.error('Confirm error:', error);
+                this.notify('error', 'Failed to confirm transaction');
+            } finally {
+                this.confirming = false;
+            }
+        },
+
+        // Cancel pending transaction
+        cancelTransaction() {
+            if (this.pendingTransaction) {
+                fetch('/api/chat/cancel', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        transaction_id: this.pendingTransaction.data.id
+                    })
+                }).catch(() => {});
+            }
+            this.pendingTransaction = null;
+        },
+
+        // Load pending transactions
+        async loadPending() {
+            try {
+                const response = await fetch('/api/chat/pending');
+                const pending = await response.json();
+                if (pending.length > 0) {
+                    // Show the most recent pending transaction
+                    const latest = pending[pending.length - 1];
+                    this.pendingTransaction = {
+                        type: 'preview',
+                        content: latest.preview,
+                        data: {
+                            id: latest.id,
+                            transaction: latest.transaction
+                        }
+                    };
+                }
+            } catch (error) {
+                console.error('Failed to load pending:', error);
+            }
+        },
+
+        // Load transactions
+        async loadTransactions() {
+            try {
+                const response = await fetch('/api/ledger/transactions?limit=50');
+                const data = await response.json();
+                this.transactions = data.transactions || [];
+            } catch (error) {
+                console.error('Failed to load transactions:', error);
+                this.notify('error', 'Failed to load transactions');
+            }
+        },
+
+        // Format message (basic markdown)
+        formatMessage(text) {
+            if (!text) return '';
+            return text
+                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                .replace(/\*(.*?)\*/g, '<em>$1</em>')
+                .replace(/`(.*?)`/g, '<code class="bg-base-300 px-1 rounded">$1</code>')
+                .replace(/\n/g, '<br>');
+        },
+
+        // Highlight ledger syntax
+        highlightLedger(text) {
+            if (!text) return '';
+            return text
+                // Date
+                .replace(/^(\d{4}\/\d{2}\/\d{2})/gm, '<span class="ledger-date">$1</span>')
+                // Status + Payee (rest of first line after date)
+                .replace(/(<span class="ledger-date">.*?<\/span>)\s*([*!]?\s*)(.+)$/gm,
+                    '$1 $2<span class="ledger-payee">$3</span>')
+                // Comments
+                .replace(/^(\s*;.*)$/gm, '<span class="ledger-comment">$1</span>')
+                // Account names
+                .replace(/^(\s+)([A-Z][a-zA-Z:]+)/gm, '$1<span class="ledger-account">$2</span>')
+                // Amounts
+                .replace(/(-?[\d,_.]+)\s+([A-Z]{3})/g, '<span class="ledger-amount">$1 $2</span>');
+        },
+
+        // Format currency
+        formatCurrency(amount, currency = 'INR') {
+            const formatter = new Intl.NumberFormat('en-IN', {
+                style: 'currency',
+                currency: currency,
+                minimumFractionDigits: 0,
+                maximumFractionDigits: 2
+            });
+            return formatter.format(amount);
+        },
+
+        // Scroll chat to bottom
+        scrollToBottom() {
+            this.$nextTick(() => {
+                const container = this.$refs.messagesContainer;
+                if (container) {
+                    container.scrollTop = container.scrollHeight;
+                }
+            });
+        },
+
+        // Show notification
+        notify(type, message) {
+            window.dispatchEvent(new CustomEvent('notify', {
+                detail: {
+                    id: Date.now(),
+                    type: type,
+                    message: message
+                }
+            }));
+        }
+    };
+}

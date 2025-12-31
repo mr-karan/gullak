@@ -1,47 +1,48 @@
+# Gullak v2 + Paisa
+# Shared volume allows both services to access the ledger files
+
 services:
   gullak:
-    image: ghcr.io/mr-karan/gullak:latest
+    build: .
     container_name: gullak
     restart: unless-stopped
     ports:
-      - "3333:3333"
+      - "8000:8000"
     volumes:
-      # Persist the SQLite database
-      - ./data:/app/data
-      # Optional: Mount custom config file
-      # - ./config.toml:/app/config.toml:ro
+      # Shared data directory with Paisa
+      - ${PAISA_DATA_DIR:-./data}:/data
     environment:
-      # Timezone setting
-      - TZ=Asia/Kolkata
-
-      # Database path - ensure it's in the mounted volume
-      - GULLAK_APP_DB_PATH=/app/data/expenses.db
-
-      # Currency settings (INR, USD, EUR, GBP, etc.)
-      - GULLAK_APP_CURRENCY=INR
-
-      # Debug mode
-      - GULLAK_APP_DEBUG=false
-
-      # OpenAI API Configuration
-      # Use OpenAI directly:
-      - GULLAK_OPENAI_BASE_URL=https://api.openai.com/v1
-      - GULLAK_OPENAI_MODEL=gpt-4o-mini
-      - GULLAK_OPENAI_TOKEN=${OPENAI_TOKEN}
-
-      # Or use Groq (uncomment to use):
-      # - GULLAK_OPENAI_BASE_URL=https://api.groq.com/openai/v1
-      # - GULLAK_OPENAI_MODEL=llama3-70b-8192
-      # - GULLAK_OPENAI_TOKEN=${GROQ_TOKEN}
-
-      # HTTP Server Settings
-      - GULLAK_HTTP_ADDRESS=:3333
-      - GULLAK_HTTP_TIMEOUT=30s
-      - GULLAK_OPENAI_TIMEOUT=10s
-
+      - TZ=${TZ:-Asia/Kolkata}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - GULLAK_DATA_DIR=/data
+      - GULLAK_LEDGER_FILE=main.ledger
+      - GULLAK_DEFAULT_CURRENCY=${GULLAK_DEFAULT_CURRENCY:-INR}
+      - GULLAK_TIMEZONE=${TZ:-Asia/Kolkata}
+      - GULLAK_DEBUG=${GULLAK_DEBUG:-false}
     healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3333"]
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 10s
+    depends_on:
+      paisa:
+        condition: service_healthy
+
+  paisa:
+    image: ananthakumaran/paisa:latest
+    container_name: paisa
+    restart: unless-stopped
+    ports:
+      - "7500:7500"
+    volumes:
+      # Paisa expects data in ~/Documents/paisa inside container
+      - ${PAISA_DATA_DIR:-./data}:/root/Documents/paisa
+    environment:
+      - TZ=${TZ:-Asia/Kolkata}
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:7500"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s

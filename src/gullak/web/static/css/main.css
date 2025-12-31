@@ -1,0 +1,42 @@
+/* Gullak - Custom Styles */
+
+/* Additional styles beyond what's in base.html */
+
+/* Loading skeleton animation */
+.skeleton-pulse {
+    animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+/* Smooth transitions */
+.transition-all {
+    transition: all 0.2s ease-in-out;
+}
+
+/* Better focus states */
+.input:focus,
+.btn:focus {
+    outline: none;
+    box-shadow: 0 0 0 2px hsl(var(--p) / 0.3);
+}
+
+/* Mobile adjustments */
+@media (max-width: 640px) {
+    .chat-bubble {
+        max-width: 90%;
+    }
+}
+
+/* Print styles */
+@media print {
+    aside, .btn, input {
+        display: none !important;
+    }
+    main {
+        width: 100% !important;
+    }
+}
