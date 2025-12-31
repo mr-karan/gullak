@@ -1,5 +1,7 @@
 """Gullak - Main FastAPI application."""
 
+import shutil
+import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -15,13 +17,36 @@ from gullak.ledger.parser import LedgerParser
 from gullak.ledger.validator import LedgerValidator
 
 
+def _check_ledger_cli() -> None:
+    """Check ledger CLI at import time - fail fast before app starts."""
+    cli_path = settings.ledger_cli
+
+    if not shutil.which(cli_path):
+        print(
+            f"""
+❌ ERROR: '{cli_path}' not found in PATH.
+
+Gullak requires ledger-cli for transaction validation.
+
+Install it:
+  Ubuntu/Debian: sudo apt install ledger
+  macOS:         brew install ledger
+  Arch:          sudo pacman -S ledger
+  Nix:           nix develop  (uses flake.nix)
+""",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+
+_check_ledger_cli()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan handler."""
-    # Startup
     settings.ensure_data_dir()
 
-    # Initialize components
     app.state.settings = settings
     app.state.parser = LedgerParser()
     app.state.validator = LedgerValidator(cli_path=settings.ledger_cli)

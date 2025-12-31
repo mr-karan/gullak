@@ -4,70 +4,80 @@
 
 {% block content %}
 <div class="flex h-screen" x-data="gullakApp()">
-    <!-- Sidebar (hidden during setup) -->
-    <aside class="w-56 bg-base-200/50 border-r border-base-300/50 flex flex-col shrink-0" x-show="setupComplete" x-cloak>
+    <!-- Sidebar -->
+    <aside class="w-64 bg-base-200/40 border-r border-base-300/30 flex flex-col shrink-0" x-show="setupComplete" x-cloak>
         <!-- Logo -->
-        <div class="p-5">
-            <h1 class="text-lg font-semibold flex items-center gap-2">
-                <span class="text-2xl">💰</span>
+        <div class="p-6 pb-4">
+            <h1 class="font-display text-xl font-semibold flex items-center gap-2.5 text-base-content">
+                <span class="w-9 h-9 bg-gradient-to-br from-primary to-secondary rounded-xl flex items-center justify-center text-primary-content text-lg shadow-soft">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                </span>
                 <span>Gullak</span>
             </h1>
         </div>
 
         <!-- Navigation -->
-        <nav class="flex-1 px-3 space-y-1">
-            <a href="#" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all"
-               :class="view === 'chat' ? 'bg-base-content/10 text-base-content' : 'text-base-content/60 hover:text-base-content hover:bg-base-content/5'"
-               @click.prevent="view = 'chat'">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                </svg>
-                <span>Chat</span>
-            </a>
-            <a href="#" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all"
-               :class="view === 'transactions' ? 'bg-base-content/10 text-base-content' : 'text-base-content/60 hover:text-base-content hover:bg-base-content/5'"
-               @click.prevent="view = 'transactions'; loadTransactions()">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                </svg>
-                <span>Transactions</span>
-            </a>
+        <nav class="flex-1 px-3">
+            <ul class="menu menu-vertical gap-1">
+                <li>
+                    <a href="#" @click.prevent="view = 'chat'"
+                       :class="view === 'chat' ? 'active font-medium' : ''">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-[18px] w-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                        </svg>
+                        Chat
+                    </a>
+                </li>
+                <li>
+                    <a href="#" @click.prevent="view = 'transactions'; loadTransactions()"
+                       :class="view === 'transactions' ? 'active font-medium' : ''">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-[18px] w-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                        </svg>
+                        Transactions
+                    </a>
+                </li>
+            </ul>
         </nav>
 
         <!-- Bottom Section -->
-        <div class="p-3 space-y-1">
-            <!-- Settings / Setup -->
-            <button @click="openSettings()"
-                    class="flex items-center gap-3 px-3 py-2 rounded-lg text-xs text-base-content/50 hover:text-base-content/80 hover:bg-base-content/5 transition-all w-full">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                </svg>
-                <span>Settings</span>
-            </button>
-            <!-- Open Paisa -->
-            <a href="http://localhost:7500" target="_blank"
-               class="flex items-center gap-3 px-3 py-2 rounded-lg text-xs text-base-content/50 hover:text-base-content/80 hover:bg-base-content/5 transition-all">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                </svg>
-                <span>Open Paisa</span>
-            </a>
-            <!-- Theme Toggle -->
-            <button class="flex items-center gap-3 px-3 py-2 rounded-lg text-xs text-base-content/50 hover:text-base-content/80 hover:bg-base-content/5 transition-all w-full"
-                    @click="toggleTheme()">
-                <template x-if="!isDark()">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
-                    </svg>
-                </template>
-                <template x-if="isDark()">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
-                    </svg>
-                </template>
-                <span x-text="isDark() ? 'Light Mode' : 'Dark Mode'"></span>
-            </button>
+        <div class="p-3 border-t border-base-300/30">
+            <ul class="menu menu-vertical menu-sm gap-0.5">
+                <li>
+                    <a href="#" @click.prevent="openSettings()" class="text-base-content/60">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                        </svg>
+                        Settings
+                    </a>
+                </li>
+                <li>
+                    <a href="http://localhost:7500" target="_blank" class="text-base-content/60">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                        </svg>
+                        Open Paisa
+                    </a>
+                </li>
+                <li>
+                    <a href="#" @click.prevent="toggleTheme()" class="text-base-content/60">
+                        <template x-if="!isDark()">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+                            </svg>
+                        </template>
+                        <template x-if="isDark()">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+                            </svg>
+                        </template>
+                        <span x-text="isDark() ? 'Light Mode' : 'Dark Mode'"></span>
+                    </a>
+                </li>
+            </ul>
         </div>
     </aside>
 
@@ -76,298 +86,276 @@
         <!-- Setup Wizard / Settings View -->
         <template x-if="view === 'setup'">
             <div class="flex-1 flex items-center justify-center p-8 bg-base-100 overflow-y-auto">
-                <div class="max-w-lg w-full">
-                    <!-- Progress indicator (only show during first-time setup) -->
-                    <template x-if="!setupComplete">
-                        <div class="flex items-center justify-center gap-2 mb-8">
-                            <div class="w-3 h-3 rounded-full transition-colors" :class="setupStep === 'welcome' ? 'bg-primary' : 'bg-base-300'"></div>
-                            <div class="w-8 h-0.5 bg-base-300"></div>
-                            <div class="w-3 h-3 rounded-full transition-colors" :class="setupStep === 'accounts' ? 'bg-primary' : 'bg-base-300'"></div>
-                            <div class="w-8 h-0.5 bg-base-300"></div>
-                            <div class="w-3 h-3 rounded-full transition-colors" :class="setupStep === 'categories' ? 'bg-primary' : 'bg-base-300'"></div>
-                        </div>
-                    </template>
-
-                    <!-- Settings mode (when accessed from sidebar after setup) -->
+                <div class="max-w-md w-full animate-fade-up">
+                    <!-- Settings mode header -->
                     <template x-if="setupComplete">
-                        <div class="space-y-6">
-                            <div class="flex items-center justify-between">
-                                <h1 class="text-xl font-semibold">Settings</h1>
-                                <button @click="view = 'chat'" class="text-base-content/50 hover:text-base-content text-sm">
-                                    Done
-                                </button>
+                        <div class="mb-8">
+                            <div class="flex items-center justify-between mb-6">
+                                <h1 class="font-display text-2xl font-semibold">Settings</h1>
+                                <button @click="view = 'chat'" class="btn btn-ghost btn-sm">Done</button>
                             </div>
 
-                            <!-- Currency & Timezone -->
-                            <div class="bg-base-200/30 rounded-xl p-4 space-y-4">
-                                <h3 class="text-sm font-medium text-base-content/70">Preferences</h3>
-                                <div class="grid grid-cols-2 gap-4">
-                                    <div>
-                                        <label class="block text-xs text-base-content/50 mb-1.5">Currency</label>
-                                        <div class="px-3 py-2 bg-base-200 rounded-lg text-sm" x-text="setupData.currency"></div>
-                                    </div>
-                                    <div>
-                                        <label class="block text-xs text-base-content/50 mb-1.5">Timezone</label>
-                                        <div class="px-3 py-2 bg-base-200 rounded-lg text-sm" x-text="setupData.timezone"></div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- Bank Accounts -->
-                            <div class="bg-base-200/30 rounded-xl p-4 space-y-3">
-                                <h3 class="text-sm font-medium text-base-content/70">Bank Accounts</h3>
-                                <div class="flex flex-wrap gap-2">
-                                    <template x-for="bank in setupData.bank_accounts" :key="bank">
-                                        <span class="px-3 py-1.5 bg-primary/10 text-primary rounded-full text-sm flex items-center gap-1">
-                                            <span x-text="bank"></span>
-                                            <button @click="removeBankAccount(bank)" class="hover:text-error">
-                                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                                                </svg>
-                                            </button>
-                                        </span>
-                                    </template>
-                                    <template x-if="setupData.bank_accounts.length === 0">
-                                        <span class="text-xs text-base-content/40">No bank accounts added</span>
-                                    </template>
-                                </div>
-                                <div class="flex gap-2" x-data="{ newBank: '' }">
-                                    <input type="text" x-model="newBank" placeholder="Add bank..."
-                                           class="flex-1 px-3 py-2 bg-base-200 border-0 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
-                                           @keyup.enter="addBankAccount(newBank); saveAccountsToLedger(); newBank = ''">
-                                    <button @click="addBankAccount(newBank); saveAccountsToLedger(); newBank = ''"
-                                            class="px-3 py-2 bg-primary text-primary-content rounded-lg text-sm hover:opacity-90 transition-opacity"
-                                            :disabled="!newBank">Add</button>
-                                </div>
-                            </div>
-
-                            <!-- Credit Cards -->
-                            <div class="bg-base-200/30 rounded-xl p-4 space-y-3">
-                                <h3 class="text-sm font-medium text-base-content/70">Credit Cards</h3>
-                                <div class="flex flex-wrap gap-2">
-                                    <template x-for="card in setupData.credit_cards" :key="card">
-                                        <span class="px-3 py-1.5 bg-secondary/10 text-secondary rounded-full text-sm flex items-center gap-1">
-                                            <span x-text="card"></span>
-                                            <button @click="removeCreditCard(card)" class="hover:text-error">
-                                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                                                </svg>
-                                            </button>
-                                        </span>
-                                    </template>
-                                    <template x-if="setupData.credit_cards.length === 0">
-                                        <span class="text-xs text-base-content/40">No credit cards added</span>
-                                    </template>
-                                </div>
-                                <div class="flex gap-2" x-data="{ newCard: '' }">
-                                    <input type="text" x-model="newCard" placeholder="Add card..."
-                                           class="flex-1 px-3 py-2 bg-base-200 border-0 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
-                                           @keyup.enter="addCreditCard(newCard); saveAccountsToLedger(); newCard = ''">
-                                    <button @click="addCreditCard(newCard); saveAccountsToLedger(); newCard = ''"
-                                            class="px-3 py-2 bg-primary text-primary-content rounded-lg text-sm hover:opacity-90 transition-opacity"
-                                            :disabled="!newCard">Add</button>
-                                </div>
-                            </div>
-
-                            <!-- Expense Categories -->
-                            <div class="bg-base-200/30 rounded-xl p-4 space-y-3">
-                                <h3 class="text-sm font-medium text-base-content/70">Expense Categories</h3>
-                                <div class="max-h-48 overflow-y-auto space-y-1 text-sm font-mono">
-                                    <template x-for="cat in setupData.categories" :key="cat">
-                                        <div class="py-1 text-base-content/70 flex items-center justify-between group">
-                                            <span x-text="cat"></span>
+                            <!-- Preferences Card -->
+                            <div class="card bg-base-200/50 mb-4">
+                                <div class="card-body p-5">
+                                    <h3 class="text-xs font-medium text-base-content/50 uppercase tracking-wider mb-3">Preferences</h3>
+                                    <div class="grid grid-cols-2 gap-3">
+                                        <div>
+                                            <label class="text-xs text-base-content/50 mb-1 block">Currency</label>
+                                            <div class="input input-sm bg-base-300/50 w-full" x-text="setupData.currency"></div>
                                         </div>
-                                    </template>
-                                    <template x-if="setupData.categories.length === 0">
-                                        <div class="text-xs text-base-content/40">No categories yet</div>
-                                    </template>
-                                </div>
-                                <p class="text-xs text-base-content/40">Categories are auto-created when you log expenses</p>
-                            </div>
-                        </div>
-                    </template>
-
-                    <!-- First-time setup: Welcome Step -->
-                    <template x-if="!setupComplete && setupStep === 'welcome'">
-                        <div class="text-center space-y-6">
-                            <div class="text-5xl mb-4">💰</div>
-                            <h1 class="text-2xl font-semibold">Welcome to Gullak</h1>
-                            <p class="text-base-content/60 text-sm leading-relaxed max-w-md mx-auto">
-                                Your AI-powered expense tracker. Let's set up a few things to get you started.
-                                You can always change these later.
-                            </p>
-
-                            <div class="space-y-4 text-left mt-8">
-                                <div>
-                                    <label class="block text-xs text-base-content/50 mb-1.5">Currency</label>
-                                    <select x-model="setupData.currency"
-                                            class="w-full px-4 py-2.5 bg-base-200 border-0 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20">
-                                        <template x-for="curr in setupOptions?.currencies || []" :key="curr.code">
-                                            <option :value="curr.code" x-text="`${curr.symbol} ${curr.name} (${curr.code})`"></option>
-                                        </template>
-                                    </select>
-                                </div>
-
-                                <div>
-                                    <label class="block text-xs text-base-content/50 mb-1.5">Timezone</label>
-                                    <select x-model="setupData.timezone"
-                                            class="w-full px-4 py-2.5 bg-base-200 border-0 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20">
-                                        <template x-for="tz in setupOptions?.timezones || []" :key="tz.value">
-                                            <option :value="tz.value" x-text="tz.label"></option>
-                                        </template>
-                                    </select>
-                                </div>
-                            </div>
-
-                            <div class="flex gap-3 pt-4">
-                                <button @click="submitSetupStep"
-                                        class="flex-1 px-6 py-3 bg-primary text-primary-content rounded-xl text-sm font-medium hover:opacity-90 disabled:opacity-50 transition-opacity"
-                                        :disabled="setupLoading">
-                                    <span x-show="!setupLoading">Continue</span>
-                                    <span x-show="setupLoading" class="flex items-center justify-center gap-2">
-                                        <span class="w-4 h-4 border-2 border-primary-content/30 border-t-primary-content rounded-full animate-spin"></span>
-                                    </span>
-                                </button>
-                                <button @click="skipSetup"
-                                        class="px-4 py-3 text-base-content/50 hover:text-base-content text-sm transition-colors"
-                                        :disabled="setupLoading">
-                                    Skip setup
-                                </button>
-                            </div>
-                        </div>
-                    </template>
-
-                    <!-- First-time setup: Accounts Step -->
-                    <template x-if="!setupComplete && setupStep === 'accounts'">
-                        <div class="space-y-6">
-                            <div class="text-center">
-                                <h2 class="text-xl font-semibold">Set up your accounts</h2>
-                                <p class="text-base-content/60 text-sm mt-2">Add your bank accounts and credit cards. You can add more later.</p>
-                            </div>
-
-                            <!-- Bank Accounts -->
-                            <div>
-                                <label class="block text-xs text-base-content/50 mb-2">Bank Accounts</label>
-                                <div class="flex flex-wrap gap-2 mb-2">
-                                    <template x-for="bank in setupData.bank_accounts" :key="bank">
-                                        <span class="px-3 py-1.5 bg-primary/10 text-primary rounded-full text-sm flex items-center gap-1">
-                                            <span x-text="bank"></span>
-                                            <button @click="removeBankAccount(bank)" class="hover:text-error">
-                                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                                                </svg>
-                                            </button>
-                                        </span>
-                                    </template>
-                                </div>
-                                <div class="flex gap-2">
-                                    <div class="flex flex-wrap gap-1.5">
-                                        <template x-for="bank in setupOptions?.suggested_banks || []" :key="bank">
-                                            <button @click="addBankAccount(bank)"
-                                                    class="px-3 py-1.5 bg-base-200 hover:bg-base-300 rounded-full text-xs transition-colors"
-                                                    :class="{ 'opacity-50': setupData.bank_accounts.includes(bank) }"
-                                                    :disabled="setupData.bank_accounts.includes(bank)"
-                                                    x-text="bank"></button>
-                                        </template>
+                                        <div>
+                                            <label class="text-xs text-base-content/50 mb-1 block">Timezone</label>
+                                            <div class="input input-sm bg-base-300/50 w-full truncate" x-text="setupData.timezone"></div>
+                                        </div>
                                     </div>
                                 </div>
-                                <div class="mt-2 flex gap-2" x-data="{ customBank: '' }">
-                                    <input type="text" x-model="customBank" placeholder="Other bank..."
-                                           class="flex-1 px-3 py-2 bg-base-200 border-0 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
-                                           @keyup.enter="addBankAccount(customBank); customBank = ''">
-                                    <button @click="addBankAccount(customBank); customBank = ''"
-                                            class="px-3 py-2 bg-base-300 hover:bg-base-content/10 rounded-lg text-sm transition-colors"
-                                            :disabled="!customBank">Add</button>
+                            </div>
+
+                            <!-- Bank Accounts Card -->
+                            <div class="card bg-base-200/50 mb-4">
+                                <div class="card-body p-5">
+                                    <h3 class="text-xs font-medium text-base-content/50 uppercase tracking-wider mb-3">Bank Accounts</h3>
+                                    <div class="flex flex-wrap gap-2 mb-3">
+                                        <template x-for="bank in setupData.bank_accounts" :key="bank">
+                                            <span class="badge badge-lg gap-1 bg-primary/10 text-primary border-0">
+                                                <span x-text="bank"></span>
+                                                <button @click="removeBankAccount(bank)" class="hover:text-error">
+                                                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                                                    </svg>
+                                                </button>
+                                            </span>
+                                        </template>
+                                        <template x-if="setupData.bank_accounts.length === 0">
+                                            <span class="text-xs text-base-content/40">No bank accounts</span>
+                                        </template>
+                                    </div>
+                                    <div class="join w-full" x-data="{ newBank: '' }">
+                                        <input type="text" x-model="newBank" placeholder="Add bank..."
+                                               class="input input-sm join-item flex-1 bg-base-300/50"
+                                               @keyup.enter="addBankAccount(newBank); saveAccountsToLedger(); newBank = ''">
+                                        <button @click="addBankAccount(newBank); saveAccountsToLedger(); newBank = ''"
+                                                class="btn btn-sm btn-primary join-item" :disabled="!newBank">Add</button>
+                                    </div>
                                 </div>
                             </div>
 
-                            <!-- Credit Cards -->
-                            <div>
-                                <label class="block text-xs text-base-content/50 mb-2">Credit Cards</label>
-                                <div class="flex flex-wrap gap-2 mb-2">
-                                    <template x-for="card in setupData.credit_cards" :key="card">
-                                        <span class="px-3 py-1.5 bg-secondary/10 text-secondary rounded-full text-sm flex items-center gap-1">
-                                            <span x-text="card"></span>
-                                            <button @click="removeCreditCard(card)" class="hover:text-error">
-                                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                                                </svg>
-                                            </button>
-                                        </span>
-                                    </template>
-                                </div>
-                                <div class="flex flex-wrap gap-1.5">
-                                    <template x-for="card in setupOptions?.suggested_cards || []" :key="card">
-                                        <button @click="addCreditCard(card)"
-                                                class="px-3 py-1.5 bg-base-200 hover:bg-base-300 rounded-full text-xs transition-colors"
-                                                :class="{ 'opacity-50': setupData.credit_cards.includes(card) }"
-                                                :disabled="setupData.credit_cards.includes(card)"
-                                                x-text="card"></button>
-                                    </template>
-                                </div>
-                                <div class="mt-2 flex gap-2" x-data="{ customCard: '' }">
-                                    <input type="text" x-model="customCard" placeholder="Other card..."
-                                           class="flex-1 px-3 py-2 bg-base-200 border-0 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
-                                           @keyup.enter="addCreditCard(customCard); customCard = ''">
-                                    <button @click="addCreditCard(customCard); customCard = ''"
-                                            class="px-3 py-2 bg-base-300 hover:bg-base-content/10 rounded-lg text-sm transition-colors"
-                                            :disabled="!customCard">Add</button>
+                            <!-- Credit Cards Card -->
+                            <div class="card bg-base-200/50 mb-4">
+                                <div class="card-body p-5">
+                                    <h3 class="text-xs font-medium text-base-content/50 uppercase tracking-wider mb-3">Credit Cards</h3>
+                                    <div class="flex flex-wrap gap-2 mb-3">
+                                        <template x-for="card in setupData.credit_cards" :key="card">
+                                            <span class="badge badge-lg gap-1 bg-secondary/10 text-secondary border-0">
+                                                <span x-text="card"></span>
+                                                <button @click="removeCreditCard(card)" class="hover:text-error">
+                                                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                                                    </svg>
+                                                </button>
+                                            </span>
+                                        </template>
+                                        <template x-if="setupData.credit_cards.length === 0">
+                                            <span class="text-xs text-base-content/40">No credit cards</span>
+                                        </template>
+                                    </div>
+                                    <div class="join w-full" x-data="{ newCard: '' }">
+                                        <input type="text" x-model="newCard" placeholder="Add card..."
+                                               class="input input-sm join-item flex-1 bg-base-300/50"
+                                               @keyup.enter="addCreditCard(newCard); saveAccountsToLedger(); newCard = ''">
+                                        <button @click="addCreditCard(newCard); saveAccountsToLedger(); newCard = ''"
+                                                class="btn btn-sm btn-primary join-item" :disabled="!newCard">Add</button>
+                                    </div>
                                 </div>
                             </div>
 
-                            <div class="flex gap-3 pt-4">
-                                <button @click="submitSetupStep"
-                                        class="flex-1 px-6 py-3 bg-primary text-primary-content rounded-xl text-sm font-medium hover:opacity-90 disabled:opacity-50 transition-opacity"
-                                        :disabled="setupLoading">
-                                    <span x-show="!setupLoading">Continue</span>
-                                    <span x-show="setupLoading" class="flex items-center justify-center gap-2">
-                                        <span class="w-4 h-4 border-2 border-primary-content/30 border-t-primary-content rounded-full animate-spin"></span>
-                                    </span>
-                                </button>
-                                <button @click="setupStep = 'categories'"
-                                        class="px-4 py-3 text-base-content/50 hover:text-base-content text-sm transition-colors"
-                                        :disabled="setupLoading">
-                                    Skip
-                                </button>
+                            <!-- Categories Card -->
+                            <div class="card bg-base-200/50">
+                                <div class="card-body p-5">
+                                    <h3 class="text-xs font-medium text-base-content/50 uppercase tracking-wider mb-3">Expense Categories</h3>
+                                    <div class="max-h-40 overflow-y-auto custom-scrollbar">
+                                        <template x-for="cat in setupData.categories" :key="cat">
+                                            <div class="py-1.5 text-sm font-mono text-base-content/70" x-text="cat"></div>
+                                        </template>
+                                        <template x-if="setupData.categories.length === 0">
+                                            <div class="text-xs text-base-content/40">No categories yet</div>
+                                        </template>
+                                    </div>
+                                    <p class="text-xs text-base-content/40 mt-2">Categories are auto-created when you log expenses</p>
+                                </div>
                             </div>
                         </div>
                     </template>
 
-                    <!-- First-time setup: Categories Step -->
-                    <template x-if="!setupComplete && setupStep === 'categories'">
-                        <div class="space-y-6">
-                            <div class="text-center">
-                                <h2 class="text-xl font-semibold">Expense categories</h2>
-                                <p class="text-base-content/60 text-sm mt-2">We'll use these default categories. You can customize them later.</p>
+                    <!-- First-time setup wizard -->
+                    <template x-if="!setupComplete">
+                        <div>
+                            <!-- Progress -->
+                            <div class="flex items-center justify-center gap-2 mb-10">
+                                <div class="w-2.5 h-2.5 rounded-full transition-all duration-300" :class="setupStep === 'welcome' ? 'bg-primary scale-125' : 'bg-base-300'"></div>
+                                <div class="w-10 h-0.5 bg-base-300"></div>
+                                <div class="w-2.5 h-2.5 rounded-full transition-all duration-300" :class="setupStep === 'accounts' ? 'bg-primary scale-125' : 'bg-base-300'"></div>
+                                <div class="w-10 h-0.5 bg-base-300"></div>
+                                <div class="w-2.5 h-2.5 rounded-full transition-all duration-300" :class="setupStep === 'categories' ? 'bg-primary scale-125' : 'bg-base-300'"></div>
                             </div>
 
-                            <div class="bg-base-200/50 rounded-xl p-4 max-h-64 overflow-y-auto">
-                                <div class="space-y-1 text-sm font-mono">
-                                    <template x-for="cat in setupOptions?.default_expense_accounts || []" :key="cat">
-                                        <div class="py-1 text-base-content/70" x-text="cat"></div>
-                                    </template>
+                            <!-- Welcome Step -->
+                            <template x-if="setupStep === 'welcome'">
+                                <div class="text-center">
+                                    <div class="w-20 h-20 bg-gradient-to-br from-primary to-secondary rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-soft-lg">
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="w-10 h-10 text-primary-content" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                        </svg>
+                                    </div>
+                                    <h1 class="font-display text-3xl font-semibold mb-3">Welcome to Gullak</h1>
+                                    <p class="text-base-content/60 text-sm leading-relaxed max-w-sm mx-auto mb-8">
+                                        Your AI-powered expense tracker. Quick setup, then you're ready to go.
+                                    </p>
+
+                                    <div class="space-y-4 text-left">
+                                        <div>
+                                            <label class="text-xs font-medium text-base-content/50 uppercase tracking-wider mb-2 block">Currency</label>
+                                            <select x-model="setupData.currency" class="select select-bordered w-full bg-base-200/50">
+                                                <template x-for="curr in setupOptions?.currencies || []" :key="curr.code">
+                                                    <option :value="curr.code" x-text="`${curr.symbol} ${curr.name} (${curr.code})`"></option>
+                                                </template>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label class="text-xs font-medium text-base-content/50 uppercase tracking-wider mb-2 block">Timezone</label>
+                                            <select x-model="setupData.timezone" class="select select-bordered w-full bg-base-200/50">
+                                                <template x-for="tz in setupOptions?.timezones || []" :key="tz.value">
+                                                    <option :value="tz.value" x-text="tz.label"></option>
+                                                </template>
+                                            </select>
+                                        </div>
+                                    </div>
+
+                                    <div class="flex gap-3 mt-8">
+                                        <button @click="submitSetupStep" class="btn btn-primary flex-1" :disabled="setupLoading">
+                                            <span x-show="!setupLoading">Continue</span>
+                                            <span x-show="setupLoading" class="loading loading-spinner loading-sm"></span>
+                                        </button>
+                                        <button @click="skipSetup" class="btn btn-ghost" :disabled="setupLoading">Skip</button>
+                                    </div>
                                 </div>
-                            </div>
+                            </template>
 
-                            <div class="flex gap-3 pt-4">
-                                <button @click="submitSetupStep"
-                                        class="flex-1 px-6 py-3 bg-primary text-primary-content rounded-xl text-sm font-medium hover:opacity-90 disabled:opacity-50 transition-opacity"
-                                        :disabled="setupLoading">
-                                    <span x-show="!setupLoading">Finish Setup</span>
-                                    <span x-show="setupLoading" class="flex items-center justify-center gap-2">
-                                        <span class="w-4 h-4 border-2 border-primary-content/30 border-t-primary-content rounded-full animate-spin"></span>
-                                    </span>
-                                </button>
-                            </div>
+                            <!-- Accounts Step -->
+                            <template x-if="setupStep === 'accounts'">
+                                <div>
+                                    <h2 class="font-display text-2xl font-semibold text-center mb-2">Set up your accounts</h2>
+                                    <p class="text-base-content/60 text-sm text-center mb-8">Add your bank accounts and credit cards</p>
+
+                                    <div class="space-y-6">
+                                        <!-- Banks -->
+                                        <div>
+                                            <label class="text-xs font-medium text-base-content/50 uppercase tracking-wider mb-3 block">Bank Accounts</label>
+                                            <div class="flex flex-wrap gap-2 mb-3">
+                                                <template x-for="bank in setupData.bank_accounts" :key="bank">
+                                                    <span class="badge badge-lg gap-1 bg-primary/10 text-primary border-0">
+                                                        <span x-text="bank"></span>
+                                                        <button @click="removeBankAccount(bank)">
+                                                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                                                            </svg>
+                                                        </button>
+                                                    </span>
+                                                </template>
+                                            </div>
+                                            <div class="flex flex-wrap gap-1.5 mb-2">
+                                                <template x-for="bank in setupOptions?.suggested_banks || []" :key="bank">
+                                                    <button @click="addBankAccount(bank)"
+                                                            class="btn btn-xs btn-ghost bg-base-200/70"
+                                                            :class="{ 'opacity-40': setupData.bank_accounts.includes(bank) }"
+                                                            :disabled="setupData.bank_accounts.includes(bank)"
+                                                            x-text="bank"></button>
+                                                </template>
+                                            </div>
+                                            <div class="join w-full" x-data="{ customBank: '' }">
+                                                <input type="text" x-model="customBank" placeholder="Other bank..."
+                                                       class="input input-sm input-bordered join-item flex-1"
+                                                       @keyup.enter="addBankAccount(customBank); customBank = ''">
+                                                <button @click="addBankAccount(customBank); customBank = ''"
+                                                        class="btn btn-sm join-item" :disabled="!customBank">Add</button>
+                                            </div>
+                                        </div>
+
+                                        <!-- Cards -->
+                                        <div>
+                                            <label class="text-xs font-medium text-base-content/50 uppercase tracking-wider mb-3 block">Credit Cards</label>
+                                            <div class="flex flex-wrap gap-2 mb-3">
+                                                <template x-for="card in setupData.credit_cards" :key="card">
+                                                    <span class="badge badge-lg gap-1 bg-secondary/10 text-secondary border-0">
+                                                        <span x-text="card"></span>
+                                                        <button @click="removeCreditCard(card)">
+                                                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                                                            </svg>
+                                                        </button>
+                                                    </span>
+                                                </template>
+                                            </div>
+                                            <div class="flex flex-wrap gap-1.5 mb-2">
+                                                <template x-for="card in setupOptions?.suggested_cards || []" :key="card">
+                                                    <button @click="addCreditCard(card)"
+                                                            class="btn btn-xs btn-ghost bg-base-200/70"
+                                                            :class="{ 'opacity-40': setupData.credit_cards.includes(card) }"
+                                                            :disabled="setupData.credit_cards.includes(card)"
+                                                            x-text="card"></button>
+                                                </template>
+                                            </div>
+                                            <div class="join w-full" x-data="{ customCard: '' }">
+                                                <input type="text" x-model="customCard" placeholder="Other card..."
+                                                       class="input input-sm input-bordered join-item flex-1"
+                                                       @keyup.enter="addCreditCard(customCard); customCard = ''">
+                                                <button @click="addCreditCard(customCard); customCard = ''"
+                                                        class="btn btn-sm join-item" :disabled="!customCard">Add</button>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="flex gap-3 mt-8">
+                                        <button @click="submitSetupStep" class="btn btn-primary flex-1" :disabled="setupLoading">
+                                            <span x-show="!setupLoading">Continue</span>
+                                            <span x-show="setupLoading" class="loading loading-spinner loading-sm"></span>
+                                        </button>
+                                        <button @click="setupStep = 'categories'" class="btn btn-ghost" :disabled="setupLoading">Skip</button>
+                                    </div>
+                                </div>
+                            </template>
+
+                            <!-- Categories Step -->
+                            <template x-if="setupStep === 'categories'">
+                                <div>
+                                    <h2 class="font-display text-2xl font-semibold text-center mb-2">Expense categories</h2>
+                                    <p class="text-base-content/60 text-sm text-center mb-8">We'll use these defaults. You can customize later.</p>
+
+                                    <div class="card bg-base-200/50 max-h-64 overflow-y-auto custom-scrollbar">
+                                        <div class="card-body p-4">
+                                            <template x-for="cat in setupOptions?.default_expense_accounts || []" :key="cat">
+                                                <div class="py-1.5 text-sm font-mono text-base-content/70" x-text="cat"></div>
+                                            </template>
+                                        </div>
+                                    </div>
+
+                                    <div class="flex gap-3 mt-8">
+                                        <button @click="submitSetupStep" class="btn btn-primary flex-1" :disabled="setupLoading">
+                                            <span x-show="!setupLoading">Finish Setup</span>
+                                            <span x-show="setupLoading" class="loading loading-spinner loading-sm"></span>
+                                        </button>
+                                    </div>
+                                </div>
+                            </template>
                         </div>
                     </template>
 
-                    <!-- Paisa info -->
-                    <div class="mt-8 p-4 bg-base-200/50 rounded-xl text-center">
+                    <!-- Footer info -->
+                    <div class="mt-8 text-center">
                         <p class="text-xs text-base-content/40">
-                            Your data is stored in plain-text ledger files, compatible with
+                            Data stored in plain-text ledger files, compatible with
                             <a href="https://paisa.fyi" target="_blank" class="text-primary hover:underline">Paisa</a>
-                            for advanced reports and analysis.
                         </p>
                     </div>
                 </div>
@@ -378,23 +366,33 @@
         <template x-if="view === 'chat'">
             <div class="flex-1 flex">
                 <!-- Chat Panel -->
-                <div class="flex-1 flex flex-col min-w-0 bg-base-100" :class="{ 'lg:w-1/2': pendingTransaction }">
+                <div class="flex-1 flex flex-col min-w-0 bg-base-100" :class="{ 'lg:border-r lg:border-base-200': pendingTransactions.length > 0 }">
                     <!-- Messages -->
-                    <div class="flex-1 overflow-y-auto p-6 space-y-4 custom-scrollbar" x-ref="messagesContainer">
-                        <!-- Welcome message -->
+                    <div class="flex-1 overflow-y-auto px-6 py-8 custom-scrollbar" x-ref="messagesContainer">
+                        <!-- Welcome state -->
                         <template x-if="messages.length === 0">
                             <div class="flex items-center justify-center h-full">
-                                <div class="text-center max-w-sm">
-                                    <div class="text-5xl mb-6">💰</div>
-                                    <h2 class="text-xl font-semibold mb-3">Welcome to Gullak</h2>
-                                    <p class="text-sm text-base-content/60 leading-relaxed">
+                                <div class="text-center max-w-md animate-fade-up">
+                                    <div class="w-16 h-16 bg-gradient-to-br from-primary to-secondary rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-soft">
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="w-8 h-8 text-primary-content" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                        </svg>
+                                    </div>
+                                    <h2 class="font-display text-2xl font-semibold mb-3">Welcome to Gullak</h2>
+                                    <p class="text-base-content/60 leading-relaxed mb-8">
                                         Tell me about your expenses in natural language.
                                     </p>
-                                    <div class="mt-6 space-y-2">
-                                        <p class="text-xs text-base-content/40">Try saying:</p>
+                                    <div class="space-y-3">
+                                        <p class="text-xs font-medium text-base-content/40 uppercase tracking-wider">Try saying</p>
                                         <div class="flex flex-wrap gap-2 justify-center">
-                                            <span class="px-3 py-1.5 bg-base-200 rounded-full text-xs">"spent 500 on groceries"</span>
-                                            <span class="px-3 py-1.5 bg-base-200 rounded-full text-xs">"paid electricity bill 2000"</span>
+                                            <button @click="input = 'spent 500 on groceries'; $refs.chatInput.focus()" 
+                                                    class="badge badge-lg bg-base-200 hover:bg-base-300 border-0 cursor-pointer transition-colors">
+                                                "spent 500 on groceries"
+                                            </button>
+                                            <button @click="input = 'paid electricity bill 2000'; $refs.chatInput.focus()"
+                                                    class="badge badge-lg bg-base-200 hover:bg-base-300 border-0 cursor-pointer transition-colors">
+                                                "paid electricity bill 2000"
+                                            </button>
                                         </div>
                                     </div>
                                 </div>
@@ -402,131 +400,174 @@
                         </template>
 
                         <!-- Chat messages -->
-                        <template x-for="msg in messages" :key="msg.id">
-                            <div class="flex" :class="msg.role === 'user' ? 'justify-end' : 'justify-start'">
-                                <div class="max-w-[80%] px-4 py-2.5 rounded-2xl chat-bubble-animate text-sm"
-                                     :class="msg.role === 'user'
-                                         ? 'bg-base-content text-base-100 rounded-br-md'
-                                         : 'bg-base-200 text-base-content rounded-bl-md'">
-                                    <span x-html="formatMessage(msg.content)"></span>
+                        <div class="max-w-2xl mx-auto space-y-4">
+                            <template x-for="msg in messages" :key="msg.id">
+                                <div class="chat" :class="msg.role === 'user' ? 'chat-end' : 'chat-start'">
+                                    <div class="chat-bubble chat-bubble-animate text-sm"
+                                         :class="msg.role === 'user' ? 'bg-primary text-primary-content' : 'bg-base-200 text-base-content'">
+                                        <span x-html="formatMessage(msg.content)"></span>
+                                    </div>
                                 </div>
-                            </div>
-                        </template>
+                            </template>
 
-                        <!-- Streaming message -->
-                        <template x-if="streaming">
-                            <div class="flex justify-start">
-                                <div class="max-w-[80%] px-4 py-2.5 rounded-2xl rounded-bl-md bg-base-200 text-sm">
-                                    <span x-html="formatMessage(streamingText)"></span>
-                                    <span class="inline-flex gap-1 ml-1">
-                                        <span class="w-1.5 h-1.5 bg-base-content/40 rounded-full animate-bounce" style="animation-delay: 0ms"></span>
-                                        <span class="w-1.5 h-1.5 bg-base-content/40 rounded-full animate-bounce" style="animation-delay: 150ms"></span>
-                                        <span class="w-1.5 h-1.5 bg-base-content/40 rounded-full animate-bounce" style="animation-delay: 300ms"></span>
-                                    </span>
+                            <!-- Streaming message -->
+                            <template x-if="streaming">
+                                <div class="chat chat-start">
+                                    <div class="chat-bubble bg-base-200 text-base-content text-sm">
+                                        <span x-html="formatMessage(streamingText)"></span>
+                                        <span class="loading loading-dots loading-xs ml-1"></span>
+                                    </div>
                                 </div>
-                            </div>
-                        </template>
+                            </template>
+                        </div>
                     </div>
 
-                    <!-- Input -->
-                    <div class="p-4 border-t border-base-200">
-                        <form @submit.prevent="sendMessage" class="flex gap-3">
-                            <input
-                                type="text"
-                                x-model="input"
-                                placeholder="Type your expense..."
-                                class="flex-1 px-4 py-2.5 bg-base-200 border-0 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-base-content/20 placeholder:text-base-content/40"
-                                :disabled="streaming"
-                                x-ref="chatInput"
-                            >
-                            <button type="submit"
-                                    class="px-4 py-2.5 bg-base-content text-base-100 rounded-xl text-sm font-medium hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed transition-opacity"
-                                    :disabled="streaming || !input.trim()">
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                                </svg>
-                            </button>
+                    <!-- Input Area -->
+                    <div class="p-4 border-t border-base-200/50">
+                        <form @submit.prevent="sendMessage" class="max-w-2xl mx-auto">
+                            <div class="join w-full shadow-soft rounded-xl">
+                                <!-- File Upload -->
+                                <label class="btn btn-ghost join-item px-3" title="Upload CSV">
+                                    <input type="file" accept=".csv,.xlsx,.xls" @change="uploadFile($event)" class="hidden" :disabled="streaming || uploading">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-base-content/50" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                                    </svg>
+                                </label>
+                                
+                                <!-- Input -->
+                                <input type="text"
+                                       x-model="input"
+                                       placeholder="Type your expense or ask a question..."
+                                       class="input join-item flex-1 bg-base-100 border-0 focus:outline-none"
+                                       :disabled="streaming || uploading"
+                                       x-ref="chatInput">
+                                
+                                <!-- Send Button -->
+                                <button type="submit"
+                                        class="btn btn-primary join-item px-4"
+                                        :disabled="streaming || uploading || !input.trim()">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                                    </svg>
+                                </button>
+                            </div>
+                            
+                            <!-- Upload indicator -->
+                            <div x-show="uploading" class="mt-2 text-xs text-base-content/50 flex items-center gap-2 justify-center">
+                                <span class="loading loading-spinner loading-xs"></span>
+                                Uploading...
+                            </div>
                         </form>
                     </div>
                 </div>
 
                 <!-- Preview Panel -->
-                <template x-if="pendingTransaction">
-                    <div class="w-full lg:w-1/2 bg-base-200/30 border-l border-base-200 flex flex-col">
-                        <div class="p-5 border-b border-base-200 flex justify-between items-center">
-                            <h2 class="text-sm font-semibold">Preview</h2>
-                            <div class="flex gap-1 bg-base-200 rounded-lg p-0.5">
-                                <button class="px-3 py-1 text-xs rounded-md transition-all"
-                                        :class="previewMode === 'table' ? 'bg-base-100 shadow-sm' : 'text-base-content/60 hover:text-base-content'"
-                                        @click="previewMode = 'table'">
-                                    Form
-                                </button>
-                                <button class="px-3 py-1 text-xs rounded-md transition-all"
-                                        :class="previewMode === 'ledger' ? 'bg-base-100 shadow-sm' : 'text-base-content/60 hover:text-base-content'"
-                                        @click="previewMode = 'ledger'">
-                                    Ledger
-                                </button>
+                <template x-if="pendingTransactions.length > 0">
+                    <div class="w-full lg:w-[420px] bg-base-200/30 flex flex-col animate-fade-in">
+                        <!-- Header -->
+                        <div class="p-5 border-b border-base-300/30">
+                            <div class="flex justify-between items-center mb-1">
+                                <h2 class="font-display font-semibold">Pending</h2>
+                                <div class="join">
+                                    <button class="btn btn-xs join-item" :class="previewMode === 'table' ? 'btn-active' : 'btn-ghost'" @click="previewMode = 'table'">Form</button>
+                                    <button class="btn btn-xs join-item" :class="previewMode === 'ledger' ? 'btn-active' : 'btn-ghost'" @click="previewMode = 'ledger'">Ledger</button>
+                                </div>
                             </div>
+                            <p class="text-xs text-base-content/50" x-text="`${pendingTransactions.length} transaction${pendingTransactions.length > 1 ? 's' : ''} to review`"></p>
                         </div>
 
-                        <div class="flex-1 overflow-y-auto p-5">
-                            <!-- Table view -->
-                            <template x-if="previewMode === 'table'">
-                                <div class="space-y-4">
-                                    <div class="grid grid-cols-2 gap-4">
-                                        <div>
-                                            <label class="block text-xs text-base-content/50 mb-1.5">Date</label>
-                                            <input type="date" class="w-full px-3 py-2 bg-base-100 border border-base-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-base-content/20"
-                                                   x-model="pendingTransaction.data.transaction.date">
+                        <!-- Transaction List -->
+                        <div class="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar">
+                            <template x-for="(pending, index) in pendingTransactions" :key="pending.data.id">
+                                <div class="card bg-base-100 shadow-soft animate-scale-in">
+                                    <!-- Transaction Header -->
+                                    <div class="px-4 py-2.5 border-b border-base-200/50 flex justify-between items-center">
+                                        <span class="text-xs font-medium text-base-content/60" x-text="pending.data.transaction.payee"></span>
+                                        <div class="flex gap-1">
+                                            <button @click="confirmTransaction(pending.data.id)"
+                                                    class="btn btn-xs btn-ghost text-success hover:bg-success/10"
+                                                    :disabled="confirming">
+                                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                                                </svg>
+                                            </button>
+                                            <button @click="cancelTransaction(pending.data.id)"
+                                                    class="btn btn-xs btn-ghost text-error hover:bg-error/10">
+                                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                                                </svg>
+                                            </button>
                                         </div>
-                                        <div>
-                                            <label class="block text-xs text-base-content/50 mb-1.5">Amount</label>
-                                            <div class="flex">
-                                                <input type="number" step="0.01" class="flex-1 px-3 py-2 bg-base-100 border border-base-300 rounded-l-lg text-sm focus:outline-none focus:ring-2 focus:ring-base-content/20"
-                                                       x-model="pendingTransaction.data.transaction.amount">
-                                                <span class="px-3 py-2 bg-base-200 border border-l-0 border-base-300 rounded-r-lg text-sm text-base-content/60" x-text="pendingTransaction.data.transaction.currency"></span>
+                                    </div>
+                                    
+                                    <!-- Form View -->
+                                    <template x-if="previewMode === 'table'">
+                                        <div class="card-body p-4 gap-3">
+                                            <div class="grid grid-cols-2 gap-3">
+                                                <div>
+                                                    <label class="text-xs text-base-content/50 mb-1 block">Date</label>
+                                                    <input type="date" class="input input-sm input-bordered w-full bg-base-200/50"
+                                                           x-model="pending.data.transaction.date"
+                                                           @change="updatePending(pending.data.id, 'date', $event.target.value)">
+                                                </div>
+                                                <div>
+                                                    <label class="text-xs text-base-content/50 mb-1 block">Amount</label>
+                                                    <div class="join w-full">
+                                                        <input type="number" step="0.01" class="input input-sm input-bordered join-item flex-1 bg-base-200/50"
+                                                               x-model="pending.data.transaction.amount"
+                                                               @input="updatePending(pending.data.id, 'amount', $event.target.value)">
+                                                        <span class="btn btn-sm btn-ghost join-item pointer-events-none text-xs" x-text="pending.data.transaction.currency"></span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div>
+                                                <label class="text-xs text-base-content/50 mb-1 block">Payee</label>
+                                                <input type="text" class="input input-sm input-bordered w-full bg-base-200/50"
+                                                       x-model="pending.data.transaction.payee"
+                                                       @input="updatePending(pending.data.id, 'payee', $event.target.value)">
+                                            </div>
+                                            <div>
+                                                <label class="text-xs text-base-content/50 mb-1 block">Category</label>
+                                                <input type="text" class="input input-sm input-bordered w-full bg-base-200/50"
+                                                       x-model="pending.data.transaction.expense_account"
+                                                       @input="updatePending(pending.data.id, 'expense_account', $event.target.value)">
+                                            </div>
+                                            <div>
+                                                <label class="text-xs text-base-content/50 mb-1 block">Paid From</label>
+                                                <input type="text" class="input input-sm input-bordered w-full bg-base-200/50"
+                                                       x-model="pending.data.transaction.payment_account"
+                                                       @input="updatePending(pending.data.id, 'payment_account', $event.target.value)">
                                             </div>
                                         </div>
-                                    </div>
-                                    <div>
-                                        <label class="block text-xs text-base-content/50 mb-1.5">Payee</label>
-                                        <input type="text" class="w-full px-3 py-2 bg-base-100 border border-base-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-base-content/20"
-                                               x-model="pendingTransaction.data.transaction.payee">
-                                    </div>
-                                    <div>
-                                        <label class="block text-xs text-base-content/50 mb-1.5">Category</label>
-                                        <input type="text" class="w-full px-3 py-2 bg-base-100 border border-base-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-base-content/20"
-                                               x-model="pendingTransaction.data.transaction.expense_account">
-                                    </div>
-                                    <div>
-                                        <label class="block text-xs text-base-content/50 mb-1.5">Paid From</label>
-                                        <input type="text" class="w-full px-3 py-2 bg-base-100 border border-base-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-base-content/20"
-                                               x-model="pendingTransaction.data.transaction.payment_account">
-                                    </div>
+                                    </template>
+                                    
+                                    <!-- Ledger View -->
+                                    <template x-if="previewMode === 'ledger'">
+                                        <pre class="ledger-preview p-4 overflow-x-auto" x-html="highlightLedger(pending.content)"></pre>
+                                    </template>
                                 </div>
-                            </template>
-
-                            <!-- Ledger view -->
-                            <template x-if="previewMode === 'ledger'">
-                                <pre class="ledger-preview bg-base-100 p-4 rounded-lg overflow-x-auto border border-base-200"
-                                     x-html="highlightLedger(pendingTransaction.content)"></pre>
                             </template>
                         </div>
 
-                        <div class="p-4 border-t border-base-200 flex gap-3">
-                            <button @click="confirmTransaction"
-                                    class="flex-1 px-4 py-2.5 bg-base-content text-base-100 rounded-lg text-sm font-medium hover:opacity-90 disabled:opacity-40 transition-opacity"
-                                    :disabled="confirming">
-                                <span x-show="!confirming">Save Transaction</span>
-                                <span x-show="confirming" class="flex items-center justify-center gap-2">
-                                    <span class="w-4 h-4 border-2 border-base-100/30 border-t-base-100 rounded-full animate-spin"></span>
-                                    Saving...
-                                </span>
-                            </button>
-                            <button @click="cancelTransaction"
-                                    class="px-4 py-2.5 text-base-content/60 hover:text-base-content rounded-lg text-sm font-medium transition-colors">
-                                Cancel
-                            </button>
+                        <!-- Footer Actions -->
+                        <div class="p-4 border-t border-base-300/30">
+                            <div class="flex gap-2">
+                                <button @click="confirmAllTransactions"
+                                        class="btn btn-primary flex-1"
+                                        :disabled="confirming || pendingTransactions.length === 0">
+                                    <template x-if="!confirming">
+                                        <span>Confirm All (<span x-text="pendingTransactions.length"></span>)</span>
+                                    </template>
+                                    <template x-if="confirming">
+                                        <span class="loading loading-spinner loading-sm"></span>
+                                    </template>
+                                </button>
+                                <button @click="cancelAllTransactions"
+                                        class="btn btn-ghost text-error"
+                                        :disabled="pendingTransactions.length === 0">
+                                    Cancel All
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </template>
@@ -537,48 +578,51 @@
         <template x-if="view === 'transactions'">
             <div class="flex-1 flex flex-col bg-base-100">
                 <!-- Header -->
-                <div class="flex justify-between items-center p-6 pb-4">
-                    <h2 class="text-lg font-semibold">Transactions</h2>
-                    <button class="flex items-center gap-2 px-3 py-1.5 text-xs text-base-content/60 hover:text-base-content hover:bg-base-200 rounded-lg transition-all"
-                            @click="loadTransactions">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <div class="flex justify-between items-center p-6 border-b border-base-200/50">
+                    <h2 class="font-display text-xl font-semibold">Transactions</h2>
+                    <button class="btn btn-ghost btn-sm gap-2" @click="loadTransactions">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                         </svg>
                         Refresh
                     </button>
                 </div>
 
-                <!-- Transactions List -->
-                <div class="flex-1 overflow-y-auto px-6 pb-6 custom-scrollbar">
+                <!-- List -->
+                <div class="flex-1 overflow-y-auto custom-scrollbar">
                     <template x-if="transactions.length === 0">
                         <div class="flex items-center justify-center h-full">
-                            <div class="text-center">
-                                <div class="text-4xl mb-4 opacity-20">📋</div>
-                                <p class="text-sm text-base-content/40">No transactions yet</p>
-                                <p class="text-xs text-base-content/30 mt-1">Start chatting to add expenses</p>
+                            <div class="text-center animate-fade-up">
+                                <div class="w-16 h-16 bg-base-200 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-base-content/30" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                                    </svg>
+                                </div>
+                                <p class="text-base-content/50 mb-1">No transactions yet</p>
+                                <p class="text-xs text-base-content/30">Start chatting to add expenses</p>
                             </div>
                         </div>
                     </template>
 
-                    <div class="space-y-1">
+                    <div class="divide-y divide-base-200/50">
                         <template x-for="txn in transactions" :key="txn.id">
-                            <div class="flex items-center gap-4 p-3 rounded-lg hover:bg-base-200/50 transition-colors cursor-pointer group">
+                            <div class="flex items-center gap-4 px-6 py-4 hover:bg-base-200/30 transition-colors cursor-pointer">
                                 <!-- Date -->
                                 <div class="text-center w-12 shrink-0">
-                                    <div class="text-[10px] text-base-content/40 uppercase tracking-wide" x-text="new Date(txn.date).toLocaleDateString('en-IN', {month: 'short'})"></div>
-                                    <div class="text-lg font-semibold text-base-content/80" x-text="new Date(txn.date).getDate()"></div>
+                                    <div class="text-[10px] text-base-content/40 uppercase tracking-wider" x-text="new Date(txn.date).toLocaleDateString('en-IN', {month: 'short'})"></div>
+                                    <div class="text-lg font-semibold text-base-content/80 font-display" x-text="new Date(txn.date).getDate()"></div>
                                 </div>
 
                                 <!-- Details -->
                                 <div class="flex-1 min-w-0">
-                                    <div class="text-sm font-medium truncate" x-text="txn.payee"></div>
-                                    <div class="text-xs text-base-content/40 truncate" x-text="txn.accounts[0]?.split(':').slice(-2).join(' › ') || 'Uncategorized'"></div>
+                                    <div class="font-medium truncate" x-text="txn.payee"></div>
+                                    <div class="text-xs text-base-content/40 truncate" x-text="txn.accounts[0]?.split(':').slice(-2).join(' / ') || 'Uncategorized'"></div>
                                 </div>
 
                                 <!-- Amount -->
                                 <div class="text-right shrink-0">
-                                    <div class="text-sm font-mono font-medium"
-                                         :class="txn.amount > 0 ? 'text-red-500' : 'text-emerald-600'"
+                                    <div class="font-mono font-medium"
+                                         :class="txn.amount > 0 ? 'text-error' : 'text-success'"
                                          x-text="formatCurrency(Math.abs(txn.amount), txn.currency)"></div>
                                 </div>
                             </div>
@@ -590,14 +634,14 @@
     </main>
 </div>
 
-<!-- Toast notifications -->
-<div class="fixed bottom-4 right-4 z-50 space-y-2" x-data="{ toasts: [] }" @notify.window="toasts.push($event.detail); setTimeout(() => toasts.shift(), 3000)">
+<!-- Toast Notifications -->
+<div class="toast toast-end" x-data="{ toasts: [] }" @notify.window="toasts.push($event.detail); setTimeout(() => toasts.shift(), 3500)">
     <template x-for="toast in toasts" :key="toast.id">
-        <div class="px-4 py-3 rounded-lg shadow-lg text-sm font-medium animate-fade-in"
+        <div class="alert shadow-soft-lg animate-fade-up"
              :class="{
-                 'bg-emerald-500 text-white': toast.type === 'success',
-                 'bg-red-500 text-white': toast.type === 'error',
-                 'bg-base-content text-base-100': toast.type === 'info'
+                 'alert-success': toast.type === 'success',
+                 'alert-error': toast.type === 'error',
+                 'alert-info': toast.type === 'info'
              }">
             <span x-text="toast.message"></span>
         </div>

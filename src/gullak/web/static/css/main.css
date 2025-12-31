@@ -1,42 +1,224 @@
-/* Gullak - Custom Styles */
+/* Gullak - Refined Styles */
 
-/* Additional styles beyond what's in base.html */
+/* Smooth page transitions */
+html {
+    scroll-behavior: smooth;
+}
 
-/* Loading skeleton animation */
+/* Loading skeleton */
 .skeleton-pulse {
-    animation: pulse 1.5s ease-in-out infinite;
+    animation: skeleton-pulse 1.8s ease-in-out infinite;
 }
 
-@keyframes pulse {
+@keyframes skeleton-pulse {
     0%, 100% { opacity: 1; }
-    50% { opacity: 0.5; }
+    50% { opacity: 0.4; }
 }
 
-/* Smooth transitions */
-.transition-all {
-    transition: all 0.2s ease-in-out;
+/* Hover lift effect */
+.hover-lift {
+    transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+                box-shadow 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.hover-lift:hover {
+    transform: translateY(-2px);
 }
 
-/* Better focus states */
-.input:focus,
-.btn:focus {
-    outline: none;
-    box-shadow: 0 0 0 2px hsl(var(--p) / 0.3);
+/* Press effect */
+.press-effect {
+    transition: transform 0.1s ease;
+}
+.press-effect:active {
+    transform: scale(0.98);
 }
 
-/* Mobile adjustments */
-@media (max-width: 640px) {
+/* Gradient text */
+.gradient-text {
+    background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+/* Shimmer effect for loading states */
+.shimmer {
+    position: relative;
+    overflow: hidden;
+}
+.shimmer::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+        90deg,
+        transparent,
+        rgba(255, 255, 255, 0.08),
+        transparent
+    );
+    transform: translateX(-100%);
+    animation: shimmer 1.5s infinite;
+}
+@keyframes shimmer {
+    100% { transform: translateX(100%); }
+}
+
+/* Floating animation */
+@keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-6px); }
+}
+.animate-float {
+    animation: float 3s ease-in-out infinite;
+}
+
+/* Pulse ring animation */
+@keyframes pulse-ring {
+    0% {
+        transform: scale(0.9);
+        opacity: 0.8;
+    }
+    50% {
+        transform: scale(1);
+        opacity: 0.4;
+    }
+    100% {
+        transform: scale(0.9);
+        opacity: 0.8;
+    }
+}
+.animate-pulse-ring {
+    animation: pulse-ring 2s ease-in-out infinite;
+}
+
+/* Slide animations */
+@keyframes slide-in-right {
+    from {
+        opacity: 0;
+        transform: translateX(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+.animate-slide-in-right {
+    animation: slide-in-right 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes slide-in-left {
+    from {
+        opacity: 0;
+        transform: translateX(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+.animate-slide-in-left {
+    animation: slide-in-left 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Number counter animation */
+@keyframes count-up {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+.animate-count {
+    animation: count-up 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Subtle border glow on focus */
+.focus-glow:focus-within {
+    box-shadow: 0 0 0 3px rgba(var(--color-primary), 0.1);
+}
+
+/* Card hover states */
+.card-interactive {
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.card-interactive:hover {
+    transform: translateY(-1px);
+    box-shadow: 
+        0 2px 4px rgba(0,0,0,0.04),
+        0 8px 16px rgba(0,0,0,0.06),
+        0 16px 32px rgba(0,0,0,0.04);
+}
+
+/* Transaction row hover */
+.transaction-row {
+    transition: background-color 0.15s ease;
+}
+.transaction-row:hover {
+    background-color: var(--color-base-200);
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
     .chat-bubble {
         max-width: 90%;
     }
 }
 
+@media (max-width: 640px) {
+    /* Stack preview panel on mobile */
+    .preview-panel {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        max-height: 60vh;
+        border-radius: 1.5rem 1.5rem 0 0;
+        z-index: 50;
+    }
+}
+
 /* Print styles */
 @media print {
-    aside, .btn, input {
+    aside,
+    .btn,
+    input,
+    .toast {
         display: none !important;
     }
     main {
         width: 100% !important;
     }
+    .card {
+        break-inside: avoid;
+    }
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+}
+
+/* Selection styling */
+::selection {
+    background-color: var(--color-primary);
+    color: var(--color-primary-content);
+}
+
+/* Placeholder styling */
+::placeholder {
+    color: var(--color-base-content);
+    opacity: 0.35;
+}
+
+/* Focus visible for accessibility */
+:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+}
+
+/* Remove focus outline for mouse users */
+:focus:not(:focus-visible) {
+    outline: none;
 }

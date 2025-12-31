@@ -28,9 +28,16 @@ function gullakApp() {
         streamingText: '',
 
         // Preview state
-        pendingTransaction: null,
+        pendingTransactions: [],
         previewMode: 'table',
         confirming: false,
+        
+        // Upload state
+        uploading: false,
+        uploadedFilePath: null,
+        
+        // Debounce timers
+        _debounceTimers: {},
 
         // Transactions state
         transactions: [],
@@ -347,7 +354,10 @@ function gullakApp() {
                     break;
 
                 case 'preview':
-                    this.pendingTransaction = event;
+                    const exists = this.pendingTransactions.find(p => p.data.id === event.data.id);
+                    if (!exists) {
+                        this.pendingTransactions.push(event);
+                    }
                     break;
 
                 case 'thinking':
@@ -368,19 +378,14 @@ function gullakApp() {
             }
         },
 
-        // Confirm pending transaction
-        async confirmTransaction() {
-            if (!this.pendingTransaction || this.confirming) return;
-
+        async confirmTransaction(txnId) {
             this.confirming = true;
 
             try {
                 const response = await fetch('/api/chat/confirm', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        transaction_id: this.pendingTransaction.data.id
-                    })
+                    body: JSON.stringify({ transaction_id: txnId })
                 });
 
                 const result = await response.json();
@@ -392,7 +397,7 @@ function gullakApp() {
                         content: '✓ ' + result.message
                     });
                     this.notify('success', 'Transaction saved!');
-                    this.pendingTransaction = null;
+                    this.pendingTransactions = this.pendingTransactions.filter(p => p.data.id !== txnId);
                 } else {
                     this.notify('error', result.message || 'Failed to save transaction');
                 }
@@ -404,40 +409,146 @@ function gullakApp() {
             }
         },
 
-        // Cancel pending transaction
-        cancelTransaction() {
-            if (this.pendingTransaction) {
-                fetch('/api/chat/cancel', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        transaction_id: this.pendingTransaction.data.id
-                    })
-                }).catch(() => {});
-            }
-            this.pendingTransaction = null;
+        cancelTransaction(txnId) {
+            fetch('/api/chat/cancel', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ transaction_id: txnId })
+            }).catch(() => {});
+
+            this.pendingTransactions = this.pendingTransactions.filter(p => p.data.id !== txnId);
         },
 
-        // Load pending transactions
+        async confirmAllTransactions() {
+            if (this.pendingTransactions.length === 0 || this.confirming) return;
+
+            this.confirming = true;
+
+            try {
+                const response = await fetch('/api/chat/confirm-all', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    this.messages.push({
+                        id: Date.now(),
+                        role: 'assistant',
+                        content: `✓ ${result.message}`
+                    });
+                    this.notify('success', result.message);
+                    this.pendingTransactions = [];
+                } else {
+                    this.notify('error', result.message || 'Failed to confirm transactions');
+                }
+            } catch (error) {
+                console.error('Confirm all error:', error);
+                this.notify('error', 'Failed to confirm transactions');
+            } finally {
+                this.confirming = false;
+            }
+        },
+
+        async cancelAllTransactions() {
+            if (this.pendingTransactions.length === 0) return;
+
+            try {
+                await fetch('/api/chat/cancel-all', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+
+                this.pendingTransactions = [];
+                this.notify('info', 'All pending transactions cancelled');
+            } catch (error) {
+                console.error('Cancel all error:', error);
+            }
+        },
+
         async loadPending() {
             try {
                 const response = await fetch('/api/chat/pending');
                 const pending = await response.json();
-                if (pending.length > 0) {
-                    // Show the most recent pending transaction
-                    const latest = pending[pending.length - 1];
-                    this.pendingTransaction = {
-                        type: 'preview',
-                        content: latest.preview,
-                        data: {
-                            id: latest.id,
-                            transaction: latest.transaction
-                        }
-                    };
-                }
+                this.pendingTransactions = pending.map(p => ({
+                    type: 'preview',
+                    content: p.preview,
+                    data: {
+                        id: p.id,
+                        transaction: p.transaction
+                    }
+                }));
             } catch (error) {
                 console.error('Failed to load pending:', error);
             }
+        },
+
+        async uploadFile(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            this.uploading = true;
+
+            try {
+                const formData = new FormData();
+                formData.append('file', file);
+
+                const response = await fetch('/api/chat/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    this.uploadedFilePath = result.file_path;
+                    this.input = `Import transactions from the uploaded file: ${result.filename}`;
+                    await this.sendMessage();
+                    this.uploadedFilePath = null;
+                } else {
+                    this.notify('error', result.error || 'Upload failed');
+                }
+            } catch (error) {
+                console.error('Upload error:', error);
+                this.notify('error', 'Failed to upload file');
+            } finally {
+                this.uploading = false;
+                event.target.value = '';
+            }
+        },
+
+        debounce(key, fn, delay = 500) {
+            if (this._debounceTimers[key]) {
+                clearTimeout(this._debounceTimers[key]);
+            }
+            this._debounceTimers[key] = setTimeout(fn, delay);
+        },
+
+        async updatePending(txnId, field, value) {
+            this.debounce(`update-${txnId}`, async () => {
+                try {
+                    const response = await fetch('/api/chat/update-pending', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            transaction_id: txnId,
+                            updates: { [field]: value }
+                        })
+                    });
+
+                    const result = await response.json();
+
+                    if (result.success) {
+                        const pending = this.pendingTransactions.find(p => p.data.id === txnId);
+                        if (pending) {
+                            pending.content = result.preview;
+                        }
+                    }
+                } catch (error) {
+                    console.error('Update pending error:', error);
+                }
+            }, 300);
         },
 
         // Load transactions
@@ -452,13 +563,13 @@ function gullakApp() {
             }
         },
 
-        // Format message (basic markdown)
+        // Format message (markdown-like)
         formatMessage(text) {
             if (!text) return '';
             return text
-                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                .replace(/\*\*(.*?)\*\*/g, '<strong class="font-semibold">$1</strong>')
                 .replace(/\*(.*?)\*/g, '<em>$1</em>')
-                .replace(/`(.*?)`/g, '<code class="bg-base-300 px-1 rounded">$1</code>')
+                .replace(/`(.*?)`/g, '<code class="bg-base-300/50 px-1.5 py-0.5 rounded text-[0.8125rem] font-mono">$1</code>')
                 .replace(/\n/g, '<br>');
         },
 
@@ -490,12 +601,14 @@ function gullakApp() {
             return formatter.format(amount);
         },
 
-        // Scroll chat to bottom
         scrollToBottom() {
             this.$nextTick(() => {
                 const container = this.$refs.messagesContainer;
                 if (container) {
-                    container.scrollTop = container.scrollHeight;
+                    container.scrollTo({
+                        top: container.scrollHeight,
+                        behavior: 'smooth'
+                    });
                 }
             });
         },

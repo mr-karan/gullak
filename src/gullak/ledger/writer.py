@@ -1,9 +1,11 @@
 """Writer for ledger-cli format files."""
 
 import asyncio
+import re
+from decimal import Decimal
 from pathlib import Path
 
-from .models import Transaction
+from .models import Posting, Transaction
 from .validator import LedgerValidator
 
 
@@ -148,9 +150,116 @@ class LedgerWriter:
 
     def _clean_empty_lines(self, content: str) -> str:
         """Remove excessive empty lines, keeping max 2 consecutive."""
-        import re
-
         # Replace 3+ consecutive newlines with 2
         cleaned = re.sub(r"\n{3,}", "\n\n", content)
         # Ensure file ends with single newline
         return cleaned.rstrip() + "\n" if cleaned.strip() else ""
+
+    async def update_transaction(self, gullak_id: str, updates: dict) -> Transaction | None:
+        """
+        Update a transaction by its gullak ID.
+
+        Args:
+            gullak_id: The gullak:id of the transaction to update
+            updates: Dictionary with fields to update (payee, date, postings, note)
+
+        Returns:
+            Updated Transaction object, or None if not found
+        """
+        from .parser import LedgerParser
+
+        content = self._read_file()
+        if not content:
+            return None
+
+        # Parse existing transactions
+        parser = LedgerParser()
+        transactions = parser.parse_string(content)
+
+        # Find transaction to update
+        target_idx = None
+        target_txn = None
+        for i, txn in enumerate(transactions):
+            if txn.gullak_id == gullak_id:
+                target_idx = i
+                target_txn = txn
+                break
+
+        if target_txn is None:
+            return None
+
+        # Apply updates to create new transaction
+        updated_data = {
+            "date": updates.get("date", target_txn.date),
+            "payee": updates.get("payee", target_txn.payee),
+            "status": target_txn.status,
+            "note": updates.get("note", target_txn.note),
+            "tags": target_txn.tags,
+            "gullak_id": gullak_id,  # Keep same ID
+        }
+
+        # Handle postings update
+        if "postings" in updates:
+            updated_data["postings"] = updates["postings"]
+        elif (
+            "amount" in updates
+            or "expense_account" in updates
+            or "payment_account" in updates
+            or "currency" in updates
+        ):
+            # Partial posting update - rebuild postings
+            old_postings = target_txn.postings
+            if len(old_postings) >= 2:
+                expense_posting = old_postings[0]
+                payment_posting = old_postings[1]
+
+                new_amount = Decimal(str(updates.get("amount", expense_posting.amount)))
+                new_currency = updates.get("currency", expense_posting.currency)
+                new_expense_account = updates.get("expense_account", expense_posting.account)
+                new_payment_account = updates.get("payment_account", payment_posting.account)
+
+                updated_data["postings"] = [
+                    Posting(account=new_expense_account, amount=new_amount, currency=new_currency),
+                    Posting(account=new_payment_account, amount=-new_amount, currency=new_currency),
+                ]
+            else:
+                updated_data["postings"] = old_postings
+        else:
+            updated_data["postings"] = target_txn.postings
+
+        updated_txn = Transaction(**updated_data)
+
+        # Rebuild file content
+        transactions[target_idx] = updated_txn
+        new_content = self._rebuild_ledger_content(content, transactions)
+
+        # Validate new content
+        is_valid, error = await self.validator.validate_content(new_content)
+        if not is_valid:
+            raise ValueError(f"Update would create invalid ledger: {error}")
+
+        # Write updated content
+        self.path.write_text(new_content)
+        return updated_txn
+
+    def _rebuild_ledger_content(
+        self, original_content: str, transactions: list[Transaction]
+    ) -> str:
+        """Rebuild ledger content preserving non-transaction parts."""
+        # Extract header comments (lines before first transaction)
+        lines = original_content.split("\n")
+        header_lines = []
+        for line in lines:
+            if re.match(r"^\d{4}[-/]\d{2}[-/]\d{2}", line):
+                break
+            header_lines.append(line)
+
+        # Build new content
+        parts = []
+        if header_lines:
+            parts.append("\n".join(header_lines).rstrip())
+
+        for txn in transactions:
+            parts.append(txn.to_ledger())
+
+        return "\n\n".join(parts) + "\n"
