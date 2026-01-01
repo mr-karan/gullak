@@ -213,7 +213,6 @@ async def update_setup_step(request: Request, body: SetupStepRequest) -> SetupSt
             timezone=timezone,
             journal_path=ledger_path.name,
         )
-        # Set up Schedule AL for Indian tax reporting if using INR
         if currency == "INR":
             manager.setup_schedule_al()
 

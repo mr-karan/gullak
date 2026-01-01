@@ -25,23 +25,25 @@ services:
       - GULLAK_TIMEZONE=${TZ:-Asia/Kolkata}
       - GULLAK_DEBUG=${GULLAK_DEBUG:-false}
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
+      test: ["CMD", "sh", "-c", "curl -f http://localhost:8000/health && test -s /data/main.ledger"]
+      interval: 5s
+      timeout: 5s
+      retries: 60
+      start_period: 5s
 
   paisa:
     image: ananthakumaran/paisa:latest
     container_name: paisa
     restart: unless-stopped
     user: "0:${GULLAK_GID:-1000}"
+    command: ["/bin/sh", "-c", "umask 0002 && exec paisa serve"]
     ports:
       - "7500:7500"
     volumes:
       - ${PAISA_DATA_DIR:-./data}:/root/Documents/paisa
     environment:
       - TZ=${TZ:-Asia/Kolkata}
+      - PAISA_CONFIG=/root/Documents/paisa/paisa.yaml
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://localhost:7500"]
       interval: 30s

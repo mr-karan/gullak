@@ -71,7 +71,7 @@ class PaisaConfig(BaseModel):
     time_zone: str = "Asia/Kolkata"
     financial_year_starting_month: int = 4
     ledger_cli: str = "ledger"
-    strict: bool = False
+    strict: str = "no"  # Paisa expects "yes" or "no" as string
 
     budget: dict[str, str] = Field(default_factory=lambda: {"rollover": "yes"})
     credit_cards: list[CreditCardConfig] = Field(default_factory=list)
