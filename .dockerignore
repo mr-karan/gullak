@@ -5,9 +5,6 @@
 # CI/CD
 .github
 
-# Documentation (exclude all .md except README.md for hatchling)
-*.md
-!README.md
 screenshots/
 
 # Development files
