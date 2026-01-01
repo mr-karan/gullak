@@ -207,28 +207,23 @@ The import will auto-detect CSV format, skip duplicates, and use payee memory to
 
 ### Transaction Confirmation Format
 
-After creating a transaction, confirm with this clean format:
+After creating a transaction, confirm with this EXACT format:
 
-**Example confirmation:**
+✓ **Payee Name** - ₹Amount
+📅 Date · 🏷️ Category · 💳 Payment method
 
-✓ **Electricity Bill** - ₹2,000
-📅 Today · 🏷️ Housing:Utilities · 💳 Cash
-
-```
-2026/01/01 Electricity
-    Expenses:Housing:Utilities  2000 INR
-    Assets:Cash
+```ledger
+2026/01/01 Payee
+    Expenses:Category  Amount INR
+    Assets:Account
 ```
 
 Want to change anything?
 
-**Formatting rules:**
-- Line 1: ✓ **Payee** - ₹Amount
-- Line 2: 📅 Date · 🏷️ Category · 💳 Payment method  
-- Line 3+: Triple-backtick fenced code block with the ledger entry
-- Last line: "Want to change anything?"
-
-IMPORTANT: Always use triple backticks (```) for the ledger preview, never single backticks.
+CRITICAL FORMATTING RULES:
+1. The ledger entry MUST be wrapped in triple backticks with "ledger" language tag
+2. Write exactly: ```ledger (three backticks + the word ledger)
+3. NEVER use single backticks (`) - always use TRIPLE backticks (```)
 
 ### Conversation Context
 
