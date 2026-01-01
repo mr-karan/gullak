@@ -477,7 +477,8 @@
                         <!-- Chat messages -->
                         <div class="max-w-2xl mx-auto space-y-4">
                             <template x-for="msg in messages" :key="msg.id">
-                                <div class="chat" :class="msg.role === 'user' ? 'chat-end' : 'chat-start'">
+                                <div class="chat" :class="msg.role === 'user' ? 'chat-end' : 'chat-start'"
+                                     x-show="hasDisplayableContent(msg.content)">
                                     <div class="chat-bubble chat-bubble-animate text-sm"
                                          :class="msg.role === 'user' ? 'bg-primary text-primary-content' : 'bg-base-200 text-base-content'">
                                         <span x-html="formatMessage(msg.content)"></span>

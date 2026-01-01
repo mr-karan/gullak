@@ -789,6 +789,19 @@ function gullakApp() {
             }
         },
 
+        hasDisplayableContent(content) {
+            if (!content) return false;
+            if (typeof content === 'string') return content.trim().length > 0;
+            if (Array.isArray(content)) {
+                return content.some(p => p.type === 'text' && p.text?.trim());
+            }
+            if (typeof content === 'object') {
+                if (content.type === 'tool_result') return false;
+                return content.text?.trim().length > 0;
+            }
+            return false;
+        },
+
         formatMessage(text) {
             if (!text) return '';
             if (typeof text !== 'string') {
@@ -796,7 +809,7 @@ function gullakApp() {
                     const textParts = text.filter(p => p.type === 'text').map(p => p.text);
                     text = textParts.join('') || '';
                 } else if (typeof text === 'object') {
-                    text = text.text || JSON.stringify(text);
+                    text = text.text || '';
                 } else {
                     text = String(text);
                 }
