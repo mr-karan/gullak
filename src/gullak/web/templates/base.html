@@ -186,6 +186,15 @@
             opacity: 0.25;
         }
 
+        /* Hide scrollbar but keep functionality */
+        .hide-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+        .hide-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+
         /* Smooth transitions */
         .transition-base {
             transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);

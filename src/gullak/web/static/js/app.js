@@ -45,6 +45,12 @@ function gullakApp() {
 
         // Transactions state
         transactions: [],
+        filteredTransactions: [],
+        groupedTransactions: {},
+        txnStats: {},
+        txnSearch: '',
+        txnCategoryFilter: '',
+        txnPeriod: 'month',
 
         // Ledger viewer state
         ledgerContent: '',
@@ -670,16 +676,99 @@ function gullakApp() {
             }, 300);
         },
 
-        // Load transactions
         async loadTransactions() {
             try {
-                const response = await fetch('/api/ledger/transactions?limit=50');
+                const response = await fetch('/api/ledger/transactions?limit=100');
                 const data = await response.json();
                 this.transactions = data.transactions || [];
+                this.filterTransactions();
             } catch (error) {
                 console.error('Failed to load transactions:', error);
                 this.notify('error', 'Failed to load transactions');
             }
+        },
+
+        async loadTransactionStats() {
+            try {
+                const response = await fetch(`/api/ledger/stats?period=${this.txnPeriod}`);
+                this.txnStats = await response.json();
+            } catch (error) {
+                console.error('Failed to load stats:', error);
+            }
+        },
+
+        filterTransactions() {
+            let filtered = [...this.transactions];
+            
+            if (this.txnSearch) {
+                const search = this.txnSearch.toLowerCase();
+                filtered = filtered.filter(t => 
+                    t.payee.toLowerCase().includes(search) ||
+                    t.accounts.some(a => a.toLowerCase().includes(search)) ||
+                    (t.note && t.note.toLowerCase().includes(search))
+                );
+            }
+            
+            if (this.txnCategoryFilter) {
+                filtered = filtered.filter(t => 
+                    t.accounts.some(a => a.includes(this.txnCategoryFilter))
+                );
+            }
+            
+            this.filteredTransactions = filtered;
+            this.groupTransactionsByDate();
+        },
+
+        groupTransactionsByDate() {
+            const groups = {};
+            for (const txn of this.filteredTransactions) {
+                if (!groups[txn.date]) groups[txn.date] = [];
+                groups[txn.date].push(txn);
+            }
+            this.groupedTransactions = groups;
+        },
+
+        formatDateRelative(dateStr) {
+            const date = new Date(dateStr);
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const diff = Math.floor((today - date) / (1000 * 60 * 60 * 24));
+            
+            if (diff === 0) return 'Today';
+            if (diff === 1) return 'Yesterday';
+            if (diff < 7) return date.toLocaleDateString('en-IN', { weekday: 'long' });
+            return date.toLocaleDateString('en-IN', { weekday: 'short', month: 'short', day: 'numeric' });
+        },
+
+        getCategoryEmoji(account) {
+            if (!account) return '💰';
+            const cat = account.toLowerCase();
+            if (cat.includes('food') || cat.includes('grocer') || cat.includes('restaurant')) return '🍽️';
+            if (cat.includes('transport') || cat.includes('uber') || cat.includes('fuel')) return '🚗';
+            if (cat.includes('shopping') || cat.includes('amazon')) return '🛍️';
+            if (cat.includes('health') || cat.includes('medical') || cat.includes('pharmacy')) return '💊';
+            if (cat.includes('entertainment') || cat.includes('movie') || cat.includes('netflix')) return '🎬';
+            if (cat.includes('utility') || cat.includes('electric') || cat.includes('water')) return '💡';
+            if (cat.includes('housing') || cat.includes('rent')) return '🏠';
+            if (cat.includes('education') || cat.includes('book')) return '📚';
+            if (cat.includes('travel') || cat.includes('hotel') || cat.includes('flight')) return '✈️';
+            if (cat.includes('subscription')) return '📱';
+            if (cat.includes('personal')) return '👤';
+            return '💸';
+        },
+
+        getCategoryColor(account) {
+            if (!account) return 'bg-base-200/70';
+            const cat = account.toLowerCase();
+            if (cat.includes('food') || cat.includes('grocer') || cat.includes('restaurant')) return 'bg-orange-100 dark:bg-orange-900/30';
+            if (cat.includes('transport')) return 'bg-blue-100 dark:bg-blue-900/30';
+            if (cat.includes('shopping')) return 'bg-pink-100 dark:bg-pink-900/30';
+            if (cat.includes('health')) return 'bg-red-100 dark:bg-red-900/30';
+            if (cat.includes('entertainment')) return 'bg-purple-100 dark:bg-purple-900/30';
+            if (cat.includes('utility') || cat.includes('housing')) return 'bg-yellow-100 dark:bg-yellow-900/30';
+            if (cat.includes('education')) return 'bg-cyan-100 dark:bg-cyan-900/30';
+            if (cat.includes('travel')) return 'bg-teal-100 dark:bg-teal-900/30';
+            return 'bg-base-200/70';
         },
 
         async loadLedgerFile() {

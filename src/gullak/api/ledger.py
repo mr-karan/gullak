@@ -189,6 +189,69 @@ async def get_ledger_file(
     }
 
 
+@router.get("/stats")
+async def get_transaction_stats(
+    request: Request,
+    period: str = Query("month", description="Period: week, month, year, all"),
+) -> dict[str, Any]:
+    """Get transaction statistics for dashboard."""
+    from collections import defaultdict
+    from datetime import date, timedelta
+
+    settings = request.app.state.settings
+    parser: LedgerParser = request.app.state.parser
+
+    if not settings.ledger_path.exists():
+        return {
+            "total_spent": 0,
+            "transaction_count": 0,
+            "categories": [],
+            "daily_spending": [],
+            "period": period,
+        }
+
+    transactions = parser.parse_file(settings.ledger_path)
+
+    today = date.today()
+    if period == "week":
+        start_date = today - timedelta(days=7)
+    elif period == "month":
+        start_date = today.replace(day=1)
+    elif period == "year":
+        start_date = today.replace(month=1, day=1)
+    else:
+        start_date = date.min
+
+    filtered = [t for t in transactions if t.date >= start_date]
+
+    total_spent = 0
+    category_totals: dict[str, float] = defaultdict(float)
+    daily_totals: dict[str, float] = defaultdict(float)
+
+    for txn in filtered:
+        for posting in txn.postings:
+            if posting.account.startswith("Expenses:") and posting.amount > 0:
+                total_spent += float(posting.amount)
+                category = posting.account.split(":")[1] if ":" in posting.account else "Other"
+                category_totals[category] += float(posting.amount)
+                daily_totals[str(txn.date)] += float(posting.amount)
+
+    categories = sorted(
+        [{"name": k, "amount": v} for k, v in category_totals.items()],
+        key=lambda x: x["amount"],
+        reverse=True,
+    )[:8]
+
+    return {
+        "total_spent": total_spent,
+        "transaction_count": len(filtered),
+        "categories": categories,
+        "daily_spending": [{"date": k, "amount": v} for k, v in sorted(daily_totals.items())],
+        "period": period,
+        "currency": settings.default_currency,
+    }
+
+
 @router.get("/health")
 async def health_check(request: Request) -> dict[str, Any]:
     """Check ledger and validator health."""
