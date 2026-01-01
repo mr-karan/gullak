@@ -41,6 +41,7 @@ class ToolState:
     parser: LedgerParser | None = None
     validator: LedgerValidator | None = None
     memory: PayeeMemory | None = None
+    current_thread_id: str | None = None
 
 
 _state = ToolState()
@@ -92,9 +93,11 @@ def configure_tool_state(
     _load_pending()
 
 
-def get_pending_transactions() -> dict[str, PendingTransaction]:
-    """Get pending transactions (for API layer)."""
-    return _state.pending_transactions
+def get_pending_transactions(thread_id: str | None = None) -> dict[str, PendingTransaction]:
+    """Get pending transactions, optionally filtered by thread_id."""
+    if thread_id is None:
+        return _state.pending_transactions
+    return {k: v for k, v in _state.pending_transactions.items() if v.thread_id == thread_id}
 
 
 def clear_pending_transaction(txn_id: str) -> PendingTransaction | None:
@@ -103,6 +106,16 @@ def clear_pending_transaction(txn_id: str) -> PendingTransaction | None:
     if result is not None:
         _save_pending()
     return result
+
+
+def set_current_thread_id(thread_id: str | None) -> None:
+    """Set the current thread context for pending transactions."""
+    _state.current_thread_id = thread_id
+
+
+def get_current_thread_id() -> str | None:
+    """Get the current thread context."""
+    return _state.current_thread_id
 
 
 def _parse_date_string(date_str: str) -> date:
@@ -223,6 +236,7 @@ def _parse_expense(args: ParseExpenseArgs) -> str:
             id=txn.gullak_id,
             transaction=txn,
             source_text=f"{args.payee} - {args.amount} {used_currency}",
+            thread_id=_state.current_thread_id,
         )
 
         _state.pending_transactions[pending.id] = pending
@@ -272,6 +286,7 @@ def _parse_income(args: ParseIncomeArgs) -> str:
             id=txn.gullak_id,
             transaction=txn,
             source_text=f"Income: {args.payee} - {args.amount} {used_currency}",
+            thread_id=_state.current_thread_id,
         )
 
         _state.pending_transactions[pending.id] = pending
@@ -659,6 +674,7 @@ def _import_csv(args: ImportCsvArgs) -> str:
             id=txn.gullak_id,
             transaction=txn,
             source_text=f"CSV import row {imp_txn.source_row}: {imp_txn.payee}",
+            thread_id=_state.current_thread_id,
         )
 
         _state.pending_transactions[pending.id] = pending

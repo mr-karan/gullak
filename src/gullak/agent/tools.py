@@ -13,6 +13,7 @@ from gullak.agent.tool_handlers import (
     clear_pending_transaction,
     configure_tool_state,
     get_pending_transactions,
+    set_current_thread_id,
 )
 from gullak.agent.tool_schemas import (
     AddCreditCardArgs,
@@ -101,3 +102,4 @@ TOOLS = TOOL_DEFINITIONS
 get_pending_transactions = get_pending_transactions
 clear_pending_transaction = clear_pending_transaction
 configure_tools = configure_agent_tools
+set_current_thread_id = set_current_thread_id

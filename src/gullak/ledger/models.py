@@ -133,6 +133,7 @@ class PendingTransaction(BaseModel):
     id: str
     transaction: Transaction
     source_text: str
+    thread_id: str | None = None
     created_at: datetime = Field(default_factory=datetime.now)
     ledger_preview: str = ""
 

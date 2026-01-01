@@ -23,6 +23,7 @@ class ConfirmRequest(BaseModel):
     """Transaction confirmation request."""
 
     transaction_id: str
+    thread_id: str | None = None
 
 
 class ConfirmResponse(BaseModel):
@@ -36,6 +37,13 @@ class BatchConfirmRequest(BaseModel):
     """Batch transaction confirmation request."""
 
     transaction_ids: list[str]
+    thread_id: str | None = None
+
+
+class ThreadFilterRequest(BaseModel):
+    """Request with optional thread filter."""
+
+    thread_id: str | None = None
 
 
 class UpdatePendingRequest(BaseModel):
@@ -110,10 +118,10 @@ async def cancel_transaction(request: Request, body: ConfirmRequest) -> ConfirmR
 
 
 @router.get("/pending")
-async def get_pending(request: Request) -> list[dict[str, Any]]:
-    """Get all pending transactions."""
+async def get_pending(request: Request, thread_id: str | None = None) -> list[dict[str, Any]]:
+    """Get pending transactions, optionally filtered by thread."""
     agent = request.app.state.agent
-    return agent.get_pending()
+    return agent.get_pending(thread_id=thread_id)
 
 
 @router.post("/upload")
@@ -143,10 +151,13 @@ async def upload_file(request: Request, file: UploadFile) -> dict:
 
 
 @router.post("/confirm-all")
-async def confirm_all_transactions(request: Request) -> dict:
-    """Confirm all pending transactions."""
+async def confirm_all_transactions(
+    request: Request, body: ThreadFilterRequest | None = None
+) -> dict:
+    """Confirm all pending transactions for a thread."""
     agent = request.app.state.agent
-    pending = agent.get_pending()
+    thread_id = body.thread_id if body else None
+    pending = agent.get_pending(thread_id=thread_id)
 
     results = []
     success_count = 0
@@ -167,10 +178,13 @@ async def confirm_all_transactions(request: Request) -> dict:
 
 
 @router.post("/cancel-all")
-async def cancel_all_transactions(request: Request) -> dict:
-    """Cancel all pending transactions."""
+async def cancel_all_transactions(
+    request: Request, body: ThreadFilterRequest | None = None
+) -> dict:
+    """Cancel all pending transactions for a thread."""
     agent = request.app.state.agent
-    pending = agent.get_pending()
+    thread_id = body.thread_id if body else None
+    pending = agent.get_pending(thread_id=thread_id)
 
     cancelled = 0
     for txn in pending:

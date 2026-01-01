@@ -22,6 +22,7 @@ from .tools import (
     configure_tools,
     execute_tool,
     get_pending_transactions,
+    set_current_thread_id,
 )
 
 
@@ -117,6 +118,9 @@ class GullakAgent:
         conversation_history.append({"role": "user", "content": user_message})
         if self._chat_history:
             await self._chat_history.save_message(thread_id, "user", user_message)
+
+        # Set thread context for pending transactions
+        set_current_thread_id(thread_id)
 
         try:
             # Agentic loop - keep processing until no more tool calls
@@ -259,14 +263,15 @@ class GullakAgent:
         """Cancel a pending transaction."""
         return clear_pending_transaction(txn_id) is not None
 
-    def get_pending(self) -> list[dict[str, Any]]:
-        """Get all pending transactions."""
+    def get_pending(self, thread_id: str | None = None) -> list[dict[str, Any]]:
+        """Get pending transactions, optionally filtered by thread."""
         return [
             {
                 "id": p.id,
                 "preview": p.ledger_preview,
                 "source_text": p.source_text,
                 "created_at": p.created_at.isoformat(),
+                "thread_id": p.thread_id,
                 "transaction": {
                     "date": str(p.transaction.date),
                     "payee": p.transaction.payee,
@@ -282,7 +287,7 @@ class GullakAgent:
                     else "",
                 },
             }
-            for p in get_pending_transactions().values()
+            for p in get_pending_transactions(thread_id=thread_id).values()
         ]
 
     def get_chat_history(self) -> ChatHistory | None:

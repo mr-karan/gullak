@@ -166,6 +166,7 @@ function gullakApp() {
                     this.messages = data.messages || [];
                     this.scrollToBottom();
                 }
+                await this.loadPending();
             } catch (error) {
                 console.error('Failed to load messages:', error);
                 this.notify('error', 'Failed to load messages');
@@ -540,7 +541,8 @@ function gullakApp() {
             try {
                 const response = await fetch('/api/chat/confirm-all', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' }
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ thread_id: this.currentThreadId })
                 });
 
                 const result = await response.json();
@@ -570,7 +572,8 @@ function gullakApp() {
             try {
                 await fetch('/api/chat/cancel-all', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' }
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ thread_id: this.currentThreadId })
                 });
 
                 this.pendingTransactions = [];
@@ -582,7 +585,10 @@ function gullakApp() {
 
         async loadPending() {
             try {
-                const response = await fetch('/api/chat/pending');
+                const url = this.currentThreadId 
+                    ? `/api/chat/pending?thread_id=${this.currentThreadId}`
+                    : '/api/chat/pending';
+                const response = await fetch(url);
                 const pending = await response.json();
                 this.pendingTransactions = pending.map(p => ({
                     type: 'preview',
