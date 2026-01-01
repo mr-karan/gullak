@@ -2,6 +2,8 @@
 
 import shutil
 import sys
+import time
+import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -14,7 +16,12 @@ from gullak.agent import GullakAgent
 from gullak.api import chat_router, ledger_router, setup_router
 from gullak.ledger.parser import LedgerParser
 from gullak.ledger.validator import LedgerValidator
+from gullak.logging import configure_logging, get_logger
 from gullak.settings import settings
+
+# Configure logging before anything else
+configure_logging(debug=settings.debug)
+logger = get_logger(__name__)
 
 
 def _check_ledger_cli() -> None:
@@ -45,6 +52,8 @@ _check_ledger_cli()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan handler."""
+    logger.info("application_startup", version="2.0.0", debug=settings.debug)
+
     settings.ensure_data_dir()
 
     app.state.settings = settings
@@ -59,11 +68,18 @@ async def lifespan(app: FastAPI):
         ledger_cli=settings.ledger_cli,
     )
 
+    logger.info(
+        "agent_initialized",
+        ledger_path=str(settings.ledger_path),
+        currency=settings.default_currency,
+    )
+
     # Note: Ledger file is created by setup wizard, not here
 
     yield
 
-    # Shutdown (cleanup if needed)
+    # Shutdown
+    logger.info("application_shutdown")
 
 
 # Create FastAPI app
@@ -86,6 +102,46 @@ templates = Jinja2Templates(directory=templates_path)
 app.include_router(chat_router, prefix="/api")
 app.include_router(ledger_router, prefix="/api")
 app.include_router(setup_router, prefix="/api")
+
+
+@app.middleware("http")
+async def logging_middleware(request: Request, call_next):
+    """Log requests with timing and correlation IDs."""
+    request_id = str(uuid.uuid4())[:8]
+    start_time = time.time()
+
+    # Skip logging for static files and health checks
+    if request.url.path.startswith("/static") or request.url.path == "/health":
+        return await call_next(request)
+
+    log = logger.bind(
+        request_id=request_id,
+        method=request.method,
+        path=request.url.path,
+    )
+
+    try:
+        response = await call_next(request)
+        duration_ms = (time.time() - start_time) * 1000
+
+        log.info(
+            "request_completed",
+            status_code=response.status_code,
+            duration_ms=round(duration_ms, 2),
+        )
+
+        response.headers["X-Request-ID"] = request_id
+        return response
+
+    except Exception as e:
+        duration_ms = (time.time() - start_time) * 1000
+        log.error(
+            "request_failed",
+            error=str(e),
+            error_type=type(e).__name__,
+            duration_ms=round(duration_ms, 2),
+        )
+        raise
 
 
 @app.get("/", response_class=HTMLResponse)
