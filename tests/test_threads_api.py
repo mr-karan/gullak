@@ -1,15 +1,6 @@
-"""Tests for Chat Threads API endpoints.
-
-These tests validate API behavior using httpx AsyncClient.
-The core thread logic is tested in test_chat_history.py.
-"""
+"""Tests for Chat Threads API endpoints."""
 
 import pytest
-
-
-pytestmark = pytest.mark.skip(
-    reason="API tests require lifespan context - see test_chat_history.py for unit tests"
-)
 
 
 class TestThreadsAPI:

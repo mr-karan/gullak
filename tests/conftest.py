@@ -36,7 +36,7 @@ def temp_data_dir(tmp_path):
 
 @pytest.fixture
 async def client(temp_data_dir):
-    """Create an async HTTP client with properly initialized app."""
+    """Create an async HTTP client with manually initialized app state."""
     with patch.dict(
         "os.environ",
         {
@@ -45,40 +45,15 @@ async def client(temp_data_dir):
             "ANTHROPIC_API_KEY": "test-key",
         },
     ):
-        from contextlib import asynccontextmanager
+        from fastapi import FastAPI
 
         from gullak.agent import GullakAgent
+        from gullak.api import chat_router, ledger_router, setup_router, threads_router
+        from gullak.chat_history import ChatHistory
         from gullak.ledger.parser import LedgerParser
         from gullak.ledger.validator import LedgerValidator
 
-        @asynccontextmanager
-        async def test_lifespan(app):
-            app.state.settings = type(
-                "Settings",
-                (),
-                {
-                    "ledger_path": temp_data_dir / "main.ledger",
-                    "default_currency": "INR",
-                    "timezone": "Asia/Kolkata",
-                    "ledger_cli": "ledger",
-                    "data_dir": temp_data_dir,
-                },
-            )()
-            app.state.parser = LedgerParser()
-            app.state.validator = LedgerValidator(cli_path="ledger")
-            app.state.agent = GullakAgent(
-                ledger_path=temp_data_dir / "main.ledger",
-                default_currency="INR",
-                timezone="Asia/Kolkata",
-                ledger_cli="ledger",
-            )
-            yield
-
-        from fastapi import FastAPI
-
-        from gullak.api import chat_router, ledger_router, setup_router, threads_router
-
-        app = FastAPI(lifespan=test_lifespan)
+        app = FastAPI()
         app.include_router(chat_router, prefix="/api")
         app.include_router(ledger_router, prefix="/api")
         app.include_router(setup_router, prefix="/api")
@@ -87,6 +62,32 @@ async def client(temp_data_dir):
         @app.get("/health")
         async def health():
             return {"status": "healthy", "version": "2.0.0"}
+
+        chat_history = ChatHistory(temp_data_dir / "chat.db")
+
+        agent = GullakAgent(
+            ledger_path=temp_data_dir / "main.ledger",
+            default_currency="INR",
+            timezone="Asia/Kolkata",
+            ledger_cli="ledger",
+        )
+        agent._chat_history = chat_history
+
+        app.state.settings = type(
+            "Settings",
+            (),
+            {
+                "ledger_path": temp_data_dir / "main.ledger",
+                "default_currency": "INR",
+                "timezone": "Asia/Kolkata",
+                "ledger_cli": "ledger",
+                "data_dir": temp_data_dir,
+            },
+        )()
+        app.state.parser = LedgerParser()
+        app.state.validator = LedgerValidator(cli_path="ledger")
+        app.state.agent = agent
+        app.state.chat_history = chat_history
 
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as ac:
