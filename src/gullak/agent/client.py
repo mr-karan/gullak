@@ -57,9 +57,8 @@ class GullakAgent:
     _chat_history: ChatHistory | None = field(default=None, init=False)
 
     def __post_init__(self) -> None:
-        """Initialize agent components."""
         self._validator = LedgerValidator(cli_path=self.ledger_cli)
-        self._writer = LedgerWriter(self.ledger_path, self._validator)
+        self._writer = LedgerWriter(self.ledger_path, self._validator, settings.paisa_url)
 
         configure_tools(
             ledger_path=self.ledger_path,

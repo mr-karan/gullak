@@ -1,18 +1,84 @@
-"""Async SQLite-based chat history with thread support."""
-
+import contextlib
 import json
 from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
 from typing import Any
-from uuid import uuid4
 
 import aiosqlite
 
 
-class ChatHistory:
-    """Async persistence for chat threads and messages."""
+class _SQL:
+    INSERT_THREAD = """
+        INSERT OR IGNORE INTO threads (id, title, created_at, updated_at)
+        VALUES (:id, :title, :created_at, :updated_at)
+    """
 
+    UPDATE_THREAD_TITLE = """
+        UPDATE threads SET title = :title, updated_at = :updated_at
+        WHERE id = :id AND title IS NULL
+    """
+
+    TOUCH_THREAD = "UPDATE threads SET updated_at = :updated_at WHERE id = :id"
+
+    INSERT_MESSAGE = """
+        INSERT INTO messages (thread_id, role, content, created_at)
+        VALUES (:thread_id, :role, :content, :created_at)
+    """
+
+    GET_THREAD_TITLE = "SELECT title FROM threads WHERE id = :id"
+
+    SET_THREAD_TITLE = "UPDATE threads SET title = :title WHERE id = :id"
+
+    LOAD_MESSAGES = """
+        SELECT id, role, content FROM messages
+        WHERE thread_id = :thread_id
+        ORDER BY id DESC LIMIT :limit
+    """
+
+    LOAD_MESSAGES_BEFORE = """
+        SELECT id, role, content FROM messages
+        WHERE thread_id = :thread_id AND id < :before_id
+        ORDER BY id DESC LIMIT :limit
+    """
+
+    LIST_THREADS = """
+        SELECT t.id, t.title, t.created_at, t.updated_at, COUNT(m.id) as message_count
+        FROM threads t
+        LEFT JOIN messages m ON t.id = m.thread_id
+        GROUP BY t.id
+        ORDER BY t.updated_at DESC
+        LIMIT :limit
+    """
+
+    GET_THREAD = """
+        SELECT t.id, t.title, t.created_at, t.updated_at, COUNT(m.id) as message_count
+        FROM threads t
+        LEFT JOIN messages m ON t.id = m.thread_id
+        WHERE t.id = :id
+        GROUP BY t.id
+    """
+
+    DELETE_THREAD_MESSAGES = "DELETE FROM messages WHERE thread_id = :thread_id"
+    DELETE_THREAD = "DELETE FROM threads WHERE id = :id"
+
+    DELETE_ALL_MESSAGES = "DELETE FROM messages"
+    DELETE_ALL_THREADS = "DELETE FROM threads"
+
+    CLEAR_OLD_MESSAGES = """
+        DELETE FROM messages WHERE thread_id NOT IN (
+            SELECT id FROM threads ORDER BY updated_at DESC LIMIT :keep_count
+        )
+    """
+
+    CLEAR_OLD_THREADS = """
+        DELETE FROM threads WHERE id NOT IN (
+            SELECT id FROM threads ORDER BY updated_at DESC LIMIT :keep_count
+        )
+    """
+
+
+class ChatHistory:
     def __init__(self, db_path: Path):
         self.db_path = db_path
         self._initialized = False
@@ -24,24 +90,21 @@ class ChatHistory:
         async with aiosqlite.connect(self.db_path) as db:
             await db.execute("PRAGMA journal_mode=WAL")
             await db.execute("PRAGMA synchronous=NORMAL")
+            await db.execute("PRAGMA foreign_keys=ON")
 
-            # Check if we need to migrate from old schema
             cursor = await db.execute(
                 "SELECT name FROM sqlite_master WHERE type='table' AND name='messages'"
             )
             messages_exists = await cursor.fetchone() is not None
 
             if messages_exists:
-                # Check if thread_id column exists
                 cursor = await db.execute("PRAGMA table_info(messages)")
                 columns = {row[1] for row in await cursor.fetchall()}
                 if "thread_id" not in columns:
-                    # Old schema - migrate by backing up and recreating
                     await db.execute("ALTER TABLE messages RENAME TO messages_old")
                     await db.commit()
-                    messages_exists = False  # Force table recreation
+                    messages_exists = False
 
-            # Create threads table
             await db.execute("""
                 CREATE TABLE IF NOT EXISTS threads (
                     id TEXT PRIMARY KEY,
@@ -51,7 +114,6 @@ class ChatHistory:
                 )
             """)
 
-            # Create messages table with proper schema
             await db.execute("""
                 CREATE TABLE IF NOT EXISTS messages (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -63,35 +125,35 @@ class ChatHistory:
                 )
             """)
 
-            # Migrate old messages if backup exists
             cursor = await db.execute(
                 "SELECT name FROM sqlite_master WHERE type='table' AND name='messages_old'"
             )
             if await cursor.fetchone():
-                # Create default thread for old messages
                 now = datetime.now().isoformat()
                 await db.execute(
-                    "INSERT OR IGNORE INTO threads (id, title, created_at, updated_at) VALUES (?, ?, ?, ?)",
-                    ("legacy", "Previous Conversations", now, now),
+                    _SQL.INSERT_THREAD,
+                    {
+                        "id": "legacy",
+                        "title": "Previous Conversations",
+                        "created_at": now,
+                        "updated_at": now,
+                    },
                 )
-                # Migrate old messages to legacy thread
                 await db.execute(
                     """
                     INSERT INTO messages (thread_id, role, content, created_at)
-                    SELECT 'legacy', role, content, COALESCE(created_at, ?)
+                    SELECT 'legacy', role, content, COALESCE(created_at, :now)
                     FROM messages_old
-                """,
-                    (now,),
+                    """,
+                    {"now": now},
                 )
                 await db.execute("DROP TABLE messages_old")
 
             await db.execute("""
-                CREATE INDEX IF NOT EXISTS idx_messages_thread 
-                ON messages(thread_id, id)
+                CREATE INDEX IF NOT EXISTS idx_messages_thread ON messages(thread_id, id)
             """)
             await db.execute("""
-                CREATE INDEX IF NOT EXISTS idx_threads_updated
-                ON threads(updated_at DESC)
+                CREATE INDEX IF NOT EXISTS idx_threads_updated ON threads(updated_at DESC)
             """)
             await db.commit()
         self._initialized = True
@@ -100,166 +162,118 @@ class ChatHistory:
     async def _get_db(self):
         await self._ensure_initialized()
         async with aiosqlite.connect(self.db_path) as db:
+            await db.execute("PRAGMA foreign_keys=ON")
             db.row_factory = aiosqlite.Row
             yield db
 
     async def create_thread(self, thread_id: str | None = None, title: str | None = None) -> str:
-        """Create a new thread. Returns thread_id."""
         if thread_id is None:
             thread_id = uuid4().hex[:12]
         now = datetime.now().isoformat()
         async with self._get_db() as db:
             await db.execute(
-                "INSERT OR IGNORE INTO threads (id, title, created_at, updated_at) VALUES (?, ?, ?, ?)",
-                (thread_id, title, now, now),
+                _SQL.INSERT_THREAD,
+                {"id": thread_id, "title": title, "created_at": now, "updated_at": now},
             )
             await db.commit()
         return thread_id
 
     async def update_thread_title(self, thread_id: str, title: str) -> None:
-        """Update thread title."""
         now = datetime.now().isoformat()
         async with self._get_db() as db:
             await db.execute(
-                "UPDATE threads SET title = ?, updated_at = ? WHERE id = ? AND title IS NULL",
-                (title, now, thread_id),
+                _SQL.UPDATE_THREAD_TITLE,
+                {"id": thread_id, "title": title, "updated_at": now},
             )
             await db.commit()
 
     async def save_message(
         self, thread_id: str, role: str, content: list[dict[str, Any]] | str
     ) -> None:
-        """Save a message to the thread."""
         now = datetime.now().isoformat()
         content_str = json.dumps(content) if isinstance(content, list) else content
 
         async with self._get_db() as db:
             await db.execute(
-                "INSERT OR IGNORE INTO threads (id, title, created_at, updated_at) VALUES (?, ?, ?, ?)",
-                (thread_id, None, now, now),
+                _SQL.INSERT_THREAD,
+                {"id": thread_id, "title": None, "created_at": now, "updated_at": now},
             )
+            await db.execute(_SQL.TOUCH_THREAD, {"id": thread_id, "updated_at": now})
             await db.execute(
-                "UPDATE threads SET updated_at = ? WHERE id = ?",
-                (now, thread_id),
-            )
-            await db.execute(
-                "INSERT INTO messages (thread_id, role, content, created_at) VALUES (?, ?, ?, ?)",
-                (thread_id, role, content_str, now),
+                _SQL.INSERT_MESSAGE,
+                {"thread_id": thread_id, "role": role, "content": content_str, "created_at": now},
             )
             await db.commit()
 
-            # Auto-generate title from first user message
             if role == "user" and isinstance(content, str):
-                cursor = await db.execute("SELECT title FROM threads WHERE id = ?", (thread_id,))
-                row = await cursor.fetchone()
+                async with db.execute(_SQL.GET_THREAD_TITLE, {"id": thread_id}) as cursor:
+                    row = await cursor.fetchone()
                 if row and row["title"] is None:
                     title = content[:50].strip()
                     if len(content) > 50:
                         title += "..."
-                    await db.execute(
-                        "UPDATE threads SET title = ? WHERE id = ?",
-                        (title, thread_id),
-                    )
+                    await db.execute(_SQL.SET_THREAD_TITLE, {"id": thread_id, "title": title})
                     await db.commit()
 
     async def load_messages(
         self, thread_id: str, limit: int = 50, before_id: int | None = None
     ) -> list[dict[str, Any]]:
-        """Load messages for a thread with optional pagination."""
         async with self._get_db() as db:
             if before_id:
-                cursor = await db.execute(
-                    """SELECT id, role, content FROM messages 
-                       WHERE thread_id = ? AND id < ? 
-                       ORDER BY id DESC LIMIT ?""",
-                    (thread_id, before_id, limit),
-                )
+                async with db.execute(
+                    _SQL.LOAD_MESSAGES_BEFORE,
+                    {"thread_id": thread_id, "before_id": before_id, "limit": limit},
+                ) as cursor:
+                    rows = await cursor.fetchall()
             else:
-                cursor = await db.execute(
-                    """SELECT id, role, content FROM messages 
-                       WHERE thread_id = ? 
-                       ORDER BY id DESC LIMIT ?""",
-                    (thread_id, limit),
-                )
-            rows = await cursor.fetchall()
+                async with db.execute(
+                    _SQL.LOAD_MESSAGES, {"thread_id": thread_id, "limit": limit}
+                ) as cursor:
+                    rows = await cursor.fetchall()
 
         messages = []
         for row in reversed(rows):
             content = row["content"]
-            try:
+            with contextlib.suppress(json.JSONDecodeError):
                 content = json.loads(content)
-            except json.JSONDecodeError:
-                pass
             messages.append({"id": row["id"], "role": row["role"], "content": content})
         return messages
 
     async def list_threads(self, limit: int = 50) -> list[dict[str, Any]]:
-        """List threads ordered by most recently updated."""
         async with self._get_db() as db:
-            cursor = await db.execute(
-                """SELECT t.id, t.title, t.created_at, t.updated_at, 
-                          COUNT(m.id) as message_count
-                   FROM threads t
-                   LEFT JOIN messages m ON t.id = m.thread_id
-                   GROUP BY t.id
-                   ORDER BY t.updated_at DESC
-                   LIMIT ?""",
-                (limit,),
-            )
+            cursor = await db.execute(_SQL.LIST_THREADS, {"limit": limit})
             rows = await cursor.fetchall()
         return [dict(row) for row in rows]
 
     async def get_thread(self, thread_id: str) -> dict[str, Any] | None:
-        """Get thread metadata."""
         async with self._get_db() as db:
-            cursor = await db.execute(
-                """SELECT t.id, t.title, t.created_at, t.updated_at,
-                          COUNT(m.id) as message_count
-                   FROM threads t
-                   LEFT JOIN messages m ON t.id = m.thread_id
-                   WHERE t.id = ?
-                   GROUP BY t.id""",
-                (thread_id,),
-            )
+            cursor = await db.execute(_SQL.GET_THREAD, {"id": thread_id})
             row = await cursor.fetchone()
         return dict(row) if row else None
 
     async def delete_thread(self, thread_id: str) -> bool:
-        """Delete a thread and its messages."""
         async with self._get_db() as db:
-            await db.execute("DELETE FROM messages WHERE thread_id = ?", (thread_id,))
-            cursor = await db.execute("DELETE FROM threads WHERE id = ?", (thread_id,))
+            await db.execute(_SQL.DELETE_THREAD_MESSAGES, {"thread_id": thread_id})
+            async with db.execute(_SQL.DELETE_THREAD, {"id": thread_id}) as cursor:
+                rowcount = cursor.rowcount
             await db.commit()
-            return cursor.rowcount > 0
+            return rowcount > 0
 
     async def delete_all_threads(self) -> int:
-        """Delete all threads and messages."""
         async with self._get_db() as db:
-            await db.execute("DELETE FROM messages")
-            cursor = await db.execute("DELETE FROM threads")
+            await db.execute(_SQL.DELETE_ALL_MESSAGES)
+            async with db.execute(_SQL.DELETE_ALL_THREADS) as cursor:
+                rowcount = cursor.rowcount
             await db.commit()
-            return cursor.rowcount
+            return rowcount
 
     async def clear_old_threads(self, keep_count: int = 100) -> int:
-        """Delete oldest threads, keeping only the most recent ones."""
         async with self._get_db() as db:
-            cursor = await db.execute(
-                "SELECT id FROM threads ORDER BY updated_at DESC LIMIT ?",
-                (keep_count,),
-            )
-            keep_ids = {row["id"] for row in await cursor.fetchall()}
-
-            if not keep_ids:
-                return 0
-
-            placeholders = ",".join("?" * len(keep_ids))
-            await db.execute(
-                f"DELETE FROM messages WHERE thread_id NOT IN ({placeholders})",
-                tuple(keep_ids),
-            )
-            cursor = await db.execute(
-                f"DELETE FROM threads WHERE id NOT IN ({placeholders})",
-                tuple(keep_ids),
-            )
+            await db.execute(_SQL.CLEAR_OLD_MESSAGES, {"keep_count": keep_count})
+            async with db.execute(_SQL.CLEAR_OLD_THREADS, {"keep_count": keep_count}) as cursor:
+                rowcount = cursor.rowcount
             await db.commit()
-            return cursor.rowcount
+            return rowcount
+
+
+from uuid import uuid4  # noqa: E402

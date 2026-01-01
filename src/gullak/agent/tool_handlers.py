@@ -28,6 +28,7 @@ from gullak.ledger.models import BudgetEntry, PendingTransaction, PeriodicBudget
 from gullak.ledger.parser import LedgerParser
 from gullak.ledger.validator import LedgerValidator
 from gullak.ledger.writer import LedgerWriter
+from gullak.settings import settings
 
 logger = logging.getLogger(__name__)
 
@@ -434,7 +435,7 @@ def _edit_transaction(args: EditTransactionArgs) -> str:
         return json.dumps({"error": "No updates provided"})
 
     async def _do_update():
-        writer = LedgerWriter(_state.ledger_path, _state.validator)
+        writer = LedgerWriter(_state.ledger_path, _state.validator, settings.paisa_url)
         return await writer.update_transaction(txn_id, updates)
 
     try:
@@ -502,7 +503,7 @@ def _delete_transaction(args: DeleteTransactionArgs) -> str:
         return json.dumps({"error": f"Transaction {txn_id} not found"})
 
     async def _do_delete():
-        writer = LedgerWriter(_state.ledger_path, _state.validator)
+        writer = LedgerWriter(_state.ledger_path, _state.validator, settings.paisa_url)
         return await writer.delete_transaction(txn_id)
 
     try:

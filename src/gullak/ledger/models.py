@@ -43,27 +43,22 @@ class Transaction(BaseModel):
     gullak_id: str = Field(default_factory=lambda: uuid4().hex[:8])
 
     def to_ledger(self) -> str:
-        """Convert transaction to ledger format string."""
-        # Header line: date [status] payee
         status_char = f" {self.status.value}" if self.status.value else ""
         header = f"{self.date.isoformat().replace('-', '/')}{status_char} {self.payee}"
 
         lines = [header]
 
-        # Add gullak ID as comment
-        lines.append(f"    ; gullak:id {self.gullak_id}")
-
-        # Add optional note
         if self.note:
             lines.append(f"    ; {self.note}")
 
-        # Add tags as comments
         for key, value in self.tags.items():
             lines.append(f"    ; {key}: {value}")
 
-        # Add postings
-        for posting in self.postings:
-            lines.append(posting.to_ledger())
+        for i, posting in enumerate(self.postings):
+            posting_line = posting.to_ledger()
+            if i == 0:
+                posting_line += f"  ; gullak:id {self.gullak_id}"
+            lines.append(posting_line)
 
         return "\n".join(lines)
 
@@ -155,16 +150,26 @@ class PeriodicBudget(BaseModel):
 
     period: str = "Monthly"
     start_date: date = Field(default_factory=date.today)
+    end_date: date | None = None
     entries: list[BudgetEntry] = Field(default_factory=list)
     funding_account: str = "Assets:Checking"
 
     def to_ledger(self) -> str:
-        start = self.start_date.isoformat().replace("-", "/")
-        lines = [f"~ {self.period} in {start}"]
+        start = self.start_date.isoformat()
+        if self.end_date:
+            end = self.end_date.isoformat()
+        else:
+            year = self.start_date.year
+            month = self.start_date.month + 2
+            if month > 12:
+                month -= 12
+                year += 1
+            end = date(year, month, 1).isoformat()
+
+        lines = [f"~ {self.period} from {start} to {end}"]
 
         for entry in self.entries:
-            amount_str = f"{entry.amount:.2f}"
-            lines.append(f"    {entry.account}  {amount_str} {entry.currency}")
+            lines.append(f"    {entry.account}  {entry.amount:.0f} {entry.currency}")
 
         lines.append(f"    {self.funding_account}")
         return "\n".join(lines)

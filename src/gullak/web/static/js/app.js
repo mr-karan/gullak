@@ -1,10 +1,5 @@
-/**
- * Gullak - Alpine.js Application
- */
-
 function gullakApp() {
     return {
-        // View state
         view: 'chat',
         theme: localStorage.getItem('theme') || 'gullak',
 
@@ -59,31 +54,50 @@ function gullakApp() {
         ledgerExists: true,
         ledgerSearch: '',
 
-        // Initialize
         async init() {
-            // Apply theme
             document.documentElement.setAttribute('data-theme', this.theme);
 
-            // Check setup status first
             await this.checkSetupStatus();
 
-            // Only focus chat input if setup is complete
             if (this.setupComplete) {
+                this.handleRoute();
+                window.addEventListener('hashchange', () => this.handleRoute());
+
                 this.$nextTick(() => {
                     if (this.$refs.chatInput) {
                         this.$refs.chatInput.focus();
                     }
                 });
 
-                // Load any pending transactions
                 this.loadPending();
                 
-                // Load threads
                 await this.loadThreads();
                 if (this.threads.length > 0) {
                     this.switchThread(this.threads[0].id);
                 }
             }
+        },
+
+        handleRoute() {
+            const hash = window.location.hash.slice(1) || 'chat';
+            const validViews = ['chat', 'transactions', 'ledger', 'settings'];
+            
+            if (validViews.includes(hash)) {
+                this.view = hash === 'settings' ? 'setup' : hash;
+                
+                if (hash === 'transactions') {
+                    this.loadTransactions();
+                    this.loadTransactionStats();
+                } else if (hash === 'ledger') {
+                    this.loadLedgerFile();
+                } else if (hash === 'settings') {
+                    this.loadSetupOptions();
+                }
+            }
+        },
+
+        navigate(viewName) {
+            window.location.hash = viewName;
         },
 
         // Check if setup has been completed
@@ -310,10 +324,9 @@ function gullakApp() {
             this.completeSetup();
         },
 
-        // Complete setup and switch to chat view
         completeSetup() {
             this.setupComplete = true;
-            this.view = 'chat';
+            window.location.hash = 'chat';
 
             this.$nextTick(() => {
                 if (this.$refs.chatInput) {
@@ -463,8 +476,8 @@ function gullakApp() {
 
         // Handle SSE event
         handleEvent(event) {
-            if (event.thread_id && !this.currentThreadId) {
-                this.currentThreadId = event.thread_id;
+            if (event.data?.thread_id && !this.currentThreadId) {
+                this.currentThreadId = event.data.thread_id;
             }
 
             switch (event.type) {

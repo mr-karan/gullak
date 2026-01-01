@@ -1,23 +1,46 @@
-"""Writer for ledger-cli format files."""
-
+import logging
 import re
 from decimal import Decimal
 from pathlib import Path
 
+import httpx
+
 from .models import Posting, Transaction
 from .validator import LedgerValidator
 
+logger = logging.getLogger(__name__)
+
 
 class LedgerWriter:
-    """Write transactions to ledger files."""
-
     def __init__(
         self,
         ledger_path: Path,
         validator: LedgerValidator | None = None,
+        paisa_url: str | None = None,
     ):
         self.path = ledger_path
         self.validator = validator or LedgerValidator()
+        self.paisa_url = paisa_url
+
+    async def _sync_paisa(self) -> None:
+        if not self.paisa_url:
+            logger.debug("Paisa sync skipped - no paisa_url configured")
+            return
+        try:
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                response = await client.post(
+                    f"{self.paisa_url}/api/sync",
+                    json={"journal": True, "prices": False, "portfolios": False},
+                )
+                result = response.json()
+                if response.status_code == 200 and result.get("success"):
+                    logger.info(f"Paisa sync successful: {result}")
+                else:
+                    logger.warning(
+                        f"Paisa sync failed: status={response.status_code} response={result}"
+                    )
+        except httpx.RequestError as e:
+            logger.warning(f"Could not sync with Paisa (not running?): {e}")
 
     async def append_transaction(self, txn: Transaction, validate: bool = True) -> bool:
         """
@@ -51,8 +74,8 @@ class LedgerWriter:
             if not is_valid:
                 raise ValueError(f"Transaction would create invalid ledger: {error}")
 
-        # Append to file
         self._append_to_file(ledger_text)
+        await self._sync_paisa()
         return True
 
     async def append_transactions(
@@ -82,6 +105,7 @@ class LedgerWriter:
                 raise ValueError(f"Transactions would create invalid ledger: {error}")
 
         self._append_to_file(ledger_text)
+        await self._sync_paisa()
         return len(transactions)
 
     def _read_file(self) -> str:
@@ -141,9 +165,9 @@ class LedgerWriter:
             new_lines.append(line)
 
         if found:
-            # Clean up multiple consecutive empty lines
             cleaned = self._clean_empty_lines("\n".join(new_lines))
             self.path.write_text(cleaned)
+            await self._sync_paisa()
 
         return found
 
@@ -237,8 +261,8 @@ class LedgerWriter:
         if not is_valid:
             raise ValueError(f"Update would create invalid ledger: {error}")
 
-        # Write updated content
         self.path.write_text(new_content)
+        await self._sync_paisa()
         return updated_txn
 
     def _rebuild_ledger_content(

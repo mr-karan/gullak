@@ -1,8 +1,3 @@
-"""Tests for Chat Threads API endpoints."""
-
-import pytest
-
-
 class TestThreadsAPI:
     """Test /api/threads endpoints."""
 

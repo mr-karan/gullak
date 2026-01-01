@@ -1,9 +1,5 @@
-"""Tests for ledger module."""
-
 from datetime import date
 from decimal import Decimal
-
-import pytest
 
 from gullak.ledger.models import Posting, Transaction, TransactionStatus
 from gullak.ledger.parser import LedgerParser
