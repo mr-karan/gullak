@@ -15,6 +15,7 @@ dependencies = [
     "aiofiles>=24.1.0",
     "python-multipart>=0.0.12",
     "structlog>=24.0.0",
+    "aiosqlite>=0.20.0",
 ]
 
 [project.optional-dependencies]

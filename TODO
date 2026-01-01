@@ -13,9 +13,11 @@
 - [x] Toast should be shadcn component
 - [x] Error message in Frontend
 - [x] Detect 0 data, and show appropriate errors
-- [x] Rename to Gullak
-- [x] README/Docs
-- [ ] Blog
+ - [x] Rename to Gullak
+ - [x] README/Docs
+ - [x] Create comprehensive API documentation file at docs/API.md
+ - [ ] Blog
+
 - [x] Self Host
 - [ ] Demo
 - [x] Apple Shortcuts

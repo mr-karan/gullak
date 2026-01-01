@@ -13,7 +13,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from gullak.agent import GullakAgent
-from gullak.api import chat_router, ledger_router, setup_router
+from gullak.api import chat_router, ledger_router, setup_router, threads_router
 from gullak.ledger.parser import LedgerParser
 from gullak.ledger.validator import LedgerValidator
 from gullak.logging import configure_logging, get_logger
@@ -102,6 +102,7 @@ templates = Jinja2Templates(directory=templates_path)
 app.include_router(chat_router, prefix="/api")
 app.include_router(ledger_router, prefix="/api")
 app.include_router(setup_router, prefix="/api")
+app.include_router(threads_router, prefix="/api")
 
 
 @app.middleware("http")

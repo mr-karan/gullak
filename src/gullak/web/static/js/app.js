@@ -23,6 +23,10 @@ function gullakApp() {
 
         // Chat state
         messages: [],
+        threads: [],
+        currentThreadId: null,
+        threadsLoading: false,
+        showThreads: true,
         input: '',
         streaming: false,
         streamingText: '',
@@ -67,6 +71,12 @@ function gullakApp() {
 
                 // Load any pending transactions
                 this.loadPending();
+                
+                // Load threads
+                await this.loadThreads();
+                if (this.threads.length > 0) {
+                    this.switchThread(this.threads[0].id);
+                }
             }
         },
 
@@ -108,6 +118,94 @@ function gullakApp() {
             } catch (error) {
                 console.error('Failed to load setup options:', error);
             }
+        },
+
+        // --- Thread Management ---
+
+        async loadThreads() {
+            this.threadsLoading = true;
+            try {
+                const response = await fetch('/api/threads');
+                if (response.ok) {
+                    this.threads = await response.json();
+                }
+            } catch (error) {
+                console.error('Failed to load threads:', error);
+            } finally {
+                this.threadsLoading = false;
+            }
+        },
+
+        async createThread() {
+            try {
+                const response = await fetch('/api/threads', { method: 'POST' });
+                if (response.ok) {
+                    const thread = await response.json();
+                    this.threads.unshift(thread);
+                    await this.switchThread(thread.id);
+                }
+            } catch (error) {
+                console.error('Failed to create thread:', error);
+                this.notify('error', 'Failed to create new chat');
+            }
+        },
+
+        async switchThread(threadId) {
+            if (this.currentThreadId === threadId) return;
+            
+            this.currentThreadId = threadId;
+            this.messages = [];
+            this.pendingTransactions = [];
+            
+            if (!threadId) return; // New Chat mode
+
+            try {
+                const response = await fetch(`/api/threads/${threadId}/messages`);
+                if (response.ok) {
+                    this.messages = await response.json();
+                    this.scrollToBottom();
+                }
+            } catch (error) {
+                console.error('Failed to load messages:', error);
+                this.notify('error', 'Failed to load messages');
+            }
+        },
+
+        async deleteThread(threadId) {
+            if (!confirm('Delete this conversation?')) return;
+            
+            try {
+                const response = await fetch(`/api/threads/${threadId}`, { method: 'DELETE' });
+                if (response.ok) {
+                    this.threads = this.threads.filter(t => t.id !== threadId);
+                    if (this.currentThreadId === threadId) {
+                        const next = this.threads[0];
+                        await this.switchThread(next ? next.id : null);
+                    }
+                    this.notify('success', 'Conversation deleted');
+                }
+            } catch (error) {
+                console.error('Failed to delete thread:', error);
+                this.notify('error', 'Failed to delete conversation');
+            }
+        },
+
+        getRelativeTime(dateStr) {
+            if (!dateStr) return '';
+            const date = new Date(dateStr);
+            const now = new Date();
+            const diffMs = now - date;
+            const diffSec = Math.floor(diffMs / 1000);
+            const diffMin = Math.floor(diffSec / 60);
+            const diffHr = Math.floor(diffMin / 60);
+            const diffDay = Math.floor(diffHr / 24);
+
+            if (diffDay > 7) return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+            if (diffDay > 1) return `${diffDay}d ago`;
+            if (diffDay === 1) return 'Yesterday';
+            if (diffHr > 0) return `${diffHr}h ago`;
+            if (diffMin > 0) return `${diffMin}m ago`;
+            return 'Just now';
         },
 
         // Handle setup step submission
@@ -304,7 +402,10 @@ function gullakApp() {
                 const response = await fetch('/api/chat', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ message: userMessage })
+                    body: JSON.stringify({ 
+                        message: userMessage,
+                        thread_id: this.currentThreadId
+                    })
                 });
 
                 const reader = response.body.getReader();
@@ -354,6 +455,10 @@ function gullakApp() {
 
         // Handle SSE event
         handleEvent(event) {
+            if (event.thread_id && !this.currentThreadId) {
+                this.currentThreadId = event.thread_id;
+            }
+
             switch (event.type) {
                 case 'text':
                     this.streamingText += event.content;
@@ -376,7 +481,7 @@ function gullakApp() {
                     break;
 
                 case 'done':
-                    // Processing complete
+                    this.loadThreads();
                     break;
 
                 case 'error':

@@ -47,14 +47,12 @@ class GullakAgent:
     timezone: str = "Asia/Kolkata"
     ledger_cli: str = "ledger"
     model: str = field(default_factory=lambda: settings.anthropic_model)
-    conversation_id: str = field(default_factory=lambda: uuid4().hex[:12])
 
     _parser: LedgerParser = field(default_factory=LedgerParser, init=False)
     _writer: LedgerWriter | None = field(default=None, init=False)
     _validator: LedgerValidator | None = field(default=None, init=False)
     _client: AsyncAnthropic | None = field(default=None, init=False)
     _system_prompt: str = field(default="", init=False)
-    _conversation_history: list[dict[str, Any]] = field(default_factory=list, init=False)
     _chat_history: ChatHistory | None = field(default=None, init=False)
 
     def __post_init__(self) -> None:
@@ -62,7 +60,6 @@ class GullakAgent:
         self._validator = LedgerValidator(cli_path=self.ledger_cli)
         self._writer = LedgerWriter(self.ledger_path, self._validator)
 
-        # Configure tools with state
         configure_tools(
             ledger_path=self.ledger_path,
             default_currency=self.default_currency,
@@ -70,12 +67,10 @@ class GullakAgent:
             validator=self._validator,
         )
 
-        # Get existing accounts for system prompt
         accounts = []
         if self.ledger_path.exists():
             accounts = list(self._parser.extract_accounts(self.ledger_path))
 
-        # Build system prompt
         self._system_prompt = get_system_prompt(
             accounts=accounts,
             default_currency=self.default_currency,
@@ -88,17 +83,15 @@ class GullakAgent:
         db_path = self.ledger_path.parent / "chat_history.db"
         self._chat_history = ChatHistory(db_path)
 
-        if self.conversation_id:
-            existing = self._chat_history.load_conversation(self.conversation_id)
-            if existing:
-                self._conversation_history = existing
-
-    async def process_message(self, user_message: str) -> AsyncIterator[AgentEvent]:
+    async def process_message(
+        self, user_message: str, thread_id: str | None = None
+    ) -> AsyncIterator[AgentEvent]:
         """
         Process a user message and yield events.
 
         Args:
             user_message: The user's input text
+            thread_id: Optional thread ID for conversation continuity
 
         Yields:
             AgentEvent objects for streaming to frontend
@@ -106,18 +99,28 @@ class GullakAgent:
         if self._client is None:
             yield AgentEvent(
                 type="error",
-                content="API key not configured. Please set ANTHROPIC_API_KEY in your .env file.",
+                content="API key not configured. Please set ANTHROPIC_API_KEY.",
             )
             return
 
-        self._conversation_history.append({"role": "user", "content": user_message})
+        # Generate thread_id if not provided
+        if thread_id is None:
+            thread_id = uuid4().hex[:12]
+
+        # Load conversation history for this thread
+        conversation_history: list[dict[str, Any]] = []
         if self._chat_history:
-            self._chat_history.save_message(self.conversation_id, "user", user_message)
+            messages = await self._chat_history.load_messages(thread_id, limit=20)
+            conversation_history = [{"role": m["role"], "content": m["content"]} for m in messages]
+
+        # Add user message
+        conversation_history.append({"role": "user", "content": user_message})
+        if self._chat_history:
+            await self._chat_history.save_message(thread_id, "user", user_message)
 
         try:
             # Agentic loop - keep processing until no more tool calls
             while True:
-                # Stream response from Claude
                 accumulated_text = ""
                 tool_uses = []
 
@@ -125,7 +128,7 @@ class GullakAgent:
                     model=self.model,
                     max_tokens=4096,
                     system=self._system_prompt,
-                    messages=self._conversation_history,
+                    messages=conversation_history,
                     tools=TOOLS,
                 ) as stream:
                     async for event in stream:
@@ -151,10 +154,8 @@ class GullakAgent:
                                 content=event.delta.text,
                             )
 
-                # Get the full response
                 response = await stream.get_final_message()
 
-                # Convert content to serializable format for history
                 content_for_history = []
                 for block in response.content:
                     if block.type == "text":
@@ -170,28 +171,22 @@ class GullakAgent:
                         )
                         tool_uses.append(block)
 
-                self._conversation_history.append(
-                    {"role": "assistant", "content": content_for_history}
-                )
+                conversation_history.append({"role": "assistant", "content": content_for_history})
                 if self._chat_history:
-                    self._chat_history.save_message(
-                        self.conversation_id, "assistant", content_for_history
+                    await self._chat_history.save_message(
+                        thread_id, "assistant", content_for_history
                     )
 
-                # Check if there are tool calls to process
                 if response.stop_reason == "tool_use" and tool_uses:
-                    # Execute tools and add results
                     tool_results = []
 
                     for tool_use in tool_uses:
-                        # Execute the tool
                         result = self._execute_tool_sync(tool_use.name, tool_use.input)
 
                         tool_results.append(
                             {"type": "tool_result", "tool_use_id": tool_use.id, "content": result}
                         )
 
-                        # Parse result for preview events
                         try:
                             result_data = json.loads(result)
                             if (
@@ -218,16 +213,18 @@ class GullakAgent:
                                 data={"text": result},
                             )
 
-                    self._conversation_history.append({"role": "user", "content": tool_results})
+                    conversation_history.append({"role": "user", "content": tool_results})
                     if self._chat_history:
-                        self._chat_history.save_message(self.conversation_id, "user", tool_results)
+                        await self._chat_history.save_message(thread_id, "user", tool_results)
 
                     continue
 
-                # No more tool calls, we're done
                 break
 
-            yield AgentEvent(type="done", data={"message_count": len(self._conversation_history)})
+            yield AgentEvent(
+                type="done",
+                data={"message_count": len(conversation_history), "thread_id": thread_id},
+            )
 
         except Exception as e:
             yield AgentEvent(type="error", content=str(e))
@@ -255,7 +252,6 @@ class GullakAgent:
             await self._writer.append_transaction(pending.transaction)
             return True, f"Transaction saved: {pending.transaction.payee}"
         except Exception as e:
-            # Put transaction back if write failed
             get_pending_transactions()[txn_id] = pending
             return False, f"Failed to write transaction: {e}"
 
@@ -289,7 +285,6 @@ class GullakAgent:
             for p in get_pending_transactions().values()
         ]
 
-    def clear_history(self) -> None:
-        """Clear conversation history and start new conversation."""
-        self._conversation_history = []
-        self.conversation_id = uuid4().hex[:12]
+    def get_chat_history(self) -> ChatHistory | None:
+        """Get the chat history instance for thread management."""
+        return self._chat_history

@@ -16,7 +16,7 @@ class ChatMessage(BaseModel):
     """Chat message request."""
 
     message: str
-    conversation_id: str | None = None
+    thread_id: str | None = None
 
 
 class ConfirmRequest(BaseModel):
@@ -55,14 +55,14 @@ async def chat(request: Request, body: ChatMessage):
     - preview: A pending transaction preview
     - thinking: Agent is using a tool
     - tool_result: Result from a tool
-    - done: Processing complete
+    - done: Processing complete (includes thread_id)
     - error: An error occurred
     """
     agent = request.app.state.agent
 
     async def event_generator():
         try:
-            async for event in agent.process_message(body.message):
+            async for event in agent.process_message(body.message, thread_id=body.thread_id):
                 yield {
                     "event": event.type,
                     "data": json.dumps(
@@ -122,11 +122,9 @@ async def upload_file(request: Request, file: UploadFile) -> dict:
     if not file.filename:
         return {"success": False, "error": "No file provided"}
 
-    # Check file extension
     if not file.filename.lower().endswith((".csv", ".xlsx", ".xls")):
         return {"success": False, "error": "Only CSV and Excel files are supported"}
 
-    # Save to temp file
     try:
         suffix = Path(file.filename).suffix
         with tempfile.NamedTemporaryFile(mode="wb", suffix=suffix, delete=False) as tmp:
@@ -204,7 +202,6 @@ async def update_pending(request: Request, body: UpdatePendingRequest) -> dict:
     txn = pending.transaction
     updates = body.updates
 
-    # Apply updates
     if "payee" in updates:
         txn.payee = updates["payee"]
     if "date" in updates:
@@ -215,7 +212,6 @@ async def update_pending(request: Request, body: UpdatePendingRequest) -> dict:
     if "note" in updates:
         txn.note = updates["note"]
 
-    # Handle amount/account updates
     if any(k in updates for k in ["amount", "expense_account", "payment_account", "currency"]):
         old_postings = txn.postings
         if len(old_postings) >= 2:
@@ -232,10 +228,8 @@ async def update_pending(request: Request, body: UpdatePendingRequest) -> dict:
                 Posting(account=new_payment, amount=-new_amount, currency=new_currency),
             ]
 
-    # Update ledger preview
     pending.ledger_preview = txn.to_ledger()
 
-    # Save to disk
     _save_pending()
 
     return {
