@@ -26,8 +26,8 @@ class Posting(BaseModel):
 
     def to_ledger(self) -> str:
         """Convert posting to ledger format."""
-        # Format amount with 2 decimal places
-        amount_str = f"{self.amount:,.2f}".replace(",", "_")
+        # Format amount with 2 decimal places (no thousand separators - ledger doesn't support them)
+        amount_str = f"{self.amount:.2f}"
         return f"    {self.account}  {amount_str} {self.currency}"
 
 
@@ -162,7 +162,7 @@ class PeriodicBudget(BaseModel):
         lines = [f"~ {self.period} in {start}"]
 
         for entry in self.entries:
-            amount_str = f"{entry.amount:,.2f}".replace(",", "_")
+            amount_str = f"{entry.amount:.2f}"
             lines.append(f"    {entry.account}  {amount_str} {entry.currency}")
 
         lines.append(f"    {self.funding_account}")
