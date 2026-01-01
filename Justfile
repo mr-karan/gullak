@@ -58,13 +58,13 @@ check: fmt lint typecheck test
 docker-build:
     GULLAK_UID=$(id -u) GULLAK_GID=$(id -g) docker compose build
 
-# Start all services (gullak + paisa)
+# Start all services (gullak + paisa) with logs
 docker-up:
-    GULLAK_UID=$(id -u) GULLAK_GID=$(id -g) docker compose up -d
-
-# Start with logs
-docker-up-logs:
     GULLAK_UID=$(id -u) GULLAK_GID=$(id -g) docker compose up
+
+# Start in background (detached)
+docker-up-detached:
+    GULLAK_UID=$(id -u) GULLAK_GID=$(id -g) docker compose up -d
 
 # Stop all services
 docker-down:
