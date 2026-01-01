@@ -2,243 +2,108 @@
 <html lang="en" data-theme="gullak">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>{% block title %}Gullak{% endblock %}</title>
 
-    <!-- Fonts - Distinctive choices -->
+    <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=DM+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,400;9..144,500;9..144,600&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 
     <!-- Alpine.js -->
-    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.13.3/dist/cdn.min.js"></script>
 
     <!-- Tailwind CSS v4 + DaisyUI v5 -->
-    <link href="https://cdn.jsdelivr.net/npm/daisyui@5" rel="stylesheet" type="text/css" />
-    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
-    <style type="text/tailwindcss">
-        @theme {
-            --font-sans: 'DM Sans', system-ui, sans-serif;
-            --font-serif: 'Fraunces', Georgia, serif;
-            --font-mono: 'IBM Plex Mono', monospace;
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@4.6.0/dist/full.min.css" rel="stylesheet" type="text/css" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                        serif: ['Fraunces', 'Georgia', 'serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    },
+                    colors: {
+                        border: "var(--border)",
+                        input: "var(--input)",
+                        ring: "var(--ring)",
+                        background: "var(--background)",
+                        foreground: "var(--foreground)",
+                    }
+                }
+            },
+            daisyui: {
+                themes: [
+                    {
+                        gullak: {
+                            "primary": "#4F46E5", // Indigo 600
+                            "primary-content": "#ffffff",
+                            "secondary": "#E0E7FF", // Indigo 100
+                            "secondary-content": "#3730a3", // Indigo 900
+                            "accent": "#F59E0B", // Amber 500
+                            "accent-content": "#ffffff",
+                            "neutral": "#1F2937", // Gray 800
+                            "neutral-content": "#ffffff",
+                            "base-100": "#FFFFFF",
+                            "base-200": "#F9FAFB", // Gray 50
+                            "base-300": "#F3F4F6", // Gray 100
+                            "base-content": "#111827", // Gray 900
+                            "info": "#3B82F6",
+                            "success": "#10B981",
+                            "warning": "#FBBF24",
+                            "error": "#EF4444",
+                            
+                            "--rounded-box": "0.75rem",
+                            "--rounded-btn": "0.5rem",
+                            "--rounded-badge": "9999px",
+                            "--animation-btn": "0.2s",
+                            "--animation-input": "0.2s",
+                            "--btn-focus-scale": "0.98",
+                            "--border-btn": "1px",
+                            "--tab-border": "1px",
+                            "--tab-radius": "0.5rem",
+                        },
+                        "gullak-dark": {
+                            "primary": "#6366F1", // Indigo 500
+                            "primary-content": "#ffffff",
+                            "secondary": "#312E81", // Indigo 900
+                            "secondary-content": "#E0E7FF", // Indigo 100
+                            "accent": "#FBBF24", // Amber 400
+                            "accent-content": "#1F2937",
+                            "neutral": "#9CA3AF", // Gray 400
+                            "neutral-content": "#1F2937",
+                            "base-100": "#09090b", // Zinc 950
+                            "base-200": "#18181b", // Zinc 900
+                            "base-300": "#27272a", // Zinc 800
+                            "base-content": "#FAFAFA", // Zinc 50
+                            "info": "#60A5FA",
+                            "success": "#34D399",
+                            "warning": "#FCD34D",
+                            "error": "#F87171",
+
+                            "--rounded-box": "0.75rem",
+                            "--rounded-btn": "0.5rem",
+                            "--rounded-badge": "9999px",
+                            "--animation-btn": "0.2s",
+                            "--animation-input": "0.2s",
+                            "--btn-focus-scale": "0.98",
+                            "--border-btn": "1px",
+                            "--tab-border": "1px",
+                            "--tab-radius": "0.5rem",
+                        }
+                    }
+                ]
+            }
         }
-    </style>
+    </script>
 
-    <!-- Custom Gullak Theme -->
-    <style>
-        /* Light theme - warm, refined */
-        [data-theme="gullak"] {
-            --color-base-100: oklch(98.5% 0.008 75);
-            --color-base-200: oklch(96% 0.010 75);
-            --color-base-300: oklch(93% 0.012 75);
-            --color-base-content: oklch(22% 0.015 60);
-
-            --color-primary: oklch(45% 0.12 55);
-            --color-primary-content: oklch(98% 0.005 75);
-
-            --color-secondary: oklch(72% 0.14 80);
-            --color-secondary-content: oklch(22% 0.015 60);
-
-            --color-accent: oklch(50% 0.12 160);
-            --color-accent-content: oklch(98% 0.005 75);
-
-            --color-neutral: oklch(35% 0.02 60);
-            --color-neutral-content: oklch(95% 0.005 75);
-
-            --color-info: oklch(65% 0.15 240);
-            --color-success: oklch(60% 0.16 155);
-            --color-warning: oklch(78% 0.16 75);
-            --color-error: oklch(58% 0.20 25);
-
-            --radius-selector: 0.75rem;
-            --radius-field: 0.625rem;
-            --radius-box: 1rem;
-
-            color-scheme: light;
-        }
-
-        /* Dark theme - rich, cozy */
-        [data-theme="gullak-dark"] {
-            --color-base-100: oklch(16% 0.015 60);
-            --color-base-200: oklch(20% 0.015 60);
-            --color-base-300: oklch(24% 0.015 60);
-            --color-base-content: oklch(92% 0.010 75);
-
-            --color-primary: oklch(72% 0.14 80);
-            --color-primary-content: oklch(18% 0.015 60);
-
-            --color-secondary: oklch(85% 0.06 75);
-            --color-secondary-content: oklch(18% 0.015 60);
-
-            --color-accent: oklch(65% 0.15 160);
-            --color-accent-content: oklch(18% 0.015 60);
-
-            --color-neutral: oklch(28% 0.015 60);
-            --color-neutral-content: oklch(92% 0.010 75);
-
-            --color-info: oklch(70% 0.12 240);
-            --color-success: oklch(65% 0.14 155);
-            --color-warning: oklch(80% 0.14 75);
-            --color-error: oklch(65% 0.18 25);
-
-            --radius-selector: 0.75rem;
-            --radius-field: 0.625rem;
-            --radius-box: 1rem;
-
-            color-scheme: dark;
-        }
-
-        /* Base styles */
-        * {
-            -webkit-font-smoothing: antialiased;
-            -moz-osx-font-smoothing: grayscale;
-        }
-
-        body {
-            font-family: 'DM Sans', system-ui, sans-serif;
-            letter-spacing: -0.01em;
-        }
-
-        /* Subtle grain texture overlay */
-        body::before {
-            content: '';
-            position: fixed;
-            inset: 0;
-            pointer-events: none;
-            opacity: 0.015;
-            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
-            z-index: 9999;
-        }
-
-        /* Typography utilities */
-        .font-display {
-            font-family: 'Fraunces', Georgia, serif;
-            font-optical-sizing: auto;
-        }
-
-        /* Ledger syntax highlighting */
-        .ledger-preview {
-            font-family: 'IBM Plex Mono', monospace;
-            font-size: 0.8125rem;
-            line-height: 1.7;
-        }
-        .ledger-date { color: var(--color-primary); font-weight: 500; }
-        .ledger-payee { color: var(--color-accent); font-weight: 500; }
-        .ledger-account { color: var(--color-secondary); }
-        .ledger-amount { color: var(--color-error); font-weight: 500; }
-        .ledger-comment { opacity: 0.5; font-style: italic; }
-
-        /* Elegant shadows */
-        .shadow-soft {
-            box-shadow: 
-                0 1px 2px rgba(0,0,0,0.04),
-                0 4px 8px rgba(0,0,0,0.04),
-                0 8px 16px rgba(0,0,0,0.02);
-        }
-        .shadow-soft-lg {
-            box-shadow: 
-                0 2px 4px rgba(0,0,0,0.04),
-                0 8px 16px rgba(0,0,0,0.06),
-                0 16px 32px rgba(0,0,0,0.04);
-        }
-
-        /* Animations */
-        @keyframes fade-up {
-            from { opacity: 0; transform: translateY(12px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-        @keyframes fade-in {
-            from { opacity: 0; }
-            to { opacity: 1; }
-        }
-        @keyframes scale-in {
-            from { opacity: 0; transform: scale(0.96); }
-            to { opacity: 1; transform: scale(1); }
-        }
-        .animate-fade-up {
-            animation: fade-up 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-        }
-        .animate-fade-in {
-            animation: fade-in 0.3s ease-out;
-        }
-        .animate-scale-in {
-            animation: scale-in 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-        }
-
-        /* Chat bubble animation */
-        .chat-bubble-animate {
-            animation: fade-up 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-        }
-
-        /* Refined scrollbar */
-        .custom-scrollbar::-webkit-scrollbar {
-            width: 5px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-track {
-            background: transparent;
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb {
-            background: var(--color-base-content);
-            opacity: 0.15;
-            border-radius: 4px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-            opacity: 0.25;
-        }
-
-        /* Hide scrollbar but keep functionality */
-        .hide-scrollbar {
-            -ms-overflow-style: none;
-            scrollbar-width: none;
-        }
-        .hide-scrollbar::-webkit-scrollbar {
-            display: none;
-        }
-
-        /* Smooth transitions */
-        .transition-base {
-            transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-        }
-
-        /* Focus states */
-        .focus-ring:focus-visible {
-            outline: none;
-            box-shadow: 0 0 0 2px var(--color-base-100), 0 0 0 4px var(--color-primary);
-        }
-
-        /* Hide until Alpine ready */
-        [x-cloak] {
-            display: none !important;
-        }
-
-        /* Staggered animation delays */
-        .stagger-1 { animation-delay: 0.05s; }
-        .stagger-2 { animation-delay: 0.1s; }
-        .stagger-3 { animation-delay: 0.15s; }
-        .stagger-4 { animation-delay: 0.2s; }
-
-        /* Glassmorphism panel */
-        .glass {
-            background: rgba(255, 255, 255, 0.7);
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
-        }
-        [data-theme="gullak-dark"] .glass {
-            background: rgba(30, 30, 30, 0.8);
-        }
-
-        /* Input styling */
-        input[type="text"],
-        input[type="date"],
-        input[type="number"],
-        select {
-            font-family: inherit;
-        }
-    </style>
-
+    <link href="/static/css/main.css" rel="stylesheet">
     {% block head %}{% endblock %}
 </head>
-<body class="min-h-screen bg-base-100 text-base-content antialiased">
+<body class="min-h-screen bg-base-100 text-base-content antialiased selection:bg-primary/20 selection:text-primary overflow-hidden">
     {% block content %}{% endblock %}
 
     <!-- App JavaScript -->

@@ -9,7 +9,7 @@ dependencies = [
     "uvicorn[standard]>=0.32.0",
     "pydantic>=2.10.0",
     "pydantic-settings>=2.6.0",
-    "anthropic>=0.40.0",
+    "litellm>=1.52.0",
     "sse-starlette>=2.1.0",
     "jinja2>=3.1.0",
     "aiofiles>=24.1.0",
@@ -44,8 +44,7 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
 
 [tool.ruff.lint.per-file-ignores]
 "src/gullak/agent/prompts.py" = ["E501"]
-"src/gullak/agent/tool_definitions.py" = ["E501"]
-"src/gullak/agent/tool_schemas.py" = ["E501"]
+"src/gullak/agent/tools.py" = ["E501"]
 
 [tool.mypy]
 python_version = "3.13"
@@ -54,3 +53,8 @@ strict = true
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.2",
+]

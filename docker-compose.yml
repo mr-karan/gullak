@@ -16,14 +16,13 @@ services:
       - "8000:8000"
     volumes:
       - ${PAISA_DATA_DIR:-./data}:/data
+    env_file:
+      - .env
     environment:
       - TZ=${TZ:-Asia/Kolkata}
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - GULLAK_DATA_DIR=/data
       - GULLAK_LEDGER_FILE=main.ledger
-      - GULLAK_DEFAULT_CURRENCY=${GULLAK_DEFAULT_CURRENCY:-INR}
       - GULLAK_TIMEZONE=${TZ:-Asia/Kolkata}
-      - GULLAK_DEBUG=${GULLAK_DEBUG:-false}
       - GULLAK_PAISA_URL=http://paisa:7500
     healthcheck:
       test: ["CMD", "sh", "-c", "curl -f http://localhost:8000/health && test -s /data/main.ledger"]

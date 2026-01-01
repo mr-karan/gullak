@@ -201,53 +201,15 @@ async def cancel_all_transactions(
 @router.post("/update-pending")
 async def update_pending(request: Request, body: UpdatePendingRequest) -> dict:
     """Update a pending transaction before confirmation."""
-    from datetime import date
-    from decimal import Decimal
+    agent = request.app.state.agent
 
-    from gullak.agent.tools import _save_pending, get_pending_transactions
-    from gullak.ledger.models import Posting
+    result = agent.update_pending(body.transaction_id, body.updates)
 
-    pending_txns = get_pending_transactions()
-
-    if body.transaction_id not in pending_txns:
+    if result is None:
         return {"success": False, "error": "Transaction not found"}
-
-    pending = pending_txns[body.transaction_id]
-    txn = pending.transaction
-    updates = body.updates
-
-    if "payee" in updates:
-        txn.payee = updates["payee"]
-    if "date" in updates:
-        if isinstance(updates["date"], str):
-            txn.date = date.fromisoformat(updates["date"])
-        else:
-            txn.date = updates["date"]
-    if "note" in updates:
-        txn.note = updates["note"]
-
-    if any(k in updates for k in ["amount", "expense_account", "payment_account", "currency"]):
-        old_postings = txn.postings
-        if len(old_postings) >= 2:
-            expense = old_postings[0]
-            payment = old_postings[1]
-
-            new_amount = Decimal(str(updates.get("amount", expense.amount)))
-            new_currency = updates.get("currency", expense.currency)
-            new_expense = updates.get("expense_account", expense.account)
-            new_payment = updates.get("payment_account", payment.account)
-
-            txn.postings = [
-                Posting(account=new_expense, amount=new_amount, currency=new_currency),
-                Posting(account=new_payment, amount=-new_amount, currency=new_currency),
-            ]
-
-    pending.ledger_preview = txn.to_ledger()
-
-    _save_pending()
 
     return {
         "success": True,
-        "preview": pending.ledger_preview,
+        "preview": result["preview"],
         "message": "Transaction updated",
     }
