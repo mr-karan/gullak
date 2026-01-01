@@ -503,6 +503,7 @@ function gullakApp() {
 
                 case 'done':
                     this.loadThreads();
+                    this.loadPending();
                     break;
 
                 case 'error':
