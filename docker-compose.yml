@@ -24,6 +24,7 @@ services:
       - GULLAK_DEFAULT_CURRENCY=${GULLAK_DEFAULT_CURRENCY:-INR}
       - GULLAK_TIMEZONE=${TZ:-Asia/Kolkata}
       - GULLAK_DEBUG=${GULLAK_DEBUG:-false}
+      - GULLAK_PAISA_URL=http://paisa:7500
     healthcheck:
       test: ["CMD", "sh", "-c", "curl -f http://localhost:8000/health && test -s /data/main.ledger"]
       interval: 5s
