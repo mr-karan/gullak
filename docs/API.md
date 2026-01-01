@@ -19,7 +19,7 @@ Process a chat message and stream the response using Server-Sent Events (SSE).
 ```json
 {
   "message": "Spent 500 INR on groceries today at BigBasket",
-  "conversation_id": "optional-session-id"
+  "thread_id": "optional-thread-id"
 }
 ```
 
@@ -29,7 +29,7 @@ A stream of Server-Sent Events with the following event types:
 - `preview`: A preview of a pending transaction.
 - `thinking`: Indicates the agent is using a tool.
 - `tool_result`: Result of a tool execution.
-- `done`: Processing of the message is complete.
+- `done`: Processing of the message is complete. Includes `thread_id` in the data.
 - `error`: An error occurred during processing.
 
 ### POST `/api/chat/confirm`
@@ -168,6 +168,116 @@ Update a pending transaction's details before confirmation.
   "success": true,
   "preview": "2024-05-21 New Payee\n    ; Updated note\n    Expenses:Food:Dining  600 INR\n    Assets:Cash",
   "message": "Transaction updated"
+}
+```
+
+---
+
+## Chat Threads API (`/api/threads`)
+
+Endpoints for managing conversation threads and history.
+
+### GET `/api/threads`
+List all threads ordered by most recently updated.
+
+**Query Parameters:**
+- `limit`: Maximum number of threads to return. Defaults to `50`.
+
+**Response:**
+```json
+[
+  {
+    "id": "thread_abc123",
+    "title": "Grocery Shopping",
+    "created_at": "2024-05-20T10:00:00Z",
+    "updated_at": "2024-05-20T10:05:00Z",
+    "message_count": 5
+  }
+]
+```
+
+### POST `/api/threads`
+Create a new chat thread.
+
+**Request Body:**
+```json
+{
+  "title": "Optional thread title"
+}
+```
+
+**Response:**
+```json
+{
+  "id": "thread_abc123",
+  "title": "Optional thread title",
+  "created_at": "2024-05-20T10:00:00Z",
+  "updated_at": "2024-05-20T10:00:00Z",
+  "message_count": 0
+}
+```
+
+### GET `/api/threads/{thread_id}`
+Get metadata for a specific thread.
+
+**Response:**
+```json
+{
+  "id": "thread_abc123",
+  "title": "Grocery Shopping",
+  "created_at": "2024-05-20T10:00:00Z",
+  "updated_at": "2024-05-20T10:05:00Z",
+  "message_count": 5
+}
+```
+
+### GET `/api/threads/{thread_id}/messages`
+Retrieve all messages in a thread with pagination.
+
+**Query Parameters:**
+- `limit`: Maximum number of messages to return. Defaults to `50`.
+- `before_id`: Optional message ID for pagination (returns messages before this ID).
+
+**Response:**
+```json
+{
+  "thread_id": "thread_abc123",
+  "messages": [
+    {
+      "id": 10,
+      "role": "user",
+      "content": "Spent 500 on groceries"
+    },
+    {
+      "id": 11,
+      "role": "assistant",
+      "content": "I've added a pending transaction for 500 INR at BigBasket."
+    }
+  ],
+  "count": 2
+}
+```
+
+### DELETE `/api/threads/{thread_id}`
+Delete a thread and all its associated messages.
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Thread deleted"
+}
+```
+
+### DELETE `/api/threads`
+Delete all chat threads and message history.
+
+**Response:**
+```json
+{
+  "success": true,
+  "deleted": 15,
+  "message": "Deleted 15 threads"
 }
 ```
 
