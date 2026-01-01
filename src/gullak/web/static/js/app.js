@@ -162,7 +162,8 @@ function gullakApp() {
             try {
                 const response = await fetch(`/api/threads/${threadId}/messages`);
                 if (response.ok) {
-                    this.messages = await response.json();
+                    const data = await response.json();
+                    this.messages = data.messages || [];
                     this.scrollToBottom();
                 }
             } catch (error) {
