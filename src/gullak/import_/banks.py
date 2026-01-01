@@ -1,5 +1,6 @@
 """Indian bank statement templates."""
 
+import contextlib
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from typing import Any
@@ -68,20 +69,16 @@ class HDFCSavingsTemplate(ImportTemplate):
                 if col.lower() in row_lower:
                     val = row_lower[col.lower()]
                     if val and val.strip():
-                        try:
+                        with contextlib.suppress(InvalidOperation):
                             debit = Decimal(val.replace(",", "").strip())
-                        except InvalidOperation:
-                            pass
                     break
 
             for col in self.credit_columns:
                 if col.lower() in row_lower:
                     val = row_lower[col.lower()]
                     if val and val.strip():
-                        try:
+                        with contextlib.suppress(InvalidOperation):
                             credit = Decimal(val.replace(",", "").strip())
-                        except InvalidOperation:
-                            pass
                     break
 
             if debit == 0 and credit == 0:
@@ -185,7 +182,7 @@ class ICICISavingsTemplate(ImportTemplate):
 
     def detect(self, headers: list[str]) -> bool:
         headers_lower = [h.lower().strip() for h in headers]
-        # ICICI often has: S No., Value Date, Transaction Date, Cheque Number, Transaction Remarks, etc.
+        # ICICI: S No., Value Date, Transaction Date, Cheque Number, etc.
         icici_specific = (
             "value date" in headers_lower
             or "transaction remarks" in headers_lower
@@ -235,16 +232,12 @@ class ICICISavingsTemplate(ImportTemplate):
             credit = Decimal("0")
 
             if withdrawal and withdrawal.strip():
-                try:
+                with contextlib.suppress(InvalidOperation):
                     debit = Decimal(withdrawal.replace(",", "").strip())
-                except InvalidOperation:
-                    pass
 
             if deposit and deposit.strip():
-                try:
+                with contextlib.suppress(InvalidOperation):
                     credit = Decimal(deposit.replace(",", "").strip())
-                except InvalidOperation:
-                    pass
 
             if debit == 0 and credit == 0:
                 return None
@@ -285,7 +278,7 @@ class SBITemplate(ImportTemplate):
 
     def detect(self, headers: list[str]) -> bool:
         headers_lower = [h.lower().strip() for h in headers]
-        # SBI often has: Txn Date, Value Date, Description, Ref No./Cheque No., Debit, Credit, Balance
+        # SBI: Txn Date, Value Date, Description, Ref No./Cheque No., etc.
         sbi_specific = (
             "txn date" in headers_lower
             or ("ref no./cheque no." in headers_lower)
@@ -319,16 +312,12 @@ class SBITemplate(ImportTemplate):
             credit = Decimal("0")
 
             if debit_str and debit_str.strip():
-                try:
+                with contextlib.suppress(InvalidOperation):
                     debit = Decimal(debit_str.replace(",", "").strip())
-                except InvalidOperation:
-                    pass
 
             if credit_str and credit_str.strip():
-                try:
+                with contextlib.suppress(InvalidOperation):
                     credit = Decimal(credit_str.replace(",", "").strip())
-                except InvalidOperation:
-                    pass
 
             if debit == 0 and credit == 0:
                 return None
@@ -400,16 +389,12 @@ class AxisBankTemplate(ImportTemplate):
             credit = Decimal("0")
 
             if debit_str and debit_str.strip():
-                try:
+                with contextlib.suppress(InvalidOperation):
                     debit = Decimal(debit_str.replace(",", "").strip())
-                except InvalidOperation:
-                    pass
 
             if credit_str and credit_str.strip():
-                try:
+                with contextlib.suppress(InvalidOperation):
                     credit = Decimal(credit_str.replace(",", "").strip())
-                except InvalidOperation:
-                    pass
 
             if debit == 0 and credit == 0:
                 return None
@@ -474,16 +459,12 @@ class KotakTemplate(ImportTemplate):
             credit = Decimal("0")
 
             if debit_str and debit_str.strip():
-                try:
+                with contextlib.suppress(InvalidOperation):
                     debit = Decimal(debit_str.replace(",", "").strip())
-                except InvalidOperation:
-                    pass
 
             if credit_str and credit_str.strip():
-                try:
+                with contextlib.suppress(InvalidOperation):
                     credit = Decimal(credit_str.replace(",", "").strip())
-                except InvalidOperation:
-                    pass
 
             if debit == 0 and credit == 0:
                 return None

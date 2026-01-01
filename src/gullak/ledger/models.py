@@ -77,15 +77,46 @@ class Transaction(BaseModel):
         payment_account: str,
         currency: str = "INR",
         note: str | None = None,
+        recurring_name: str | None = None,
+        recurring_period: str | None = None,
     ) -> Self:
         """Create a simple expense transaction with two postings."""
+        tags = {}
+        if recurring_name:
+            tags["Recurring"] = recurring_name
+        if recurring_period:
+            tags["Period"] = recurring_period
+
+        return cls(
+            date=date,
+            payee=payee,
+            note=note,
+            tags=tags,
+            postings=[
+                Posting(account=expense_account, amount=amount, currency=currency),
+                Posting(account=payment_account, amount=-amount, currency=currency),
+            ],
+        )
+
+    @classmethod
+    def create_income(
+        cls,
+        date: date,
+        payee: str,
+        amount: Decimal,
+        income_account: str,
+        deposit_account: str,
+        currency: str = "INR",
+        note: str | None = None,
+    ) -> Self:
+        """Create an income transaction (salary, interest, etc.)."""
         return cls(
             date=date,
             payee=payee,
             note=note,
             postings=[
-                Posting(account=expense_account, amount=amount, currency=currency),
-                Posting(account=payment_account, amount=-amount, currency=currency),
+                Posting(account=income_account, amount=-amount, currency=currency),
+                Posting(account=deposit_account, amount=amount, currency=currency),
             ],
         )
 
@@ -101,11 +132,38 @@ class PendingTransaction(BaseModel):
 
     id: str
     transaction: Transaction
-    source_text: str  # Original user input
+    source_text: str
     created_at: datetime = Field(default_factory=datetime.now)
-    ledger_preview: str = ""  # Cached ledger format
+    ledger_preview: str = ""
 
     def model_post_init(self, __context: object) -> None:
-        """Generate ledger preview after initialization."""
         if not self.ledger_preview:
             self.ledger_preview = self.transaction.to_ledger()
+
+
+class BudgetEntry(BaseModel):
+    """A single budget category with target amount."""
+
+    account: str
+    amount: Decimal
+    currency: str = "INR"
+
+
+class PeriodicBudget(BaseModel):
+    """Periodic transaction for Paisa budget tracking."""
+
+    period: str = "Monthly"
+    start_date: date = Field(default_factory=date.today)
+    entries: list[BudgetEntry] = Field(default_factory=list)
+    funding_account: str = "Assets:Checking"
+
+    def to_ledger(self) -> str:
+        start = self.start_date.isoformat().replace("-", "/")
+        lines = [f"~ {self.period} in {start}"]
+
+        for entry in self.entries:
+            amount_str = f"{entry.amount:,.2f}".replace(",", "_")
+            lines.append(f"    {entry.account}  {amount_str} {entry.currency}")
+
+        lines.append(f"    {self.funding_account}")
+        return "\n".join(lines)

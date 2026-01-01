@@ -2,7 +2,6 @@
 
 import re
 
-
 # Pattern order matters: first match wins. Income patterns before expense patterns.
 CATEGORY_PATTERNS: list[tuple[re.Pattern[str], str]] = [
     (re.compile(r"salary|payroll|stipend", re.IGNORECASE), "Income:Salary"),

@@ -1,15 +1,20 @@
 # Gullak v2 + Paisa
 # Shared volume allows both services to access the ledger files
+# Files are created with host user permissions for easy editing
 
 services:
   gullak:
-    build: .
+    build:
+      context: .
+      args:
+        # Match host user for proper file permissions
+        GULLAK_UID: ${GULLAK_UID:-1000}
+        GULLAK_GID: ${GULLAK_GID:-1000}
     container_name: gullak
     restart: unless-stopped
     ports:
       - "8000:8000"
     volumes:
-      # Shared data directory with Paisa
       - ${PAISA_DATA_DIR:-./data}:/data
     environment:
       - TZ=${TZ:-Asia/Kolkata}
@@ -36,7 +41,6 @@ services:
     ports:
       - "7500:7500"
     volumes:
-      # Paisa expects data in ~/Documents/paisa inside container
       - ${PAISA_DATA_DIR:-./data}:/root/Documents/paisa
     environment:
       - TZ=${TZ:-Asia/Kolkata}

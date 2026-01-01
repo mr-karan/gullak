@@ -5,7 +5,7 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, File, Request, UploadFile
+from fastapi import APIRouter, Request, UploadFile
 from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse
 
@@ -117,7 +117,7 @@ async def get_pending(request: Request) -> list[dict[str, Any]]:
 
 
 @router.post("/upload")
-async def upload_file(request: Request, file: UploadFile = File(...)) -> dict:
+async def upload_file(request: Request, file: UploadFile) -> dict:
     """Upload a CSV file for import."""
     if not file.filename:
         return {"success": False, "error": "No file provided"}

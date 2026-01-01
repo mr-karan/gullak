@@ -12,6 +12,7 @@ router = APIRouter(prefix="/setup", tags=["setup"])
 
 class SetupStep(str, Enum):
     """Setup wizard steps."""
+
     WELCOME = "welcome"
     CURRENCY = "currency"
     ACCOUNTS = "accounts"
@@ -21,6 +22,7 @@ class SetupStep(str, Enum):
 
 class SetupStatus(BaseModel):
     """Current setup status."""
+
     is_complete: bool
     current_step: SetupStep
     preferences: dict[str, Any]
@@ -28,6 +30,7 @@ class SetupStatus(BaseModel):
 
 class SetupPreferences(BaseModel):
     """User preferences from setup."""
+
     currency: str = "INR"
     timezone: str = "Asia/Kolkata"
     bank_accounts: list[str] = []
@@ -37,12 +40,14 @@ class SetupPreferences(BaseModel):
 
 class SetupStepRequest(BaseModel):
     """Request to update setup step."""
+
     step: SetupStep
     data: dict[str, Any] = {}
 
 
 class SetupStepResponse(BaseModel):
     """Response for setup step."""
+
     success: bool
     next_step: SetupStep | None
     message: str
@@ -188,7 +193,8 @@ async def update_setup_step(request: Request, body: SetupStepRequest) -> SetupSt
     ledger_path.parent.mkdir(parents=True, exist_ok=True)
 
     if body.step == SetupStep.WELCOME:
-        # Create initial ledger file with header
+        from gullak.config.paisa import PaisaConfigManager
+
         currency = body.data.get("currency", "INR")
         timezone = body.data.get("timezone", "Asia/Kolkata")
 
@@ -199,6 +205,17 @@ async def update_setup_step(request: Request, body: SetupStepRequest) -> SetupSt
 
 """
         ledger_path.write_text(header)
+
+        config_path = ledger_path.parent / "paisa.yaml"
+        manager = PaisaConfigManager(config_path)
+        manager.update_basic_settings(
+            currency=currency,
+            timezone=timezone,
+            journal_path=ledger_path.name,
+        )
+        # Set up Schedule AL for Indian tax reporting if using INR
+        if currency == "INR":
+            manager.setup_schedule_al()
 
         return SetupStepResponse(
             success=True,
@@ -239,11 +256,13 @@ async def update_setup_step(request: Request, body: SetupStepRequest) -> SetupSt
 
         # Add income accounts if this is first-time setup
         if "account Income:Salary" not in content:
-            new_accounts.extend([
-                "account Income:Salary",
-                "account Income:Freelance",
-                "account Income:Interest",
-            ])
+            new_accounts.extend(
+                [
+                    "account Income:Salary",
+                    "account Income:Freelance",
+                    "account Income:Interest",
+                ]
+            )
 
         if new_accounts:
             accounts_section = "\n" + "\n".join(new_accounts) + "\n"
@@ -255,7 +274,9 @@ async def update_setup_step(request: Request, body: SetupStepRequest) -> SetupSt
         return SetupStepResponse(
             success=True,
             next_step=None if is_complete else SetupStep.CATEGORIES,
-            message="Accounts updated!" if is_complete else "Accounts added! Now let's set up expense categories.",
+            message="Accounts updated!"
+            if is_complete
+            else "Accounts added! Now let's set up expense categories.",
         )
 
     elif body.step == SetupStep.CATEGORIES:
@@ -300,10 +321,11 @@ async def update_setup_step(request: Request, body: SetupStepRequest) -> SetupSt
 @router.post("/skip")
 async def skip_setup(request: Request) -> SetupStepResponse:
     """Skip setup and use defaults."""
+    from gullak.config.paisa import PaisaConfigManager
+
     settings = request.app.state.settings
     ledger_path = settings.ledger_path
 
-    # Create a minimal ledger file with defaults
     default_ledger = """; Gullak Ledger File
 ; gullak:version 2.0
 ; gullak:currency INR
@@ -332,6 +354,15 @@ account Expenses:Health
 
     ledger_path.parent.mkdir(parents=True, exist_ok=True)
     ledger_path.write_text(default_ledger)
+
+    config_path = ledger_path.parent / "paisa.yaml"
+    manager = PaisaConfigManager(config_path)
+    manager.update_basic_settings(
+        currency="INR",
+        timezone="Asia/Kolkata",
+        journal_path=ledger_path.name,
+    )
+    manager.setup_schedule_al()
 
     return SetupStepResponse(
         success=True,

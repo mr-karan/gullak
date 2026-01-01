@@ -12,9 +12,9 @@ from fastapi.templating import Jinja2Templates
 
 from gullak.agent import GullakAgent
 from gullak.api import chat_router, ledger_router, setup_router
-from gullak.config import settings
 from gullak.ledger.parser import LedgerParser
 from gullak.ledger.validator import LedgerValidator
+from gullak.settings import settings
 
 
 def _check_ledger_cli() -> None:

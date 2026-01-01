@@ -7,10 +7,10 @@ from datetime import date
 from decimal import Decimal
 from pathlib import Path
 
-from gullak.ledger.models import Transaction, Posting
+from gullak.ledger.models import Posting, Transaction
 
-from .templates import ImportTemplate, GenericTemplate, DebitCreditTemplate
 from .banks import BANK_TEMPLATES
+from .templates import DebitCreditTemplate, GenericTemplate, ImportTemplate
 
 
 @dataclass
@@ -119,7 +119,7 @@ class CSVProcessor:
         result = ImportResult()
 
         try:
-            with open(file_path, "r", encoding="utf-8-sig") as f:
+            with open(file_path, encoding="utf-8-sig") as f:
                 # Detect delimiter
                 sample = f.read(4096)
                 f.seek(0)
@@ -184,6 +184,7 @@ class CSVProcessor:
         """Compute content hashes for existing transactions."""
         hashes: set[str] = set()
         for txn in transactions:
-            content = f"{txn.date}|{txn.payee}|{txn.total_amount}|{txn.postings[0].currency if txn.postings else 'INR'}"
+            currency = txn.postings[0].currency if txn.postings else "INR"
+            content = f"{txn.date}|{txn.payee}|{txn.total_amount}|{currency}"
             hashes.add(hashlib.sha256(content.encode()).hexdigest()[:16])
         return hashes

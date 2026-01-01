@@ -1,8 +1,8 @@
 """Payee memory system for auto-categorization."""
 
 import re
-from pathlib import Path
 from difflib import SequenceMatcher
+from pathlib import Path
 
 
 class PayeeMemory:

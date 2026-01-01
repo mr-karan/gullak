@@ -12,14 +12,10 @@ class LedgerParser:
     """Parse ledger-format files into Transaction objects."""
 
     # Match transaction header: 2024/01/15 [*!] Payee name
-    DATE_PATTERN = re.compile(
-        r"^(\d{4}[-/]\d{2}[-/]\d{2})\s*([*!])?\s*(.+?)(?:\s*;\s*(.*))?$"
-    )
+    DATE_PATTERN = re.compile(r"^(\d{4}[-/]\d{2}[-/]\d{2})\s*([*!])?\s*(.+?)(?:\s*;\s*(.*))?$")
 
     # Match posting: account  amount [currency]
-    POSTING_PATTERN = re.compile(
-        r"^\s{2,}([A-Za-z][^\d]*?)\s{2,}([-\d,_.]+)\s*(\w+)?(?:\s*;.*)?$"
-    )
+    POSTING_PATTERN = re.compile(r"^\s{2,}([A-Za-z][^\d]*?)\s{2,}([-\d,_.]+)\s*(\w+)?(?:\s*;.*)?$")
 
     # Match comment line
     COMMENT_PATTERN = re.compile(r"^\s*;\s*(.*)$")
@@ -135,9 +131,7 @@ class LedgerParser:
 
         return Posting(account=account, amount=amount, currency=currency)
 
-    def _build_transaction(
-        self, data: dict, comments: list[str]
-    ) -> Transaction | None:
+    def _build_transaction(self, data: dict, comments: list[str]) -> Transaction | None:
         """Build Transaction object from parsed data and comments."""
         if not data.get("postings"):
             return None

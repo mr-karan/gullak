@@ -17,9 +17,7 @@ class Settings(BaseSettings):
     )
 
     # Anthropic API (no prefix - uses standard ANTHROPIC_API_KEY)
-    anthropic_api_key: str | None = Field(
-        default=None, validation_alias="ANTHROPIC_API_KEY"
-    )
+    anthropic_api_key: str | None = Field(default=None, validation_alias="ANTHROPIC_API_KEY")
     anthropic_model: str = "claude-sonnet-4-20250514"
 
     # Ledger configuration

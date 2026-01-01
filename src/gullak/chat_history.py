@@ -1,5 +1,6 @@
 """SQLite-based chat history persistence."""
 
+import contextlib
 import json
 import sqlite3
 from datetime import datetime
@@ -59,10 +60,7 @@ class ChatHistory:
         now = datetime.now().isoformat()
 
         # Serialize content if it's a list (for assistant messages with tool_use)
-        if isinstance(content, list):
-            content_str = json.dumps(content)
-        else:
-            content_str = content
+        content_str = json.dumps(content) if isinstance(content, list) else content
 
         with sqlite3.connect(self.db_path) as conn:
             # Ensure conversation exists
@@ -75,10 +73,8 @@ class ChatHistory:
                 "UPDATE conversations SET updated_at = ? WHERE id = ?", (now, conversation_id)
             )
             # Insert message
-            conn.execute(
-                "INSERT INTO messages (conversation_id, role, content, created_at) VALUES (?, ?, ?, ?)",
-                (conversation_id, role, content_str, now),
-            )
+            sql = "INSERT INTO messages (conversation_id, role, content, created_at)"
+            conn.execute(f"{sql} VALUES (?, ?, ?, ?)", (conversation_id, role, content_str, now))
             conn.commit()
 
     def load_conversation(self, conversation_id: str) -> list[dict[str, Any]]:
@@ -93,10 +89,8 @@ class ChatHistory:
             for row in cursor:
                 content = row["content"]
                 # Try to parse as JSON (for assistant messages)
-                try:
+                with contextlib.suppress(json.JSONDecodeError):
                     content = json.loads(content)
-                except json.JSONDecodeError:
-                    pass
                 messages.append({"role": row["role"], "content": content})
             return messages
 

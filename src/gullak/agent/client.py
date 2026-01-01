@@ -9,20 +9,19 @@ from uuid import uuid4
 
 from anthropic import AsyncAnthropic
 
-from gullak.config import settings
-from gullak.ledger.parser import LedgerParser
-from gullak.ledger.writer import LedgerWriter
-from gullak.ledger.validator import LedgerValidator
-
 from gullak.chat_history import ChatHistory
+from gullak.ledger.parser import LedgerParser
+from gullak.ledger.validator import LedgerValidator
+from gullak.ledger.writer import LedgerWriter
+from gullak.settings import settings
 
 from .prompts import get_system_prompt
 from .tools import (
     TOOLS,
-    get_pending_transactions,
     clear_pending_transaction,
     configure_tools,
     execute_tool,
+    get_pending_transactions,
 )
 
 
@@ -141,14 +140,16 @@ class GullakAgent:
                                     data={"tool": event.content_block.name},
                                 )
 
-                        elif event.type == "content_block_delta":
-                            if hasattr(event.delta, "type"):
-                                if event.delta.type == "text_delta":
-                                    accumulated_text += event.delta.text
-                                    yield AgentEvent(
-                                        type="text",
-                                        content=event.delta.text,
-                                    )
+                        elif (
+                            event.type == "content_block_delta"
+                            and hasattr(event.delta, "type")
+                            and event.delta.type == "text_delta"
+                        ):
+                            accumulated_text += event.delta.text
+                            yield AgentEvent(
+                                type="text",
+                                content=event.delta.text,
+                            )
 
                 # Get the full response
                 response = await stream.get_final_message()

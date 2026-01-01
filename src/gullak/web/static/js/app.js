@@ -42,6 +42,13 @@ function gullakApp() {
         // Transactions state
         transactions: [],
 
+        // Ledger viewer state
+        ledgerContent: '',
+        ledgerPath: '',
+        ledgerLines: 0,
+        ledgerExists: true,
+        ledgerSearch: '',
+
         // Initialize
         async init() {
             // Apply theme
@@ -563,7 +570,24 @@ function gullakApp() {
             }
         },
 
-        // Format message (markdown-like)
+        async loadLedgerFile() {
+            try {
+                const params = new URLSearchParams();
+                if (this.ledgerSearch) params.set('search', this.ledgerSearch);
+                
+                const response = await fetch(`/api/ledger/file?${params}`);
+                const data = await response.json();
+                
+                this.ledgerContent = data.content || '';
+                this.ledgerPath = data.path || '';
+                this.ledgerLines = data.lines || 0;
+                this.ledgerExists = data.exists !== false;
+            } catch (error) {
+                console.error('Failed to load ledger file:', error);
+                this.notify('error', 'Failed to load ledger file');
+            }
+        },
+
         formatMessage(text) {
             if (!text) return '';
             return text

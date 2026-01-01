@@ -1,6 +1,5 @@
 """Writer for ledger-cli format files."""
 
-import asyncio
 import re
 from decimal import Decimal
 from pathlib import Path

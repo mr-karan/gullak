@@ -54,17 +54,17 @@ check: fmt lint typecheck test
 
 # === Docker ===
 
-# Build docker image
+# Build docker image with current user's UID/GID for file permissions
 docker-build:
-    docker compose build
+    GULLAK_UID=$(id -u) GULLAK_GID=$(id -g) docker compose build
 
 # Start all services (gullak + paisa)
 docker-up:
-    docker compose up -d
+    GULLAK_UID=$(id -u) GULLAK_GID=$(id -g) docker compose up -d
 
 # Start with logs
 docker-up-logs:
-    docker compose up
+    GULLAK_UID=$(id -u) GULLAK_GID=$(id -g) docker compose up
 
 # Stop all services
 docker-down:
@@ -117,8 +117,16 @@ init-ledger:
 
 # Reset setup (delete ledger file to trigger setup wizard)
 reset-setup:
-    @rm -f data/main.ledger
-    @echo "Ledger file deleted. Setup wizard will show on next load."
+    @rm -f data/main.ledger data/paisa.yaml data/paisa.db data/chat_history.db
+    @echo "All data files deleted. Setup wizard will show on next load."
+
+# Fresh start: clean slate + rebuild + run with logs
+fresh:
+    @rm -rf data/
+    @mkdir -p data
+    GULLAK_UID=$(id -u) GULLAK_GID=$(id -g) docker compose down
+    GULLAK_UID=$(id -u) GULLAK_GID=$(id -g) docker compose build
+    GULLAK_UID=$(id -u) GULLAK_GID=$(id -g) docker compose up
 
 # Show environment info
 info:

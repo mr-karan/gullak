@@ -115,9 +115,7 @@ async def list_transactions(
     # Filter by account
     if account:
         transactions = [
-            t
-            for t in transactions
-            if any(p.account.startswith(account) for p in t.postings)
+            t for t in transactions if any(p.account.startswith(account) for p in t.postings)
         ]
 
     # Get most recent
@@ -141,26 +139,74 @@ async def list_transactions(
     }
 
 
+@router.get("/file")
+async def get_ledger_file(
+    request: Request,
+    search: str = Query("", description="Search/filter text"),
+) -> dict[str, Any]:
+    """Get raw ledger file content for viewing."""
+    settings = request.app.state.settings
+
+    if not settings.ledger_path.exists():
+        return {
+            "success": True,
+            "content": "",
+            "lines": 0,
+            "path": str(settings.ledger_path),
+            "exists": False,
+        }
+
+    content = settings.ledger_path.read_text()
+
+    if search:
+        lines = content.split("\n")
+        filtered = []
+        in_matching_txn = False
+        current_txn = []
+
+        for line in lines:
+            if line and not line[0].isspace():
+                if current_txn and in_matching_txn:
+                    filtered.extend(current_txn)
+                current_txn = [line]
+                in_matching_txn = search.lower() in line.lower()
+            else:
+                current_txn.append(line)
+                if search.lower() in line.lower():
+                    in_matching_txn = True
+
+        if current_txn and in_matching_txn:
+            filtered.extend(current_txn)
+
+        content = "\n".join(filtered)
+
+    return {
+        "success": True,
+        "content": content,
+        "lines": content.count("\n") + 1 if content else 0,
+        "path": str(settings.ledger_path),
+        "exists": True,
+    }
+
+
 @router.get("/health")
 async def health_check(request: Request) -> dict[str, Any]:
     """Check ledger and validator health."""
     settings = request.app.state.settings
     validator: LedgerValidator = request.app.state.validator
 
-    # Check if ledger file exists
     ledger_exists = settings.ledger_path.exists()
-
-    # Check if ledger CLI is available
     cli_available = await validator.check_cli_available()
 
-    # Validate ledger if it exists
     ledger_valid = False
     ledger_error = ""
     if ledger_exists:
         ledger_valid, ledger_error = await validator.validate_file(settings.ledger_path)
 
     return {
-        "status": "healthy" if (cli_available and (ledger_valid or not ledger_exists)) else "degraded",
+        "status": "healthy"
+        if (cli_available and (ledger_valid or not ledger_exists))
+        else "degraded",
         "ledger_path": str(settings.ledger_path),
         "ledger_exists": ledger_exists,
         "ledger_valid": ledger_valid,
