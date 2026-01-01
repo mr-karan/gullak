@@ -35,6 +35,7 @@ services:
     image: ananthakumaran/paisa:latest
     container_name: paisa
     restart: unless-stopped
+    user: "0:${GULLAK_GID:-1000}"
     ports:
       - "7500:7500"
     volumes:
