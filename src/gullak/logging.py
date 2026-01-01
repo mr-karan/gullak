@@ -52,6 +52,7 @@ def configure_logging(debug: bool = False) -> None:
     # Reduce noise from uvicorn access logs in production
     if not debug:
         logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
+        logging.getLogger("LiteLLM").setLevel(logging.WARNING)
 
 
 def get_logger(name: str | None = None) -> structlog.stdlib.BoundLogger:

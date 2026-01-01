@@ -295,8 +295,8 @@
                     </div>
                 </div>
 
-                <!-- Transaction Preview Panel (Right Side) - Redesigned -->
-                <div class="w-[400px] preview-panel flex flex-col z-10"
+                <!-- Transaction Preview Panel (Right Side) - Compact & Clean -->
+                <div class="w-[340px] preview-panel flex flex-col z-10"
                      x-show="pendingTransactions.length > 0"
                      x-transition:enter="transition ease-out duration-300"
                      x-transition:enter-start="translate-x-full opacity-0"
@@ -306,88 +306,79 @@
                      x-transition:leave-end="translate-x-full opacity-0">
 
                     <!-- Panel Header -->
-                    <div class="h-14 flex items-center justify-between px-5 border-b border-base-200/60 bg-base-100">
+                    <div class="h-12 flex items-center justify-between px-4 border-b border-base-200/60 bg-base-100">
                         <div class="flex items-center gap-2">
-                            <div class="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center">
-                                <span class="text-xs font-semibold text-primary" x-text="pendingTransactions.length"></span>
+                            <div class="w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center">
+                                <span class="text-[10px] font-semibold text-primary" x-text="pendingTransactions.length"></span>
                             </div>
-                            <span class="font-medium text-sm">Pending Review</span>
+                            <span class="font-medium text-xs">Pending</span>
                         </div>
-                        <div class="flex gap-2">
+                        <div class="flex gap-1">
                             <button @click="confirmAllTransactions"
-                                    class="px-3 py-1.5 rounded-lg bg-success text-white text-xs font-semibold hover:bg-success/90 transition-colors"
+                                    class="px-2.5 py-1 rounded-md bg-success/90 text-white text-[10px] font-semibold hover:bg-success transition-colors"
                                     :disabled="confirming">
                                 Confirm All
                             </button>
                             <button @click="cancelAllTransactions"
-                                    class="px-3 py-1.5 rounded-lg text-xs font-medium text-base-content/50 hover:text-error hover:bg-error/10 transition-colors">
+                                    class="px-2.5 py-1 rounded-md text-[10px] font-medium text-base-content/50 hover:text-error hover:bg-error/10 transition-colors">
                                 Clear
                             </button>
                         </div>
                     </div>
 
-                    <!-- Transaction Cards -->
-                    <div class="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar bg-base-200/30">
+                    <!-- Transaction List -->
+                    <div class="flex-1 overflow-y-auto custom-scrollbar bg-base-100">
                         <template x-for="pending in pendingTransactions" :key="pending.data.id">
-                            <div class="preview-card animate-slide-up">
-                                <!-- Header with Amount -->
-                                <div class="preview-card-header">
-                                    <div class="preview-card-payee" x-text="pending.data.transaction.payee"></div>
-                                    <div class="preview-card-amount">
-                                        <span x-text="formatCurrency(pending.data.transaction.amount, pending.data.transaction.currency)"></span>
+                            <div class="preview-card-compact border-b border-base-100 last:border-0 animate-slide-up">
+                                <!-- Top row: Payee + Amount + Quick Actions -->
+                                <div class="flex items-start justify-between gap-2 px-3 pt-2.5 pb-2">
+                                    <div class="flex-1 min-w-0">
+                                        <div class="text-sm font-semibold text-base-content truncate" x-text="pending.data.transaction.payee"></div>
+                                        <div class="text-xs text-base-content/50 font-mono mt-0.5" x-text="formatCurrency(pending.data.transaction.amount, pending.data.transaction.currency)"></div>
+                                    </div>
+                                    <div class="flex gap-1 flex-shrink-0">
+                                        <button @click="confirmTransaction(pending.data.id)"
+                                                class="w-7 h-7 rounded-md bg-success/90 text-white flex items-center justify-center hover:bg-success transition-colors"
+                                                :disabled="confirming">
+                                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                                        </button>
+                                        <button @click="cancelTransaction(pending.data.id)"
+                                                class="w-7 h-7 rounded-md bg-base-200 text-base-content/50 hover:text-error hover:bg-error/10 flex items-center justify-center transition-colors">
+                                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                                        </button>
                                     </div>
                                 </div>
 
-                                <!-- Editable Fields -->
-                                <div class="preview-card-fields">
+                                <!-- Compact editable fields -->
+                                <div class="px-3 pb-2.5 space-y-1.5">
                                     <!-- Date -->
-                                    <div class="preview-card-field">
-                                        <div class="preview-card-field-icon">
-                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-                                        </div>
+                                    <div class="flex items-center gap-2">
+                                        <svg class="w-3.5 h-3.5 text-base-content/30 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
                                         <input type="date"
                                                x-model="pending.data.transaction.date"
                                                @change="updatePending(pending.data.id, 'date', $event.target.value)"
-                                               class="preview-card-field-input" />
+                                               class="text-xs bg-transparent border-none p-0 text-base-content/70 focus:text-base-content outline-none w-full" />
                                     </div>
 
                                     <!-- Category -->
-                                    <div class="preview-card-field">
-                                        <div class="preview-card-field-icon">
-                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
-                                        </div>
+                                    <div class="flex items-center gap-2">
+                                        <svg class="w-3.5 h-3.5 text-base-content/30 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
                                         <input type="text"
                                                x-model="pending.data.transaction.expense_account"
                                                @input="updatePending(pending.data.id, 'expense_account', $event.target.value)"
-                                               class="preview-card-field-input text-primary font-medium"
+                                               class="text-xs bg-transparent border-none p-0 text-primary font-medium focus:text-primary/80 outline-none w-full placeholder:text-base-content/30"
                                                placeholder="Category" />
                                     </div>
 
                                     <!-- Payment Account -->
-                                    <div class="preview-card-field">
-                                        <div class="preview-card-field-icon">
-                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
-                                        </div>
+                                    <div class="flex items-center gap-2">
+                                        <svg class="w-3.5 h-3.5 text-base-content/30 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
                                         <input type="text"
                                                x-model="pending.data.transaction.payment_account"
                                                @input="updatePending(pending.data.id, 'payment_account', $event.target.value)"
-                                               class="preview-card-field-input"
-                                               placeholder="Payment Account" />
+                                               class="text-xs bg-transparent border-none p-0 text-base-content/70 focus:text-base-content outline-none w-full placeholder:text-base-content/30"
+                                               placeholder="Payment" />
                                     </div>
-                                </div>
-
-                                <!-- Actions -->
-                                <div class="preview-card-actions">
-                                    <button @click="confirmTransaction(pending.data.id)"
-                                            class="preview-action-confirm"
-                                            :disabled="confirming">
-                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-                                        Confirm
-                                    </button>
-                                    <button @click="cancelTransaction(pending.data.id)"
-                                            class="preview-action-cancel">
-                                        Skip
-                                    </button>
                                 </div>
                             </div>
                         </template>
