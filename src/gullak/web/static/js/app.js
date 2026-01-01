@@ -772,17 +772,21 @@ function gullakApp() {
         },
 
         getCategoryColor(account) {
-            if (!account) return 'bg-base-200/70';
+            if (!account) return 'bg-base-200';
             const cat = account.toLowerCase();
-            if (cat.includes('food') || cat.includes('grocer') || cat.includes('restaurant')) return 'bg-orange-100 dark:bg-orange-900/30';
-            if (cat.includes('transport')) return 'bg-blue-100 dark:bg-blue-900/30';
-            if (cat.includes('shopping')) return 'bg-pink-100 dark:bg-pink-900/30';
-            if (cat.includes('health')) return 'bg-red-100 dark:bg-red-900/30';
-            if (cat.includes('entertainment')) return 'bg-purple-100 dark:bg-purple-900/30';
-            if (cat.includes('utility') || cat.includes('housing')) return 'bg-yellow-100 dark:bg-yellow-900/30';
-            if (cat.includes('education')) return 'bg-cyan-100 dark:bg-cyan-900/30';
-            if (cat.includes('travel')) return 'bg-teal-100 dark:bg-teal-900/30';
-            return 'bg-base-200/70';
+            // Using DaisyUI-compatible color classes that work in both light and dark mode
+            if (cat.includes('food') || cat.includes('grocer') || cat.includes('restaurant')) return 'bg-warning/15 text-warning';
+            if (cat.includes('transport') || cat.includes('uber') || cat.includes('fuel')) return 'bg-info/15 text-info';
+            if (cat.includes('shopping') || cat.includes('amazon')) return 'bg-secondary text-secondary-content';
+            if (cat.includes('health') || cat.includes('medical') || cat.includes('pharmacy')) return 'bg-error/15 text-error';
+            if (cat.includes('entertainment') || cat.includes('movie') || cat.includes('netflix')) return 'bg-primary/15 text-primary';
+            if (cat.includes('utility') || cat.includes('electric') || cat.includes('water')) return 'bg-accent/15 text-accent';
+            if (cat.includes('housing') || cat.includes('rent')) return 'bg-success/15 text-success';
+            if (cat.includes('education') || cat.includes('book')) return 'bg-info/15 text-info';
+            if (cat.includes('travel') || cat.includes('hotel') || cat.includes('flight')) return 'bg-success/15 text-success';
+            if (cat.includes('subscription')) return 'bg-primary/15 text-primary';
+            if (cat.includes('personal')) return 'bg-secondary text-secondary-content';
+            return 'bg-base-200';
         },
 
         async loadLedgerFile() {
@@ -829,11 +833,45 @@ function gullakApp() {
                 }
             }
             if (!text) return '';
+
+            // Check for transaction confirmation pattern and format nicely
+            const txnPattern = /^[^\n]*(?:Blinkit|Uber|Swiggy|Zomato|Amazon|Netflix|Spotify)[^\n]*\n.*?(?:Expenses|Assets|Liabilities).*?\n\n?(?:```ledger\n[\s\S]*?```)?/i;
+
+            // Format ledger code blocks beautifully
+            text = text.replace(/```ledger\n([\s\S]*?)```/g, (match, code) => {
+                const highlighted = this.highlightLedger(code.trim());
+                return `<div class="ledger-block mt-3"><pre class="text-[13px] leading-relaxed">${highlighted}</pre></div>`;
+            });
+
+            // Format generic code blocks
+            text = text.replace(/```(\w*)\n([\s\S]*?)```/g, (match, lang, code) => {
+                return `<div class="ledger-block mt-3"><pre class="text-[13px] leading-relaxed">${this.escapeHtml(code.trim())}</pre></div>`;
+            });
+
+            // Format transaction summary nicely (the checkmark response)
+            text = text.replace(/^(.*?)\n(.*?(?:Expenses|Income|Assets|Liabilities)[^\n]*)\s*(?:\n|$)/gm, (match, line1, line2) => {
+                // Check if this looks like a transaction summary
+                if (line1.includes('₹') || line1.includes('INR') || /\d+(?:\.\d+)?/.test(line1)) {
+                    return `<div class="transaction-summary py-2">
+                        <div class="font-medium text-base-content">${line1}</div>
+                        <div class="text-sm text-base-content/60 mt-1">${line2}</div>
+                    </div>`;
+                }
+                return match;
+            });
+
+            // Standard markdown formatting
             return text
                 .replace(/\*\*(.*?)\*\*/g, '<strong class="font-semibold">$1</strong>')
                 .replace(/\*(.*?)\*/g, '<em>$1</em>')
-                .replace(/`(.*?)`/g, '<code class="bg-base-300/50 px-1.5 py-0.5 rounded text-[0.8125rem] font-mono">$1</code>')
+                .replace(/`([^`]+)`/g, '<code class="inline-code">$1</code>')
                 .replace(/\n/g, '<br>');
+        },
+
+        escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
         },
 
         // Highlight ledger syntax

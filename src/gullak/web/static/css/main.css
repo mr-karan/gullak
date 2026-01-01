@@ -1,36 +1,101 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap');
+/* Gullak - Refined Financial Assistant UI */
 
-/* Base Refinements */
+/* ============================================
+   Base & Typography
+   ============================================ */
+
 :root {
-    --sidebar-width: 260px;
-    --header-height: 60px;
+    --sidebar-width: 280px;
+    --header-height: 56px;
+    --preview-width: 400px;
 }
 
 body {
-    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    font-family: 'DM Sans', system-ui, -apple-system, sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    font-feature-settings: "ss01", "ss02";
 }
 
-/* Typography */
 .font-display {
-    font-family: 'Fraunces', serif;
-    font-variation-settings: "SOFT" 50, "WONK" 0;
+    font-family: 'Instrument Serif', Georgia, serif;
+    font-weight: 400;
+    letter-spacing: -0.01em;
 }
 
 .font-mono {
-    font-family: 'JetBrains Mono', monospace;
+    font-family: 'IBM Plex Mono', monospace;
 }
 
-/* Utilities */
-.text-balance {
-    text-wrap: balance;
+/* ============================================
+   Animations & Transitions
+   ============================================ */
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
 }
 
-/* Custom Scrollbar - Minimal */
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateY(16px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes slideInRight {
+    from {
+        opacity: 0;
+        transform: translateX(24px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+@keyframes scaleIn {
+    from {
+        opacity: 0;
+        transform: scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+@keyframes pulseSoft {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.6; }
+}
+
+@keyframes shimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+}
+
+@keyframes bounce-dot {
+    0%, 80%, 100% { transform: translateY(0); }
+    40% { transform: translateY(-6px); }
+}
+
+.animate-fade-in { animation: fadeIn 0.4s ease-out forwards; }
+.animate-slide-up { animation: slideUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+.animate-slide-in-right { animation: slideInRight 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+.animate-scale-in { animation: scaleIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+
+/* ============================================
+   Scrollbar - Refined
+   ============================================ */
+
 ::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
+    width: 8px;
+    height: 8px;
 }
 
 ::-webkit-scrollbar-track {
@@ -39,122 +104,886 @@ body {
 
 ::-webkit-scrollbar-thumb {
     background: transparent;
-    border-radius: 10px;
+    border-radius: 100px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
 }
 
-:hover::-webkit-scrollbar-thumb {
-    background: color-mix(in srgb, var(--fallback-bc,oklch(var(--bc)/0.2)), transparent 20%);
+*:hover::-webkit-scrollbar-thumb {
+    background-color: oklch(var(--bc) / 0.15);
+    background-clip: padding-box;
 }
 
-/* Animations */
-@keyframes fadeIn {
-    from { opacity: 0; }
-    to { opacity: 1; }
+.custom-scrollbar::-webkit-scrollbar-thumb {
+    background-color: oklch(var(--bc) / 0.08);
 }
 
-@keyframes slideUp {
-    from { opacity: 0; transform: translateY(10px); }
-    to { opacity: 1; transform: translateY(0); }
+.custom-scrollbar:hover::-webkit-scrollbar-thumb {
+    background-color: oklch(var(--bc) / 0.15);
 }
 
-@keyframes slideInRight {
-    from { opacity: 0; transform: translateX(20px); }
-    to { opacity: 1; transform: translateX(0); }
-}
+/* ============================================
+   Chat Bubbles - Refined Design
+   ============================================ */
 
-.animate-fade-in {
-    animation: fadeIn 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
-}
-
-.animate-slide-up {
-    animation: slideUp 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
-}
-
-.animate-slide-in-right {
-    animation: slideInRight 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
-}
-
-/* Component Overrides & Custom Classes */
-
-/* Sidebar */
-.sidebar-link {
-    @apply flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium text-base-content/60 transition-all duration-200 hover:bg-base-200 hover:text-base-content;
-}
-
-.sidebar-link.active {
-    @apply bg-base-200 text-primary font-semibold;
-}
-
-.sidebar-link svg {
-    @apply w-4 h-4 opacity-70 transition-opacity;
-}
-
-.sidebar-link:hover svg, .sidebar-link.active svg {
-    @apply opacity-100;
-}
-
-/* Chat Bubbles */
 .chat-bubble-user {
-    @apply bg-primary text-primary-content rounded-2xl rounded-tr-sm px-5 py-3 shadow-sm text-[15px] leading-relaxed;
+    background: linear-gradient(135deg, oklch(var(--p)) 0%, oklch(var(--p) / 0.9) 100%);
+    color: oklch(var(--pc));
+    border-radius: 20px 20px 6px 20px;
+    padding: 14px 18px;
+    font-size: 15px;
+    line-height: 1.6;
+    box-shadow:
+        0 2px 8px oklch(var(--p) / 0.15),
+        0 1px 2px oklch(var(--p) / 0.1);
+    position: relative;
 }
 
 .chat-bubble-ai {
-    @apply bg-base-200 text-base-content rounded-2xl rounded-tl-sm px-5 py-3 text-[15px] leading-relaxed border border-base-300/50;
+    background: oklch(var(--b2));
+    color: oklch(var(--bc));
+    border-radius: 20px 20px 20px 6px;
+    padding: 16px 20px;
+    font-size: 15px;
+    line-height: 1.65;
+    border: 1px solid oklch(var(--bc) / 0.06);
+    box-shadow: 0 1px 3px oklch(var(--bc) / 0.04);
 }
 
-/* Inputs */
+/* Message content formatting */
+.chat-bubble-ai .message-content {
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+}
+
+.chat-bubble-ai strong {
+    font-weight: 600;
+    color: oklch(var(--bc));
+}
+
+.chat-bubble-ai em {
+    font-style: italic;
+    color: oklch(var(--bc) / 0.8);
+}
+
+/* Inline code in messages */
+.chat-bubble-ai code:not(.ledger-code),
+.chat-bubble-user code:not(.ledger-code) {
+    background: oklch(var(--bc) / 0.08);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.875em;
+}
+
+.chat-bubble-user code:not(.ledger-code) {
+    background: oklch(var(--pc) / 0.15);
+}
+
+/* Inline code styling */
+.inline-code {
+    background: oklch(var(--bc) / 0.06);
+    padding: 2px 7px;
+    border-radius: 5px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.85em;
+    color: oklch(var(--bc) / 0.85);
+}
+
+/* Transaction summary in chat */
+.transaction-summary {
+    border-left: 3px solid oklch(var(--su));
+    padding-left: 12px;
+    margin: 8px 0;
+}
+
+/* ============================================
+   Transaction Card - Beautiful Formatting
+   ============================================ */
+
+.transaction-card {
+    background: oklch(var(--b1));
+    border: 1px solid oklch(var(--bc) / 0.08);
+    border-radius: 16px;
+    padding: 20px;
+    margin: 8px 0;
+    box-shadow:
+        0 1px 3px oklch(var(--bc) / 0.04),
+        0 4px 12px oklch(var(--bc) / 0.02);
+    transition: all 0.2s ease;
+}
+
+.transaction-card:hover {
+    border-color: oklch(var(--bc) / 0.12);
+    box-shadow:
+        0 2px 8px oklch(var(--bc) / 0.06),
+        0 8px 24px oklch(var(--bc) / 0.04);
+}
+
+.transaction-card-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    margin-bottom: 16px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid oklch(var(--bc) / 0.06);
+}
+
+.transaction-card-payee {
+    font-size: 17px;
+    font-weight: 600;
+    color: oklch(var(--bc));
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.transaction-card-payee .status-icon {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, oklch(var(--su)) 0%, oklch(var(--su) / 0.8) 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 11px;
+}
+
+.transaction-card-amount {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 20px;
+    font-weight: 600;
+    color: oklch(var(--bc));
+    text-align: right;
+}
+
+.transaction-card-amount .currency {
+    font-size: 14px;
+    font-weight: 500;
+    color: oklch(var(--bc) / 0.5);
+    margin-left: 4px;
+}
+
+.transaction-card-details {
+    display: grid;
+    gap: 12px;
+}
+
+.transaction-card-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 14px;
+}
+
+.transaction-card-row .icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    background: oklch(var(--bc) / 0.04);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: oklch(var(--bc) / 0.5);
+    flex-shrink: 0;
+}
+
+.transaction-card-row .label {
+    color: oklch(var(--bc) / 0.5);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    min-width: 60px;
+}
+
+.transaction-card-row .value {
+    color: oklch(var(--bc));
+    font-weight: 500;
+}
+
+.transaction-card-row .value.category {
+    color: oklch(var(--p));
+    background: oklch(var(--p) / 0.08);
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 13px;
+}
+
+.transaction-card-row .value.account {
+    color: oklch(var(--bc) / 0.7);
+    font-size: 13px;
+}
+
+/* ============================================
+   Ledger Code Block - Syntax Highlighting
+   ============================================ */
+
+.ledger-block {
+    background: oklch(var(--b2));
+    border: 1px solid oklch(var(--bc) / 0.08);
+    border-radius: 12px;
+    padding: 16px 20px;
+    margin: 12px 0;
+    overflow-x: auto;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 13px;
+    line-height: 1.7;
+}
+
+.ledger-block code {
+    background: transparent !important;
+    padding: 0 !important;
+}
+
+/* Ledger syntax colors */
+.ledger-date {
+    color: oklch(var(--p));
+    font-weight: 600;
+}
+
+.ledger-payee {
+    color: oklch(var(--bc));
+    font-weight: 500;
+}
+
+.ledger-account {
+    color: oklch(var(--in));
+}
+
+.ledger-amount {
+    color: oklch(var(--su));
+    font-weight: 500;
+}
+
+.ledger-comment {
+    color: oklch(var(--bc) / 0.4);
+    font-style: italic;
+}
+
+/* ============================================
+   Input Styles - Clean Design
+   ============================================ */
+
 .input-minimal {
-    @apply bg-transparent border-0 border-b border-base-300 rounded-none px-0 py-2 focus:ring-0 focus:border-primary transition-colors text-base placeholder:text-base-content/30;
+    background: transparent;
+    border: none;
+    border-bottom: 1px solid oklch(var(--bc) / 0.1);
+    border-radius: 0;
+    padding: 8px 0;
+    font-size: 14px;
+    color: oklch(var(--bc));
+    transition: border-color 0.2s ease;
+    outline: none;
+}
+
+.input-minimal:focus {
+    border-bottom-color: oklch(var(--p));
+    box-shadow: none;
+}
+
+.input-minimal::placeholder {
+    color: oklch(var(--bc) / 0.3);
 }
 
 .input-box {
-    @apply bg-base-200/50 border border-transparent rounded-xl px-4 py-3 focus:outline-none focus:bg-base-100 focus:border-primary/20 focus:shadow-sm transition-all text-sm placeholder:text-base-content/30;
+    background: oklch(var(--b2));
+    border: 1px solid oklch(var(--bc) / 0.08);
+    border-radius: 10px;
+    padding: 10px 14px;
+    font-size: 14px;
+    color: oklch(var(--bc));
+    transition: all 0.2s ease;
+    outline: none;
 }
 
-/* Cards */
+.input-box:focus {
+    background: oklch(var(--b1));
+    border-color: oklch(var(--p) / 0.3);
+    box-shadow: 0 0 0 3px oklch(var(--p) / 0.08);
+}
+
+.input-box::placeholder {
+    color: oklch(var(--bc) / 0.35);
+}
+
+/* ============================================
+   Chat Input Area - Refined
+   ============================================ */
+
+.chat-input-container {
+    background: oklch(var(--b1));
+    border: 1px solid oklch(var(--bc) / 0.1);
+    border-radius: 16px;
+    padding: 6px;
+    transition: all 0.2s ease;
+    box-shadow:
+        0 1px 3px oklch(var(--bc) / 0.04),
+        0 4px 12px oklch(var(--bc) / 0.02);
+}
+
+.chat-input-container:focus-within {
+    border-color: oklch(var(--p) / 0.3);
+    box-shadow:
+        0 0 0 3px oklch(var(--p) / 0.06),
+        0 4px 16px oklch(var(--bc) / 0.06);
+}
+
+.chat-input-textarea {
+    background: transparent;
+    border: none;
+    outline: none;
+    resize: none;
+    font-size: 15px;
+    line-height: 1.5;
+    padding: 10px 12px;
+    color: oklch(var(--bc));
+    min-height: 24px;
+    max-height: 120px;
+}
+
+.chat-input-textarea::placeholder {
+    color: oklch(var(--bc) / 0.4);
+}
+
+.chat-send-button {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    background: linear-gradient(135deg, oklch(var(--p)) 0%, oklch(var(--p) / 0.85) 100%);
+    color: oklch(var(--pc));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 6px oklch(var(--p) / 0.25);
+}
+
+.chat-send-button:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px oklch(var(--p) / 0.35);
+}
+
+.chat-send-button:active:not(:disabled) {
+    transform: translateY(0) scale(0.97);
+}
+
+.chat-send-button:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    box-shadow: none;
+}
+
+/* ============================================
+   Cards & Containers
+   ============================================ */
+
 .card-clean {
-    @apply bg-base-100 border border-base-200 rounded-xl overflow-hidden transition-all duration-200;
+    background: oklch(var(--b1));
+    border: 1px solid oklch(var(--bc) / 0.06);
+    border-radius: 14px;
+    overflow: hidden;
+    transition: all 0.2s ease;
 }
 
 .card-clean:hover {
-    @apply border-base-300 shadow-sm;
+    border-color: oklch(var(--bc) / 0.1);
+    box-shadow: 0 4px 16px oklch(var(--bc) / 0.04);
 }
 
-/* Buttons */
-.btn-primary-soft {
-    @apply btn btn-primary btn-sm font-medium normal-case tracking-wide shadow-none hover:shadow-md transition-all rounded-lg;
+.card-elevated {
+    background: oklch(var(--b1));
+    border: 1px solid oklch(var(--bc) / 0.06);
+    border-radius: 16px;
+    box-shadow:
+        0 1px 2px oklch(var(--bc) / 0.04),
+        0 4px 16px oklch(var(--bc) / 0.03);
 }
 
-.btn-ghost-sm {
-    @apply btn btn-ghost btn-sm btn-square hover:bg-base-200 transition-colors rounded-lg;
+/* ============================================
+   Preview Panel - Transaction Cards
+   ============================================ */
+
+.preview-panel {
+    background: oklch(var(--b2) / 0.5);
+    border-left: 1px solid oklch(var(--bc) / 0.06);
 }
 
-/* Ledger Code Block */
-.ledger-block {
-    @apply font-mono text-sm bg-base-200/50 p-4 rounded-xl border border-base-300/50 overflow-x-auto;
+.preview-card {
+    background: oklch(var(--b1));
+    border: 1px solid oklch(var(--bc) / 0.08);
+    border-radius: 14px;
+    padding: 16px;
+    transition: all 0.2s ease;
 }
 
-/* Transaction List Item */
+.preview-card:hover {
+    border-color: oklch(var(--bc) / 0.12);
+    box-shadow: 0 4px 16px oklch(var(--bc) / 0.06);
+}
+
+.preview-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 14px;
+}
+
+.preview-card-payee {
+    font-weight: 600;
+    font-size: 15px;
+    color: oklch(var(--bc));
+}
+
+.preview-card-amount {
+    font-family: 'IBM Plex Mono', monospace;
+    font-weight: 600;
+    font-size: 18px;
+    color: oklch(var(--bc));
+}
+
+.preview-card-fields {
+    display: grid;
+    gap: 10px;
+}
+
+.preview-card-field {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.preview-card-field-icon {
+    width: 28px;
+    height: 28px;
+    border-radius: 7px;
+    background: oklch(var(--bc) / 0.04);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: oklch(var(--bc) / 0.4);
+    flex-shrink: 0;
+}
+
+.preview-card-field-input {
+    flex: 1;
+    background: oklch(var(--bc) / 0.03);
+    border: 1px solid transparent;
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-size: 13px;
+    color: oklch(var(--bc));
+    transition: all 0.15s ease;
+}
+
+.preview-card-field-input:focus {
+    background: oklch(var(--b1));
+    border-color: oklch(var(--p) / 0.3);
+    outline: none;
+}
+
+.preview-card-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px solid oklch(var(--bc) / 0.06);
+}
+
+.preview-action-confirm {
+    flex: 1;
+    background: linear-gradient(135deg, oklch(var(--su)) 0%, oklch(var(--su) / 0.85) 100%);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    padding: 10px 16px;
+    font-weight: 600;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+}
+
+.preview-action-confirm:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px oklch(var(--su) / 0.3);
+}
+
+.preview-action-cancel {
+    background: oklch(var(--bc) / 0.05);
+    color: oklch(var(--bc) / 0.6);
+    border: none;
+    border-radius: 8px;
+    padding: 10px 16px;
+    font-weight: 500;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.preview-action-cancel:hover {
+    background: oklch(var(--er) / 0.1);
+    color: oklch(var(--er));
+}
+
+/* ============================================
+   Sidebar Navigation
+   ============================================ */
+
+.sidebar-link {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 500;
+    color: oklch(var(--bc) / 0.6);
+    transition: all 0.15s ease;
+}
+
+.sidebar-link:hover {
+    background: oklch(var(--bc) / 0.04);
+    color: oklch(var(--bc));
+}
+
+.sidebar-link.active {
+    background: oklch(var(--p) / 0.08);
+    color: oklch(var(--p));
+}
+
+.sidebar-link svg {
+    width: 18px;
+    height: 18px;
+    opacity: 0.7;
+    transition: opacity 0.15s ease;
+}
+
+.sidebar-link:hover svg,
+.sidebar-link.active svg {
+    opacity: 1;
+}
+
+/* ============================================
+   Transaction List Item
+   ============================================ */
+
 .txn-item {
-    @apply flex items-center justify-between p-4 hover:bg-base-200/50 transition-colors border-b border-base-100 last:border-0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 18px;
+    transition: background 0.15s ease;
+    border-bottom: 1px solid oklch(var(--bc) / 0.04);
+}
+
+.txn-item:last-child {
+    border-bottom: none;
+}
+
+.txn-item:hover {
+    background: oklch(var(--bc) / 0.02);
+}
+
+/* ============================================
+   Theme Toggle - Fixed
+   ============================================ */
+
+.theme-toggle {
+    position: relative;
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    background: oklch(var(--bc) / 0.05);
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: oklch(var(--bc) / 0.6);
+    transition: all 0.2s ease;
+    overflow: hidden;
+}
+
+.theme-toggle:hover {
+    background: oklch(var(--bc) / 0.08);
+    color: oklch(var(--bc));
+}
+
+.theme-toggle svg {
+    width: 18px;
+    height: 18px;
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.theme-toggle .sun-icon {
+    position: absolute;
+}
+
+.theme-toggle .moon-icon {
+    position: absolute;
+}
+
+/* Dark mode: show sun, hide moon */
+[data-theme="gullak-dark"] .theme-toggle .sun-icon {
+    opacity: 1;
+    transform: rotate(0deg) scale(1);
+}
+
+[data-theme="gullak-dark"] .theme-toggle .moon-icon {
+    opacity: 0;
+    transform: rotate(-90deg) scale(0.5);
+}
+
+/* Light mode: show moon, hide sun */
+[data-theme="gullak"] .theme-toggle .sun-icon {
+    opacity: 0;
+    transform: rotate(90deg) scale(0.5);
+}
+
+[data-theme="gullak"] .theme-toggle .moon-icon {
+    opacity: 1;
+    transform: rotate(0deg) scale(1);
+}
+
+/* ============================================
+   Typing Indicator
+   ============================================ */
+
+.typing-indicator {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 0;
+}
+
+.typing-indicator .dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: oklch(var(--bc) / 0.4);
+    animation: bounce-dot 1.4s ease-in-out infinite;
+}
+
+.typing-indicator .dot:nth-child(2) {
+    animation-delay: 0.2s;
+}
+
+.typing-indicator .dot:nth-child(3) {
+    animation-delay: 0.4s;
+}
+
+/* ============================================
+   Toast Notifications
+   ============================================ */
+
+.toast-notification {
+    background: oklch(var(--b1));
+    border: 1px solid oklch(var(--bc) / 0.1);
+    border-radius: 12px;
+    padding: 14px 18px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    box-shadow:
+        0 4px 16px oklch(var(--bc) / 0.08),
+        0 8px 32px oklch(var(--bc) / 0.04);
+    animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.toast-notification.success {
+    border-color: oklch(var(--su) / 0.2);
+}
+
+.toast-notification.success .toast-icon {
+    color: oklch(var(--su));
+    background: oklch(var(--su) / 0.1);
+}
+
+.toast-notification.error {
+    border-color: oklch(var(--er) / 0.2);
+}
+
+.toast-notification.error .toast-icon {
+    color: oklch(var(--er));
+    background: oklch(var(--er) / 0.1);
+}
+
+.toast-notification.info {
+    border-color: oklch(var(--in) / 0.2);
+}
+
+.toast-notification.info .toast-icon {
+    color: oklch(var(--in));
+    background: oklch(var(--in) / 0.1);
+}
+
+.toast-icon {
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* ============================================
+   Empty State
+   ============================================ */
+
+.empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 48px 24px;
+    text-align: center;
+}
+
+.empty-state-icon {
+    width: 72px;
+    height: 72px;
+    border-radius: 20px;
+    background: linear-gradient(135deg, oklch(var(--p) / 0.1) 0%, oklch(var(--s) / 0.2) 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 24px;
+    color: oklch(var(--p));
+}
+
+.empty-state-title {
+    font-family: 'Instrument Serif', Georgia, serif;
+    font-size: 26px;
+    color: oklch(var(--bc));
+    margin-bottom: 8px;
+}
+
+.empty-state-desc {
+    font-size: 15px;
+    color: oklch(var(--bc) / 0.5);
+    max-width: 320px;
+    line-height: 1.6;
+}
+
+/* ============================================
+   Prompt Suggestions
+   ============================================ */
+
+.prompt-suggestion {
+    background: oklch(var(--bc) / 0.03);
+    border: 1px solid oklch(var(--bc) / 0.06);
+    border-radius: 10px;
+    padding: 10px 16px;
+    font-size: 14px;
+    color: oklch(var(--bc) / 0.7);
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.prompt-suggestion:hover {
+    background: oklch(var(--bc) / 0.06);
+    border-color: oklch(var(--bc) / 0.1);
+    color: oklch(var(--bc));
+}
+
+/* ============================================
+   Utilities
+   ============================================ */
+
+.text-balance {
+    text-wrap: balance;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+    display: none;
+}
+
+.no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+}
+
+/* Alpine cloaking */
+[x-cloak] {
+    display: none !important;
 }
 
 /* Glass effect */
 .glass-panel {
-    @apply bg-base-100/80 backdrop-blur-md border border-base-200;
+    background: oklch(var(--b1) / 0.8);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid oklch(var(--bc) / 0.08);
 }
 
-/* Loading States */
+/* Shimmer loading */
 .shimmer {
-    background: linear-gradient(90deg, var(--base-200) 0%, var(--base-300) 50%, var(--base-200) 100%);
+    background: linear-gradient(
+        90deg,
+        oklch(var(--b2)) 0%,
+        oklch(var(--b3)) 50%,
+        oklch(var(--b2)) 100%
+    );
     background-size: 200% 100%;
     animation: shimmer 1.5s infinite linear;
 }
 
-@keyframes shimmer {
-    0% { background-position: 200% 0; }
-    100% { background-position: -200% 0; }
+/* ============================================
+   Stats Cards
+   ============================================ */
+
+.stat-card {
+    background: oklch(var(--b1));
+    border: 1px solid oklch(var(--bc) / 0.06);
+    border-radius: 14px;
+    padding: 20px;
 }
 
-/* Alpine cloaking */
-[x-cloak] { display: none !important; }
+.stat-card-label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: oklch(var(--bc) / 0.45);
+    margin-bottom: 6px;
+}
+
+.stat-card-value {
+    font-family: 'Instrument Serif', Georgia, serif;
+    font-size: 28px;
+    color: oklch(var(--bc));
+}
+
+/* ============================================
+   Filter Pills
+   ============================================ */
+
+.filter-pill {
+    background: oklch(var(--bc) / 0.04);
+    border: 1px solid oklch(var(--bc) / 0.06);
+    border-radius: 100px;
+    padding: 6px 14px;
+    font-size: 13px;
+    font-weight: 500;
+    color: oklch(var(--bc) / 0.6);
+    cursor: pointer;
+    transition: all 0.15s ease;
+    white-space: nowrap;
+}
+
+.filter-pill:hover {
+    background: oklch(var(--bc) / 0.08);
+    color: oklch(var(--bc));
+}
+
+.filter-pill.active {
+    background: oklch(var(--p));
+    border-color: oklch(var(--p));
+    color: oklch(var(--pc));
+}

@@ -1,30 +1,36 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="gullak">
+<html lang="en" class="transition-colors duration-300">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>{% block title %}Gullak{% endblock %}</title>
 
-    <!-- Fonts -->
+    <!-- Fonts - Distinctive choices -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,400;9..144,500;9..144,600&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=Instrument+Serif&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 
     <!-- Alpine.js -->
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.13.3/dist/cdn.min.js"></script>
 
-    <!-- Tailwind CSS v4 + DaisyUI v5 -->
+    <!-- Tailwind CSS + DaisyUI -->
     <link href="https://cdn.jsdelivr.net/npm/daisyui@4.6.0/dist/full.min.css" rel="stylesheet" type="text/css" />
     <script src="https://cdn.tailwindcss.com"></script>
-    
+
     <script>
+        // Apply saved theme immediately to prevent flash
+        (function() {
+            const savedTheme = localStorage.getItem('theme') || 'gullak';
+            document.documentElement.setAttribute('data-theme', savedTheme);
+        })();
+
         tailwind.config = {
             theme: {
                 extend: {
                     fontFamily: {
-                        sans: ['Inter', 'system-ui', 'sans-serif'],
-                        serif: ['Fraunces', 'Georgia', 'serif'],
-                        mono: ['JetBrains Mono', 'monospace'],
+                        sans: ['DM Sans', 'system-ui', 'sans-serif'],
+                        display: ['Instrument Serif', 'Georgia', 'serif'],
+                        mono: ['IBM Plex Mono', 'monospace'],
                     },
                     colors: {
                         border: "var(--border)",
@@ -32,6 +38,13 @@
                         ring: "var(--ring)",
                         background: "var(--background)",
                         foreground: "var(--foreground)",
+                    },
+                    animation: {
+                        'fade-in': 'fadeIn 0.4s ease-out forwards',
+                        'slide-up': 'slideUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards',
+                        'slide-in-right': 'slideInRight 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards',
+                        'scale-in': 'scaleIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards',
+                        'pulse-soft': 'pulseSoft 2s ease-in-out infinite',
                     }
                 }
             },
@@ -39,60 +52,60 @@
                 themes: [
                     {
                         gullak: {
-                            "primary": "#4F46E5", // Indigo 600
+                            "primary": "#4338CA",
                             "primary-content": "#ffffff",
-                            "secondary": "#E0E7FF", // Indigo 100
-                            "secondary-content": "#3730a3", // Indigo 900
-                            "accent": "#F59E0B", // Amber 500
+                            "secondary": "#E0E7FF",
+                            "secondary-content": "#3730A3",
+                            "accent": "#F59E0B",
                             "accent-content": "#ffffff",
-                            "neutral": "#1F2937", // Gray 800
+                            "neutral": "#1F2937",
                             "neutral-content": "#ffffff",
                             "base-100": "#FFFFFF",
-                            "base-200": "#F9FAFB", // Gray 50
-                            "base-300": "#F3F4F6", // Gray 100
-                            "base-content": "#111827", // Gray 900
+                            "base-200": "#F8FAFC",
+                            "base-300": "#F1F5F9",
+                            "base-content": "#0F172A",
                             "info": "#3B82F6",
-                            "success": "#10B981",
-                            "warning": "#FBBF24",
-                            "error": "#EF4444",
-                            
-                            "--rounded-box": "0.75rem",
-                            "--rounded-btn": "0.5rem",
+                            "success": "#059669",
+                            "warning": "#D97706",
+                            "error": "#DC2626",
+
+                            "--rounded-box": "1rem",
+                            "--rounded-btn": "0.625rem",
                             "--rounded-badge": "9999px",
                             "--animation-btn": "0.2s",
                             "--animation-input": "0.2s",
                             "--btn-focus-scale": "0.98",
                             "--border-btn": "1px",
                             "--tab-border": "1px",
-                            "--tab-radius": "0.5rem",
+                            "--tab-radius": "0.625rem",
                         },
                         "gullak-dark": {
-                            "primary": "#6366F1", // Indigo 500
-                            "primary-content": "#ffffff",
-                            "secondary": "#312E81", // Indigo 900
-                            "secondary-content": "#E0E7FF", // Indigo 100
-                            "accent": "#FBBF24", // Amber 400
+                            "primary": "#818CF8",
+                            "primary-content": "#0F0F23",
+                            "secondary": "#312E81",
+                            "secondary-content": "#E0E7FF",
+                            "accent": "#FBBF24",
                             "accent-content": "#1F2937",
-                            "neutral": "#9CA3AF", // Gray 400
+                            "neutral": "#9CA3AF",
                             "neutral-content": "#1F2937",
-                            "base-100": "#09090b", // Zinc 950
-                            "base-200": "#18181b", // Zinc 900
-                            "base-300": "#27272a", // Zinc 800
-                            "base-content": "#FAFAFA", // Zinc 50
+                            "base-100": "#0C0C0F",
+                            "base-200": "#141419",
+                            "base-300": "#1E1E26",
+                            "base-content": "#F1F5F9",
                             "info": "#60A5FA",
                             "success": "#34D399",
-                            "warning": "#FCD34D",
+                            "warning": "#FBBF24",
                             "error": "#F87171",
 
-                            "--rounded-box": "0.75rem",
-                            "--rounded-btn": "0.5rem",
+                            "--rounded-box": "1rem",
+                            "--rounded-btn": "0.625rem",
                             "--rounded-badge": "9999px",
                             "--animation-btn": "0.2s",
                             "--animation-input": "0.2s",
                             "--btn-focus-scale": "0.98",
                             "--border-btn": "1px",
                             "--tab-border": "1px",
-                            "--tab-radius": "0.5rem",
+                            "--tab-radius": "0.625rem",
                         }
                     }
                 ]
