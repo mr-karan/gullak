@@ -791,6 +791,17 @@ function gullakApp() {
 
         formatMessage(text) {
             if (!text) return '';
+            if (typeof text !== 'string') {
+                if (Array.isArray(text)) {
+                    const textParts = text.filter(p => p.type === 'text').map(p => p.text);
+                    text = textParts.join('') || '';
+                } else if (typeof text === 'object') {
+                    text = text.text || JSON.stringify(text);
+                } else {
+                    text = String(text);
+                }
+            }
+            if (!text) return '';
             return text
                 .replace(/\*\*(.*?)\*\*/g, '<strong class="font-semibold">$1</strong>')
                 .replace(/\*(.*?)\*/g, '<em>$1</em>')
