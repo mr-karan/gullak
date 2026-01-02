@@ -157,8 +157,17 @@
                                         </div>
                                     </template>
                                 </div>
+                                <!-- Quick add suggested banks -->
+                                <div class="flex flex-wrap gap-1.5 mb-3" x-show="setupOptions?.suggested_banks?.length">
+                                    <template x-for="bank in (setupOptions?.suggested_banks || []).filter(b => !setupData.bank_accounts.includes(b))" :key="bank">
+                                        <button @click="addBankAccount(bank)" 
+                                                class="px-3 py-1 text-xs rounded-full border border-base-300 text-base-content/60 hover:border-primary hover:text-primary hover:bg-primary/5 transition-all">
+                                            + <span x-text="bank"></span>
+                                        </button>
+                                    </template>
+                                </div>
                                 <div class="flex gap-2">
-                                    <input type="text" x-data="{val:''}" x-model="val" @keyup.enter="addBankAccount(val); val=''" placeholder="Add bank account..." class="input-box flex-1" />
+                                    <input type="text" x-data="{val:''}" x-model="val" @keyup.enter="addBankAccount(val); val=''" placeholder="Or type custom bank name..." class="input-box flex-1" />
                                     <button class="btn btn-primary" @click="addBankAccount($el.previousElementSibling.value); $el.previousElementSibling.value=''">Add</button>
                                 </div>
                             </div>
@@ -176,8 +185,16 @@
                                         </div>
                                     </template>
                                 </div>
+                                <div class="flex flex-wrap gap-1.5 mb-3" x-show="setupOptions?.suggested_cards?.length">
+                                    <template x-for="card in (setupOptions?.suggested_cards || []).filter(c => !setupData.credit_cards.includes(c))" :key="card">
+                                        <button @click="addCreditCard(card)" 
+                                                class="px-3 py-1 text-xs rounded-full border border-base-300 text-base-content/60 hover:border-primary hover:text-primary hover:bg-primary/5 transition-all">
+                                            + <span x-text="card"></span>
+                                        </button>
+                                    </template>
+                                </div>
                                 <div class="flex gap-2">
-                                    <input type="text" x-data="{val:''}" x-model="val" @keyup.enter="addCreditCard(val); val=''" placeholder="Add credit card..." class="input-box flex-1" />
+                                    <input type="text" x-data="{val:''}" x-model="val" @keyup.enter="addCreditCard(val); val=''" placeholder="Or type custom card name..." class="input-box flex-1" />
                                     <button class="btn btn-primary" @click="addCreditCard($el.previousElementSibling.value); $el.previousElementSibling.value=''">Add</button>
                                 </div>
                             </div>
