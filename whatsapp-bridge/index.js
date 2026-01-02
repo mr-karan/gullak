@@ -4,6 +4,7 @@ import makeWASocket, {
   fetchLatestBaileysVersion,
   makeCacheableSignalKeyStore,
   downloadMediaMessage,
+  normalizeMessageContent,
 } from "@whiskeysockets/baileys";
 import express from "express";
 import QRCode from "qrcode";
@@ -167,23 +168,6 @@ async function connectWhatsApp() {
     });
   }
 
-  function unwrapMessage(msg) {
-    if (!msg.message) return null;
-    let content = msg.message;
-    
-    if (content.ephemeralMessage) {
-      content = content.ephemeralMessage.message;
-    }
-    if (content.viewOnceMessage) {
-      content = content.viewOnceMessage.message;
-    }
-    if (content.viewOnceMessageV2) {
-      content = content.viewOnceMessageV2.message;
-    }
-    
-    return content;
-  }
-
   sock.ev.on("messages.upsert", async ({ messages, type }) => {
     if (type !== "notify") return;
 
@@ -191,21 +175,25 @@ async function connectWhatsApp() {
       if (msg.key.fromMe) continue;
       if (!msg.message) continue;
 
-      const content = unwrapMessage(msg);
+      const content = normalizeMessageContent(msg.message);
       if (!content) continue;
 
       const text =
         content.conversation ||
         content.extendedTextMessage?.text ||
         content.imageMessage?.caption ||
+        content.videoMessage?.caption ||
         content.documentMessage?.caption ||
         "";
 
       const imageMessage = content.imageMessage;
+      const videoMessage = content.videoMessage;
       const documentMessage = content.documentMessage;
-      const hasMedia = imageMessage || documentMessage;
+      const audioMessage = content.audioMessage;
+      const stickerMessage = content.stickerMessage;
+      const hasMedia = imageMessage || videoMessage || documentMessage || audioMessage || stickerMessage;
 
-      logger.debug({ msgId: msg.key.id, hasMedia, keys: Object.keys(content) }, "Processing message");
+      logger.debug({ msgId: msg.key.id, hasMedia: !!hasMedia, keys: Object.keys(content) }, "Processing message");
 
       if (!text.trim() && !hasMedia) continue;
 
@@ -222,7 +210,7 @@ async function connectWhatsApp() {
       if (hasMedia) {
         try {
           const buffer = await downloadMediaMessage(
-            msg, 
+            msg,
             "buffer",
             {},
             {
@@ -231,11 +219,23 @@ async function connectWhatsApp() {
             }
           );
 
-          const mimetype = imageMessage?.mimetype || documentMessage?.mimetype;
+          const mimetype =
+            imageMessage?.mimetype ||
+            videoMessage?.mimetype ||
+            documentMessage?.mimetype ||
+            audioMessage?.mimetype ||
+            stickerMessage?.mimetype;
+
           const filename = documentMessage?.fileName || null;
 
+          let mediaType = "document";
+          if (imageMessage) mediaType = "image";
+          else if (videoMessage) mediaType = "video";
+          else if (audioMessage) mediaType = "audio";
+          else if (stickerMessage) mediaType = "sticker";
+
           payload.media = {
-            type: imageMessage ? "image" : "document",
+            type: mediaType,
             mimetype: mimetype,
             filename: filename,
             data: buffer.toString("base64"),
@@ -243,7 +243,7 @@ async function connectWhatsApp() {
           };
 
           logger.info(
-            { from: payload.from, mediaType: payload.media.type, size: payload.media.size },
+            { from: payload.from, mediaType: payload.media.type, size: payload.media.size, mimetype },
             "Media message received"
           );
         } catch (err) {
