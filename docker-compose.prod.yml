@@ -38,6 +38,7 @@ services:
       - GULLAK_TIMEZONE=${TZ:-UTC}
       - GULLAK_DEFAULT_CURRENCY=${GULLAK_DEFAULT_CURRENCY:-USD}
       - GULLAK_PAISA_URL=http://paisa:7500
+      - GULLAK_PAISA_EXTERNAL_URL=${GULLAK_PAISA_EXTERNAL_URL:-http://localhost:7500}
       - GULLAK_WHATSAPP_BRIDGE_URL=http://whatsapp-bridge:3000
       - GULLAK_DEBUG=false
     healthcheck:

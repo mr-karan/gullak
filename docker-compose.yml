@@ -34,6 +34,7 @@ services:
       - GULLAK_LEDGER_FILE=main.ledger
       - GULLAK_TIMEZONE=${TZ:-Asia/Kolkata}
       - GULLAK_PAISA_URL=http://paisa:7500
+      - GULLAK_PAISA_EXTERNAL_URL=http://localhost:7500
       - GULLAK_WHATSAPP_BRIDGE_URL=http://whatsapp-bridge:3000
       - GULLAK_DEBUG=true
     healthcheck:

@@ -69,7 +69,14 @@ class Settings(BaseSettings):
     # ==========================================================================
     # Integrations
     # ==========================================================================
-    paisa_url: str = "http://localhost:7500"
+    paisa_url: str = Field(
+        default="http://localhost:7500",
+        description="Internal Paisa URL for backend API sync (e.g., http://paisa:7500 in Docker)",
+    )
+    paisa_external_url: str | None = Field(
+        default=None,
+        description="Browser-accessible Paisa URL for 'Open Paisa' link. Falls back to paisa_url.",
+    )
 
     # WhatsApp Integration
     whatsapp_bridge_url: str = "http://whatsapp-bridge:3000"

@@ -164,7 +164,7 @@ async def index(request: Request):
     """Serve the main application page."""
     return templates.TemplateResponse(
         "index.html",
-        {"request": request, "paisa_url": settings.paisa_url},
+        {"request": request, "paisa_url": settings.paisa_external_url or settings.paisa_url},
     )
 
 
