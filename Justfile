@@ -52,7 +52,7 @@ typecheck:
 # Run all checks (format, lint, typecheck, test)
 check: fmt lint typecheck test
 
-# === Docker ===
+# === Docker (Development) ===
 
 # Build docker image with current user's UID/GID for file permissions
 docker-build:
@@ -84,6 +84,40 @@ docker-restart: docker-down docker-build docker-up
 # Shell into gullak container
 docker-shell:
     docker compose exec gullak bash
+
+# === Docker (Production) ===
+
+# Build production images
+prod-build:
+    GULLAK_UID=$(id -u) GULLAK_GID=$(id -g) docker compose -f docker-compose.prod.yml build
+
+# Start production services (detached)
+prod-up:
+    GULLAK_UID=$(id -u) GULLAK_GID=$(id -g) docker compose -f docker-compose.prod.yml up -d
+
+# Stop production services
+prod-down:
+    docker compose -f docker-compose.prod.yml down
+
+# View production logs
+prod-logs:
+    docker compose -f docker-compose.prod.yml logs -f
+
+# Rebuild and restart production
+prod-restart: prod-down prod-build prod-up
+
+# Backup production data volume
+prod-backup:
+    @mkdir -p backups
+    docker run --rm -v gullak_data:/volume -v $(pwd)/backups:/backup alpine tar -czf /backup/gullak_data_$(date +%F_%H%M%S).tar.gz -C /volume .
+    @echo "Backup saved to backups/"
+
+# Update production (pull, rebuild, restart)
+prod-update:
+    git pull
+    GULLAK_UID=$(id -u) GULLAK_GID=$(id -g) docker compose -f docker-compose.prod.yml build --pull
+    docker compose -f docker-compose.prod.yml up -d
+    docker image prune -f
 
 # === Ledger ===
 

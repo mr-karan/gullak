@@ -9,7 +9,7 @@ FROM ghcr.io/astral-sh/uv:python3.13-bookworm-slim
 ARG GULLAK_UID=1000
 ARG GULLAK_GID=1000
 
-# Install runtime dependencies
+# Install runtime dependencies and create user
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ledger \
     curl \
@@ -20,7 +20,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /app
 
 # Copy project files for dependency installation
-COPY pyproject.toml uv.lock ./
+COPY pyproject.toml uv.lock README.md ./
 
 # Install all dependencies (including dev)
 RUN --mount=type=cache,target=/root/.cache/uv \
@@ -29,12 +29,12 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 # Copy source code (will be overridden by volume mount in dev)
 COPY src/ ./src/
 
-# Install the project in editable mode
+# Install the project
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --locked
+    uv sync --locked --no-editable
 
-# Set ownership
-RUN chown -R gullak:gullak /app
+# Set ownership using UID:GID (works even if user creation failed)
+RUN chown -R $GULLAK_UID:$GULLAK_GID /app
 
 ENV PATH="/app/.venv/bin:$PATH" \
     GULLAK_HOST=0.0.0.0 \
@@ -42,7 +42,7 @@ ENV PATH="/app/.venv/bin:$PATH" \
     GULLAK_DATA_DIR=/data \
     GULLAK_DEBUG=true
 
-USER gullak
+USER $GULLAK_UID
 
 EXPOSE 8000
 
