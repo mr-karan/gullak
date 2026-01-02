@@ -1,12 +1,18 @@
 # Gullak Production Docker Compose
 #
-# Quick Start:
+# Quick Start (Standalone):
 #   1. cp .env.production.example .env
 #   2. Edit .env and set your OPENROUTER_API_KEY (required)
-#   3. docker compose -f docker-compose.prod.yml up -d
+#   3. docker compose -f docker-compose.prod.yml up -d --build
 #   4. Open http://localhost:8000
 #
-# All other settings have sensible defaults. See .env.production.example for options.
+# With Reverse Proxy (Caddy/Traefik/nginx):
+#   1. Set GULLAK_DATA_DIR to your persistent storage path
+#   2. Set GULLAK_PROXY_NETWORK to your proxy's network name
+#   3. docker compose -f docker-compose.prod.yml up -d --build
+#   4. Connect containers to proxy network (see docs/deployment.md)
+#
+# See docs/deployment.md for full deployment guide.
 
 services:
   gullak:
@@ -22,33 +28,24 @@ services:
     ports:
       - "${GULLAK_HOST_PORT:-127.0.0.1:8000}:8000"
     volumes:
-      - gullak_data:/data
+      - ${GULLAK_DATA_DIR:-gullak_data}:/data
     env_file:
       - .env
     environment:
-      # Internal service URLs (don't change these)
-      - GULLAK_PAISA_URL=http://paisa:7500
-      - GULLAK_WHATSAPP_BRIDGE_URL=http://whatsapp-bridge:3000
+      - TZ=${TZ:-UTC}
       - GULLAK_DATA_DIR=/data
-      # Defaults (override in .env)
-      - GULLAK_DEBUG=false
       - GULLAK_LEDGER_FILE=${GULLAK_LEDGER_FILE:-main.ledger}
       - GULLAK_TIMEZONE=${TZ:-UTC}
       - GULLAK_DEFAULT_CURRENCY=${GULLAK_DEFAULT_CURRENCY:-USD}
+      - GULLAK_PAISA_URL=http://paisa:7500
+      - GULLAK_WHATSAPP_BRIDGE_URL=http://whatsapp-bridge:3000
+      - GULLAK_DEBUG=false
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 30s
-    deploy:
-      resources:
-        limits:
-          cpus: '2'
-          memory: 1G
-        reservations:
-          cpus: '0.5'
-          memory: 256M
     logging:
       driver: "json-file"
       options:
@@ -56,12 +53,12 @@ services:
         max-file: "3"
     security_opt:
       - no-new-privileges:true
-    read_only: true
-    tmpfs:
-      - /tmp
+    networks:
+      - gullak-internal
+      - default
     depends_on:
       whatsapp-bridge:
-        condition: service_healthy
+        condition: service_started  # Don't wait for healthy - WhatsApp needs QR scan
 
   paisa:
     image: ananthakumaran/paisa:latest
@@ -72,7 +69,8 @@ services:
     ports:
       - "${PAISA_HOST_PORT:-127.0.0.1:7500}:7500"
     volumes:
-      - gullak_data:/root/Documents/paisa:ro
+      # NOT read-only - paisa needs to write paisa.db
+      - ${GULLAK_DATA_DIR:-gullak_data}:/root/Documents/paisa
     environment:
       - TZ=${TZ:-UTC}
       - PAISA_CONFIG=/root/Documents/paisa/paisa.yaml
@@ -82,14 +80,6 @@ services:
       timeout: 10s
       retries: 3
       start_period: 10s
-    deploy:
-      resources:
-        limits:
-          cpus: '1'
-          memory: 512M
-        reservations:
-          cpus: '0.25'
-          memory: 128M
     logging:
       driver: "json-file"
       options:
@@ -97,6 +87,9 @@ services:
         max-file: "3"
     security_opt:
       - no-new-privileges:true
+    networks:
+      - gullak-internal
+      - default
     depends_on:
       gullak:
         condition: service_healthy
@@ -114,7 +107,7 @@ services:
       - LOG_LEVEL=info
       - NODE_ENV=production
     volumes:
-      - whatsapp_session:/data/whatsapp-session
+      - ${GULLAK_DATA_DIR:-gullak_data}/whatsapp-session:/data/whatsapp-session
     expose:
       - "3000"
     healthcheck:
@@ -123,14 +116,6 @@ services:
       timeout: 10s
       retries: 3
       start_period: 15s
-    deploy:
-      resources:
-        limits:
-          cpus: '1'
-          memory: 512M
-        reservations:
-          cpus: '0.25'
-          memory: 128M
     logging:
       driver: "json-file"
       options:
@@ -138,13 +123,17 @@ services:
         max-file: "3"
     security_opt:
       - no-new-privileges:true
+    networks:
+      - gullak-internal
 
+networks:
+  gullak-internal:
+    # Internal network for service communication
+    internal: true
+  default:
+    # Default network - can be connected to external proxy network
+
+# Named volume (used when GULLAK_DATA_DIR is not set)
 volumes:
   gullak_data:
     name: gullak_data
-  whatsapp_session:
-    name: gullak_whatsapp_session
-
-networks:
-  default:
-    name: gullak_network

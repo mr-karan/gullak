@@ -64,17 +64,21 @@ GULLAK_UID=$(id -u)
 GULLAK_GID=$(id -g)
 ```
 
-## Reverse Proxy Setup (Caddy)
+## Reverse Proxy Setup
 
-For production use, it is highly recommended to use a reverse proxy like **Caddy** for automatic HTTPS.
+For production use, it is highly recommended to use a reverse proxy like **Caddy** for automatic HTTPS. There are two approaches depending on your setup.
 
-1.  **Expose Ports**: In your `.env`, change the host ports to allow the proxy to connect (or keep them at `127.0.0.1` if Caddy is on the same host).
+### Option A: Localhost Binding (Simple)
+
+If Caddy runs on the same host (not in Docker), bind ports to localhost:
+
+1.  **Configure Ports** in `.env`:
     ```bash
     GULLAK_HOST_PORT=127.0.0.1:8000
     PAISA_HOST_PORT=127.0.0.1:7500
     ```
 
-2.  **Caddyfile Example**:
+2.  **Caddyfile**:
     ```caddy
     gullak.example.com {
         reverse_proxy localhost:8000
@@ -85,19 +89,105 @@ For production use, it is highly recommended to use a reverse proxy like **Caddy
     }
     ```
 
-3.  **Start Caddy**:
+### Option B: Docker Network (Recommended for Homelab)
+
+If Caddy runs in Docker alongside Gullak, use Docker networks for container-to-container communication. This avoids port binding entirely.
+
+1.  **Create a shared proxy network** (if not exists):
     ```bash
-    caddy run --config Caddyfile
+    docker network create public_proxy
     ```
+
+2.  **Configure Gullak** - set data directory and disable port binding:
+    ```bash
+    # .env
+    GULLAK_DATA_DIR=/mnt/storage/gullak  # Your persistent storage path
+    GULLAK_HOST_PORT=127.0.0.1:8000      # Or remove ports entirely
+    PAISA_HOST_PORT=127.0.0.1:7500
+    ```
+
+3.  **Launch Gullak**:
+    ```bash
+    docker compose -f docker-compose.prod.yml up -d --build
+    ```
+
+4.  **Connect containers to proxy network**:
+    ```bash
+    # Connect both gullak and paisa to the shared network
+    docker network connect public_proxy gullak
+    docker network connect public_proxy paisa
+    ```
+
+5.  **Caddyfile** - use container names instead of localhost:
+    ```caddy
+    gullak.example.com {
+        reverse_proxy gullak:8000
+    }
+
+    paisa.example.com {
+        reverse_proxy paisa:7500
+    }
+    ```
+
+6.  **Reload Caddy**:
+    ```bash
+    docker exec caddy caddy reload --config /etc/caddy/Caddyfile
+    ```
+
+#### Important Notes for Docker Network Setup
+
+- **After rebuilding containers**: You must reconnect to the proxy network. Container recreation disconnects from external networks.
+  ```bash
+  # After docker compose up -d --build
+  docker network connect public_proxy gullak
+  docker network connect public_proxy paisa
+  ```
+
+- **Network persistence**: Add this to a deploy script to automate reconnection:
+  ```bash
+  #!/bin/bash
+  cd ~/gullak
+  git pull
+  docker compose -f docker-compose.prod.yml up -d --build
+  docker network connect public_proxy gullak 2>/dev/null || true
+  docker network connect public_proxy paisa 2>/dev/null || true
+  ```
+
+- **Verify connectivity**:
+  ```bash
+  # Check containers are on the network
+  docker network inspect public_proxy --format '{{range .Containers}}{{.Name}} {{end}}'
+  
+  # Test internal DNS resolution from Caddy
+  docker exec caddy nslookup gullak
+  ```
 
 ## Data Backup
 
-Gullak stores all persistent data in Docker named volumes. You should regularly back these up.
+Gullak stores all persistent data in a single directory. The location depends on your configuration:
 
-- **`gullak_data`**: Contains your `.ledger` files, chat history, and Paisa configuration.
-- **`gullak_whatsapp_session`**: Contains WhatsApp authentication state.
+- **Docker volume** (default): `gullak_data` named volume
+- **Bind mount** (recommended): Path set via `GULLAK_DATA_DIR` environment variable
 
-### Manual Backup Command
+### Data Directory Contents
+
+| Path | Contents |
+|------|----------|
+| `*.ledger` | Your transaction files |
+| `paisa.yaml` | Paisa dashboard configuration |
+| `paisa.db` | Paisa database (auto-generated) |
+| `threads/` | Chat history per conversation |
+| `whatsapp-session/` | WhatsApp authentication state |
+
+### Backup Commands
+
+**If using bind mount** (e.g., `GULLAK_DATA_DIR=/mnt/storage/gullak`):
+```bash
+# Direct backup - just copy the directory
+tar -czf gullak_backup_$(date +%F).tar.gz /mnt/storage/gullak
+```
+
+**If using Docker volume**:
 ```bash
 docker run --rm -v gullak_data:/volume -v $(pwd):/backup alpine \
   tar -czf /backup/gullak_data_$(date +%F).tar.gz -C /volume .
@@ -114,11 +204,16 @@ To update to the latest version:
 
 2.  **Rebuild and Restart**:
     ```bash
-    docker compose -f docker-compose.prod.yml build --pull
-    docker compose -f docker-compose.prod.yml up -d
+    docker compose -f docker-compose.prod.yml up -d --build
     ```
 
-3.  **Cleanup**:
+3.  **Reconnect to Proxy Network** (if using Docker network setup):
+    ```bash
+    docker network connect public_proxy gullak 2>/dev/null || true
+    docker network connect public_proxy paisa 2>/dev/null || true
+    ```
+
+4.  **Cleanup**:
     ```bash
     docker image prune -f
     ```
