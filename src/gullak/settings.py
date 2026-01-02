@@ -71,6 +71,18 @@ class Settings(BaseSettings):
     # ==========================================================================
     paisa_url: str = "http://localhost:7500"
 
+    # WhatsApp Integration
+    whatsapp_bridge_url: str = "http://whatsapp-bridge:3000"
+    whatsapp_api_key: str | None = Field(default=None, validation_alias="GULLAK_WHATSAPP_API_KEY")
+    whatsapp_allowed_numbers: list[str] = Field(
+        default_factory=list,
+        description="List of allowed phone numbers (e.g., 919999999999) that can interact with the bot",
+    )
+    whatsapp_group_require_mention: bool = Field(
+        default=False,
+        description="If true, only process group messages that mention @gullak",
+    )
+
     # ==========================================================================
     # Application
     # ==========================================================================

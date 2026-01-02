@@ -1,3 +1,7 @@
+# Gullak Production Dockerfile
+# Multi-stage build for minimal image size
+# For development with hot reload, use Dockerfile.dev
+
 # Build stage
 FROM ghcr.io/astral-sh/uv:python3.13-bookworm-slim AS builder
 

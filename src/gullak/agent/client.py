@@ -5,13 +5,19 @@ Implements a minimal agentic loop with streaming support.
 
 import json
 import logging
+import os
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
+# Keep LiteLLM logs quiet unless explicitly enabled.
+os.environ.setdefault("LITELLM_LOG", "WARNING")
+
 import litellm
+
+litellm.suppress_debug_info = True
 
 from gullak.chat_history import ChatHistory
 from gullak.ledger.parser import LedgerParser
@@ -304,6 +310,24 @@ class GullakAgent:
             # Restore pending on failure
             self._tool_state.add_pending(pending)
             return False, f"Failed to write transaction: {e}"
+
+    async def undo_transaction(self, txn_id: str) -> tuple[bool, str]:
+        """
+        Undo a previously saved transaction by ID.
+
+        Returns:
+            Tuple of (success, message)
+        """
+        if self._writer is None:
+            return False, "Writer not initialized"
+
+        try:
+            deleted = await self._writer.delete_transaction(txn_id)
+            if deleted:
+                return True, "Transaction undone"
+            return False, "Transaction not found"
+        except Exception as e:
+            return False, f"Failed to undo transaction: {e}"
 
     def cancel_transaction(self, txn_id: str) -> bool:
         """Cancel a pending transaction."""

@@ -1,0 +1,17 @@
+{
+  "name": "gullak-whatsapp-bridge",
+  "version": "1.0.0",
+  "description": "WhatsApp bridge for Gullak using Baileys",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "bun run index.js"
+  },
+  "dependencies": {
+    "@hapi/boom": "^10.0.1",
+    "@whiskeysockets/baileys": "7.0.0-rc.9",
+    "express": "^5.2.1",
+    "pino": "^9.6.0",
+    "qrcode": "^1.5.4"
+  }
+}

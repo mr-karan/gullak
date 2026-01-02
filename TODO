@@ -1,3 +1,11 @@
+## 현재 진행 중인 작업
+- [x] Create a production deployment guide for Gullak at `/Users/karan/Code/gullak/docs/deployment.md`
+- [x] Write /Users/karan/Code/gullak/docs/development.md - Local development setup guide for Gullak.
+- [x] Write /Users/karan/Code/gullak/docs/AGENTS.md - AI assistant instructions for working with Gullak codebase.
+- [x] Write docs/troubleshooting.md - Troubleshooting guide for Gullak
+- [x] Write /Users/karan/Code/gullak/docs/whatsapp.md - WhatsApp integration documentation for Gullak.
+- [x] Write docs/architecture.md - system architecture documentation for Gullak
+
 - [x] Create a nice UI
 - [x] Add `?confirm=true|false` in the API
 - [x] Add separate handler for confirmation
@@ -16,6 +24,8 @@
  - [x] Rename to Gullak
  - [x] README/Docs
  - [x] Create comprehensive API documentation file at docs/API.md
+ - [x] Write docs/index.md - main documentation entry point
+ - [x] Write docs/ledger.md - Plain-text accounting documentation for Gullak
  - [ ] Blog
 
 - [x] Self Host

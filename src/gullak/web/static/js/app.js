@@ -1,7 +1,12 @@
 function gullakApp() {
     return {
         view: 'chat',
-        theme: localStorage.getItem('theme') || 'gullak',
+        theme: (() => {
+            const savedTheme = localStorage.getItem('theme');
+            if (savedTheme === 'gullak-dark') return 'dark';
+            if (savedTheme === 'gullak') return 'light';
+            return savedTheme || 'light';
+        })(),
 
         // Setup state
         setupComplete: true,
@@ -15,6 +20,12 @@ function gullakApp() {
             categories: [],
         },
         setupLoading: false,
+        
+        // WhatsApp state
+        whatsappConnected: false,
+        whatsappStatus: 'stopped',
+        qrLoading: false,
+        qrImageUrl: null,
 
         // Chat state
         messages: [],
@@ -56,6 +67,9 @@ function gullakApp() {
 
         async init() {
             document.documentElement.setAttribute('data-theme', this.theme);
+            if (document.body) {
+                document.body.setAttribute('data-theme', this.theme);
+            }
 
             await this.checkSetupStatus();
 
@@ -76,6 +90,12 @@ function gullakApp() {
                     this.switchThread(this.threads[0].id);
                 }
             }
+
+            window.addEventListener('undo-transaction', (event) => {
+                if (event.detail?.id) {
+                    this.undoTransaction(event.detail.id);
+                }
+            });
         },
 
         handleRoute() {
@@ -92,6 +112,7 @@ function gullakApp() {
                     this.loadLedgerFile();
                 } else if (hash === 'settings') {
                     this.loadSetupOptions();
+                    this.checkWhatsAppStatus();
                 }
             }
         },
@@ -138,6 +159,81 @@ function gullakApp() {
             } catch (error) {
                 console.error('Failed to load setup options:', error);
             }
+        },
+        
+        // Check WhatsApp Status
+        async checkWhatsAppStatus() {
+            try {
+                const response = await fetch('/api/whatsapp/status');
+                if (response.ok) {
+                    const data = await response.json();
+                    this.whatsappConnected = data.connected;
+                    this.whatsappStatus = data.status || 'stopped';
+                } else {
+                    this.whatsappConnected = false;
+                    this.whatsappStatus = 'stopped';
+                }
+            } catch (error) {
+                console.error('Failed to check WhatsApp status:', error);
+                this.whatsappConnected = false;
+                this.whatsappStatus = 'stopped';
+            }
+        },
+
+        // Start WhatsApp session to generate QR
+        async startWhatsAppSession() {
+            this.qrLoading = true;
+            try {
+                const response = await fetch('/api/whatsapp/start', { method: 'POST' });
+                if (response.ok) {
+                    this.whatsappStatus = 'STARTING';
+                    // Poll for QR code
+                    this.pollForQrCode();
+                }
+            } catch (error) {
+                console.error('Failed to start WhatsApp session:', error);
+            } finally {
+                this.qrLoading = false;
+            }
+        },
+
+        // Poll for QR code until ready
+        async pollForQrCode() {
+            const maxAttempts = 30;
+            let attempts = 0;
+            
+            const poll = async () => {
+                attempts++;
+                try {
+                    const response = await fetch('/api/whatsapp/qr');
+                    const contentType = response.headers.get('content-type');
+                    
+                    if (contentType && contentType.includes('image')) {
+                        const blob = await response.blob();
+                        this.qrImageUrl = URL.createObjectURL(blob);
+                        this.whatsappStatus = 'SCAN_QR_CODE';
+                        return;
+                    }
+                    
+                    const data = await response.json();
+                    if (data.status === 'connected') {
+                        this.whatsappConnected = true;
+                        this.whatsappStatus = 'WORKING';
+                        return;
+                    }
+                    
+                    if (attempts < maxAttempts && !this.whatsappConnected) {
+                        setTimeout(poll, 1000);
+                    }
+                } catch (error) {
+                    console.error('QR poll error:', error);
+                    if (attempts < maxAttempts) {
+                        setTimeout(poll, 1000);
+                    }
+                }
+            };
+            
+            poll();
         },
 
         // --- Thread Management ---
@@ -385,19 +481,23 @@ function gullakApp() {
         async openSettings() {
             await this.checkSetupStatus(); // Refresh data from ledger
             await this.loadSetupOptions();
+            this.checkWhatsAppStatus();
             this.view = 'setup';
         },
 
         // Theme toggle
         toggleTheme() {
-            this.theme = this.theme === 'gullak' ? 'gullak-dark' : 'gullak';
+            this.theme = this.theme === 'light' ? 'dark' : 'light';
             document.documentElement.setAttribute('data-theme', this.theme);
+            if (document.body) {
+                document.body.setAttribute('data-theme', this.theme);
+            }
             localStorage.setItem('theme', this.theme);
         },
 
         // Check if dark mode
         isDark() {
-            return this.theme === 'gullak-dark';
+            return this.theme === 'dark';
         },
 
         // Send chat message
@@ -487,10 +587,15 @@ function gullakApp() {
                     break;
 
                 case 'preview':
-                    const exists = this.pendingTransactions.find(p => p.data.id === event.data.id);
-                    if (!exists) {
-                        this.pendingTransactions.push(event);
-                    }
+                    this.confirmTransaction(event.data.id, { auto: true })
+                        .then((autoConfirmed) => {
+                            if (!autoConfirmed) {
+                                const exists = this.pendingTransactions.find(p => p.data.id === event.data.id);
+                                if (!exists) {
+                                    this.pendingTransactions.push(event);
+                                }
+                            }
+                        });
                     break;
 
                 case 'thinking':
@@ -512,7 +617,7 @@ function gullakApp() {
             }
         },
 
-        async confirmTransaction(txnId) {
+        async confirmTransaction(txnId, options = {}) {
             this.confirming = true;
 
             try {
@@ -525,21 +630,60 @@ function gullakApp() {
                 const result = await response.json();
 
                 if (result.success) {
-                    this.messages.push({
-                        id: Date.now(),
-                        role: 'assistant',
-                        content: '✓ ' + result.message
-                    });
-                    this.notify('success', 'Transaction saved!');
+                    if (!options.auto) {
+                        this.messages.push({
+                            id: Date.now(),
+                            role: 'assistant',
+                            content: result.message
+                        });
+                        this.notify('success', 'Transaction saved!');
+                    } else {
+                        this.notify('success', 'Saved', {
+                            label: 'Undo',
+                            event: 'undo-transaction',
+                            payload: { id: txnId }
+                        });
+                    }
                     this.pendingTransactions = this.pendingTransactions.filter(p => p.data.id !== txnId);
+                    return true;
                 } else {
-                    this.notify('error', result.message || 'Failed to save transaction');
+                    if (!options.auto) {
+                        this.notify('error', result.message || 'Failed to save transaction');
+                    }
+                    return false;
                 }
             } catch (error) {
                 console.error('Confirm error:', error);
-                this.notify('error', 'Failed to confirm transaction');
+                if (!options.auto) {
+                    this.notify('error', 'Failed to confirm transaction');
+                }
+                return false;
             } finally {
                 this.confirming = false;
+            }
+        },
+
+        async undoTransaction(txnId) {
+            try {
+                const response = await fetch('/api/chat/undo', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ transaction_id: txnId })
+                });
+
+                const result = await response.json();
+                if (result.success) {
+                    this.notify('info', 'Undone');
+                    if (this.view === 'transactions') {
+                        this.loadTransactions();
+                        this.loadTransactionStats();
+                    }
+                } else {
+                    this.notify('error', result.message || 'Failed to undo');
+                }
+            } catch (error) {
+                console.error('Undo error:', error);
+                this.notify('error', 'Failed to undo');
             }
         },
 
@@ -834,9 +978,6 @@ function gullakApp() {
             }
             if (!text) return '';
 
-            // Check for transaction confirmation pattern and format nicely
-            const txnPattern = /^[^\n]*(?:Blinkit|Uber|Swiggy|Zomato|Amazon|Netflix|Spotify)[^\n]*\n.*?(?:Expenses|Assets|Liabilities).*?\n\n?(?:```ledger\n[\s\S]*?```)?/i;
-
             // Format ledger code blocks beautifully
             text = text.replace(/```ledger\n([\s\S]*?)```/g, (match, code) => {
                 const highlighted = this.highlightLedger(code.trim());
@@ -846,18 +987,6 @@ function gullakApp() {
             // Format generic code blocks
             text = text.replace(/```(\w*)\n([\s\S]*?)```/g, (match, lang, code) => {
                 return `<div class="ledger-block mt-3"><pre class="text-[13px] leading-relaxed">${this.escapeHtml(code.trim())}</pre></div>`;
-            });
-
-            // Format transaction summary nicely (the checkmark response)
-            text = text.replace(/^(.*?)\n(.*?(?:Expenses|Income|Assets|Liabilities)[^\n]*)\s*(?:\n|$)/gm, (match, line1, line2) => {
-                // Check if this looks like a transaction summary
-                if (line1.includes('₹') || line1.includes('INR') || /\d+(?:\.\d+)?/.test(line1)) {
-                    return `<div class="transaction-summary py-2">
-                        <div class="font-medium text-base-content">${line1}</div>
-                        <div class="text-sm text-base-content/60 mt-1">${line2}</div>
-                    </div>`;
-                }
-                return match;
             });
 
             // Standard markdown formatting
@@ -915,12 +1044,13 @@ function gullakApp() {
         },
 
         // Show notification
-        notify(type, message) {
+        notify(type, message, action = null) {
             window.dispatchEvent(new CustomEvent('notify', {
                 detail: {
                     id: Date.now(),
                     type: type,
-                    message: message
+                    message: message,
+                    action: action
                 }
             }));
         }

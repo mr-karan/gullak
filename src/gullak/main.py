@@ -7,6 +7,7 @@ import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
 
+import httpx
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
@@ -14,6 +15,7 @@ from fastapi.templating import Jinja2Templates
 
 from gullak.agent import GullakAgent
 from gullak.api import chat_router, ledger_router, setup_router, threads_router
+from gullak.api.whatsapp import router as whatsapp_router
 from gullak.ledger.parser import LedgerParser
 from gullak.ledger.validator import LedgerValidator
 from gullak.logging import configure_logging, get_logger
@@ -74,11 +76,22 @@ async def lifespan(app: FastAPI):
         currency=settings.default_currency,
     )
 
+    # Initialize shared HTTP client for WhatsApp bridge
+    whatsapp_timeout = httpx.Timeout(10.0, connect=5.0)
+    whatsapp_headers = {"X-Api-Key": settings.whatsapp_api_key} if settings.whatsapp_api_key else {}
+    app.state.whatsapp_client = httpx.AsyncClient(
+        timeout=whatsapp_timeout,
+        base_url=settings.whatsapp_bridge_url,
+        headers=whatsapp_headers,
+    )
+    logger.info("whatsapp_client_initialized", base_url=settings.whatsapp_bridge_url)
+
     # Note: Ledger file is created by setup wizard, not here
 
     yield
 
     # Shutdown
+    await app.state.whatsapp_client.aclose()
     logger.info("application_shutdown")
 
 
@@ -103,6 +116,7 @@ app.include_router(chat_router, prefix="/api")
 app.include_router(ledger_router, prefix="/api")
 app.include_router(setup_router, prefix="/api")
 app.include_router(threads_router, prefix="/api")
+app.include_router(whatsapp_router, prefix="/api")
 
 
 @app.middleware("http")
@@ -148,7 +162,10 @@ async def logging_middleware(request: Request, call_next):
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
     """Serve the main application page."""
-    return templates.TemplateResponse("index.html", {"request": request})
+    return templates.TemplateResponse(
+        "index.html",
+        {"request": request, "paisa_url": settings.paisa_url},
+    )
 
 
 @app.get("/health")

@@ -106,6 +106,16 @@ async def confirm_transaction(request: Request, body: ConfirmRequest) -> Confirm
     return ConfirmResponse(success=success, message=message)
 
 
+@router.post("/undo")
+async def undo_transaction(request: Request, body: ConfirmRequest) -> ConfirmResponse:
+    """Undo a saved transaction."""
+    agent = request.app.state.agent
+
+    success, message = await agent.undo_transaction(body.transaction_id)
+
+    return ConfirmResponse(success=success, message=message)
+
+
 @router.post("/cancel")
 async def cancel_transaction(request: Request, body: ConfirmRequest) -> ConfirmResponse:
     """Cancel a pending transaction."""

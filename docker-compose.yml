@@ -1,20 +1,30 @@
-# Gullak v2 + Paisa
-# Shared volume allows both services to access the ledger files
-# Files are created with host user permissions for easy editing
+# Gullak Development Docker Compose
+# Usage: docker compose up --build
+#
+# Features:
+# - Source code mounted for hot reload (with Dockerfile.dev)
+# - All ports exposed for debugging
+# - Verbose logging
+# - Local builds (no registry required)
+#
+# For production, use: docker compose -f docker-compose.prod.yml up -d
 
 services:
   gullak:
     build:
       context: .
+      dockerfile: Dockerfile.dev
       args:
-        # Match host user for proper file permissions
         GULLAK_UID: ${GULLAK_UID:-1000}
         GULLAK_GID: ${GULLAK_GID:-1000}
-    container_name: gullak
+    container_name: gullak-dev
     restart: unless-stopped
     ports:
       - "8000:8000"
     volumes:
+      # Mount source for hot reload
+      - ./src:/app/src:ro
+      # Data directory
       - ${PAISA_DATA_DIR:-./data}:/data
     env_file:
       - .env
@@ -24,16 +34,20 @@ services:
       - GULLAK_LEDGER_FILE=main.ledger
       - GULLAK_TIMEZONE=${TZ:-Asia/Kolkata}
       - GULLAK_PAISA_URL=http://paisa:7500
+      - GULLAK_WHATSAPP_BRIDGE_URL=http://whatsapp-bridge:3000
+      - GULLAK_DEBUG=true
     healthcheck:
       test: ["CMD", "sh", "-c", "curl -f http://localhost:8000/health && test -s /data/main.ledger"]
       interval: 5s
       timeout: 5s
       retries: 60
       start_period: 5s
+    depends_on:
+      - whatsapp-bridge
 
   paisa:
     image: ananthakumaran/paisa:latest
-    container_name: paisa
+    container_name: paisa-dev
     restart: unless-stopped
     user: "0:${GULLAK_GID:-1000}"
     command: ["/bin/sh", "-c", "umask 0002 && exec paisa serve"]
@@ -53,3 +67,23 @@ services:
     depends_on:
       gullak:
         condition: service_healthy
+
+  whatsapp-bridge:
+    build:
+      context: ./whatsapp-bridge
+    container_name: whatsapp-bridge-dev
+    restart: unless-stopped
+    environment:
+      - WEBHOOK_URL=http://gullak:8000/api/whatsapp/webhook
+      - GULLAK_WHATSAPP_API_KEY=${GULLAK_WHATSAPP_API_KEY:-}
+      - LOG_LEVEL=debug
+      - NODE_ENV=development
+    volumes:
+      - whatsapp_session:/data/whatsapp-session
+      # Mount source for development
+      - ./whatsapp-bridge/index.js:/usr/src/app/index.js:ro
+    ports:
+      - "3000:3000"
+
+volumes:
+  whatsapp_session:

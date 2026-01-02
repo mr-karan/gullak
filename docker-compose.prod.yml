@@ -1,0 +1,150 @@
+# Gullak Production Docker Compose
+#
+# Quick Start:
+#   1. cp .env.production.example .env
+#   2. Edit .env and set your OPENROUTER_API_KEY (required)
+#   3. docker compose -f docker-compose.prod.yml up -d
+#   4. Open http://localhost:8000
+#
+# All other settings have sensible defaults. See .env.production.example for options.
+
+services:
+  gullak:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        GULLAK_UID: ${GULLAK_UID:-1000}
+        GULLAK_GID: ${GULLAK_GID:-1000}
+    image: gullak:latest
+    container_name: gullak
+    restart: always
+    ports:
+      - "${GULLAK_HOST_PORT:-127.0.0.1:8000}:8000"
+    volumes:
+      - gullak_data:/data
+    env_file:
+      - .env
+    environment:
+      # Internal service URLs (don't change these)
+      - GULLAK_PAISA_URL=http://paisa:7500
+      - GULLAK_WHATSAPP_BRIDGE_URL=http://whatsapp-bridge:3000
+      - GULLAK_DATA_DIR=/data
+      # Defaults (override in .env)
+      - GULLAK_DEBUG=false
+      - GULLAK_LEDGER_FILE=${GULLAK_LEDGER_FILE:-main.ledger}
+      - GULLAK_TIMEZONE=${TZ:-UTC}
+      - GULLAK_DEFAULT_CURRENCY=${GULLAK_DEFAULT_CURRENCY:-USD}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+    depends_on:
+      whatsapp-bridge:
+        condition: service_healthy
+
+  paisa:
+    image: ananthakumaran/paisa:latest
+    container_name: paisa
+    restart: always
+    user: "0:${GULLAK_GID:-1000}"
+    command: ["/bin/sh", "-c", "umask 0002 && exec paisa serve"]
+    ports:
+      - "${PAISA_HOST_PORT:-127.0.0.1:7500}:7500"
+    volumes:
+      - gullak_data:/root/Documents/paisa:ro
+    environment:
+      - TZ=${TZ:-UTC}
+      - PAISA_CONFIG=/root/Documents/paisa/paisa.yaml
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:7500"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    security_opt:
+      - no-new-privileges:true
+    depends_on:
+      gullak:
+        condition: service_healthy
+
+  whatsapp-bridge:
+    build:
+      context: ./whatsapp-bridge
+      dockerfile: Dockerfile
+    image: gullak-whatsapp-bridge:latest
+    container_name: whatsapp-bridge
+    restart: always
+    environment:
+      - WEBHOOK_URL=http://gullak:8000/api/whatsapp/webhook
+      - GULLAK_WHATSAPP_API_KEY=${GULLAK_WHATSAPP_API_KEY:-}
+      - LOG_LEVEL=info
+      - NODE_ENV=production
+    volumes:
+      - whatsapp_session:/data/whatsapp-session
+    expose:
+      - "3000"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3000/api/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  gullak_data:
+    name: gullak_data
+  whatsapp_session:
+    name: gullak_whatsapp_session
+
+networks:
+  default:
+    name: gullak_network

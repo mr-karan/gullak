@@ -190,12 +190,6 @@ body {
     color: oklch(var(--bc) / 0.85);
 }
 
-/* Transaction summary in chat */
-.transaction-summary {
-    border-left: 3px solid oklch(var(--su));
-    padding-left: 12px;
-    margin: 8px 0;
-}
 
 /* ============================================
    Transaction Card - Beautiful Formatting
@@ -314,6 +308,7 @@ body {
     color: oklch(var(--bc) / 0.7);
     font-size: 13px;
 }
+
 
 /* ============================================
    Ledger Code Block - Syntax Highlighting
@@ -619,23 +614,23 @@ body {
 }
 
 /* Dark mode: show sun, hide moon */
-[data-theme="gullak-dark"] .theme-toggle .sun-icon {
+[data-theme="dark"] .theme-toggle .sun-icon {
     opacity: 1;
     transform: rotate(0deg) scale(1);
 }
 
-[data-theme="gullak-dark"] .theme-toggle .moon-icon {
+[data-theme="dark"] .theme-toggle .moon-icon {
     opacity: 0;
     transform: rotate(-90deg) scale(0.5);
 }
 
 /* Light mode: show moon, hide sun */
-[data-theme="gullak"] .theme-toggle .sun-icon {
+[data-theme="light"] .theme-toggle .sun-icon {
     opacity: 0;
     transform: rotate(90deg) scale(0.5);
 }
 
-[data-theme="gullak"] .theme-toggle .moon-icon {
+[data-theme="light"] .theme-toggle .moon-icon {
     opacity: 1;
     transform: rotate(0deg) scale(1);
 }

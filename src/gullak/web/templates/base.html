@@ -20,8 +20,16 @@
     <script>
         // Apply saved theme immediately to prevent flash
         (function() {
-            const savedTheme = localStorage.getItem('theme') || 'gullak';
-            document.documentElement.setAttribute('data-theme', savedTheme);
+            const savedTheme = localStorage.getItem('theme');
+            const normalizedTheme = savedTheme === 'gullak-dark'
+                ? 'dark'
+                : savedTheme === 'gullak'
+                    ? 'light'
+                    : (savedTheme || 'light');
+            document.documentElement.setAttribute('data-theme', normalizedTheme);
+            if (document.body) {
+                document.body.setAttribute('data-theme', normalizedTheme);
+            }
         })();
 
         tailwind.config = {
