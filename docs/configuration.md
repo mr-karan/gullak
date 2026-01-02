@@ -56,7 +56,16 @@ Gullak can receive messages via a Baileys-based WhatsApp bridge.
 | `GULLAK_WHATSAPP_ALLOWED_NUMBERS` | JSON array of phone numbers allowed to interact with the bot (e.g., `["919876543210"]`). | `[]` |
 | `GULLAK_WHATSAPP_GROUP_REQUIRE_MENTION` | If true, the bot only responds in groups when mentioned. | `false` |
 
-## 4. Application Settings
+## 4. Media Processing (Receipt OCR)
+
+Configuration for the receipt scanning and document processing feature.
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `GULLAK_MEDIA_MAX_IMAGE_SIZE` | Maximum allowed size for image uploads (bytes). | `5242880` (5MB) |
+| `GULLAK_MEDIA_MAX_PDF_SIZE` | Maximum allowed size for PDF uploads (bytes). | `10485760` (10MB) |
+
+## 5. Application Settings
 
 General settings for the FastAPI application.
 

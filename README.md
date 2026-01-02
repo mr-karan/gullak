@@ -20,6 +20,7 @@ Gullak uses LLMs to parse your intent, categorize the expense, and write it to a
 - 📊 **Paisa Integration**: Built-in integration with [Paisa](https://paisa.fyi) for beautiful charts and deep financial reports.
 - 📱 **WhatsApp Integration**: Log expenses by messaging yourself on WhatsApp via a built-in bridge.
 - 💬 **Threaded Conversations**: Context-aware chat history allows for natural follow-up corrections.
+- 📸 **Receipt OCR**: Upload receipt images or PDFs via Web UI or WhatsApp. Gullak extracts expense details automatically.
 - 🔍 **Transaction Previews**: Review and edit AI-parsed transactions before they are committed to your ledger.
 - 🐳 **Docker First**: One-command deployment with Docker Compose.
 
