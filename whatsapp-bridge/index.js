@@ -3,6 +3,7 @@ import makeWASocket, {
   DisconnectReason,
   fetchLatestBaileysVersion,
   makeCacheableSignalKeyStore,
+  downloadMediaMessage,
 } from "@whiskeysockets/baileys";
 import express from "express";
 import QRCode from "qrcode";
@@ -176,9 +177,15 @@ async function connectWhatsApp() {
       const text =
         msg.message.conversation ||
         msg.message.extendedTextMessage?.text ||
+        msg.message.imageMessage?.caption ||
+        msg.message.documentMessage?.caption ||
         "";
 
-      if (!text.trim()) continue;
+      const imageMessage = msg.message.imageMessage;
+      const documentMessage = msg.message.documentMessage;
+      const hasMedia = imageMessage || documentMessage;
+
+      if (!text.trim() && !hasMedia) continue;
 
       const payload = {
         id: msg.key.id,
@@ -187,9 +194,43 @@ async function connectWhatsApp() {
         author: msg.key.participant || msg.key.remoteJid,
         body: text,
         timestamp: msg.messageTimestamp,
+        media: null,
       };
 
-      logger.info({ from: payload.from }, "Message received");
+      if (hasMedia) {
+        try {
+          const buffer = await downloadMediaMessage(
+            msg,
+            "buffer",
+            {},
+            {
+              logger,
+              reuploadRequest: sock.updateMediaMessage,
+            }
+          );
+
+          const mimetype = imageMessage?.mimetype || documentMessage?.mimetype;
+          const filename = documentMessage?.fileName || null;
+
+          payload.media = {
+            type: imageMessage ? "image" : "document",
+            mimetype: mimetype,
+            filename: filename,
+            data: buffer.toString("base64"),
+            size: buffer.length,
+          };
+
+          logger.info(
+            { from: payload.from, mediaType: payload.media.type, size: payload.media.size },
+            "Media message received"
+          );
+        } catch (err) {
+          logger.error({ err: err.message }, "Failed to download media");
+        }
+      } else {
+        logger.info({ from: payload.from }, "Text message received");
+      }
+
       await sendWebhook("message", payload);
     }
   });

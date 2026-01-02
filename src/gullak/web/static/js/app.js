@@ -46,6 +46,11 @@ function gullakApp() {
         uploading: false,
         uploadedFilePath: null,
         
+        // Receipt upload state
+        uploadingReceipt: false,
+        receiptPreview: null,
+        pendingMedia: null,
+        
         // Debounce timers
         _debounceTimers: {},
 
@@ -798,6 +803,129 @@ function gullakApp() {
             } finally {
                 this.uploading = false;
                 event.target.value = '';
+            }
+        },
+
+        async uploadReceipt(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
+            if (!allowedTypes.includes(file.type)) {
+                this.notify('error', 'Only JPEG, PNG, WebP images and PDFs are supported');
+                event.target.value = '';
+                return;
+            }
+
+            const maxSize = file.type === 'application/pdf' ? 10 * 1024 * 1024 : 5 * 1024 * 1024;
+            if (file.size > maxSize) {
+                const maxMB = maxSize / (1024 * 1024);
+                this.notify('error', `File too large. Maximum ${maxMB}MB`);
+                event.target.value = '';
+                return;
+            }
+
+            this.uploadingReceipt = true;
+
+            try {
+                const formData = new FormData();
+                formData.append('file', file);
+
+                const response = await fetch('/api/chat/upload-receipt', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    if (file.type.startsWith('image/')) {
+                        this.receiptPreview = URL.createObjectURL(file);
+                    }
+                    this.pendingMedia = result.media;
+                    await this.sendMessageWithMedia(file.name);
+                } else {
+                    this.notify('error', result.error || 'Upload failed');
+                }
+            } catch (error) {
+                console.error('Receipt upload error:', error);
+                this.notify('error', 'Failed to upload receipt');
+            } finally {
+                this.uploadingReceipt = false;
+                this.receiptPreview = null;
+                this.pendingMedia = null;
+                event.target.value = '';
+            }
+        },
+
+        async sendMessageWithMedia(filename) {
+            const message = this.input.trim() || `Receipt: ${filename}`;
+            this.input = '';
+            this.streaming = true;
+            this.streamingText = '';
+
+            this.messages.push({
+                id: Date.now(),
+                role: 'user',
+                content: message,
+                hasMedia: true
+            });
+
+            this.scrollToBottom();
+
+            try {
+                const response = await fetch('/api/chat/with-media', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        message: message,
+                        thread_id: this.currentThreadId,
+                        media: this.pendingMedia
+                    })
+                });
+
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let buffer = '';
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+
+                    buffer += decoder.decode(value, { stream: true });
+                    const lines = buffer.split('\n');
+                    buffer = lines.pop() || '';
+
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            try {
+                                const data = JSON.parse(line.slice(6));
+                                this.handleEvent(data);
+                            } catch (e) {
+                                console.error('Parse error:', e, line);
+                            }
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error('Chat with media error:', error);
+                this.messages.push({
+                    id: Date.now(),
+                    role: 'assistant',
+                    content: 'Sorry, something went wrong processing the receipt. Please try again.'
+                });
+                this.notify('error', 'Failed to process receipt');
+            } finally {
+                this.streaming = false;
+                if (this.streamingText) {
+                    this.messages.push({
+                        id: Date.now(),
+                        role: 'assistant',
+                        content: this.streamingText
+                    });
+                    this.streamingText = '';
+                }
+                this.scrollToBottom();
             }
         },
 

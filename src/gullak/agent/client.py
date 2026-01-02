@@ -25,6 +25,8 @@ from gullak.ledger.validator import LedgerValidator
 from gullak.ledger.writer import LedgerWriter
 from gullak.settings import settings
 
+from gullak.media import MediaContent
+
 from .prompts import get_system_prompt
 from .tool_state import ToolState
 from .tools import TOOLS, ToolResult, execute_tool, get_openai_tools
@@ -123,7 +125,10 @@ class GullakAgent:
             )
 
     async def process_message(
-        self, user_message: str, thread_id: str | None = None
+        self,
+        user_message: str,
+        thread_id: str | None = None,
+        media: MediaContent | list[MediaContent] | None = None,
     ) -> AsyncIterator[AgentEvent]:
         """
         Process a user message and yield events.
@@ -133,6 +138,7 @@ class GullakAgent:
         Args:
             user_message: The user's input text
             thread_id: Optional thread ID for conversation continuity
+            media: Optional media content (images/PDFs) for vision processing
 
         Yields:
             AgentEvent objects for streaming to frontend
@@ -161,8 +167,30 @@ class GullakAgent:
             for m in loaded:
                 messages.append({"role": m["role"], "content": m["content"]})
 
-        # Add user message
-        messages.append({"role": "user", "content": user_message})
+        # Build user message content (multimodal if media present)
+        if media:
+            content_parts: list[dict[str, Any]] = []
+
+            if user_message.strip():
+                content_parts.append({"type": "text", "text": user_message})
+            else:
+                content_parts.append(
+                    {
+                        "type": "text",
+                        "text": "Please analyze this receipt/document and extract expense information.",
+                    }
+                )
+
+            if isinstance(media, list):
+                for m in media:
+                    content_parts.append(m.to_message_content())
+            else:
+                content_parts.append(media.to_message_content())
+
+            messages.append({"role": "user", "content": content_parts})
+        else:
+            messages.append({"role": "user", "content": user_message})
+
         if self._chat_history:
             await self._chat_history.save_message(thread_id, "user", user_message)
 

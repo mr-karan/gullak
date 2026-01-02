@@ -1,6 +1,7 @@
 """WhatsApp integration via Baileys-based bridge."""
 
 import asyncio
+import base64
 from collections import OrderedDict
 from time import time
 
@@ -9,6 +10,7 @@ import structlog
 from fastapi import APIRouter, Request, Response
 from pydantic import BaseModel
 
+from gullak.media import MediaProcessor
 from gullak.settings import settings
 
 router = APIRouter(prefix="/whatsapp", tags=["whatsapp"])
@@ -172,15 +174,51 @@ async def whatsapp_webhook(request: Request, body: WebhookPayload):
         if not triggered:
             return {"status": "ignored", "reason": "group_no_mention"}
 
-    # Skip empty messages
-    if not message_body.strip():
+    # Process media if present
+    media_data = payload.get("media")
+    media_content = None
+
+    if media_data:
+        processor = MediaProcessor(
+            max_image_size=settings.media_max_image_size,
+            max_pdf_size=settings.media_max_pdf_size,
+        )
+
+        try:
+            raw_data = base64.b64decode(media_data["data"])
+            media_content, error = processor.process_and_encode(
+                raw_data,
+                mime_type=media_data.get("mimetype"),
+                filename=media_data.get("filename"),
+            )
+
+            if error:
+                logger.warning("whatsapp_media_validation_failed", error=error)
+                client = get_whatsapp_client(request)
+                try:
+                    await client.post(
+                        "/api/sendText",
+                        json={"session": "default", "chatId": sender, "text": f"❌ {error}"},
+                    )
+                except Exception:
+                    pass
+                return {"status": "ignored", "reason": "invalid_media", "error": error}
+
+            logger.info(
+                "whatsapp_media_processed",
+                media_type=media_data.get("type"),
+                size=len(raw_data),
+            )
+        except Exception as e:
+            logger.error("whatsapp_media_decode_failed", error=str(e))
+
+    # Skip if no text and no valid media
+    if not message_body.strip() and not media_content:
         return {"status": "ignored", "reason": "empty_message"}
 
     client = get_whatsapp_client(request)
     agent = request.app.state.agent
 
-    # Use sender (chat ID) for thread context
-    # Sanitize: replace @ with _ to avoid any path issues
     thread_id = f"wa_{sender.replace('@', '_')}"
 
     logger.info(
@@ -188,6 +226,7 @@ async def whatsapp_webhook(request: Request, body: WebhookPayload):
         chat_id=sender,
         author=author_number,
         body_length=len(message_body),
+        has_media=media_content is not None,
     )
 
     try:
@@ -196,13 +235,14 @@ async def whatsapp_webhook(request: Request, body: WebhookPayload):
     except Exception as e:
         logger.debug("whatsapp_typing_indicator_failed", error=type(e).__name__)
 
-    # Process with agent, using per-thread lock to prevent concurrent state corruption
     response_text = ""
     thread_lock = _get_thread_lock(thread_id)
 
     try:
         async with thread_lock:
-            async for event in agent.process_message(message_body, thread_id=thread_id):
+            async for event in agent.process_message(
+                message_body, thread_id=thread_id, media=media_content
+            ):
                 if event.type == "text":
                     response_text += event.content
                 elif event.type == "error":

@@ -9,6 +9,9 @@ from fastapi import APIRouter, Request, UploadFile
 from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse
 
+from gullak.media import MediaContent, MediaProcessor
+from gullak.settings import settings
+
 router = APIRouter(prefix="/chat", tags=["chat"])
 
 
@@ -51,6 +54,14 @@ class UpdatePendingRequest(BaseModel):
 
     transaction_id: str
     updates: dict
+
+
+class ChatMessageWithMedia(BaseModel):
+    """Chat message with optional media attachment."""
+
+    message: str = ""
+    thread_id: str | None = None
+    media: dict | None = None
 
 
 @router.post("")
@@ -223,3 +234,74 @@ async def update_pending(request: Request, body: UpdatePendingRequest) -> dict:
         "preview": result["preview"],
         "message": "Transaction updated",
     }
+
+
+@router.post("/upload-receipt")
+async def upload_receipt(request: Request, file: UploadFile) -> dict:
+    """Upload a receipt image or PDF for OCR processing."""
+    if not file.filename:
+        return {"success": False, "error": "No file provided"}
+
+    processor = MediaProcessor(
+        max_image_size=settings.media_max_image_size,
+        max_pdf_size=settings.media_max_pdf_size,
+    )
+
+    try:
+        content = await file.read()
+
+        media_content, error = processor.process_and_encode(
+            content,
+            mime_type=file.content_type,
+            filename=file.filename,
+        )
+
+        if error:
+            return {"success": False, "error": error}
+
+        return {
+            "success": True,
+            "media": media_content.model_dump() if media_content else None,
+            "filename": file.filename,
+        }
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@router.post("/with-media")
+async def chat_with_media(request: Request, body: ChatMessageWithMedia):
+    """Process a chat message with media attachment (receipt/document)."""
+    agent = request.app.state.agent
+
+    media_content = None
+    if body.media:
+        media_content = MediaContent(**body.media)
+
+    async def event_generator():
+        try:
+            async for event in agent.process_message(
+                body.message, thread_id=body.thread_id, media=media_content
+            ):
+                yield {
+                    "event": event.type,
+                    "data": json.dumps(
+                        {
+                            "type": event.type,
+                            "content": event.content,
+                            "data": event.data,
+                        }
+                    ),
+                }
+        except Exception as e:
+            yield {
+                "event": "error",
+                "data": json.dumps(
+                    {
+                        "type": "error",
+                        "content": str(e),
+                        "data": {},
+                    }
+                ),
+            }
+
+    return EventSourceResponse(event_generator())

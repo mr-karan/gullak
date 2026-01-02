@@ -84,6 +84,18 @@ class Settings(BaseSettings):
     )
 
     # ==========================================================================
+    # Media Processing (Receipt OCR)
+    # ==========================================================================
+    media_max_image_size: int = Field(
+        default=5 * 1024 * 1024,
+        description="Maximum image file size in bytes (default 5MB)",
+    )
+    media_max_pdf_size: int = Field(
+        default=10 * 1024 * 1024,
+        description="Maximum PDF file size in bytes (default 10MB)",
+    )
+
+    # ==========================================================================
     # Application
     # ==========================================================================
     debug: bool = False
