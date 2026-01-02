@@ -31,9 +31,14 @@ class Posting(BaseModel):
         return f"    {self.account}  {amount_str} {self.currency}"
 
 
-class Transaction(BaseModel):
-    """A complete ledger transaction with postings."""
+class TransactionSource(str, Enum):
+    WEB = "web"
+    WHATSAPP = "whatsapp"
+    CSV = "csv"
+    API = "api"
 
+
+class Transaction(BaseModel):
     date: date
     payee: str
     postings: list[Posting]
@@ -41,6 +46,8 @@ class Transaction(BaseModel):
     note: str | None = None
     tags: dict[str, str] = Field(default_factory=dict)
     gullak_id: str = Field(default_factory=lambda: uuid4().hex[:8])
+    source: TransactionSource | None = None
+    source_user: str | None = None
 
     def to_ledger(self) -> str:
         status_char = f" {self.status.value}" if self.status.value else ""
@@ -48,17 +55,22 @@ class Transaction(BaseModel):
 
         lines = [header]
 
+        lines.append(f"    ; gullak:id {self.gullak_id}")
+
+        if self.source:
+            lines.append(f"    ; gullak:source {self.source.value}")
+
+        if self.source_user:
+            lines.append(f"    ; gullak:user {self.source_user}")
+
         if self.note:
             lines.append(f"    ; {self.note}")
 
         for key, value in self.tags.items():
             lines.append(f"    ; {key}: {value}")
 
-        for i, posting in enumerate(self.postings):
-            posting_line = posting.to_ledger()
-            if i == 0:
-                posting_line += f"  ; gullak:id {self.gullak_id}"
-            lines.append(posting_line)
+        for posting in self.postings:
+            lines.append(posting.to_ledger())
 
         return "\n".join(lines)
 
@@ -74,8 +86,9 @@ class Transaction(BaseModel):
         note: str | None = None,
         recurring_name: str | None = None,
         recurring_period: str | None = None,
+        source: TransactionSource | None = None,
+        source_user: str | None = None,
     ) -> Self:
-        """Create a simple expense transaction with two postings."""
         tags = {}
         if recurring_name:
             tags["Recurring"] = recurring_name
@@ -87,6 +100,8 @@ class Transaction(BaseModel):
             payee=payee,
             note=note,
             tags=tags,
+            source=source,
+            source_user=source_user,
             postings=[
                 Posting(account=expense_account, amount=amount, currency=currency),
                 Posting(account=payment_account, amount=-amount, currency=currency),
@@ -103,12 +118,15 @@ class Transaction(BaseModel):
         deposit_account: str,
         currency: str = "INR",
         note: str | None = None,
+        source: TransactionSource | None = None,
+        source_user: str | None = None,
     ) -> Self:
-        """Create an income transaction (salary, interest, etc.)."""
         return cls(
             date=date,
             payee=payee,
             note=note,
+            source=source,
+            source_user=source_user,
             postings=[
                 Posting(account=income_account, amount=-amount, currency=currency),
                 Posting(account=deposit_account, amount=amount, currency=currency),

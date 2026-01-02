@@ -159,11 +159,15 @@ class GullakAgent:
         if self._tool_state:
             self._tool_state.set_thread_id(thread_id)
 
-        # Load conversation history
         messages: list[dict[str, Any]] = [{"role": "system", "content": self._system_prompt}]
 
+        if self._tool_state:
+            pending_context = self._build_pending_context(thread_id)
+            if pending_context:
+                messages.append({"role": "system", "content": pending_context})
+
         if self._chat_history:
-            loaded = await self._chat_history.load_messages(thread_id, limit=20)
+            loaded = await self._chat_history.load_messages(thread_id, limit=10)
             for m in loaded:
                 messages.append({"role": m["role"], "content": m["content"]})
 
@@ -422,5 +426,25 @@ class GullakAgent:
         }
 
     def get_chat_history(self) -> ChatHistory | None:
-        """Get the chat history instance for thread management."""
         return self._chat_history
+
+    def _build_pending_context(self, thread_id: str | None) -> str:
+        if not self._tool_state:
+            return ""
+
+        pending = self._tool_state.get_pending(thread_id=thread_id)
+        if not pending:
+            return ""
+
+        lines = ["[PENDING TRANSACTIONS - Use edit_pending_transaction to modify these]"]
+        for p in pending.values():
+            txn = p.transaction
+            amount = txn.total_amount
+            currency = txn.postings[0].currency if txn.postings else self.default_currency
+            expense_acc = txn.postings[0].account if txn.postings else "Unknown"
+            payment_acc = txn.postings[1].account if len(txn.postings) > 1 else "Unknown"
+            lines.append(
+                f"- ID: {p.id} | {txn.payee}: {amount} {currency} | {expense_acc} <- {payment_acc}"
+            )
+
+        return "\n".join(lines)

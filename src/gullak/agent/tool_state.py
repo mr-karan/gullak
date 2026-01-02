@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 
 from gullak.ledger.categories import suggest_category
 from gullak.ledger.memory import PayeeMemory
-from gullak.ledger.models import PendingTransaction
+from gullak.ledger.models import PendingTransaction, TransactionSource
 from gullak.ledger.parser import LedgerParser
 from gullak.ledger.validator import LedgerValidator
 
@@ -46,8 +46,11 @@ class ToolState:
         self.validator = validator or LedgerValidator()
         self.memory = PayeeMemory(ledger_path)
         self.current_thread_id: str | None = None
+        self.current_source: TransactionSource | None = None
+        self.current_source_user: str | None = None
 
         self._pending: dict[str, PendingTransaction] = {}
+        self._last_created_id: str | None = None
         self._load_pending()
 
     # -------------------------------------------------------------------------
@@ -85,16 +88,27 @@ class ToolState:
         pending_file.write_text(json.dumps(data, indent=2, default=str))
 
     def add_pending(self, pending: PendingTransaction) -> None:
-        """Add a pending transaction."""
         self._pending[pending.id] = pending
+        self._last_created_id = pending.id
         self._save_pending()
         logger.info(f"Added pending transaction: {pending.id}")
 
     def get_pending(self, thread_id: str | None = None) -> dict[str, PendingTransaction]:
-        """Get pending transactions, optionally filtered by thread_id."""
         if thread_id is None:
             return self._pending.copy()
         return {k: v for k, v in self._pending.items() if v.thread_id == thread_id}
+
+    def get_last_pending(self) -> PendingTransaction | None:
+        if self._last_created_id and self._last_created_id in self._pending:
+            pending = self._pending[self._last_created_id]
+            if self.current_thread_id is None or pending.thread_id == self.current_thread_id:
+                return pending
+
+        thread_pending = self.get_pending(thread_id=self.current_thread_id)
+        if not thread_pending:
+            return None
+
+        return max(thread_pending.values(), key=lambda p: p.created_at)
 
     def clear_pending(self, txn_id: str) -> PendingTransaction | None:
         """Remove and return a pending transaction."""
@@ -218,6 +232,31 @@ class ToolState:
         )
         return pattern_suggestion or "Expenses:Other"
 
+    def suggest_accounts(self, payee: str, amount: Decimal | None = None) -> tuple[str, str | None]:
+        """
+        Suggest both expense and payment accounts based on payee.
+
+        Returns:
+            Tuple of (expense_account, payment_account).
+            payment_account may be None if not learned.
+        """
+        expense_account: str | None = None
+        payment_account: str | None = None
+
+        # Check payee memory for both accounts
+        if self.memory:
+            expense_account, payment_account = self.memory.suggest_accounts(payee)
+
+        # Fall back to pattern matching for expense account
+        if not expense_account:
+            pattern_suggestion = suggest_category(
+                payee,
+                float(amount) if amount else 0.0,
+            )
+            expense_account = pattern_suggestion or "Expenses:Other"
+
+        return expense_account, payment_account
+
     # -------------------------------------------------------------------------
     # Account Listing
     # -------------------------------------------------------------------------
@@ -247,9 +286,15 @@ class ToolState:
     # -------------------------------------------------------------------------
 
     def set_thread_id(self, thread_id: str | None) -> None:
-        """Set the current thread context for pending transactions."""
         self.current_thread_id = thread_id
 
     def get_thread_id(self) -> str | None:
-        """Get the current thread context."""
         return self.current_thread_id
+
+    def set_source_context(
+        self,
+        source: TransactionSource | None,
+        source_user: str | None = None,
+    ) -> None:
+        self.current_source = source
+        self.current_source_user = source_user

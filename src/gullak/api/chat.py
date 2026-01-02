@@ -9,6 +9,7 @@ from fastapi import APIRouter, Request, UploadFile
 from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse
 
+from gullak.ledger.models import TransactionSource
 from gullak.media import MediaContent, MediaProcessor
 from gullak.settings import settings
 
@@ -66,18 +67,10 @@ class ChatMessageWithMedia(BaseModel):
 
 @router.post("")
 async def chat(request: Request, body: ChatMessage):
-    """
-    Process a chat message and stream the response.
-
-    Returns Server-Sent Events with the following event types:
-    - text: Text content from the agent
-    - preview: A pending transaction preview
-    - thinking: Agent is using a tool
-    - tool_result: Result from a tool
-    - done: Processing complete (includes thread_id)
-    - error: An error occurred
-    """
     agent = request.app.state.agent
+
+    if agent._tool_state:
+        agent._tool_state.set_source_context(TransactionSource.WEB)
 
     async def event_generator():
         try:
@@ -270,8 +263,10 @@ async def upload_receipt(request: Request, file: UploadFile) -> dict:
 
 @router.post("/with-media")
 async def chat_with_media(request: Request, body: ChatMessageWithMedia):
-    """Process a chat message with media attachment (receipt/document)."""
     agent = request.app.state.agent
+
+    if agent._tool_state:
+        agent._tool_state.set_source_context(TransactionSource.WEB)
 
     media_content = None
     if body.media:

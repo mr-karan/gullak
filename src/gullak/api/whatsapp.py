@@ -10,6 +10,7 @@ import structlog
 from fastapi import APIRouter, Request, Response
 from pydantic import BaseModel
 
+from gullak.ledger.models import TransactionSource
 from gullak.media import MediaProcessor
 from gullak.settings import settings
 
@@ -221,10 +222,13 @@ async def whatsapp_webhook(request: Request, body: WebhookPayload):
 
     thread_id = f"wa_{sender.replace('@', '_')}"
 
+    source_user = payload.get("pushName") or author_number
+
     logger.info(
         "processing_whatsapp_message",
         chat_id=sender,
         author=author_number,
+        source_user=source_user,
         body_length=len(message_body),
         has_media=media_content is not None,
     )
@@ -240,6 +244,9 @@ async def whatsapp_webhook(request: Request, body: WebhookPayload):
 
     try:
         async with thread_lock:
+            if agent._tool_state:
+                agent._tool_state.set_source_context(TransactionSource.WHATSAPP, source_user)
+
             async for event in agent.process_message(
                 message_body, thread_id=thread_id, media=media_content
             ):

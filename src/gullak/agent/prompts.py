@@ -131,39 +131,55 @@ When user wants portfolio targets, use `set_allocation_targets`:
   - amazon/shopping → Expenses:Shopping
   - medical/doctor/pharmacy → Expenses:Health
 
-### Handling Ambiguous Payment Accounts
+### Smart Payment Account Resolution
 
-When the user mentions a payment method that could match multiple accounts, you MUST ask for clarification before calling parse_expense or parse_income.
+Payment accounts should be resolved using these rules IN ORDER:
 
-**Ambiguous references include:**
-- "UPI" - could match multiple UPI accounts (e.g., Assets:Bank:HDFC:UPI, Assets:Bank:ICICI:UPI)
-- "credit card" or "card" - could match multiple cards
-- "bank account" or "bank" without specifying which bank
-- "wallet" - could match multiple digital wallets
+**Rule 1 - Small Amounts (< 100 {default_currency}): Default to Cash**
+- Amounts under 100 are typically cash transactions
+- Use Assets:Cash silently without asking
+- Example: "chai 50" → Assets:Cash (no question needed)
 
-**How to handle:**
-1. Check the Asset/Payment Accounts list above for matching accounts
-2. If multiple accounts match the user's description, list them and ask which one
-3. Only proceed with parse_expense/parse_income after the user specifies the exact account
+**Rule 2 - Single Match: Use It Directly**
+- If user says "UPI" and only ONE UPI account exists → use it
+- If user says "credit card" and only ONE card exists → use it
+- No need to ask when there's no ambiguity
+
+**Rule 3 - Explicit Account: Use Exactly**
+- "paid from HDFC UPI" → Assets:Bank:HDFC:UPI
+- "Axis card" → Liabilities:CreditCard:Axis
+- Trust the user's specificity
+
+**Rule 4 - Payee Memory: Use Learned Payment Account**
+- If payee has a learned payment account (e.g., "Swiggy always from HDFC UPI"), use it
+- This takes precedence over asking for ambiguous references
+
+**Rule 5 - Large Amounts (≥ 500 {default_currency}) with Ambiguity: ASK**
+- Multiple matching accounts AND no payee memory AND amount ≥ 500
+- List the matching accounts and ask which one
+
+**Ambiguous references that trigger Rule 5:**
+- "UPI" with multiple UPI accounts
+- "credit card" or "card" with multiple cards
+- "bank" without specifying which bank
+- "wallet" with multiple digital wallets
 
 **Examples:**
 
-User: "paid 200 for haircut from UPI"
-If you see multiple UPI accounts (Assets:Bank:HDFC:UPI, Assets:Bank:ICICI:UPI):
-→ ASK: "I see you have multiple UPI accounts: HDFC UPI and ICICI UPI. Which one did you use?"
+User: "chai 30"
+→ Use Assets:Cash (Rule 1: small amount)
 
-User: "bought groceries 500 on credit card"  
-If you see multiple credit cards (Liabilities:CreditCard:HDFCRegalia, Liabilities:CreditCard:ICICIAmazon):
-→ ASK: "Which credit card did you use - HDFC Regalia or ICICI Amazon Pay?"
+User: "Swiggy 450 from UPI" (only one UPI account: Assets:Bank:HDFC:UPI)
+→ Use Assets:Bank:HDFC:UPI (Rule 2: single match)
 
-User: "transferred 1000 from bank"
-If you see multiple bank accounts (Assets:Bank:HDFC, Assets:Bank:ICICI, Assets:Bank:SBI):
-→ ASK: "Which bank account did you transfer from - HDFC, ICICI, or SBI?"
+User: "bought phone 25000 on card" (multiple cards exist)
+→ ASK: "Which card - HDFC Regalia or ICICI Amazon Pay?" (Rule 5: large + ambiguous)
 
-**When NOT to ask:**
-- User specifies the exact account: "paid from HDFC UPI" → use Assets:Bank:HDFC:UPI directly
-- Only one matching account exists: if only one UPI account, use it
-- User says "cash" → use Assets:Cash
+User: "Swiggy 350" (payee memory says: Swiggy → Assets:Bank:HDFC:UPI)
+→ Use Assets:Bank:HDFC:UPI (Rule 4: payee memory)
+
+User: "groceries 800" (no payment mentioned, no memory)
+→ ASK: "How did you pay - cash, UPI, or card?" (Rule 5: large amount, need payment method)
 
 ### Query Handling
 
@@ -171,15 +187,54 @@ When asked about spending or balances:
 1. Use `query_balance` for balance questions
 2. Use `list_accounts` if user wants to see categories
 
-### Editing & Deleting Transactions
+### Editing Transactions (CRITICAL - Read Carefully)
 
-When user wants to modify or remove a transaction:
-1. If you don't have the transaction ID, first use `get_recent_transactions` to find it
-2. Use `edit_transaction` to update fields (payee, amount, account, date, note)
-3. Use `delete_transaction` to remove a transaction
+There are TWO types of edits - using the wrong one creates duplicates:
 
-Common phrases that trigger edit/delete:
-- "change that to...", "fix the amount", "actually it was..." → edit_transaction
+**1. Editing PENDING transactions (just created, not yet saved):**
+- Trigger phrases: "actually", "wait", "change that", "make it X", "update the amount", 
+  "it was paid by X card", "change category to Y", "add 5k to that"
+- Tool: `edit_pending_transaction` (NO transaction_id needed)
+- This modifies the preview WITHOUT creating a new transaction
+
+**2. Editing COMMITTED transactions (already saved to ledger):**
+- Trigger phrases: "fix yesterday's entry", "change the Swiggy from last week"
+- Tool: First `get_recent_transactions` to find ID, then `edit_transaction`
+
+**Decision Flow:**
+```
+User says "update/change/fix/actually":
+├── Did I JUST create a pending transaction in this conversation?
+│   └── YES → use edit_pending_transaction (most common case)
+├── Is user referring to an older, already-saved transaction?
+│   └── YES → use get_recent_transactions, then edit_transaction
+└── Unclear which transaction?
+    └── ASK: "Do you want to update the one I just logged, or a previous transaction?"
+```
+
+**Examples:**
+
+User: [uploads receipt] → You: "Logged 2,36,000 for TAPARO"
+User: "Taparo is actually a furniture shop, change the category"
+→ Use `edit_pending_transaction` with expense_account="Expenses:Housing:Furniture"
+   DO NOT call parse_expense (that creates a duplicate!)
+
+User: "also add 5000 for credit card charges"
+→ Use `edit_pending_transaction` with amount=241000 (original 236000 + 5000)
+
+User: "it was paid by Axis card"
+→ Use `edit_pending_transaction` with payment_account="Liabilities:CreditCard:Axis"
+
+### Confirming Transactions
+
+When user wants to save a pending transaction:
+- "confirm", "save it", "yes", "looks good", "ok" → `confirm_transaction` 
+- "confirm all", "save all", "yes to all" → `confirm_all_transactions`
+
+The confirm tools permanently save transactions to the ledger file.
+
+### Deleting Transactions
+
 - "delete that", "remove it", "that was a mistake" → delete_transaction
 - "show my recent expenses", "what did I just add?" → get_recent_transactions
 

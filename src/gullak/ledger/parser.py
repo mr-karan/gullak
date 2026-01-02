@@ -5,7 +5,7 @@ from datetime import date
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
-from .models import Posting, Transaction, TransactionStatus
+from .models import Posting, Transaction, TransactionSource, TransactionStatus
 
 
 class LedgerParser:
@@ -20,11 +20,15 @@ class LedgerParser:
     # Match comment line
     COMMENT_PATTERN = re.compile(r"^\s*;\s*(.*)$")
 
-    # Match gullak ID in comment
     GULLAK_ID_PATTERN = re.compile(r"gullak:id\s+(\w+)")
+    GULLAK_SOURCE_PATTERN = re.compile(r"gullak:source\s+(\w+)")
+    GULLAK_USER_PATTERN = re.compile(r"gullak:user\s+(.+)$")
 
-    # Match tag in comment: key: value
     TAG_PATTERN = re.compile(r"^(\w+):\s*(.+)$")
+
+    POSTING_WITH_COMMENT_PATTERN = re.compile(
+        r"^\s{2,}([A-Za-z][^\d]*?)\s{2,}([-\d,_.]+)\s*(\w+)?(?:\s*;\s*(.*))?$"
+    )
 
     def parse_file(self, path: Path) -> list[Transaction]:
         """Parse a ledger file and return list of transactions."""
@@ -70,7 +74,15 @@ class LedgerParser:
                 current_comments = []
                 continue
 
-            # Check for posting
+            if current_txn is not None and (match := self.POSTING_WITH_COMMENT_PATTERN.match(line)):
+                posting = self._parse_posting(match)
+                if posting:
+                    current_txn["postings"].append(posting)
+                    inline_comment = match.group(4)
+                    if inline_comment:
+                        current_comments.append(inline_comment)
+                continue
+
             if current_txn is not None and (match := self.POSTING_PATTERN.match(line)):
                 posting = self._parse_posting(match)
                 if posting:
@@ -132,29 +144,38 @@ class LedgerParser:
         return Posting(account=account, amount=amount, currency=currency)
 
     def _build_transaction(self, data: dict, comments: list[str]) -> Transaction | None:
-        """Build Transaction object from parsed data and comments."""
         if not data.get("postings"):
             return None
 
-        # Extract gullak ID from comments
         gullak_id = None
+        source = None
+        source_user = None
         note = None
         tags: dict[str, str] = {}
 
         for comment in comments:
-            # Check for gullak ID
             if match := self.GULLAK_ID_PATTERN.search(comment):
                 gullak_id = match.group(1)
                 continue
 
-            # Check for tag
+            if match := self.GULLAK_SOURCE_PATTERN.search(comment):
+                source_str = match.group(1).lower()
+                try:
+                    source = TransactionSource(source_str)
+                except ValueError:
+                    pass
+                continue
+
+            if match := self.GULLAK_USER_PATTERN.search(comment):
+                source_user = match.group(1).strip()
+                continue
+
             if match := self.TAG_PATTERN.match(comment):
                 key, value = match.groups()
-                if key != "gullak":  # Skip gullak meta tags
+                if key != "gullak":
                     tags[key] = value
                 continue
 
-            # Otherwise treat as note
             if note is None:
                 note = comment
 
@@ -169,5 +190,9 @@ class LedgerParser:
 
         if gullak_id:
             txn_data["gullak_id"] = gullak_id
+        if source:
+            txn_data["source"] = source
+        if source_user:
+            txn_data["source_user"] = source_user
 
         return Transaction(**txn_data)
