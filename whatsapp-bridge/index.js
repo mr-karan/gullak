@@ -167,6 +167,23 @@ async function connectWhatsApp() {
     });
   }
 
+  function unwrapMessage(msg) {
+    if (!msg.message) return null;
+    let content = msg.message;
+    
+    if (content.ephemeralMessage) {
+      content = content.ephemeralMessage.message;
+    }
+    if (content.viewOnceMessage) {
+      content = content.viewOnceMessage.message;
+    }
+    if (content.viewOnceMessageV2) {
+      content = content.viewOnceMessageV2.message;
+    }
+    
+    return content;
+  }
+
   sock.ev.on("messages.upsert", async ({ messages, type }) => {
     if (type !== "notify") return;
 
@@ -174,16 +191,21 @@ async function connectWhatsApp() {
       if (msg.key.fromMe) continue;
       if (!msg.message) continue;
 
+      const content = unwrapMessage(msg);
+      if (!content) continue;
+
       const text =
-        msg.message.conversation ||
-        msg.message.extendedTextMessage?.text ||
-        msg.message.imageMessage?.caption ||
-        msg.message.documentMessage?.caption ||
+        content.conversation ||
+        content.extendedTextMessage?.text ||
+        content.imageMessage?.caption ||
+        content.documentMessage?.caption ||
         "";
 
-      const imageMessage = msg.message.imageMessage;
-      const documentMessage = msg.message.documentMessage;
+      const imageMessage = content.imageMessage;
+      const documentMessage = content.documentMessage;
       const hasMedia = imageMessage || documentMessage;
+
+      logger.debug({ msgId: msg.key.id, hasMedia, keys: Object.keys(content) }, "Processing message");
 
       if (!text.trim() && !hasMedia) continue;
 
@@ -200,7 +222,7 @@ async function connectWhatsApp() {
       if (hasMedia) {
         try {
           const buffer = await downloadMediaMessage(
-            msg,
+            msg, 
             "buffer",
             {},
             {
@@ -225,7 +247,7 @@ async function connectWhatsApp() {
             "Media message received"
           );
         } catch (err) {
-          logger.error({ err: err.message }, "Failed to download media");
+          logger.error({ err: err.message, stack: err.stack }, "Failed to download media");
         }
       } else {
         logger.info({ from: payload.from }, "Text message received");
@@ -235,6 +257,8 @@ async function connectWhatsApp() {
     }
   });
 }
+
+
 
 app.get("/api/status", (req, res) => {
   res.json({
