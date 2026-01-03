@@ -1,6 +1,73 @@
 document.addEventListener('alpine:init', () => {
 
     // =========================================================================
+    // PWA STORE - Service worker, install prompt, updates
+    // =========================================================================
+    Alpine.store('pwa', {
+        deferredPrompt: null,
+        canInstall: false,
+        isStandalone: false,
+        updateAvailable: false,
+        registration: null,
+
+        init() {
+            this.isStandalone = window.matchMedia('(display-mode: standalone)').matches 
+                || window.navigator.standalone === true;
+
+            if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.register('/sw.js')
+                    .then((reg) => {
+                        this.registration = reg;
+                        reg.addEventListener('updatefound', () => {
+                            const newWorker = reg.installing;
+                            if (newWorker) {
+                                newWorker.addEventListener('statechange', () => {
+                                    if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                                        this.updateAvailable = true;
+                                    }
+                                });
+                            }
+                        });
+                    })
+                    .catch((err) => console.warn('SW registration failed:', err));
+
+                navigator.serviceWorker.addEventListener('controllerchange', () => {
+                    window.location.reload();
+                });
+            }
+
+            window.addEventListener('beforeinstallprompt', (e) => {
+                e.preventDefault();
+                this.deferredPrompt = e;
+                this.canInstall = true;
+            });
+
+            window.addEventListener('appinstalled', () => {
+                this.canInstall = false;
+                this.deferredPrompt = null;
+                Alpine.store('notify').success('App installed successfully!');
+            });
+        },
+
+        async promptInstall() {
+            if (!this.deferredPrompt) return false;
+            this.deferredPrompt.prompt();
+            const { outcome } = await this.deferredPrompt.userChoice;
+            this.deferredPrompt = null;
+            if (outcome === 'accepted') {
+                this.canInstall = false;
+            }
+            return outcome === 'accepted';
+        },
+
+        applyUpdate() {
+            if (this.registration && this.registration.waiting) {
+                this.registration.waiting.postMessage('skipWaiting');
+            }
+        }
+    });
+
+    // =========================================================================
     // ROUTER STORE - View state and navigation
     // =========================================================================
     Alpine.store('router', {
@@ -934,7 +1001,12 @@ document.addEventListener('alpine:init', () => {
                 if (!groups[txn.date]) groups[txn.date] = [];
                 groups[txn.date].push(txn);
             }
-            return groups;
+            const sortedDates = Object.keys(groups).sort((a, b) => b.localeCompare(a));
+            const sorted = {};
+            for (const date of sortedDates) {
+                sorted[date] = groups[date];
+            }
+            return sorted;
         },
 
         async load() {
@@ -1193,9 +1265,11 @@ function gullakApp() {
         },
 
         formatDateRelative(dateStr) {
-            const date = new Date(dateStr);
+            const [year, month, day] = dateStr.split('-').map(Number);
+            const date = new Date(year, month - 1, day);
             const today = new Date();
             today.setHours(0, 0, 0, 0);
+            date.setHours(0, 0, 0, 0);
             const diff = Math.floor((today - date) / (1000 * 60 * 60 * 24));
 
             if (diff === 0) return 'Today';

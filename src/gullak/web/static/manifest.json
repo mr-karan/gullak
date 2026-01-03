@@ -1,0 +1,75 @@
+{
+  "name": "Gullak",
+  "short_name": "Gullak",
+  "description": "AI-powered expense tracker with natural language input",
+  "id": "/",
+  "start_url": "/?source=pwa",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "background_color": "#0C0C0F",
+  "theme_color": "#4338CA",
+  "orientation": "portrait-primary",
+  "categories": ["finance", "productivity"],
+  "launch_handler": {
+    "client_mode": "focus-existing"
+  },
+  "icons": [
+    {
+      "src": "/static/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/static/icons/icon-192-maskable.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/static/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/static/icons/icon-512-maskable.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "New Expense",
+      "short_name": "Add",
+      "description": "Log a new expense",
+      "url": "/?action=new",
+      "icons": [{ "src": "/static/icons/shortcut-add.png", "sizes": "96x96" }]
+    },
+    {
+      "name": "Transactions",
+      "short_name": "Txns",
+      "description": "View recent transactions",
+      "url": "/#transactions",
+      "icons": [{ "src": "/static/icons/shortcut-list.png", "sizes": "96x96" }]
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/static/icons/screenshot-wide.png",
+      "sizes": "1280x720",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "Gullak desktop view"
+    },
+    {
+      "src": "/static/icons/screenshot-narrow.png",
+      "sizes": "720x1280",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Gullak mobile view"
+    }
+  ]
+}

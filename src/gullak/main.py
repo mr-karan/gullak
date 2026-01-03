@@ -9,7 +9,7 @@ from pathlib import Path
 
 import httpx
 from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -177,6 +177,30 @@ async def health():
         "status": "healthy",
         "version": "2.0.0",
     }
+
+
+@app.get("/sw.js")
+async def service_worker():
+    """Serve service worker from root with proper headers."""
+    sw_path = static_path / "sw.js"
+    return FileResponse(
+        sw_path,
+        media_type="application/javascript",
+        headers={"Service-Worker-Allowed": "/", "Cache-Control": "no-cache"},
+    )
+
+
+@app.get("/manifest.json")
+async def manifest():
+    """Serve manifest from root."""
+    manifest_path = static_path / "manifest.json"
+    return FileResponse(manifest_path, media_type="application/manifest+json")
+
+
+@app.get("/offline", response_class=HTMLResponse)
+async def offline(request: Request):
+    """Offline fallback page."""
+    return templates.TemplateResponse("offline.html", {"request": request})
 
 
 # Run with uvicorn if executed directly
