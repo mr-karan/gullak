@@ -22,6 +22,7 @@ Gullak uses LLMs to parse natural language into ledger entries. It supports mult
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `GULLAK_INFERENCE_MODEL` | Model identifier in LiteLLM format. Supports OpenRouter, OpenAI, Anthropic, Gemini, Ollama, etc. | `openrouter/google/gemini-2.0-flash-001` |
+| `GULLAK_INFERENCE_VISION_MODEL` | Model for vision tasks (receipt OCR). Falls back to `GULLAK_INFERENCE_MODEL` if not set. | - |
 | `GULLAK_INFERENCE_CONTEXT_LENGTH` | Maximum tokens to pass to the model. | `8192` |
 | `OPENROUTER_API_KEY` | API key for [OpenRouter](https://openrouter.ai/) (Recommended). | - |
 | `OPENAI_API_KEY` | API key for direct OpenAI access. | - |
@@ -86,6 +87,8 @@ This is the recommended setup for most users.
 ```bash
 # .env
 GULLAK_INFERENCE_MODEL=openrouter/google/gemini-2.0-flash-001
+# Use a vision-capable model for receipt OCR
+GULLAK_INFERENCE_VISION_MODEL=openrouter/openai/gpt-4o
 OPENROUTER_API_KEY=sk-or-v1-your-key-here
 GULLAK_DEFAULT_CURRENCY=USD
 GULLAK_TIMEZONE=America/New_York

@@ -557,21 +557,70 @@ body {
    Transaction List Item
    ============================================ */
 
+.txn-swipe-container {
+    position: relative;
+    overflow: hidden;
+    border-bottom: 1px solid oklch(var(--bc) / 0.04);
+}
+
+.txn-swipe-container:last-child {
+    border-bottom: none;
+}
+
+.txn-swipe-actions {
+    position: absolute;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: 100px;
+    display: flex;
+    align-items: stretch;
+}
+
+.txn-action-btn {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    cursor: pointer;
+    transition: opacity 0.15s ease;
+}
+
+.txn-action-btn.edit {
+    background: oklch(var(--p));
+    color: oklch(var(--pc));
+}
+
+.txn-action-btn.delete {
+    background: oklch(var(--er));
+    color: white;
+}
+
+.txn-action-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
 .txn-item {
     display: flex;
     align-items: center;
     justify-content: space-between;
     padding: 14px 18px;
-    transition: background 0.15s ease;
-    border-bottom: 1px solid oklch(var(--bc) / 0.04);
+    background: oklch(var(--b1));
+    transition: transform 0.2s ease, background 0.15s ease;
+    will-change: transform;
+    touch-action: pan-y pinch-zoom;
 }
 
-.txn-item:last-child {
-    border-bottom: none;
-}
-
-.txn-item:hover {
-    background: oklch(var(--bc) / 0.02);
+@media (min-width: 768px) {
+    .txn-item:hover {
+        background: oklch(var(--bc) / 0.02);
+    }
+    
+    .txn-swipe-actions {
+        display: none;
+    }
 }
 
 /* ============================================
@@ -825,23 +874,44 @@ body {
 .stat-card {
     background: oklch(var(--b1));
     border: 1px solid oklch(var(--bc) / 0.06);
-    border-radius: 14px;
-    padding: 20px;
+    border-radius: 12px;
+    padding: 14px;
+}
+
+@media (min-width: 768px) {
+    .stat-card {
+        border-radius: 14px;
+        padding: 20px;
+    }
 }
 
 .stat-card-label {
-    font-size: 11px;
+    font-size: 10px;
     font-weight: 600;
     text-transform: uppercase;
-    letter-spacing: 0.8px;
+    letter-spacing: 0.6px;
     color: oklch(var(--bc) / 0.45);
-    margin-bottom: 6px;
+    margin-bottom: 4px;
+}
+
+@media (min-width: 768px) {
+    .stat-card-label {
+        font-size: 11px;
+        letter-spacing: 0.8px;
+        margin-bottom: 6px;
+    }
 }
 
 .stat-card-value {
     font-family: 'Instrument Serif', Georgia, serif;
-    font-size: 28px;
+    font-size: 22px;
     color: oklch(var(--bc));
+}
+
+@media (min-width: 768px) {
+    .stat-card-value {
+        font-size: 28px;
+    }
 }
 
 /* ============================================

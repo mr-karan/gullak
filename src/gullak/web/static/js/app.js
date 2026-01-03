@@ -5,12 +5,22 @@ document.addEventListener('alpine:init', () => {
     // =========================================================================
     Alpine.store('router', {
         view: 'chat',
+        sidebarOpen: false,
 
         init() {
             window.addEventListener('hashchange', () => this.handleRoute());
         },
 
+        toggleSidebar() {
+            this.sidebarOpen = !this.sidebarOpen;
+        },
+
+        closeSidebar() {
+            this.sidebarOpen = false;
+        },
+
         navigate(viewName, threadId = null) {
+            this.sidebarOpen = false;
             let targetHash;
             if (viewName === 'chat' && threadId) {
                 targetHash = `#chat/${threadId}`;
@@ -397,6 +407,7 @@ document.addEventListener('alpine:init', () => {
             this.currentId = threadId;
             Alpine.store('chat').messages = [];
             Alpine.store('pending').transactions = [];
+            Alpine.store('router').sidebarOpen = false;
 
             if (threadId) {
                 const expectedHash = `chat/${threadId}`;
@@ -893,6 +904,8 @@ document.addEventListener('alpine:init', () => {
         editing: null,
         showEditModal: false,
         deleting: false,
+        swipedId: null,
+        _swipeState: null,
 
         get filtered() {
             let result = [...this.list];
@@ -1006,6 +1019,7 @@ document.addEventListener('alpine:init', () => {
                 const result = await response.json();
                 if (result.success) {
                     Alpine.store('notify').success('Transaction deleted');
+                    this.swipedId = null;
                     await this.load();
                 } else {
                     Alpine.store('notify').error(result.error || 'Failed to delete');
@@ -1016,6 +1030,63 @@ document.addEventListener('alpine:init', () => {
             } finally {
                 this.deleting = false;
             }
+        },
+
+        handleTouchStart(e, txnId) {
+            if (this.swipedId && this.swipedId !== txnId) {
+                this.swipedId = null;
+            }
+            const touch = e.touches[0];
+            this._swipeState = {
+                id: txnId,
+                startX: touch.clientX,
+                startY: touch.clientY,
+                currentX: 0,
+                swiping: false
+            };
+        },
+
+        handleTouchMove(e, txnId, el) {
+            if (!this._swipeState || this._swipeState.id !== txnId) return;
+
+            const touch = e.touches[0];
+            const deltaX = touch.clientX - this._swipeState.startX;
+            const deltaY = touch.clientY - this._swipeState.startY;
+
+            if (!this._swipeState.swiping) {
+                if (Math.abs(deltaX) > 10 && Math.abs(deltaX) > Math.abs(deltaY)) {
+                    this._swipeState.swiping = true;
+                } else if (Math.abs(deltaY) > 10) {
+                    this._swipeState = null;
+                    return;
+                }
+            }
+
+            if (this._swipeState.swiping) {
+                e.preventDefault();
+                const clampedX = Math.max(-100, Math.min(0, deltaX));
+                this._swipeState.currentX = clampedX;
+                el.style.transform = `translateX(${clampedX}px)`;
+            }
+        },
+
+        handleTouchEnd(e, txnId, el) {
+            if (!this._swipeState || this._swipeState.id !== txnId) return;
+
+            const threshold = -50;
+            if (this._swipeState.currentX < threshold) {
+                el.style.transform = 'translateX(-100px)';
+                this.swipedId = txnId;
+            } else {
+                el.style.transform = 'translateX(0)';
+                this.swipedId = null;
+            }
+            this._swipeState = null;
+        },
+
+        closeSwipe(el) {
+            if (el) el.style.transform = 'translateX(0)';
+            this.swipedId = null;
         }
     });
 

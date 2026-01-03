@@ -76,6 +76,7 @@ class GullakAgent:
     timezone: str = "Asia/Kolkata"
     ledger_cli: str = "ledger"
     model: str = field(default_factory=lambda: settings.inference_model)
+    vision_model: str = field(default_factory=lambda: settings.effective_vision_model)
 
     _parser: LedgerParser = field(default_factory=LedgerParser, init=False)
     _writer: LedgerWriter | None = field(default=None, init=False)
@@ -143,7 +144,11 @@ class GullakAgent:
         Yields:
             AgentEvent objects for streaming to frontend
         """
-        api_key = settings.inference_api_key
+        use_vision = media is not None
+        active_model = self.vision_model if use_vision else self.model
+        api_key = settings.vision_api_key if use_vision else settings.inference_api_key
+        base_url = settings.vision_base_url if use_vision else settings.inference_base_url
+
         if not api_key:
             yield AgentEvent(
                 type="error",
@@ -212,13 +217,13 @@ class GullakAgent:
                 current_text = ""
 
                 response = await litellm.acompletion(
-                    model=self.model,
+                    model=active_model,
                     messages=messages,
                     tools=self._tools if self._tools else None,
                     tool_choice="auto" if self._tools else None,
                     stream=True,
                     api_key=api_key,
-                    base_url=settings.inference_base_url,
+                    base_url=base_url,
                 )
 
                 # Stream text chunks to frontend

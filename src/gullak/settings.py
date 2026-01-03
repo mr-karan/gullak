@@ -52,6 +52,11 @@ class Settings(BaseSettings):
         "openrouter/anthropic/claude-3.5-sonnet, openrouter/google/gemini-2.0-flash-001, "
         "gpt-4o, gemini/gemini-2.0-flash, claude-sonnet-4-20250514",
     )
+    inference_vision_model: str | None = Field(
+        default=None,
+        description="Model for vision/media tasks (receipt OCR). Falls back to inference_model if not set. "
+        "Use a vision-capable model like gpt-4o, gemini-2.0-flash, claude-sonnet-4-20250514.",
+    )
     inference_context_length: int = Field(
         default=8192,
         description="Max tokens to pass to the model. Larger = better quality but more expensive.",
@@ -115,43 +120,53 @@ class Settings(BaseSettings):
         return self.data_dir / self.ledger_file
 
     @property
-    def inference_api_key(self) -> str | None:
-        """Get API key based on model provider.
+    def effective_vision_model(self) -> str:
+        """Get vision model, falling back to inference_model if not set."""
+        return self.inference_vision_model or self.inference_model
 
-        Auto-detects provider from model name and returns appropriate key.
-        Priority: OpenRouter > OpenAI > Google > Anthropic
-        """
-        model = self.inference_model.lower()
+    def _get_api_key_for_model(self, model: str) -> str | None:
+        """Get API key for a specific model string."""
+        model = model.lower()
 
-        # OpenRouter models
         if model.startswith("openrouter/"):
             return self.openrouter_api_key
-
-        # Direct provider models
         if model.startswith("gemini/") or model.startswith("google/"):
             return self.google_api_key
         if model.startswith("anthropic/") or model.startswith("claude"):
             return self.anthropic_api_key
         if model.startswith("ollama"):
-            return None  # Ollama doesn't need API key
-
-        # OpenAI and OpenAI-compatible (default)
+            return None
         return self.openai_api_key
+
+    def _get_base_url_for_model(self, model: str) -> str | None:
+        """Get base URL for a specific model string."""
+        model = model.lower()
+
+        if model.startswith("openrouter/"):
+            return None
+        if model.startswith("ollama"):
+            return self.ollama_base_url or "http://localhost:11434"
+        return self.openai_base_url
+
+    @property
+    def inference_api_key(self) -> str | None:
+        """Get API key based on model provider."""
+        return self._get_api_key_for_model(self.inference_model)
+
+    @property
+    def vision_api_key(self) -> str | None:
+        """Get API key for vision model."""
+        return self._get_api_key_for_model(self.effective_vision_model)
 
     @property
     def inference_base_url(self) -> str | None:
         """Get base URL based on model provider."""
-        model = self.inference_model.lower()
+        return self._get_base_url_for_model(self.inference_model)
 
-        # OpenRouter uses default LiteLLM handling
-        if model.startswith("openrouter/"):
-            return None  # LiteLLM knows OpenRouter's URL
-
-        if model.startswith("ollama"):
-            return self.ollama_base_url or "http://localhost:11434"
-
-        # OpenAI-compatible custom endpoint
-        return self.openai_base_url
+    @property
+    def vision_base_url(self) -> str | None:
+        """Get base URL for vision model."""
+        return self._get_base_url_for_model(self.effective_vision_model)
 
     def ensure_data_dir(self) -> None:
         """Create data directory if it doesn't exist."""

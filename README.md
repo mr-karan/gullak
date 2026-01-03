@@ -65,6 +65,7 @@ Gullak is configured via environment variables. The most important ones are:
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `GULLAK_INFERENCE_MODEL` | LiteLLM model string (e.g., `openrouter/google/gemini-2.0-flash-001`) | `openrouter/google/gemini-2.0-flash-001` |
+| `GULLAK_INFERENCE_VISION_MODEL` | Model for receipt OCR (optional, falls back to main model) | - |
 | `OPENROUTER_API_KEY` | API key if using OpenRouter | - |
 | `GULLAK_DEFAULT_CURRENCY` | Your primary currency (e.g., `INR`, `USD`) | `INR` |
 | `GULLAK_TIMEZONE` | Your timezone | `Asia/Kolkata` |
