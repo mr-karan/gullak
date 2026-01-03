@@ -10,8 +10,8 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=Instrument+Serif&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 
-    <!-- Alpine.js -->
-    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.13.3/dist/cdn.min.js"></script>
+    <script src="/static/js/app.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.15.3/dist/cdn.min.js"></script>
 
     <!-- Tailwind CSS + DaisyUI -->
     <link href="https://cdn.jsdelivr.net/npm/daisyui@4.6.0/dist/full.min.css" rel="stylesheet" type="text/css" />
@@ -126,9 +126,6 @@
 </head>
 <body class="min-h-screen bg-base-100 text-base-content antialiased selection:bg-primary/20 selection:text-primary overflow-hidden">
     {% block content %}{% endblock %}
-
-    <!-- App JavaScript -->
-    <script src="/static/js/app.js"></script>
     {% block scripts %}{% endblock %}
 </body>
 </html>
