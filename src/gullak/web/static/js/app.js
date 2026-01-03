@@ -1219,14 +1219,17 @@ function gullakApp() {
                 
                 const hash = window.location.hash.slice(1) || '';
                 const deepLinkedThreadId = hash.startsWith('chat/') ? hash.slice(5) : null;
-                
-                if (deepLinkedThreadId && threads.list.some(t => t.id === deepLinkedThreadId)) {
-                    await threads.switch(deepLinkedThreadId);
-                } else if (threads.list.length > 0) {
-                    await threads.switch(threads.list[0].id);
-                }
+                const isNonChatView = ['transactions', 'ledger', 'settings'].includes(hash);
                 
                 router.handleRoute();
+                
+                if (!isNonChatView) {
+                    if (deepLinkedThreadId && threads.list.some(t => t.id === deepLinkedThreadId)) {
+                        await threads.switch(deepLinkedThreadId);
+                    } else if (threads.list.length > 0) {
+                        await threads.switch(threads.list[0].id);
+                    }
+                }
             }
 
             window.addEventListener('undo-transaction', (event) => {
