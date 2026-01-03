@@ -3,11 +3,22 @@
 from typing import Any
 
 from fastapi import APIRouter, Query, Request
+from pydantic import BaseModel
 
 from gullak.ledger.parser import LedgerParser
 from gullak.ledger.validator import LedgerValidator
+from gullak.ledger.writer import LedgerWriter
 
 router = APIRouter(prefix="/ledger", tags=["ledger"])
+
+
+class TransactionUpdate(BaseModel):
+    payee: str | None = None
+    date: str | None = None
+    amount: float | None = None
+    expense_account: str | None = None
+    payment_account: str | None = None
+    note: str | None = None
 
 
 @router.get("/accounts")
@@ -277,3 +288,62 @@ async def health_check(request: Request) -> dict[str, Any]:
         "cli_available": cli_available,
         "cli_path": settings.ledger_cli,
     }
+
+
+@router.delete("/transactions/{transaction_id}")
+async def delete_transaction(request: Request, transaction_id: str) -> dict[str, Any]:
+    """Delete a transaction by its gullak ID."""
+    writer: LedgerWriter = request.app.state.writer
+
+    try:
+        deleted = await writer.delete_transaction(transaction_id)
+        if deleted:
+            return {"success": True, "message": "Transaction deleted"}
+        return {"success": False, "error": "Transaction not found"}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@router.put("/transactions/{transaction_id}")
+async def update_transaction(
+    request: Request, transaction_id: str, body: TransactionUpdate
+) -> dict[str, Any]:
+    """Update a transaction by its gullak ID."""
+    writer: LedgerWriter = request.app.state.writer
+
+    updates = {}
+    if body.payee is not None:
+        updates["payee"] = body.payee
+    if body.date is not None:
+        updates["date"] = body.date
+    if body.amount is not None:
+        updates["amount"] = body.amount
+    if body.expense_account is not None:
+        updates["expense_account"] = body.expense_account
+    if body.payment_account is not None:
+        updates["payment_account"] = body.payment_account
+    if body.note is not None:
+        updates["note"] = body.note
+
+    if not updates:
+        return {"success": False, "error": "No updates provided"}
+
+    try:
+        updated = await writer.update_transaction(transaction_id, updates)
+        if updated:
+            return {
+                "success": True,
+                "message": "Transaction updated",
+                "transaction": {
+                    "id": updated.gullak_id,
+                    "date": str(updated.date),
+                    "payee": updated.payee,
+                    "amount": float(updated.total_amount),
+                    "accounts": [p.account for p in updated.postings],
+                },
+            }
+        return {"success": False, "error": "Transaction not found"}
+    except ValueError as e:
+        return {"success": False, "error": str(e)}
+    except Exception as e:
+        return {"success": False, "error": str(e)}

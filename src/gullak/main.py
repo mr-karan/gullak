@@ -18,6 +18,7 @@ from gullak.api import chat_router, ledger_router, setup_router, threads_router
 from gullak.api.whatsapp import router as whatsapp_router
 from gullak.ledger.parser import LedgerParser
 from gullak.ledger.validator import LedgerValidator
+from gullak.ledger.writer import LedgerWriter
 from gullak.logging import configure_logging, get_logger
 from gullak.settings import settings
 
@@ -61,6 +62,7 @@ async def lifespan(app: FastAPI):
     app.state.settings = settings
     app.state.parser = LedgerParser()
     app.state.validator = LedgerValidator(cli_path=settings.ledger_cli)
+    app.state.writer = LedgerWriter(settings.ledger_path, app.state.validator, settings.paisa_url)
 
     # Initialize agent
     app.state.agent = GullakAgent(

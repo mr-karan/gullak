@@ -890,6 +890,9 @@ document.addEventListener('alpine:init', () => {
         search: '',
         categoryFilter: '',
         period: 'month',
+        editing: null,
+        showEditModal: false,
+        deleting: false,
 
         get filtered() {
             let result = [...this.list];
@@ -939,6 +942,79 @@ document.addEventListener('alpine:init', () => {
                 this.stats = await response.json();
             } catch (error) {
                 console.error('Failed to load stats:', error);
+            }
+        },
+
+        openEdit(txn) {
+            this.editing = {
+                id: txn.id,
+                payee: txn.payee,
+                date: txn.date,
+                amount: Math.abs(txn.amount),
+                expense_account: txn.accounts.find(a => a.startsWith('Expenses:')) || txn.accounts[0] || '',
+                payment_account: txn.accounts.find(a => !a.startsWith('Expenses:')) || txn.accounts[1] || '',
+                note: txn.note || ''
+            };
+            this.showEditModal = true;
+        },
+
+        closeEdit() {
+            this.editing = null;
+            this.showEditModal = false;
+        },
+
+        async saveEdit() {
+            if (!this.editing) return;
+
+            try {
+                const response = await fetch(`/api/ledger/transactions/${this.editing.id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        payee: this.editing.payee,
+                        date: this.editing.date,
+                        amount: this.editing.amount,
+                        expense_account: this.editing.expense_account,
+                        payment_account: this.editing.payment_account,
+                        note: this.editing.note || null
+                    })
+                });
+
+                const result = await response.json();
+                if (result.success) {
+                    Alpine.store('notify').success('Transaction updated');
+                    this.closeEdit();
+                    await this.load();
+                } else {
+                    Alpine.store('notify').error(result.error || 'Failed to update');
+                }
+            } catch (error) {
+                console.error('Failed to update transaction:', error);
+                Alpine.store('notify').error('Failed to update transaction');
+            }
+        },
+
+        async delete(txnId) {
+            if (!confirm('Delete this transaction?')) return;
+
+            this.deleting = true;
+            try {
+                const response = await fetch(`/api/ledger/transactions/${txnId}`, {
+                    method: 'DELETE'
+                });
+
+                const result = await response.json();
+                if (result.success) {
+                    Alpine.store('notify').success('Transaction deleted');
+                    await this.load();
+                } else {
+                    Alpine.store('notify').error(result.error || 'Failed to delete');
+                }
+            } catch (error) {
+                console.error('Failed to delete transaction:', error);
+                Alpine.store('notify').error('Failed to delete transaction');
+            } finally {
+                this.deleting = false;
             }
         }
     });
