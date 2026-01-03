@@ -1789,6 +1789,16 @@ textarea:focus-visible {
 }
 
 /* ============================================
+   Mobile Viewport Fix
+   ============================================ */
+
+/* Fallback for browsers that don't support dvh */
+.h-dvh {
+    height: 100vh;
+    height: 100dvh;
+}
+
+/* ============================================
    Responsive Utilities
    ============================================ */
 
