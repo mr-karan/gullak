@@ -8,7 +8,7 @@ read_when:
 
 # Plain-Text Accounting in Gullak
 
-Gullak is built on the philosophy of **Plain-Text Accounting (PTA)**. This means your financial data is stored in a human-readable, version-controllable, and future-proof text format—specifically the [ledger-cli](https://ledger-cli.org/) format.
+Gullak is built on the philosophy of **Plain-Text Accounting (PTA)**. This means your financial data is stored in a human-readable, version-controllable, and future-proof text format; specifically, the [ledger-cli](https://ledger-cli.org/) format.
 
 ## What is Plain-Text Accounting?
 
@@ -96,7 +96,7 @@ If there are errors, `ledger` will tell you exactly which line is causing the is
 
 ## Paisa Integration
 
-Gullak is designed to work seamlessly with [Paisa](https://paisa.fyi). 
+Gullak integrates with [Paisa](https://paisa.fyi). 
 - **Real-time Sync**: Whenever Gullak writes a transaction, it pings Paisa to refresh its database.
 - **Shared Files**: Both tools read the same `.ledger` files.
 - **Configuration**: Paisa settings (like budget targets or credit card limits) are managed in `paisa.yaml` in the same data directory.

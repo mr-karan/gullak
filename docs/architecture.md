@@ -8,7 +8,7 @@ read_when:
 
 # System Architecture
 
-Gullak is designed as a set of lightweight, interoperable services that work together to provide a seamless expense tracking experience. It leverages the power of Large Language Models (LLMs) to bridge the gap between natural language and structured plain-text accounting.
+Gullak is designed as a set of lightweight, interoperable services that work together to provide a streamlined expense tracking experience. It uses Large Language Models (LLMs) to bridge the gap between natural language and structured plain-text accounting.
 
 ## High-Level Overview
 

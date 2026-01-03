@@ -7,7 +7,7 @@ read_when:
 
 # Gullak Documentation
 
-Welcome to the Gullak documentation. Gullak is an AI-powered expense tracker that turns natural language sentences into structured ledger entries, leveraging the power of plain-text accounting.
+Welcome to the Gullak documentation. Gullak is an AI-powered expense tracker that turns natural language sentences into structured ledger entries using plain-text accounting.
 
 ## Introduction
 

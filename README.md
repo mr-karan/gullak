@@ -20,7 +20,7 @@
 
 ![Gullak Transaction Logger](./screenshots/log.png)
 
-Gullak is a minimalist expense tracker that turns natural language sentences into structured ledger entries. It combines the ease of a chat interface with the power of plain-text accounting.
+Gullak is a minimalist expense tracker that turns natural language sentences into structured ledger entries. It combines the ease of a chat interface with the structure of plain-text accounting.
 
 ## Why Gullak?
 
@@ -33,7 +33,7 @@ Gullak uses LLMs to parse your intent, categorize the expense, and write it to a
 - 🧠 **Natural Language Processing**: Type (or speak) your expenses naturally. Powered by LiteLLM.
 - 📝 **Plain-Text Accounting**: Uses `ledger-cli` format. Your data is yours, stored in human-readable text files.
 - 🤖 **Multi-Provider LLM Support**: Works with OpenRouter (recommended), OpenAI, Anthropic, Gemini, or local Ollama.
-- 📊 **Paisa Integration**: Built-in integration with [Paisa](https://paisa.fyi) for beautiful charts and deep financial reports.
+- 📊 **Paisa Integration**: Built-in integration with [Paisa](https://paisa.fyi) for detailed charts and financial reports.
 - 📱 **WhatsApp Integration**: Log expenses by messaging yourself on WhatsApp via a built-in bridge.
 - 💬 **Threaded Conversations**: Context-aware chat history allows for natural follow-up corrections.
 - 📸 **Receipt OCR**: Upload receipt images or PDFs via Web UI or WhatsApp. Gullak extracts expense details automatically.
@@ -45,7 +45,7 @@ Gullak uses LLMs to parse your intent, categorize the expense, and write it to a
 Gullak runs as a stack of three lightweight services:
 
 1.  **Gullak (FastAPI)**: The main engine handling the AI agent, web UI, and ledger management.
-2.  **Paisa**: A powerful visualization engine that reads your ledger files and provides a dashboard.
+2.  **Paisa**: A visualization engine that reads your ledger files and provides a dashboard.
 3.  **WhatsApp Bridge (Node.js)**: A Baileys-based bridge that connects Gullak to your WhatsApp account.
 
 ## Quick Start
