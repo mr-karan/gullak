@@ -71,11 +71,45 @@ document.addEventListener('alpine:init', () => {
     // ROUTER STORE - View state and navigation
     // =========================================================================
     Alpine.store('router', {
-        view: 'chat',
+        route: { name: 'chat', params: {} },
         sidebarOpen: false,
+        loading: false,
+        _started: false,
+        _applying: false,
 
-        init() {
-            window.addEventListener('hashchange', () => this.handleRoute());
+        validViews: ['chat', 'transactions', 'ledger', 'settings'],
+
+        get view() {
+            return this.route.name === 'settings' ? 'setup' : this.route.name;
+        },
+
+        parseHash(rawHash) {
+            const hash = (rawHash || '').replace(/^#/, '') || 'chat';
+
+            if (hash.startsWith('chat/')) {
+                return { name: 'chat', params: { threadId: hash.slice(5) } };
+            }
+
+            if (this.validViews.includes(hash)) {
+                return { name: hash, params: {} };
+            }
+
+            return { name: 'chat', params: {} };
+        },
+
+        toHash(route) {
+            if (route.name === 'chat' && route.params?.threadId) {
+                return `#chat/${route.params.threadId}`;
+            }
+            return `#${route.name}`;
+        },
+
+        start() {
+            if (this._started) return;
+            this._started = true;
+
+            window.addEventListener('hashchange', () => this.syncFromLocation());
+            this.syncFromLocation();
         },
 
         toggleSidebar() {
@@ -86,49 +120,76 @@ document.addEventListener('alpine:init', () => {
             this.sidebarOpen = false;
         },
 
-        navigate(viewName, threadId = null) {
+        navigate(name, params = {}) {
             this.sidebarOpen = false;
-            let targetHash;
-            if (viewName === 'chat' && threadId) {
-                targetHash = `#chat/${threadId}`;
-            } else {
-                targetHash = `#${viewName}`;
-            }
-            
+            const next = { name, params };
+            const targetHash = this.toHash(next);
+
             if (window.location.hash === targetHash) {
-                this.handleRoute();
+                this.apply(next);
             } else {
                 window.location.hash = targetHash.slice(1);
             }
         },
 
-        handleRoute() {
-            const hash = window.location.hash.slice(1) || 'chat';
-            const validViews = ['chat', 'transactions', 'ledger', 'settings'];
-            
-            let viewName = hash;
-            let threadId = null;
-            
-            if (hash.startsWith('chat/')) {
-                viewName = 'chat';
-                threadId = hash.slice(5);
+        syncFromLocation() {
+            const next = this.parseHash(window.location.hash);
+            this.apply(next);
+        },
+
+        async apply(nextRoute) {
+            if (this._applying) return;
+            this._applying = true;
+            this.loading = true;
+
+            try {
+                const setup = Alpine.store('setup');
+
+                if (!setup.complete && nextRoute.name !== 'settings') {
+                    window.location.hash = 'settings';
+                    return;
+                }
+
+                this.route = nextRoute;
+
+                if (nextRoute.name === 'chat') {
+                    await this._applyChatRoute(nextRoute.params);
+                } else if (nextRoute.name === 'transactions') {
+                    await Alpine.store('transactions').load();
+                } else if (nextRoute.name === 'ledger') {
+                    await Alpine.store('ledger').load();
+                } else if (nextRoute.name === 'settings') {
+                    await Alpine.store('setup').loadOptions();
+                    await Alpine.store('whatsapp').checkStatus();
+                }
+            } finally {
+                this._applying = false;
+                this.loading = false;
+            }
+        },
+
+        async _applyChatRoute(params) {
+            const threads = Alpine.store('threads');
+            const pending = Alpine.store('pending');
+
+            if (threads.list.length === 0) {
+                await threads.load();
             }
 
-            if (validViews.includes(viewName)) {
-                this.view = viewName === 'settings' ? 'setup' : viewName;
+            pending.load();
 
-                if (viewName === 'chat' && threadId) {
-                    const threads = Alpine.store('threads');
-                    if (threads.currentId !== threadId) {
-                        threads.switch(threadId);
-                    }
-                } else if (viewName === 'transactions') {
-                    Alpine.store('transactions').load();
-                } else if (viewName === 'ledger') {
-                    Alpine.store('ledger').load();
-                } else if (viewName === 'settings') {
-                    Alpine.store('setup').loadOptions();
-                    Alpine.store('whatsapp').checkStatus();
+            const requestedId = params.threadId;
+            const exists = requestedId && threads.list.some(t => t.id === requestedId);
+            const targetId = exists ? requestedId : (threads.list[0]?.id ?? null);
+
+            if (targetId && threads.currentId !== targetId) {
+                await threads.switch(targetId, { skipHashUpdate: true });
+            }
+
+            if (targetId && requestedId !== targetId) {
+                const canonical = this.toHash({ name: 'chat', params: { threadId: targetId } });
+                if (window.location.hash !== canonical) {
+                    history.replaceState(null, '', canonical);
                 }
             }
         }
@@ -213,7 +274,7 @@ document.addEventListener('alpine:init', () => {
                 }
 
                 if (!this.complete) {
-                    Alpine.store('router').view = 'setup';
+                    Alpine.store('router').route = { name: 'settings', params: {} };
                     await this.loadOptions();
                 }
             } catch (error) {
@@ -476,17 +537,12 @@ document.addEventListener('alpine:init', () => {
             Alpine.store('pending').transactions = [];
             Alpine.store('router').sidebarOpen = false;
 
-            if (threadId) {
+            if (threadId && !opts.skipHashUpdate) {
                 const expectedHash = `chat/${threadId}`;
                 const currentHash = window.location.hash.slice(1);
                 if (currentHash !== expectedHash) {
                     history.replaceState(null, '', `#${expectedHash}`);
                 }
-            }
-            
-            const router = Alpine.store('router');
-            if (router.view !== 'chat') {
-                router.view = 'chat';
             }
 
             if (!threadId) return;
@@ -1202,10 +1258,11 @@ function gullakApp() {
         async init() {
             const setup = Alpine.store('setup');
             const router = Alpine.store('router');
-            const threads = Alpine.store('threads');
             const pending = Alpine.store('pending');
 
             await setup.checkStatus();
+
+            router.start();
 
             if (setup.complete) {
                 this.$nextTick(() => {
@@ -1213,23 +1270,6 @@ function gullakApp() {
                         this.$refs.chatInput.focus();
                     }
                 });
-
-                pending.load();
-                await threads.load();
-                
-                const hash = window.location.hash.slice(1) || '';
-                const deepLinkedThreadId = hash.startsWith('chat/') ? hash.slice(5) : null;
-                const isNonChatView = ['transactions', 'ledger', 'settings'].includes(hash);
-                
-                router.handleRoute();
-                
-                if (!isNonChatView) {
-                    if (deepLinkedThreadId && threads.list.some(t => t.id === deepLinkedThreadId)) {
-                        await threads.switch(deepLinkedThreadId);
-                    } else if (threads.list.length > 0) {
-                        await threads.switch(threads.list[0].id);
-                    }
-                }
             }
 
             window.addEventListener('undo-transaction', (event) => {
