@@ -66,7 +66,7 @@ Ledger requires every transaction to sum to zero.
 - **Diagnosis**: The WhatsApp bridge might be unable to start the session.
 - **Solution**: 
   1. Check `docker compose logs -f whatsapp-bridge`.
-  2. Ensure `GULLAK_WAHA_BASE_URL` is set correctly (`http://whatsapp-bridge:3000`).
+  2. Ensure `GULLAK_WHATSAPP_BRIDGE_URL` is set correctly (`http://whatsapp-bridge:3000`).
   3. Try restarting the bridge: `docker compose restart whatsapp-bridge`.
 
 ### Session stuck on "STARTING"

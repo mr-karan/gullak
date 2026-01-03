@@ -21,7 +21,7 @@ logger = structlog.get_logger(__name__)
 WHATSAPP_BRIDGE_TIMEOUT = httpx.Timeout(10.0, connect=5.0)
 
 # Simple in-memory message deduplication cache (message_id -> timestamp)
-# Prevents double-processing if Waha retries the webhook
+# Prevents double-processing if the bridge retries the webhook
 _processed_messages: OrderedDict[str, float] = OrderedDict()
 _DEDUPE_TTL_SECONDS = 300  # 5 minutes
 _DEDUPE_MAX_SIZE = 1000
@@ -129,7 +129,7 @@ async def get_status(request: Request):
 
 @router.post("/webhook")
 async def whatsapp_webhook(request: Request, body: WebhookPayload):
-    """Handle incoming WhatsApp messages via Waha webhook."""
+    """Handle incoming WhatsApp messages via webhook."""
     # Only process text messages
     if body.event != "message":
         return {"status": "ignored", "reason": "not_message_event"}
