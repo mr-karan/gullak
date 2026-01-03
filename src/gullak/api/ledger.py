@@ -110,6 +110,7 @@ async def list_transactions(
     request: Request,
     limit: int = Query(50, description="Maximum number of transactions"),
     account: str = Query("", description="Filter by account"),
+    period: str = Query("all", description="Period filter: week, month, year, all"),
 ) -> dict[str, Any]:
     """
     List recent transactions from the ledger.
@@ -117,11 +118,27 @@ async def list_transactions(
     Args:
         limit: Maximum number of transactions to return
         account: Filter by account pattern
+        period: Time period filter (week, month, year, all)
     """
+    from datetime import date, timedelta
+
     settings = request.app.state.settings
     parser: LedgerParser = request.app.state.parser
 
     transactions = parser.parse_file(settings.ledger_path)
+
+    # Filter by period
+    if period != "all":
+        today = date.today()
+        if period == "week":
+            start_date = today - timedelta(days=7)
+        elif period == "month":
+            start_date = today.replace(day=1)
+        elif period == "year":
+            start_date = today.replace(month=1, day=1)
+        else:
+            start_date = date.min
+        transactions = [t for t in transactions if t.date >= start_date]
 
     # Filter by account
     if account:
@@ -147,6 +164,7 @@ async def list_transactions(
         ],
         "count": len(recent),
         "total": len(transactions),
+        "period": period,
     }
 
 

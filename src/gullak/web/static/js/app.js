@@ -76,6 +76,7 @@ document.addEventListener('alpine:init', () => {
         loading: false,
         _started: false,
         _applying: false,
+        _pendingRoute: null,
 
         validViews: ['chat', 'transactions', 'ledger', 'settings'],
 
@@ -125,6 +126,16 @@ document.addEventListener('alpine:init', () => {
             const next = { name, params };
             const targetHash = this.toHash(next);
 
+            if (this._applying) {
+                this._pendingRoute = next;
+                if (window.location.hash !== targetHash) {
+                    window.location.hash = targetHash.slice(1);
+                }
+                return;
+            }
+
+            this._pendingRoute = null;
+
             if (window.location.hash === targetHash) {
                 this.apply(next);
             } else {
@@ -139,6 +150,7 @@ document.addEventListener('alpine:init', () => {
 
         async apply(nextRoute) {
             if (this._applying) return;
+
             this._applying = true;
             this.loading = true;
 
@@ -146,7 +158,10 @@ document.addEventListener('alpine:init', () => {
                 const setup = Alpine.store('setup');
 
                 if (!setup.complete && nextRoute.name !== 'settings') {
-                    window.location.hash = 'settings';
+                    this.route = { name: 'settings', params: {} };
+                    if (window.location.hash !== '#settings') {
+                        window.location.hash = 'settings';
+                    }
                     return;
                 }
 
@@ -165,6 +180,12 @@ document.addEventListener('alpine:init', () => {
             } finally {
                 this._applying = false;
                 this.loading = false;
+
+                if (this._pendingRoute) {
+                    const pending = this._pendingRoute;
+                    this._pendingRoute = null;
+                    this.navigate(pending.name, pending.params);
+                }
             }
         },
 
@@ -179,15 +200,15 @@ document.addEventListener('alpine:init', () => {
             pending.load();
 
             const requestedId = params.threadId;
-            const exists = requestedId && threads.list.some(t => t.id === requestedId);
-            const targetId = exists ? requestedId : (threads.list[0]?.id ?? null);
+            const targetId = requestedId || (threads.list[0]?.id ?? null);
 
             if (targetId && threads.currentId !== targetId) {
                 await threads.switch(targetId, { skipHashUpdate: true });
             }
 
             if (targetId && requestedId !== targetId) {
-                const canonical = this.toHash({ name: 'chat', params: { threadId: targetId } });
+                this.route = { name: 'chat', params: { threadId: targetId } };
+                const canonical = this.toHash(this.route);
                 if (window.location.hash !== canonical) {
                     history.replaceState(null, '', canonical);
                 }
@@ -537,14 +558,6 @@ document.addEventListener('alpine:init', () => {
             Alpine.store('pending').transactions = [];
             Alpine.store('router').sidebarOpen = false;
 
-            if (threadId && !opts.skipHashUpdate) {
-                const expectedHash = `chat/${threadId}`;
-                const currentHash = window.location.hash.slice(1);
-                if (currentHash !== expectedHash) {
-                    history.replaceState(null, '', `#${expectedHash}`);
-                }
-            }
-
             if (!threadId) return;
 
             try {
@@ -557,6 +570,10 @@ document.addEventListener('alpine:init', () => {
             } catch (error) {
                 console.error('Failed to load messages:', error);
                 Alpine.store('notify').error('Failed to load messages');
+            }
+
+            if (!opts.skipHashUpdate) {
+                Alpine.store('router').navigate('chat', { threadId });
             }
         },
 
@@ -1067,7 +1084,7 @@ document.addEventListener('alpine:init', () => {
 
         async load() {
             try {
-                const response = await fetch('/api/ledger/transactions?limit=100');
+                const response = await fetch(`/api/ledger/transactions?limit=100&period=${this.period}`);
                 const data = await response.json();
                 this.list = data.transactions || [];
                 await this.loadStats();
@@ -1084,6 +1101,11 @@ document.addEventListener('alpine:init', () => {
             } catch (error) {
                 console.error('Failed to load stats:', error);
             }
+        },
+
+        async setPeriod(newPeriod) {
+            this.period = newPeriod;
+            await this.load();
         },
 
         openEdit(txn) {
@@ -1259,8 +1281,13 @@ function gullakApp() {
             const setup = Alpine.store('setup');
             const router = Alpine.store('router');
             const pending = Alpine.store('pending');
+            const threads = Alpine.store('threads');
 
             await setup.checkStatus();
+
+            if (setup.complete && threads.list.length === 0) {
+                await threads.load();
+            }
 
             router.start();
 

@@ -3,7 +3,11 @@
 {% block title %}Gullak{% endblock %}
 
 {% block content %}
-<div class="flex h-screen bg-base-100" x-data="gullakApp()">
+<div class="flex h-screen bg-base-100" x-data="gullakApp()" 
+     @keydown.window.meta.k.prevent="$store.commandPalette && $store.commandPalette.toggle()"
+     @keydown.window.ctrl.k.prevent="$store.commandPalette && $store.commandPalette.toggle()"
+     @keydown.window.slash.prevent="if(!['INPUT','TEXTAREA'].includes(document.activeElement.tagName)) $refs.chatInput?.focus()"
+     @keydown.window.escape="$store.commandPalette && ($store.commandPalette.open = false)">
 
     <!-- Mobile Header Bar -->
     <div class="md:hidden fixed top-0 left-0 right-0 h-14 bg-base-100 border-b border-base-200/60 flex items-center px-4 z-30" x-show="$store.setup.complete" x-cloak>
@@ -46,24 +50,25 @@
         <nav class="flex-1 px-3 py-4 space-y-1 overflow-y-auto custom-scrollbar">
             <a href="#chat"
                @click.prevent="$store.router.navigate('chat')"
-               :class="$store.router.view === 'chat' ? 'bg-primary/8 text-primary' : 'text-base-content/60 hover:bg-base-200/80 hover:text-base-content'"
-               class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200">
-                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-                Chat
+               :class="$store.router.view === 'chat' ? 'bg-primary/10 text-primary border-primary/20' : 'text-base-content/60 hover:bg-base-200/80 hover:text-base-content border-transparent'"
+               class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 border group">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="transition-transform group-hover:scale-110"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                <span class="flex-1">Chat</span>
+                <kbd class="hidden xl:inline text-[10px] font-mono px-1.5 py-0.5 rounded bg-base-200/80 text-base-content/40">/</kbd>
             </a>
             <a href="#transactions"
                @click.prevent="$store.router.navigate('transactions')"
-               :class="$store.router.view === 'transactions' ? 'bg-primary/8 text-primary' : 'text-base-content/60 hover:bg-base-200/80 hover:text-base-content'"
-               class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200">
-                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
-                Transactions
+               :class="$store.router.view === 'transactions' ? 'bg-primary/10 text-primary border-primary/20' : 'text-base-content/60 hover:bg-base-200/80 hover:text-base-content border-transparent'"
+               class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 border group">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="transition-transform group-hover:scale-110"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
+                <span class="flex-1">Transactions</span>
             </a>
             <a href="#ledger"
                @click.prevent="$store.router.navigate('ledger')"
-               :class="$store.router.view === 'ledger' ? 'bg-primary/8 text-primary' : 'text-base-content/60 hover:bg-base-200/80 hover:text-base-content'"
-               class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200">
-                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/></svg>
-                Ledger
+               :class="$store.router.view === 'ledger' ? 'bg-primary/10 text-primary border-primary/20' : 'text-base-content/60 hover:bg-base-200/80 hover:text-base-content border-transparent'"
+               class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 border group">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="transition-transform group-hover:scale-110"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/></svg>
+                <span class="flex-1">Ledger</span>
             </a>
 
             <!-- Thread History -->
@@ -83,7 +88,7 @@
                     <template x-for="thread in $store.threads.list" :key="thread.id">
                         <div class="group relative flex items-center gap-2 px-4 py-2 rounded-lg text-sm cursor-pointer transition-all duration-150"
                              :class="$store.threads.currentId === thread.id ? 'bg-base-200/80 text-base-content' : 'text-base-content/60 hover:bg-base-200/50 hover:text-base-content'"
-                             @click="$store.threads.switch(thread.id)">
+                             @click="$store.router.navigate('chat', { threadId: thread.id })">
                             <span class="truncate flex-1 text-[13px]" x-text="thread.title || 'New Chat'"></span>
 
                             <button @click.stop="$store.threads.delete(thread.id)"
@@ -153,7 +158,7 @@
     </aside>
 
     <!-- Main Content Area -->
-    <main class="flex-1 flex flex-col relative overflow-hidden bg-base-100 pt-14 md:pt-0">
+    <main class="flex-1 flex flex-col relative overflow-hidden bg-gradient-mesh pt-14 md:pt-0 pb-[68px] md:pb-0">
 
         <!-- Setup Wizard -->
         <template x-if="$store.router.view === 'setup'">
@@ -365,26 +370,39 @@
 
                         <!-- Empty State -->
                         <template x-if="$store.chat.messages.length === 0 && !$store.chat.streaming">
-                            <div class="h-full flex flex-col items-center justify-center p-4 text-center animate-fade-in">
-                                <div class="empty-state-icon">
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M2 12h20"/></svg>
+                            <div class="h-full flex flex-col items-center justify-center p-6 text-center animate-fade-in">
+                                <div class="empty-state-icon-wrapper">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
                                 </div>
-                                <h2 class="empty-state-title">Log an expense in a sentence</h2>
-                                <p class="empty-state-desc mb-8">Just type it out. Gullak will categorize it and prep it for confirmation.</p>
+                                <h2 class="empty-state-title-premium">Log an expense in a sentence</h2>
+                                <p class="empty-state-desc-premium mb-10">Just type it out. Gullak will categorize it and prep it for confirmation.</p>
 
-                                <div class="flex flex-wrap justify-center gap-2 max-w-md">
-                                    <button @click="$store.chat.input = 'Uber to office 350'; $refs.chatInput.focus()" class="prompt-suggestion">
+                                <div class="flex flex-wrap justify-center gap-2.5 max-w-lg">
+                                    <button @click="$store.chat.input = 'Uber to office 350'; $refs.chatInput.focus()" class="prompt-suggestion group">
+                                        <span class="text-base-content/40 group-hover:text-primary mr-1.5">→</span>
                                         Uber to office 350
                                     </button>
-                                    <button @click="$store.chat.input = 'Blinkit groceries 850'; $refs.chatInput.focus()" class="prompt-suggestion">
+                                    <button @click="$store.chat.input = 'Blinkit groceries 850'; $refs.chatInput.focus()" class="prompt-suggestion group">
+                                        <span class="text-base-content/40 group-hover:text-primary mr-1.5">→</span>
                                         Blinkit groceries 850
                                     </button>
-                                    <button @click="$store.chat.input = 'Netflix renewal 649'; $refs.chatInput.focus()" class="prompt-suggestion">
+                                    <button @click="$store.chat.input = 'Netflix renewal 649'; $refs.chatInput.focus()" class="prompt-suggestion group">
+                                        <span class="text-base-content/40 group-hover:text-primary mr-1.5">→</span>
                                         Netflix renewal 649
                                     </button>
-                                    <button @click="$store.chat.input = 'Coffee and croissant 180'; $refs.chatInput.focus()" class="prompt-suggestion">
+                                    <button @click="$store.chat.input = 'Coffee and croissant 180'; $refs.chatInput.focus()" class="prompt-suggestion group">
+                                        <span class="text-base-content/40 group-hover:text-primary mr-1.5">→</span>
                                         Coffee and croissant 180
                                     </button>
+                                </div>
+
+                                <!-- Keyboard shortcut hint for desktop -->
+                                <div class="hidden md:flex items-center gap-2 mt-10 text-xs text-base-content/40">
+                                    <span>Press</span>
+                                    <kbd class="px-2 py-1 bg-base-200 rounded text-base-content/60 font-mono">/</kbd>
+                                    <span>to focus input or</span>
+                                    <kbd class="px-2 py-1 bg-base-200 rounded text-base-content/60 font-mono">⌘K</kbd>
+                                    <span>for command palette</span>
                                 </div>
                             </div>
                         </template>
@@ -417,43 +435,48 @@
                     </div>
 
                     <!-- Input Area -->
-                    <div class="p-3 md:p-6 bg-gradient-to-t from-base-100 via-base-100 to-transparent">
+                    <div class="p-3 md:p-6 bg-gradient-to-t from-base-100 via-base-100/95 to-transparent">
                         <div class="max-w-3xl mx-auto">
                             <form @submit.prevent="$store.chat.send()">
-                                <div class="chat-input-container flex items-end gap-2">
-                                    <label class="p-2.5 rounded-lg text-base-content/40 hover:text-base-content hover:bg-base-200/80 transition-all duration-150 cursor-pointer" title="Upload CSV/Excel">
+                                <div class="chat-input-container flex items-end gap-1.5 md:gap-2">
+                                    <label class="chat-attach-btn cursor-pointer hidden md:flex" title="Upload CSV/Excel">
                                         <input type="file" accept=".csv,.xlsx,.xls" @change="$store.chat.uploadFile($event)" class="hidden" :disabled="$store.chat.streaming || $store.chat.uploading || $store.chat.uploadingReceipt">
                                         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
                                     </label>
  
-                                    <label class="p-2.5 rounded-lg text-base-content/40 hover:text-base-content hover:bg-base-200/80 transition-all duration-150 cursor-pointer" title="Upload receipt (image/PDF)">
-                                        <input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" @change="$store.chat.uploadReceipt($event)" class="hidden" :disabled="$store.chat.streaming || $store.chat.uploading || $store.chat.uploadingReceipt">
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6.5H15"/><path d="M9 10H15"/><path d="M9 13.5H13"/><path d="M6 2h10l4 4v16a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z"/><path d="M14 2v4h4"/></svg>
+                                    <label class="chat-attach-btn cursor-pointer" title="Upload receipt">
+                                        <input type="file" accept="image/jpeg,image/png,image/webp,application/pdf,.csv,.xlsx,.xls" @change="$event.target.files[0]?.type.startsWith('image') || $event.target.files[0]?.type === 'application/pdf' ? $store.chat.uploadReceipt($event) : $store.chat.uploadFile($event)" class="hidden" :disabled="$store.chat.streaming || $store.chat.uploading || $store.chat.uploadingReceipt">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
                                     </label>
- 
+
                                     <textarea
                                         x-model="$store.chat.input"
                                         x-ref="chatInput"
                                         @keydown.enter.prevent="if(!$event.shiftKey) $store.chat.send()"
                                         rows="1"
-                                        placeholder="Type an expense..."
+                                        placeholder="Log an expense..."
                                         class="chat-input-textarea flex-1"
                                         :disabled="$store.chat.streaming || $store.chat.uploading || $store.chat.uploadingReceipt"></textarea>
  
                                     <button type="submit"
-                                            class="chat-send-button"
+                                            class="chat-send-button flex-shrink-0"
                                             :disabled="$store.chat.streaming || $store.chat.uploading || $store.chat.uploadingReceipt || !$store.chat.input.trim()">
                                         <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
                                     </button>
                                 </div>
                             </form>
-                            <div x-show="$store.chat.uploading" class="text-center mt-3 text-xs text-base-content/50 animate-pulse">Uploading file...</div>
-                            <div x-show="$store.chat.uploadingReceipt" class="text-center mt-3 text-xs text-base-content/50 animate-pulse">
+                            <!-- Upload status indicators -->
+                            <div x-show="$store.chat.uploading" class="flex items-center justify-center gap-2 mt-3 text-xs text-base-content/50">
+                                <div class="w-4 h-4 border-2 border-primary/30 border-t-primary rounded-full animate-spin"></div>
+                                <span>Uploading file...</span>
+                            </div>
+                            <div x-show="$store.chat.uploadingReceipt" class="flex items-center justify-center gap-2 mt-3 text-xs text-base-content/50">
+                                <div class="w-4 h-4 border-2 border-primary/30 border-t-primary rounded-full animate-spin"></div>
                                 <span>Processing receipt...</span>
                             </div>
                             <template x-if="$store.chat.uploadingReceipt && $store.chat.receiptPreview">
                                 <div class="mt-3 flex items-center justify-center gap-2 text-xs text-base-content/60">
-                                    <img :src="$store.chat.receiptPreview" alt="Receipt preview" class="w-10 h-10 rounded-lg object-cover border border-base-200/60" />
+                                    <img :src="$store.chat.receiptPreview" alt="Receipt preview" class="w-10 h-10 rounded-xl object-cover border border-base-200/60 shadow-sm" />
                                     <span>Receipt attached</span>
                                 </div>
                             </template>
@@ -569,13 +592,13 @@
                         <div class="flex bg-base-200/80 p-1 rounded-xl flex-1 md:flex-none">
                             <button class="flex-1 md:flex-none px-3 md:px-4 py-1.5 rounded-lg text-xs font-medium transition-all duration-150"
                                     :class="$store.transactions.period === 'week' ? 'bg-base-100 text-primary shadow-sm' : 'text-base-content/60 hover:text-base-content'"
-                                    @click="$store.transactions.period = 'week'; $store.transactions.loadStats()">Week</button>
+                                    @click="$store.transactions.setPeriod('week')">Week</button>
                             <button class="flex-1 md:flex-none px-3 md:px-4 py-1.5 rounded-lg text-xs font-medium transition-all duration-150"
                                     :class="$store.transactions.period === 'month' ? 'bg-base-100 text-primary shadow-sm' : 'text-base-content/60 hover:text-base-content'"
-                                    @click="$store.transactions.period = 'month'; $store.transactions.loadStats()">Month</button>
+                                    @click="$store.transactions.setPeriod('month')">Month</button>
                             <button class="flex-1 md:flex-none px-3 md:px-4 py-1.5 rounded-lg text-xs font-medium transition-all duration-150"
                                     :class="$store.transactions.period === 'year' ? 'bg-base-100 text-primary shadow-sm' : 'text-base-content/60 hover:text-base-content'"
-                                    @click="$store.transactions.period = 'year'; $store.transactions.loadStats()">Year</button>
+                                    @click="$store.transactions.setPeriod('year')">Year</button>
                         </div>
                         <button @click="$store.transactions.load()" class="p-2 rounded-lg text-base-content/50 hover:text-base-content hover:bg-base-200/80 transition-colors flex-shrink-0">
                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 5.5A10 10 0 1 1 11.26 2.8"/></svg>
@@ -805,43 +828,45 @@
                 </div>
 
                 <!-- Modal Body -->
-                <div class="p-6 space-y-4" x-show="$store.transactions.editing">
-                    <!-- Payee -->
-                    <div>
-                        <label class="block text-xs font-medium text-base-content/60 mb-1.5">Payee</label>
-                        <input type="text" x-model="$store.transactions.editing.payee" class="input-box w-full" />
-                    </div>
-
-                    <!-- Date & Amount -->
-                    <div class="grid grid-cols-2 gap-4">
+                <template x-if="$store.transactions.editing">
+                    <div class="p-6 space-y-4">
+                        <!-- Payee -->
                         <div>
-                            <label class="block text-xs font-medium text-base-content/60 mb-1.5">Date</label>
-                            <input type="date" x-model="$store.transactions.editing.date" class="input-box w-full" />
+                            <label class="block text-xs font-medium text-base-content/60 mb-1.5">Payee</label>
+                            <input type="text" x-model="$store.transactions.editing.payee" class="input-box w-full" />
                         </div>
+
+                        <!-- Date & Amount -->
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-xs font-medium text-base-content/60 mb-1.5">Date</label>
+                                <input type="date" x-model="$store.transactions.editing.date" class="input-box w-full" />
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-base-content/60 mb-1.5">Amount</label>
+                                <input type="number" step="0.01" x-model="$store.transactions.editing.amount" class="input-box w-full" />
+                            </div>
+                        </div>
+
+                        <!-- Expense Account -->
                         <div>
-                            <label class="block text-xs font-medium text-base-content/60 mb-1.5">Amount</label>
-                            <input type="number" step="0.01" x-model="$store.transactions.editing.amount" class="input-box w-full" />
+                            <label class="block text-xs font-medium text-base-content/60 mb-1.5">Category</label>
+                            <input type="text" x-model="$store.transactions.editing.expense_account" class="input-box w-full" placeholder="Expenses:Food:Groceries" />
+                        </div>
+
+                        <!-- Payment Account -->
+                        <div>
+                            <label class="block text-xs font-medium text-base-content/60 mb-1.5">Payment Account</label>
+                            <input type="text" x-model="$store.transactions.editing.payment_account" class="input-box w-full" placeholder="Assets:Bank:HDFC" />
+                        </div>
+
+                        <!-- Note -->
+                        <div>
+                            <label class="block text-xs font-medium text-base-content/60 mb-1.5">Note (optional)</label>
+                            <input type="text" x-model="$store.transactions.editing.note" class="input-box w-full" placeholder="Add a note..." />
                         </div>
                     </div>
-
-                    <!-- Expense Account -->
-                    <div>
-                        <label class="block text-xs font-medium text-base-content/60 mb-1.5">Category</label>
-                        <input type="text" x-model="$store.transactions.editing.expense_account" class="input-box w-full" placeholder="Expenses:Food:Groceries" />
-                    </div>
-
-                    <!-- Payment Account -->
-                    <div>
-                        <label class="block text-xs font-medium text-base-content/60 mb-1.5">Payment Account</label>
-                        <input type="text" x-model="$store.transactions.editing.payment_account" class="input-box w-full" placeholder="Assets:Bank:HDFC" />
-                    </div>
-
-                    <!-- Note -->
-                    <div>
-                        <label class="block text-xs font-medium text-base-content/60 mb-1.5">Note (optional)</label>
-                        <input type="text" x-model="$store.transactions.editing.note" class="input-box w-full" placeholder="Add a note..." />
-                    </div>
-                </div>
+                </template>
 
                 <!-- Modal Footer -->
                 <div class="px-6 py-4 border-t border-base-200/60 flex justify-end gap-3">
@@ -892,10 +917,133 @@
 
     </main>
 
+    <!-- Mobile Bottom Navigation -->
+    <nav class="bottom-nav md:hidden" x-show="$store.setup.complete" x-cloak>
+        <div class="bottom-nav-inner">
+            <button @click="$store.router.navigate('chat')" 
+                    class="bottom-nav-item"
+                    :class="$store.router.view === 'chat' && 'active'">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                <span>Chat</span>
+            </button>
+            <button @click="$store.router.navigate('transactions')" 
+                    class="bottom-nav-item"
+                    :class="$store.router.view === 'transactions' && 'active'">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
+                <span>Transactions</span>
+            </button>
+            <button @click="$store.router.navigate('ledger')" 
+                    class="bottom-nav-item"
+                    :class="$store.router.view === 'ledger' && 'active'">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/></svg>
+                <span>Ledger</span>
+            </button>
+            <button @click="$store.router.navigate('settings')" 
+                    class="bottom-nav-item"
+                    :class="$store.router.view === 'setup' && 'active'">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                <span>Settings</span>
+            </button>
+        </div>
+    </nav>
+
+    <!-- Command Palette (Desktop) -->
+    <div x-data="{ open: false, query: '', selectedIndex: 0, commands: [
+            { id: 'chat', label: 'Go to Chat', shortcut: '/', icon: 'chat' },
+            { id: 'transactions', label: 'Go to Transactions', shortcut: 'Alt+T', icon: 'card' },
+            { id: 'ledger', label: 'Go to Ledger', shortcut: 'Alt+L', icon: 'book' },
+            { id: 'settings', label: 'Open Settings', shortcut: 'Alt+S', icon: 'settings' },
+            { id: 'new-thread', label: 'New Chat Thread', shortcut: 'Alt+N', icon: 'plus' },
+            { id: 'theme', label: 'Toggle Theme', shortcut: 'Alt+D', icon: 'moon' }
+         ] }"
+         x-init="Alpine.store('commandPalette', { open: false, toggle() { this.open = !this.open } });
+                 $watch('$store.commandPalette.open', v => { open = v; if(v) { query = ''; selectedIndex = 0; $nextTick(() => $refs.cmdInput?.focus()); } })"
+         x-show="open"
+         x-transition:enter="transition ease-out duration-200"
+         x-transition:enter-start="opacity-0"
+         x-transition:enter-end="opacity-100"
+         x-transition:leave="transition ease-in duration-150"
+         x-transition:leave-start="opacity-100"
+         x-transition:leave-end="opacity-0"
+         class="command-palette-backdrop hidden md:flex"
+         @click.self="$store.commandPalette.open = false"
+         x-cloak>
+        <div class="command-palette animate-scale-in"
+             @keydown.down.prevent="selectedIndex = Math.min(selectedIndex + 1, commands.filter(c => c.label.toLowerCase().includes(query.toLowerCase())).length - 1)"
+             @keydown.up.prevent="selectedIndex = Math.max(selectedIndex - 1, 0)"
+             @keydown.enter.prevent="
+                const filtered = commands.filter(c => c.label.toLowerCase().includes(query.toLowerCase()));
+                const cmd = filtered[selectedIndex];
+                if (cmd) {
+                    if (cmd.id === 'theme') $store.theme.toggle();
+                    else if (cmd.id === 'new-thread') $store.threads.create();
+                    else $store.router.navigate(cmd.id);
+                    $store.commandPalette.open = false;
+                }
+             ">
+            <div class="flex items-center gap-3 px-5 py-4 border-b border-base-200/60">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-base-content/40"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                <input type="text" 
+                       x-ref="cmdInput"
+                       x-model="query"
+                       placeholder="Type a command or search..." 
+                       class="flex-1 bg-transparent outline-none text-base text-base-content placeholder:text-base-content/40" />
+                <kbd class="px-2 py-1 text-xs font-mono bg-base-200 rounded text-base-content/50">ESC</kbd>
+            </div>
+            <div class="command-palette-list">
+                <template x-for="(cmd, index) in commands.filter(c => c.label.toLowerCase().includes(query.toLowerCase()))" :key="cmd.id">
+                    <button class="command-palette-item w-full text-left"
+                            :class="index === selectedIndex && 'selected'"
+                            @click="
+                                if (cmd.id === 'theme') $store.theme.toggle();
+                                else if (cmd.id === 'new-thread') $store.threads.create();
+                                else $store.router.navigate(cmd.id);
+                                $store.commandPalette.open = false;
+                            "
+                            @mouseenter="selectedIndex = index">
+                        <div class="command-palette-item-icon">
+                            <template x-if="cmd.icon === 'chat'">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                            </template>
+                            <template x-if="cmd.icon === 'card'">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
+                            </template>
+                            <template x-if="cmd.icon === 'book'">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/></svg>
+                            </template>
+                            <template x-if="cmd.icon === 'settings'">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                            </template>
+                            <template x-if="cmd.icon === 'plus'">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                            </template>
+                            <template x-if="cmd.icon === 'moon'">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+                            </template>
+                        </div>
+                        <span class="command-palette-item-label" x-text="cmd.label"></span>
+                        <span class="command-palette-item-shortcut" x-text="cmd.shortcut"></span>
+                    </button>
+                </template>
+                <div x-show="commands.filter(c => c.label.toLowerCase().includes(query.toLowerCase())).length === 0" 
+                     class="px-5 py-8 text-center text-sm text-base-content/40">
+                    No commands found
+                </div>
+            </div>
+            <div class="flex items-center justify-between px-5 py-3 border-t border-base-200/60 text-xs text-base-content/40">
+                <div class="flex items-center gap-4">
+                    <span class="flex items-center gap-1"><kbd class="px-1.5 py-0.5 bg-base-200 rounded">↑↓</kbd> Navigate</span>
+                    <span class="flex items-center gap-1"><kbd class="px-1.5 py-0.5 bg-base-200 rounded">↵</kbd> Select</span>
+                </div>
+                <span class="flex items-center gap-1"><kbd class="px-1.5 py-0.5 bg-base-200 rounded">⌘K</kbd> to toggle</span>
+            </div>
+        </div>
+    </div>
+
 </div>
 
 <!-- Toast Notifications -->
-<div class="fixed bottom-6 right-6 z-50 flex flex-col gap-3 pointer-events-none"
+<div class="fixed bottom-24 md:bottom-6 right-4 md:right-6 left-4 md:left-auto z-50 flex flex-col gap-3 pointer-events-none"
      x-data="{ toasts: [] }"
      @notify.window="toasts.push($event.detail); setTimeout(() => toasts.shift(), 4000)">
     <template x-for="toast in toasts" :key="toast.id">
