@@ -10,27 +10,46 @@ document.addEventListener('alpine:init', () => {
             window.addEventListener('hashchange', () => this.handleRoute());
         },
 
-        navigate(viewName) {
-            const targetHash = `#${viewName}`;
+        navigate(viewName, threadId = null) {
+            let targetHash;
+            if (viewName === 'chat' && threadId) {
+                targetHash = `#chat/${threadId}`;
+            } else {
+                targetHash = `#${viewName}`;
+            }
+            
             if (window.location.hash === targetHash) {
                 this.handleRoute();
             } else {
-                window.location.hash = viewName;
+                window.location.hash = targetHash.slice(1);
             }
         },
 
         handleRoute() {
             const hash = window.location.hash.slice(1) || 'chat';
             const validViews = ['chat', 'transactions', 'ledger', 'settings'];
+            
+            let viewName = hash;
+            let threadId = null;
+            
+            if (hash.startsWith('chat/')) {
+                viewName = 'chat';
+                threadId = hash.slice(5);
+            }
 
-            if (validViews.includes(hash)) {
-                this.view = hash === 'settings' ? 'setup' : hash;
+            if (validViews.includes(viewName)) {
+                this.view = viewName === 'settings' ? 'setup' : viewName;
 
-                if (hash === 'transactions') {
+                if (viewName === 'chat' && threadId) {
+                    const threads = Alpine.store('threads');
+                    if (threads.currentId !== threadId) {
+                        threads.switch(threadId);
+                    }
+                } else if (viewName === 'transactions') {
                     Alpine.store('transactions').load();
-                } else if (hash === 'ledger') {
+                } else if (viewName === 'ledger') {
                     Alpine.store('ledger').load();
-                } else if (hash === 'settings') {
+                } else if (viewName === 'settings') {
                     Alpine.store('setup').loadOptions();
                     Alpine.store('whatsapp').checkStatus();
                 }
@@ -372,12 +391,23 @@ document.addEventListener('alpine:init', () => {
             }
         },
 
-        async switch(threadId) {
-            if (this.currentId === threadId) return;
+        async switch(threadId, opts = {}) {
+            if (this.currentId === threadId && !opts.force) return;
 
             this.currentId = threadId;
             Alpine.store('chat').messages = [];
             Alpine.store('pending').transactions = [];
+
+            const router = Alpine.store('router');
+            if (router.view !== 'chat') {
+                router.navigate('chat', threadId);
+            } else if (threadId) {
+                const currentHash = window.location.hash.slice(1);
+                const expectedHash = `chat/${threadId}`;
+                if (currentHash !== expectedHash) {
+                    history.replaceState(null, '', `#${expectedHash}`);
+                }
+            }
 
             if (!threadId) return;
 
@@ -947,8 +977,6 @@ function gullakApp() {
             await setup.checkStatus();
 
             if (setup.complete) {
-                router.handleRoute();
-
                 this.$nextTick(() => {
                     if (this.$refs.chatInput) {
                         this.$refs.chatInput.focus();
@@ -956,11 +984,18 @@ function gullakApp() {
                 });
 
                 pending.load();
-
                 await threads.load();
-                if (threads.list.length > 0) {
-                    threads.switch(threads.list[0].id);
+                
+                const hash = window.location.hash.slice(1) || '';
+                const deepLinkedThreadId = hash.startsWith('chat/') ? hash.slice(5) : null;
+                
+                if (deepLinkedThreadId && threads.list.some(t => t.id === deepLinkedThreadId)) {
+                    await threads.switch(deepLinkedThreadId);
+                } else if (threads.list.length > 0) {
+                    await threads.switch(threads.list[0].id);
                 }
+                
+                router.handleRoute();
             }
 
             window.addEventListener('undo-transaction', (event) => {

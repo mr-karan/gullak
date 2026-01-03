@@ -54,16 +54,16 @@ class LedgerWriter:
             True if successful
 
         Raises:
-            ValueError: If transaction would create invalid ledger
+            ValueError: If transaction would create invalid ledger or duplicate ID
             IOError: If file write fails
         """
         ledger_text = txn.to_ledger()
+        current_content = self._read_file()
+
+        if txn.gullak_id and f"gullak:id {txn.gullak_id}" in current_content:
+            raise ValueError(f"Transaction {txn.gullak_id} already exists in ledger")
 
         if validate:
-            # Read current content
-            current_content = self._read_file()
-
-            # Create temp content with new transaction
             if current_content:
                 temp_content = current_content.rstrip() + "\n\n" + ledger_text + "\n"
             else:

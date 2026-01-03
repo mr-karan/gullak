@@ -202,6 +202,7 @@ async function connectWhatsApp() {
         from: msg.key.remoteJid,
         fromMe: msg.key.fromMe,
         author: msg.key.participant || msg.key.remoteJid,
+        pushName: msg.pushName || null,
         body: text,
         timestamp: msg.messageTimestamp,
         media: null,

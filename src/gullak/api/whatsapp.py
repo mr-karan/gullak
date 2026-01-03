@@ -222,7 +222,8 @@ async def whatsapp_webhook(request: Request, body: WebhookPayload):
 
     thread_id = f"wa_{sender.replace('@', '_')}"
 
-    source_user = payload.get("pushName") or author_number
+    push_name = payload.get("pushName")
+    source_user = push_name or author_number
 
     logger.info(
         "processing_whatsapp_message",
@@ -232,6 +233,12 @@ async def whatsapp_webhook(request: Request, body: WebhookPayload):
         body_length=len(message_body),
         has_media=media_content is not None,
     )
+
+    chat_history = agent.get_chat_history()
+    if chat_history and push_name:
+        thread = await chat_history.get_thread(thread_id)
+        if thread is None or thread.get("title") is None:
+            await chat_history.update_thread_title(thread_id, f"WhatsApp: {push_name}")
 
     try:
         await client.post("/api/sendSeen", json={"session": "default", "chatId": sender})
