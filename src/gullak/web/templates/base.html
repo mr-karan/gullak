@@ -21,7 +21,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=Instrument+Serif&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 
-    <script src="/static/js/app.js"></script>
+    <script src="/static/js/app.js?v={{ asset_version.js }}"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.15.3/dist/cdn.min.js"></script>
 
     <!-- Tailwind CSS + DaisyUI -->
@@ -132,7 +132,7 @@
         }
     </script>
 
-    <link href="/static/css/main.css" rel="stylesheet">
+    <link href="/static/css/main.css?v={{ asset_version.css }}" rel="stylesheet">
     {% block head %}{% endblock %}
 </head>
 <body class="min-h-screen bg-base-100 text-base-content antialiased selection:bg-primary/20 selection:text-primary overflow-hidden">

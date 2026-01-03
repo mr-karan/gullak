@@ -1,13 +1,17 @@
-const CACHE_VERSION = 'gullak-v2';
+const CACHE_VERSION = 'gullak-v3';
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 
 const STATIC_ASSETS = [
   '/',
-  '/static/css/main.css',
-  '/static/js/app.js',
   '/static/manifest.json',
   '/offline'
+];
+
+// Assets with query-string versioning - use network-first
+const VERSIONED_ASSET_PATTERNS = [
+  /\/static\/js\/app\.js\?v=/,
+  /\/static\/css\/main\.css\?v=/
 ];
 
 const CACHE_FIRST_PATTERNS = [
@@ -51,6 +55,12 @@ self.addEventListener('fetch', (event) => {
   }
 
   if (NETWORK_ONLY_PATTERNS.some((pattern) => pattern.test(url.pathname))) {
+    return;
+  }
+
+  // Versioned assets use network-first to respect cache busting
+  if (VERSIONED_ASSET_PATTERNS.some((pattern) => pattern.test(url.href))) {
+    event.respondWith(networkFirst(request));
     return;
   }
 

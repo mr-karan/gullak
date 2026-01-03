@@ -1,5 +1,6 @@
 """Gullak - Main FastAPI application."""
 
+import hashlib
 import shutil
 import time
 import uuid
@@ -107,6 +108,15 @@ app.mount("/static", StaticFiles(directory=static_path), name="static")
 templates_path = Path(__file__).parent / "web" / "templates"
 templates = Jinja2Templates(directory=templates_path)
 
+
+def get_asset_hash(filename: str) -> str:
+    """Generate a short hash of file contents for cache busting."""
+    filepath = static_path / filename
+    if filepath.exists():
+        content = filepath.read_bytes()
+        return hashlib.md5(content).hexdigest()[:8]
+    return str(int(time.time()))
+
 # Include API routers
 app.include_router(chat_router, prefix="/api")
 app.include_router(ledger_router, prefix="/api")
@@ -160,7 +170,14 @@ async def index(request: Request):
     """Serve the main application page."""
     return templates.TemplateResponse(
         "index.html",
-        {"request": request, "paisa_url": settings.paisa_external_url or settings.paisa_url},
+        {
+            "request": request,
+            "paisa_url": settings.paisa_external_url or settings.paisa_url,
+            "asset_version": {
+                "js": get_asset_hash("js/app.js"),
+                "css": get_asset_hash("css/main.css"),
+            },
+        },
     )
 
 
