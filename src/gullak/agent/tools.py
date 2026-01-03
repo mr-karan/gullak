@@ -262,6 +262,10 @@ def execute_parse_expense(state: ToolState, input: ParseExpenseInput) -> ToolRes
 
         state.add_pending(pending)
 
+        is_default_cash = input.payment_account == "Assets:Cash"
+        is_small_amount = input.amount < 100
+        auto_confirmable = not is_default_cash or is_small_amount
+
         return ToolResult(
             success=True,
             is_pending=True,
@@ -269,6 +273,7 @@ def execute_parse_expense(state: ToolState, input: ParseExpenseInput) -> ToolRes
             data={
                 "id": pending.id,
                 "preview": pending.ledger_preview,
+                "auto_confirmable": auto_confirmable,
                 "transaction": {
                     "date": str(txn.date),
                     "payee": txn.payee,

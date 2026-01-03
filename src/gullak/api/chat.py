@@ -1,5 +1,6 @@
 """Chat API endpoint with SSE streaming."""
 
+import asyncio
 import json
 import tempfile
 from pathlib import Path
@@ -14,6 +15,14 @@ from gullak.media import MediaContent, MediaProcessor
 from gullak.settings import settings
 
 router = APIRouter(prefix="/chat", tags=["chat"])
+
+_thread_locks: dict[str, asyncio.Lock] = {}
+
+
+def _get_thread_lock(thread_id: str) -> asyncio.Lock:
+    if thread_id not in _thread_locks:
+        _thread_locks[thread_id] = asyncio.Lock()
+    return _thread_locks[thread_id]
 
 
 class ChatMessage(BaseModel):
@@ -72,30 +81,34 @@ async def chat(request: Request, body: ChatMessage):
     if agent._tool_state:
         agent._tool_state.set_source_context(TransactionSource.WEB)
 
+    thread_id = body.thread_id or "default"
+    thread_lock = _get_thread_lock(thread_id)
+
     async def event_generator():
-        try:
-            async for event in agent.process_message(body.message, thread_id=body.thread_id):
+        async with thread_lock:
+            try:
+                async for event in agent.process_message(body.message, thread_id=body.thread_id):
+                    yield {
+                        "event": event.type,
+                        "data": json.dumps(
+                            {
+                                "type": event.type,
+                                "content": event.content,
+                                "data": event.data,
+                            }
+                        ),
+                    }
+            except Exception as e:
                 yield {
-                    "event": event.type,
+                    "event": "error",
                     "data": json.dumps(
                         {
-                            "type": event.type,
-                            "content": event.content,
-                            "data": event.data,
+                            "type": "error",
+                            "content": str(e),
+                            "data": {},
                         }
                     ),
                 }
-        except Exception as e:
-            yield {
-                "event": "error",
-                "data": json.dumps(
-                    {
-                        "type": "error",
-                        "content": str(e),
-                        "data": {},
-                    }
-                ),
-            }
 
     return EventSourceResponse(event_generator())
 
@@ -272,31 +285,35 @@ async def chat_with_media(request: Request, body: ChatMessageWithMedia):
     if body.media:
         media_content = MediaContent(**body.media)
 
+    thread_id = body.thread_id or "default"
+    thread_lock = _get_thread_lock(thread_id)
+
     async def event_generator():
-        try:
-            async for event in agent.process_message(
-                body.message, thread_id=body.thread_id, media=media_content
-            ):
+        async with thread_lock:
+            try:
+                async for event in agent.process_message(
+                    body.message, thread_id=body.thread_id, media=media_content
+                ):
+                    yield {
+                        "event": event.type,
+                        "data": json.dumps(
+                            {
+                                "type": event.type,
+                                "content": event.content,
+                                "data": event.data,
+                            }
+                        ),
+                    }
+            except Exception as e:
                 yield {
-                    "event": event.type,
+                    "event": "error",
                     "data": json.dumps(
                         {
-                            "type": event.type,
-                            "content": event.content,
-                            "data": event.data,
+                            "type": "error",
+                            "content": str(e),
+                            "data": {},
                         }
                     ),
                 }
-        except Exception as e:
-            yield {
-                "event": "error",
-                "data": json.dumps(
-                    {
-                        "type": "error",
-                        "content": str(e),
-                        "data": {},
-                    }
-                ),
-            }
 
     return EventSourceResponse(event_generator())

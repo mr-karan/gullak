@@ -398,15 +398,17 @@ document.addEventListener('alpine:init', () => {
             Alpine.store('chat').messages = [];
             Alpine.store('pending').transactions = [];
 
-            const router = Alpine.store('router');
-            if (router.view !== 'chat') {
-                router.navigate('chat', threadId);
-            } else if (threadId) {
-                const currentHash = window.location.hash.slice(1);
+            if (threadId) {
                 const expectedHash = `chat/${threadId}`;
+                const currentHash = window.location.hash.slice(1);
                 if (currentHash !== expectedHash) {
                     history.replaceState(null, '', `#${expectedHash}`);
                 }
+            }
+            
+            const router = Alpine.store('router');
+            if (router.view !== 'chat') {
+                router.view = 'chat';
             }
 
             if (!threadId) return;
@@ -698,15 +700,25 @@ document.addEventListener('alpine:init', () => {
         },
 
         handlePreview(event) {
-            this.confirmOne(event.data.id, { auto: true })
-                .then((autoConfirmed) => {
-                    if (!autoConfirmed) {
-                        const exists = this.transactions.find(p => p.data.id === event.data.id);
-                        if (!exists) {
-                            this.transactions.push(event);
+            const autoConfirmable = event.data?.auto_confirmable === true;
+            
+            if (autoConfirmable) {
+                this.confirmOne(event.data.id, { auto: true })
+                    .then((autoConfirmed) => {
+                        if (!autoConfirmed) {
+                            this._addPreviewIfNotExists(event);
                         }
-                    }
-                });
+                    });
+            } else {
+                this._addPreviewIfNotExists(event);
+            }
+        },
+        
+        _addPreviewIfNotExists(event) {
+            const exists = this.transactions.find(p => p.data.id === event.data.id);
+            if (!exists) {
+                this.transactions.push(event);
+            }
         },
 
         async confirmOne(txnId, options = {}) {
