@@ -6,7 +6,7 @@
 <div class="flex h-screen bg-base-100" x-data="gullakApp()">
 
     <!-- Sidebar Navigation -->
-    <aside class="w-[280px] flex flex-col border-r border-base-200/60 bg-base-100 flex-shrink-0 z-20" x-show="setupComplete" x-cloak>
+    <aside class="w-[280px] flex flex-col border-r border-base-200/60 bg-base-100 flex-shrink-0 z-20" x-show="$store.setup.complete" x-cloak>
         <!-- App Header -->
         <div class="h-14 flex items-center px-5 border-b border-base-200/60">
             <div class="flex items-center gap-3">
@@ -20,22 +20,22 @@
         <!-- Main Nav -->
         <nav class="flex-1 px-3 py-4 space-y-1 overflow-y-auto custom-scrollbar">
             <a href="#chat"
-               @click.prevent="navigate('chat')"
-               :class="view === 'chat' ? 'bg-primary/8 text-primary' : 'text-base-content/60 hover:bg-base-200/80 hover:text-base-content'"
+               @click.prevent="$store.router.navigate('chat')"
+               :class="$store.router.view === 'chat' ? 'bg-primary/8 text-primary' : 'text-base-content/60 hover:bg-base-200/80 hover:text-base-content'"
                class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200">
                 <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
                 Chat
             </a>
             <a href="#transactions"
-               @click.prevent="navigate('transactions')"
-               :class="view === 'transactions' ? 'bg-primary/8 text-primary' : 'text-base-content/60 hover:bg-base-200/80 hover:text-base-content'"
+               @click.prevent="$store.router.navigate('transactions')"
+               :class="$store.router.view === 'transactions' ? 'bg-primary/8 text-primary' : 'text-base-content/60 hover:bg-base-200/80 hover:text-base-content'"
                class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200">
                 <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
                 Transactions
             </a>
             <a href="#ledger"
-               @click.prevent="navigate('ledger')"
-               :class="view === 'ledger' ? 'bg-primary/8 text-primary' : 'text-base-content/60 hover:bg-base-200/80 hover:text-base-content'"
+               @click.prevent="$store.router.navigate('ledger')"
+               :class="$store.router.view === 'ledger' ? 'bg-primary/8 text-primary' : 'text-base-content/60 hover:bg-base-200/80 hover:text-base-content'"
                class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200">
                 <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/></svg>
                 Ledger
@@ -45,23 +45,23 @@
             <div class="pt-5 mt-5 border-t border-base-200/60">
                 <div class="px-4 flex items-center justify-between mb-3">
                     <span class="text-xs font-semibold text-base-content/40 uppercase tracking-wider">History</span>
-                    <button @click="createThread" class="p-1 rounded-md text-primary hover:bg-primary/10 transition-colors" title="New Chat">
+                    <button @click="$store.threads.create()" class="p-1 rounded-md text-primary hover:bg-primary/10 transition-colors" title="New Chat">
                         <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                     </button>
                 </div>
 
                 <div class="space-y-0.5">
-                    <template x-if="threadsLoading">
+                    <template x-if="$store.threads.loading">
                         <div class="px-4 py-2 text-sm text-base-content/40 italic">Loading...</div>
                     </template>
 
-                    <template x-for="thread in threads" :key="thread.id">
+                    <template x-for="thread in $store.threads.list" :key="thread.id">
                         <div class="group relative flex items-center gap-2 px-4 py-2 rounded-lg text-sm cursor-pointer transition-all duration-150"
-                             :class="currentThreadId === thread.id ? 'bg-base-200/80 text-base-content' : 'text-base-content/60 hover:bg-base-200/50 hover:text-base-content'"
-                             @click="switchThread(thread.id)">
+                             :class="$store.threads.currentId === thread.id ? 'bg-base-200/80 text-base-content' : 'text-base-content/60 hover:bg-base-200/50 hover:text-base-content'"
+                             @click="$store.threads.switch(thread.id)">
                             <span class="truncate flex-1 text-[13px]" x-text="thread.title || 'New Chat'"></span>
 
-                            <button @click.stop="deleteThread(thread.id)"
+                            <button @click.stop="$store.threads.delete(thread.id)"
                                     class="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-error/10 hover:text-error transition-all duration-150">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
                             </button>
@@ -80,12 +80,12 @@
                     Open Paisa
                 </a>
                 {% endif %}
-                <a href="#settings" @click.prevent="navigate('settings')" class="p-2 rounded-lg text-base-content/50 hover:text-base-content hover:bg-base-200/80 transition-all duration-150" title="Settings">
+                <a href="#settings" @click.prevent="$store.router.navigate('settings')" class="p-2 rounded-lg text-base-content/50 hover:text-base-content hover:bg-base-200/80 transition-all duration-150" title="Settings">
                     <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
                 </a>
 
-                <!-- Theme Toggle - Fixed -->
-                <button @click="toggleTheme()" class="theme-toggle" title="Toggle Theme">
+                <!-- Theme Toggle -->
+                <button @click="$store.theme.toggle()" class="theme-toggle" title="Toggle Theme">
                     <svg class="sun-icon" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
                     <svg class="moon-icon" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
                 </button>
@@ -97,78 +97,78 @@
     <main class="flex-1 flex flex-col relative overflow-hidden bg-base-100">
 
         <!-- Setup Wizard -->
-        <template x-if="view === 'setup'">
+        <template x-if="$store.router.view === 'setup'">
             <div class="flex-1 overflow-y-auto p-8">
                 <div class="w-full max-w-3xl space-y-8 animate-slide-up">
                     <div class="flex items-center justify-between">
                         <h1 class="text-2xl font-display">Settings</h1>
-                        <button @click="navigate('chat')" class="btn btn-ghost btn-sm" x-show="setupComplete">Done</button>
+                        <button @click="$store.router.navigate('chat')" class="btn btn-ghost btn-sm" x-show="$store.setup.complete">Done</button>
                     </div>
 
                     <!-- Steps -->
-                    <div x-show="!setupComplete" class="flex gap-2 mb-8">
-                        <div class="h-1 flex-1 rounded-full transition-colors duration-300" :class="['welcome', 'accounts', 'categories'].indexOf(setupStep) >= 0 ? 'bg-primary' : 'bg-base-300'"></div>
-                        <div class="h-1 flex-1 rounded-full transition-colors duration-300" :class="['accounts', 'categories'].indexOf(setupStep) >= 0 ? 'bg-primary' : 'bg-base-300'"></div>
-                        <div class="h-1 flex-1 rounded-full transition-colors duration-300" :class="setupStep === 'categories' ? 'bg-primary' : 'bg-base-300'"></div>
+                    <div x-show="!$store.setup.complete" class="flex gap-2 mb-8">
+                        <div class="h-1 flex-1 rounded-full transition-colors duration-300" :class="['welcome', 'accounts', 'categories'].indexOf($store.setup.step) >= 0 ? 'bg-primary' : 'bg-base-300'"></div>
+                        <div class="h-1 flex-1 rounded-full transition-colors duration-300" :class="['accounts', 'categories'].indexOf($store.setup.step) >= 0 ? 'bg-primary' : 'bg-base-300'"></div>
+                        <div class="h-1 flex-1 rounded-full transition-colors duration-300" :class="$store.setup.step === 'categories' ? 'bg-primary' : 'bg-base-300'"></div>
                     </div>
 
                     <!-- Content -->
                     <div class="space-y-6">
                         <!-- Welcome / Currency -->
-                        <div x-show="setupStep === 'welcome' || (setupComplete && view === 'setup')" class="card-elevated p-6 space-y-4">
+                        <div x-show="$store.setup.step === 'welcome' || ($store.setup.complete && $store.router.view === 'setup')" class="card-elevated p-6 space-y-4">
                             <h2 class="text-lg font-semibold">Preferences</h2>
                             <div class="grid gap-4">
                                 <div>
                                     <label class="block text-sm font-medium text-base-content/70 mb-2">Currency</label>
-                                    <select x-model="setupData.currency" class="select select-bordered w-full bg-base-100">
-                                        <template x-for="curr in setupOptions?.currencies || []" :key="curr.code">
+                                    <select x-model="$store.setup.data.currency" class="select select-bordered w-full bg-base-100">
+                                        <template x-for="curr in $store.setup.options?.currencies || []" :key="curr.code">
                                             <option :value="curr.code" x-text="`${curr.symbol} ${curr.name}`"></option>
                                         </template>
                                     </select>
                                 </div>
                                 <div>
                                     <label class="block text-sm font-medium text-base-content/70 mb-2">Timezone</label>
-                                    <select x-model="setupData.timezone" class="select select-bordered w-full bg-base-100">
-                                        <template x-for="tz in setupOptions?.timezones || []" :key="tz.value">
+                                    <select x-model="$store.setup.data.timezone" class="select select-bordered w-full bg-base-100">
+                                        <template x-for="tz in $store.setup.options?.timezones || []" :key="tz.value">
                                             <option :value="tz.value" x-text="tz.label"></option>
                                         </template>
                                     </select>
                                 </div>
                             </div>
-                            <div x-show="!setupComplete && setupStep === 'welcome'" class="pt-2">
-                                <button @click="submitSetupStep" class="btn btn-primary w-full" :disabled="setupLoading">Continue</button>
+                            <div x-show="!$store.setup.complete && $store.setup.step === 'welcome'" class="pt-2">
+                                <button @click="$store.setup.submitStep()" class="btn btn-primary w-full" :disabled="$store.setup.loading">Continue</button>
                             </div>
                         </div>
 
                         <!-- Accounts -->
-                        <div x-show="setupStep === 'accounts' || (setupComplete && view === 'setup')" class="card-elevated p-6 space-y-5">
+                        <div x-show="$store.setup.step === 'accounts' || ($store.setup.complete && $store.router.view === 'setup')" class="card-elevated p-6 space-y-5">
                             <h2 class="text-lg font-semibold">Accounts</h2>
 
                             <!-- Banks -->
                             <div>
                                 <label class="block text-xs font-semibold text-base-content/50 uppercase tracking-wider mb-3">Bank Accounts</label>
                                 <div class="flex flex-wrap gap-2 mb-3">
-                                    <template x-for="bank in setupData.bank_accounts" :key="bank">
+                                    <template x-for="bank in $store.setup.data.bank_accounts" :key="bank">
                                         <div class="inline-flex items-center gap-2 bg-base-200 rounded-full pl-4 pr-2 py-1.5 text-sm">
                                             <span x-text="bank"></span>
-                                            <button @click="removeBankAccount(bank)" class="p-0.5 rounded-full hover:bg-error/20 hover:text-error transition-colors">
+                                            <button @click="$store.setup.removeBank(bank)" class="p-0.5 rounded-full hover:bg-error/20 hover:text-error transition-colors">
                                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
                                             </button>
                                         </div>
                                     </template>
                                 </div>
                                 <!-- Quick add suggested banks -->
-                                <div class="flex flex-wrap gap-1.5 mb-3" x-show="setupOptions?.suggested_banks?.length">
-                                    <template x-for="bank in (setupOptions?.suggested_banks || []).filter(b => !setupData.bank_accounts.includes(b))" :key="bank">
-                                        <button @click="addBankAccount(bank)" 
+                                <div class="flex flex-wrap gap-1.5 mb-3" x-show="$store.setup.options?.suggested_banks?.length">
+                                    <template x-for="bank in ($store.setup.options?.suggested_banks || []).filter(b => !$store.setup.data.bank_accounts.includes(b))" :key="bank">
+                                        <button @click="$store.setup.addBank(bank)" 
                                                 class="px-3 py-1 text-xs rounded-full border border-base-300 text-base-content/60 hover:border-primary hover:text-primary hover:bg-primary/5 transition-all">
                                             + <span x-text="bank"></span>
                                         </button>
                                     </template>
                                 </div>
                                 <div class="flex gap-2">
-                                    <input type="text" x-data="{val:''}" x-model="val" @keyup.enter="addBankAccount(val); val=''" placeholder="Or type custom bank name..." class="input-box flex-1" />
-                                    <button class="btn btn-primary" @click="addBankAccount($el.previousElementSibling.value); $el.previousElementSibling.value=''">Add</button>
+                                    <input type="text" x-data="{val:''}" x-model="val" @keyup.enter="$store.setup.addBank(val); val=''" placeholder="Or type custom bank name..." class="input-box flex-1" />
+                                    <button class="btn btn-primary" @click="$store.setup.addBank($el.previousElementSibling.value); $el.previousElementSibling.value=''">Add</button>
                                 </div>
                             </div>
 
@@ -176,41 +176,41 @@
                             <div>
                                 <label class="block text-xs font-semibold text-base-content/50 uppercase tracking-wider mb-3">Credit Cards</label>
                                 <div class="flex flex-wrap gap-2 mb-3">
-                                    <template x-for="card in setupData.credit_cards" :key="card">
+                                    <template x-for="card in $store.setup.data.credit_cards" :key="card">
                                         <div class="inline-flex items-center gap-2 bg-base-200 rounded-full pl-4 pr-2 py-1.5 text-sm">
                                             <span x-text="card"></span>
-                                            <button @click="removeCreditCard(card)" class="p-0.5 rounded-full hover:bg-error/20 hover:text-error transition-colors">
+                                            <button @click="$store.setup.removeCard(card)" class="p-0.5 rounded-full hover:bg-error/20 hover:text-error transition-colors">
                                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
                                             </button>
                                         </div>
                                     </template>
                                 </div>
-                                <div class="flex flex-wrap gap-1.5 mb-3" x-show="setupOptions?.suggested_cards?.length">
-                                    <template x-for="card in (setupOptions?.suggested_cards || []).filter(c => !setupData.credit_cards.includes(c))" :key="card">
-                                        <button @click="addCreditCard(card)" 
+                                <div class="flex flex-wrap gap-1.5 mb-3" x-show="$store.setup.options?.suggested_cards?.length">
+                                    <template x-for="card in ($store.setup.options?.suggested_cards || []).filter(c => !$store.setup.data.credit_cards.includes(c))" :key="card">
+                                        <button @click="$store.setup.addCard(card)" 
                                                 class="px-3 py-1 text-xs rounded-full border border-base-300 text-base-content/60 hover:border-primary hover:text-primary hover:bg-primary/5 transition-all">
                                             + <span x-text="card"></span>
                                         </button>
                                     </template>
                                 </div>
                                 <div class="flex gap-2">
-                                    <input type="text" x-data="{val:''}" x-model="val" @keyup.enter="addCreditCard(val); val=''" placeholder="Or type custom card name..." class="input-box flex-1" />
-                                    <button class="btn btn-primary" @click="addCreditCard($el.previousElementSibling.value); $el.previousElementSibling.value=''">Add</button>
+                                    <input type="text" x-data="{val:''}" x-model="val" @keyup.enter="$store.setup.addCard(val); val=''" placeholder="Or type custom card name..." class="input-box flex-1" />
+                                    <button class="btn btn-primary" @click="$store.setup.addCard($el.previousElementSibling.value); $el.previousElementSibling.value=''">Add</button>
                                 </div>
                             </div>
 
-                            <div x-show="!setupComplete && setupStep === 'accounts'" class="pt-2 flex gap-3">
-                                <button @click="setupStep = 'categories'" class="btn btn-ghost">Skip</button>
-                                <button @click="submitSetupStep" class="btn btn-primary flex-1" :disabled="setupLoading">Continue</button>
+                            <div x-show="!$store.setup.complete && $store.setup.step === 'accounts'" class="pt-2 flex gap-3">
+                                <button @click="$store.setup.step = 'categories'" class="btn btn-ghost">Skip</button>
+                                <button @click="$store.setup.submitStep()" class="btn btn-primary flex-1" :disabled="$store.setup.loading">Continue</button>
                             </div>
                         </div>
 
                         <!-- Categories -->
-                        <div x-show="setupStep === 'categories' || (setupComplete && view === 'setup')" class="card-elevated p-6 space-y-4">
+                        <div x-show="$store.setup.step === 'categories' || ($store.setup.complete && $store.router.view === 'setup')" class="card-elevated p-6 space-y-4">
                             <h2 class="text-lg font-semibold">Categories</h2>
                             <div class="bg-base-200/50 rounded-xl p-4 max-h-60 overflow-y-auto custom-scrollbar">
                                 <div class="flex flex-wrap gap-2">
-                                    <template x-for="cat in (setupData.categories.length ? setupData.categories : setupOptions?.default_expense_accounts) || []" :key="cat">
+                                    <template x-for="cat in ($store.setup.data.categories.length ? $store.setup.data.categories : $store.setup.options?.default_expense_accounts) || []" :key="cat">
                                         <span class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-base-100 rounded-full text-xs text-base-content/70 border border-base-200">
                                             <div class="w-1.5 h-1.5 rounded-full bg-primary/60 flex-shrink-0"></div>
                                             <span x-text="cat"></span>
@@ -218,22 +218,22 @@
                                     </template>
                                 </div>
                             </div>
-                            <div x-show="!setupComplete && setupStep === 'categories'" class="pt-2">
-                                <button @click="submitSetupStep" class="btn btn-primary w-full" :disabled="setupLoading">Finish Setup</button>
+                            <div x-show="!$store.setup.complete && $store.setup.step === 'categories'" class="pt-2">
+                                <button @click="$store.setup.submitStep()" class="btn btn-primary w-full" :disabled="$store.setup.loading">Finish Setup</button>
                             </div>
                         </div>
 
                         <!-- WhatsApp Integration -->
-                        <div x-show="setupComplete && view === 'setup'" class="card-elevated p-6 space-y-5">
+                        <div x-show="$store.setup.complete && $store.router.view === 'setup'" class="card-elevated p-6 space-y-5">
                             <div class="flex items-center justify-between">
                                 <h2 class="text-lg font-semibold">WhatsApp Integration</h2>
                                 <div class="px-2 py-1 rounded-full text-xs font-medium"
-                                     :class="whatsappConnected ? 'bg-success/10 text-success' : 'bg-base-200 text-base-content/50'">
-                                    <span x-text="whatsappConnected ? 'Connected' : 'Not Connected'"></span>
+                                     :class="$store.whatsapp.connected ? 'bg-success/10 text-success' : 'bg-base-200 text-base-content/50'">
+                                    <span x-text="$store.whatsapp.connected ? 'Connected' : 'Not Connected'"></span>
                                 </div>
                             </div>
 
-                            <div x-show="!whatsappConnected" class="space-y-4">
+                            <div x-show="!$store.whatsapp.connected" class="space-y-4">
                                 <p class="text-sm text-base-content/70">
                                     Link your WhatsApp to log expenses via chat.
                                     <br>
@@ -244,34 +244,34 @@
                                     3. Click the button below to generate a QR code, then scan it
                                 </p>
                                 
-                                <template x-if="whatsappStatus === 'stopped' || whatsappStatus === 'STOPPED'">
+                                <template x-if="$store.whatsapp.status === 'stopped' || $store.whatsapp.status === 'STOPPED'">
                                     <div class="flex justify-center">
-                                        <button @click="startWhatsAppSession()" 
-                                                :disabled="qrLoading"
+                                        <button @click="$store.whatsapp.startSession()" 
+                                                :disabled="$store.whatsapp.qrLoading"
                                                 class="btn btn-primary">
-                                            <span x-show="!qrLoading">Generate QR Code</span>
-                                            <span x-show="qrLoading" class="loading loading-spinner loading-sm"></span>
+                                            <span x-show="!$store.whatsapp.qrLoading">Generate QR Code</span>
+                                            <span x-show="$store.whatsapp.qrLoading" class="loading loading-spinner loading-sm"></span>
                                         </button>
                                     </div>
                                 </template>
 
-                                <template x-if="whatsappStatus === 'STARTING'">
+                                <template x-if="$store.whatsapp.status === 'STARTING'">
                                     <div class="flex flex-col items-center gap-2 p-4">
                                         <span class="loading loading-spinner loading-lg text-primary"></span>
                                         <p class="text-sm text-base-content/60">Starting session...</p>
                                     </div>
                                 </template>
 
-                                <template x-if="whatsappStatus === 'SCAN_QR_CODE' && qrImageUrl">
+                                <template x-if="$store.whatsapp.status === 'SCAN_QR_CODE' && $store.whatsapp.qrImageUrl">
                                     <div class="space-y-3">
                                         <div class="flex justify-center p-4 bg-white rounded-xl border border-base-200 w-fit mx-auto">
-                                            <img :src="qrImageUrl" class="w-64 h-64 object-contain" alt="Scan QR Code" />
+                                            <img :src="$store.whatsapp.qrImageUrl" class="w-64 h-64 object-contain" alt="Scan QR Code" />
                                         </div>
                                         <p class="text-xs text-center text-base-content/40">
                                             Scan with WhatsApp. QR expires in ~20 seconds.
                                         </p>
                                         <div class="flex justify-center">
-                                            <button @click="startWhatsAppSession()" class="btn btn-sm btn-ghost">
+                                            <button @click="$store.whatsapp.startSession()" class="btn btn-sm btn-ghost">
                                                 Regenerate QR
                                             </button>
                                         </div>
@@ -279,9 +279,9 @@
                                 </template>
                             </div>
 
-                            <div x-show="whatsappConnected" class="space-y-3">
+                            <div x-show="$store.whatsapp.connected" class="space-y-3">
                                 <p class="text-sm text-base-content/70">
-                                    ✅ Your WhatsApp is linked. You can now start logging expenses.
+                                    Your WhatsApp is linked. You can now start logging expenses.
                                 </p>
                                 <div class="bg-base-200/50 rounded-lg p-4 text-sm">
                                     <p class="font-medium mb-1">Try sending:</p>
@@ -296,7 +296,7 @@
         </template>
 
         <!-- Chat View -->
-        <template x-if="view === 'chat'">
+        <template x-if="$store.router.view === 'chat'">
             <div class="flex-1 flex overflow-hidden">
                 <!-- Chat Area -->
                 <div class="flex-1 flex flex-col relative min-w-0">
@@ -305,7 +305,7 @@
                     <div class="flex-1 overflow-y-auto px-4 py-6 md:px-8 custom-scrollbar" x-ref="messagesContainer">
 
                         <!-- Empty State -->
-                        <template x-if="messages.length === 0 && !streaming">
+                        <template x-if="$store.chat.messages.length === 0 && !$store.chat.streaming">
                             <div class="h-full flex flex-col items-center justify-center p-4 text-center animate-fade-in">
                                 <div class="empty-state-icon">
                                     <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M2 12h20"/></svg>
@@ -314,16 +314,16 @@
                                 <p class="empty-state-desc mb-8">Just type it out. Gullak will categorize it and prep it for confirmation.</p>
 
                                 <div class="flex flex-wrap justify-center gap-2 max-w-md">
-                                    <button @click="input = 'Uber to office 350'; $refs.chatInput.focus()" class="prompt-suggestion">
+                                    <button @click="$store.chat.input = 'Uber to office 350'; $refs.chatInput.focus()" class="prompt-suggestion">
                                         Uber to office 350
                                     </button>
-                                    <button @click="input = 'Blinkit groceries 850'; $refs.chatInput.focus()" class="prompt-suggestion">
+                                    <button @click="$store.chat.input = 'Blinkit groceries 850'; $refs.chatInput.focus()" class="prompt-suggestion">
                                         Blinkit groceries 850
                                     </button>
-                                    <button @click="input = 'Netflix renewal 649'; $refs.chatInput.focus()" class="prompt-suggestion">
+                                    <button @click="$store.chat.input = 'Netflix renewal 649'; $refs.chatInput.focus()" class="prompt-suggestion">
                                         Netflix renewal 649
                                     </button>
-                                    <button @click="input = 'Coffee and croissant 180'; $refs.chatInput.focus()" class="prompt-suggestion">
+                                    <button @click="$store.chat.input = 'Coffee and croissant 180'; $refs.chatInput.focus()" class="prompt-suggestion">
                                         Coffee and croissant 180
                                     </button>
                                 </div>
@@ -332,7 +332,7 @@
 
                         <!-- Messages -->
                         <div class="max-w-3xl mx-auto space-y-5 pb-4">
-                            <template x-for="msg in messages" :key="msg.id">
+                            <template x-for="msg in $store.chat.messages" :key="msg.id">
                                 <div :class="msg.role === 'user' ? 'flex justify-end' : 'flex justify-start'"
                                      x-show="hasDisplayableContent(msg.content)"
                                      class="animate-slide-up">
@@ -343,7 +343,7 @@
                             </template>
 
                             <!-- Typing Indicator -->
-                            <template x-if="streaming">
+                            <template x-if="$store.chat.streaming">
                                 <div class="flex justify-start animate-fade-in">
                                     <div class="chat-bubble-ai">
                                         <div class="typing-indicator">
@@ -357,44 +357,44 @@
                         </div>
                     </div>
 
-                    <!-- Input Area - Refined -->
+                    <!-- Input Area -->
                     <div class="p-4 md:p-6 bg-gradient-to-t from-base-100 via-base-100 to-transparent">
                         <div class="max-w-3xl mx-auto">
-                            <form @submit.prevent="sendMessage">
+                            <form @submit.prevent="$store.chat.send()">
                                 <div class="chat-input-container flex items-end gap-2">
                                     <label class="p-2.5 rounded-lg text-base-content/40 hover:text-base-content hover:bg-base-200/80 transition-all duration-150 cursor-pointer" title="Upload CSV/Excel">
-                                        <input type="file" accept=".csv,.xlsx,.xls" @change="uploadFile($event)" class="hidden" :disabled="streaming || uploading || uploadingReceipt">
+                                        <input type="file" accept=".csv,.xlsx,.xls" @change="$store.chat.uploadFile($event)" class="hidden" :disabled="$store.chat.streaming || $store.chat.uploading || $store.chat.uploadingReceipt">
                                         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
                                     </label>
  
                                     <label class="p-2.5 rounded-lg text-base-content/40 hover:text-base-content hover:bg-base-200/80 transition-all duration-150 cursor-pointer" title="Upload receipt (image/PDF)">
-                                        <input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" @change="uploadReceipt($event)" class="hidden" :disabled="streaming || uploading || uploadingReceipt">
+                                        <input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" @change="$store.chat.uploadReceipt($event)" class="hidden" :disabled="$store.chat.streaming || $store.chat.uploading || $store.chat.uploadingReceipt">
                                         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6.5H15"/><path d="M9 10H15"/><path d="M9 13.5H13"/><path d="M6 2h10l4 4v16a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z"/><path d="M14 2v4h4"/></svg>
                                     </label>
  
                                     <textarea
-                                        x-model="input"
+                                        x-model="$store.chat.input"
                                         x-ref="chatInput"
-                                        @keydown.enter.prevent="if(!$event.shiftKey) sendMessage()"
+                                        @keydown.enter.prevent="if(!$event.shiftKey) $store.chat.send()"
                                         rows="1"
                                         placeholder="Type an expense..."
                                         class="chat-input-textarea flex-1"
-                                        :disabled="streaming || uploading || uploadingReceipt"></textarea>
+                                        :disabled="$store.chat.streaming || $store.chat.uploading || $store.chat.uploadingReceipt"></textarea>
  
                                     <button type="submit"
                                             class="chat-send-button"
-                                            :disabled="streaming || uploading || uploadingReceipt || !input.trim()">
+                                            :disabled="$store.chat.streaming || $store.chat.uploading || $store.chat.uploadingReceipt || !$store.chat.input.trim()">
                                         <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
                                     </button>
                                 </div>
                             </form>
-                            <div x-show="uploading" class="text-center mt-3 text-xs text-base-content/50 animate-pulse">Uploading file...</div>
-                            <div x-show="uploadingReceipt" class="text-center mt-3 text-xs text-base-content/50 animate-pulse">
+                            <div x-show="$store.chat.uploading" class="text-center mt-3 text-xs text-base-content/50 animate-pulse">Uploading file...</div>
+                            <div x-show="$store.chat.uploadingReceipt" class="text-center mt-3 text-xs text-base-content/50 animate-pulse">
                                 <span>Processing receipt...</span>
                             </div>
-                            <template x-if="uploadingReceipt && receiptPreview">
+                            <template x-if="$store.chat.uploadingReceipt && $store.chat.receiptPreview">
                                 <div class="mt-3 flex items-center justify-center gap-2 text-xs text-base-content/60">
-                                    <img :src="receiptPreview" alt="Receipt preview" class="w-10 h-10 rounded-lg object-cover border border-base-200/60" />
+                                    <img :src="$store.chat.receiptPreview" alt="Receipt preview" class="w-10 h-10 rounded-lg object-cover border border-base-200/60" />
                                     <span>Receipt attached</span>
                                 </div>
                             </template>
@@ -402,9 +402,9 @@
                     </div>
                 </div>
 
-                <!-- Transaction Preview Panel (Right Side) - Compact & Clean -->
+                <!-- Transaction Preview Panel (Right Side) -->
                 <div class="w-[340px] preview-panel flex flex-col z-10"
-                     x-show="pendingTransactions.length > 0"
+                     x-show="$store.pending.transactions.length > 0"
                      x-transition:enter="transition ease-out duration-300"
                      x-transition:enter-start="translate-x-full opacity-0"
                      x-transition:enter-end="translate-x-0 opacity-100"
@@ -416,17 +416,17 @@
                     <div class="h-12 flex items-center justify-between px-4 border-b border-base-200/60 bg-base-100">
                         <div class="flex items-center gap-2">
                             <div class="w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center">
-                                <span class="text-[10px] font-semibold text-primary" x-text="pendingTransactions.length"></span>
+                                <span class="text-[10px] font-semibold text-primary" x-text="$store.pending.transactions.length"></span>
                             </div>
                             <span class="font-medium text-xs">Pending</span>
                         </div>
                         <div class="flex gap-1">
-                            <button @click="confirmAllTransactions"
+                            <button @click="$store.pending.confirmAll()"
                                     class="px-2.5 py-1 rounded-md bg-success/90 text-white text-[10px] font-semibold hover:bg-success transition-colors"
-                                    :disabled="confirming">
+                                    :disabled="$store.pending.confirming">
                                 Confirm All
                             </button>
-                            <button @click="cancelAllTransactions"
+                            <button @click="$store.pending.cancelAll()"
                                     class="px-2.5 py-1 rounded-md text-[10px] font-medium text-base-content/50 hover:text-error hover:bg-error/10 transition-colors">
                                 Clear
                             </button>
@@ -435,7 +435,7 @@
 
                     <!-- Transaction List -->
                     <div class="flex-1 overflow-y-auto custom-scrollbar bg-base-100">
-                        <template x-for="pending in pendingTransactions" :key="pending.data.id">
+                        <template x-for="pending in $store.pending.transactions" :key="pending.data.id">
                             <div class="preview-card-compact border-b border-base-100 last:border-0 animate-slide-up">
                                 <!-- Top row: Payee + Amount + Quick Actions -->
                                 <div class="flex items-start justify-between gap-2 px-3 pt-2.5 pb-2">
@@ -444,12 +444,12 @@
                                         <div class="text-xs text-base-content/50 font-mono mt-0.5" x-text="formatCurrency(pending.data.transaction.amount, pending.data.transaction.currency)"></div>
                                     </div>
                                     <div class="flex gap-1 flex-shrink-0">
-                                        <button @click="confirmTransaction(pending.data.id)"
+                                        <button @click="$store.pending.confirmOne(pending.data.id)"
                                                 class="w-7 h-7 rounded-md bg-success/90 text-white flex items-center justify-center hover:bg-success transition-colors"
-                                                :disabled="confirming">
+                                                :disabled="$store.pending.confirming">
                                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
                                         </button>
-                                        <button @click="cancelTransaction(pending.data.id)"
+                                        <button @click="$store.pending.cancel(pending.data.id)"
                                                 class="w-7 h-7 rounded-md bg-base-200 text-base-content/50 hover:text-error hover:bg-error/10 flex items-center justify-center transition-colors">
                                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                                         </button>
@@ -463,7 +463,7 @@
                                         <svg class="w-3.5 h-3.5 text-base-content/30 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
                                         <input type="date"
                                                x-model="pending.data.transaction.date"
-                                               @change="updatePending(pending.data.id, 'date', $event.target.value)"
+                                               @change="$store.pending.update(pending.data.id, 'date', $event.target.value)"
                                                class="text-xs bg-transparent border-none p-0 text-base-content/70 focus:text-base-content outline-none w-full" />
                                     </div>
 
@@ -472,7 +472,7 @@
                                         <svg class="w-3.5 h-3.5 text-base-content/30 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
                                         <input type="text"
                                                x-model="pending.data.transaction.expense_account"
-                                               @input="updatePending(pending.data.id, 'expense_account', $event.target.value)"
+                                               @input="$store.pending.update(pending.data.id, 'expense_account', $event.target.value)"
                                                class="text-xs bg-transparent border-none p-0 text-primary font-medium focus:text-primary/80 outline-none w-full placeholder:text-base-content/30"
                                                placeholder="Category" />
                                     </div>
@@ -482,7 +482,7 @@
                                         <svg class="w-3.5 h-3.5 text-base-content/30 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
                                         <input type="text"
                                                x-model="pending.data.transaction.payment_account"
-                                               @input="updatePending(pending.data.id, 'payment_account', $event.target.value)"
+                                               @input="$store.pending.update(pending.data.id, 'payment_account', $event.target.value)"
                                                class="text-xs bg-transparent border-none p-0 text-base-content/70 focus:text-base-content outline-none w-full placeholder:text-base-content/30"
                                                placeholder="Payment" />
                                     </div>
@@ -495,7 +495,7 @@
         </template>
 
         <!-- Transactions View -->
-        <template x-if="view === 'transactions'">
+        <template x-if="$store.router.view === 'transactions'">
             <div class="flex-1 flex flex-col h-full bg-base-50/50">
                 <!-- Header -->
                 <div class="h-16 border-b border-base-200/60 bg-base-100 flex items-center justify-between px-8 flex-shrink-0">
@@ -503,45 +503,45 @@
                     <div class="flex items-center gap-3">
                         <div class="flex bg-base-200/80 p-1 rounded-xl">
                             <button class="px-4 py-1.5 rounded-lg text-xs font-medium transition-all duration-150"
-                                    :class="txnPeriod === 'week' ? 'bg-base-100 text-primary shadow-sm' : 'text-base-content/60 hover:text-base-content'"
-                                    @click="txnPeriod = 'week'; loadTransactionStats()">Week</button>
+                                    :class="$store.transactions.period === 'week' ? 'bg-base-100 text-primary shadow-sm' : 'text-base-content/60 hover:text-base-content'"
+                                    @click="$store.transactions.period = 'week'; $store.transactions.loadStats()">Week</button>
                             <button class="px-4 py-1.5 rounded-lg text-xs font-medium transition-all duration-150"
-                                    :class="txnPeriod === 'month' ? 'bg-base-100 text-primary shadow-sm' : 'text-base-content/60 hover:text-base-content'"
-                                    @click="txnPeriod = 'month'; loadTransactionStats()">Month</button>
+                                    :class="$store.transactions.period === 'month' ? 'bg-base-100 text-primary shadow-sm' : 'text-base-content/60 hover:text-base-content'"
+                                    @click="$store.transactions.period = 'month'; $store.transactions.loadStats()">Month</button>
                             <button class="px-4 py-1.5 rounded-lg text-xs font-medium transition-all duration-150"
-                                    :class="txnPeriod === 'year' ? 'bg-base-100 text-primary shadow-sm' : 'text-base-content/60 hover:text-base-content'"
-                                    @click="txnPeriod = 'year'; loadTransactionStats()">Year</button>
+                                    :class="$store.transactions.period === 'year' ? 'bg-base-100 text-primary shadow-sm' : 'text-base-content/60 hover:text-base-content'"
+                                    @click="$store.transactions.period = 'year'; $store.transactions.loadStats()">Year</button>
                         </div>
-                        <button @click="loadTransactions(); loadTransactionStats()" class="p-2 rounded-lg text-base-content/50 hover:text-base-content hover:bg-base-200/80 transition-colors">
+                        <button @click="$store.transactions.load()" class="p-2 rounded-lg text-base-content/50 hover:text-base-content hover:bg-base-200/80 transition-colors">
                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 5.5A10 10 0 1 1 11.26 2.8"/></svg>
                         </button>
                     </div>
                 </div>
 
                 <!-- Pending Confirmation Section -->
-                <div class="px-8 pt-6" x-show="pendingTransactions.length > 0" x-cloak>
+                <div class="px-8 pt-6" x-show="$store.pending.transactions.length > 0" x-cloak>
                     <div class="card-elevated overflow-hidden">
                         <div class="h-12 flex items-center justify-between px-4 border-b border-base-200/60 bg-base-100">
                             <div class="flex items-center gap-2">
                                 <div class="w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center">
-                                    <span class="text-[10px] font-semibold text-primary" x-text="pendingTransactions.length"></span>
+                                    <span class="text-[10px] font-semibold text-primary" x-text="$store.pending.transactions.length"></span>
                                 </div>
                                 <span class="font-medium text-xs">Pending confirmations</span>
                             </div>
                             <div class="flex gap-2">
-                                <button @click="confirmAllTransactions"
+                                <button @click="$store.pending.confirmAll()"
                                         class="px-3 py-1 rounded-md bg-success/90 text-white text-[10px] font-semibold hover:bg-success transition-colors"
-                                        :disabled="confirming">
+                                        :disabled="$store.pending.confirming">
                                     Confirm all
                                 </button>
-                                <button @click="cancelAllTransactions"
+                                <button @click="$store.pending.cancelAll()"
                                         class="px-3 py-1 rounded-md text-[10px] font-medium text-base-content/50 hover:text-error hover:bg-error/10 transition-colors">
                                     Clear all
                                 </button>
                             </div>
                         </div>
                         <div class="max-h-64 overflow-y-auto custom-scrollbar bg-base-100">
-                            <template x-for="pending in pendingTransactions" :key="pending.data.id">
+                            <template x-for="pending in $store.pending.transactions" :key="pending.data.id">
                                 <div class="preview-card-compact border-b border-base-100 last:border-0 animate-slide-up">
                                     <div class="flex items-start justify-between gap-2 px-3 pt-2.5 pb-2">
                                         <div class="flex-1 min-w-0">
@@ -549,12 +549,12 @@
                                             <div class="text-xs text-base-content/50 font-mono mt-0.5" x-text="formatCurrency(pending.data.transaction.amount, pending.data.transaction.currency)"></div>
                                         </div>
                                         <div class="flex gap-1 flex-shrink-0">
-                                            <button @click="confirmTransaction(pending.data.id)"
+                                            <button @click="$store.pending.confirmOne(pending.data.id)"
                                                     class="w-7 h-7 rounded-md bg-success/90 text-white flex items-center justify-center hover:bg-success transition-colors"
-                                                    :disabled="confirming">
+                                                    :disabled="$store.pending.confirming">
                                                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
                                             </button>
-                                            <button @click="cancelTransaction(pending.data.id)"
+                                            <button @click="$store.pending.cancel(pending.data.id)"
                                                     class="w-7 h-7 rounded-md bg-base-200 text-base-content/50 hover:text-error hover:bg-error/10 flex items-center justify-center transition-colors">
                                                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                                             </button>
@@ -565,14 +565,14 @@
                                             <svg class="w-3.5 h-3.5 text-base-content/30 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
                                             <input type="date"
                                                    x-model="pending.data.transaction.date"
-                                                   @change="updatePending(pending.data.id, 'date', $event.target.value)"
+                                                   @change="$store.pending.update(pending.data.id, 'date', $event.target.value)"
                                                    class="text-xs bg-transparent border-none p-0 text-base-content/70 focus:text-base-content outline-none w-full" />
                                         </div>
                                         <div class="flex items-center gap-2">
                                             <svg class="w-3.5 h-3.5 text-base-content/30 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
                                             <input type="text"
                                                    x-model="pending.data.transaction.expense_account"
-                                                   @input="updatePending(pending.data.id, 'expense_account', $event.target.value)"
+                                                   @input="$store.pending.update(pending.data.id, 'expense_account', $event.target.value)"
                                                    class="text-xs bg-transparent border-none p-0 text-primary font-medium focus:text-primary/80 outline-none w-full placeholder:text-base-content/30"
                                                    placeholder="Category" />
                                         </div>
@@ -580,7 +580,7 @@
                                             <svg class="w-3.5 h-3.5 text-base-content/30 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
                                             <input type="text"
                                                    x-model="pending.data.transaction.payment_account"
-                                                   @input="updatePending(pending.data.id, 'payment_account', $event.target.value)"
+                                                   @input="$store.pending.update(pending.data.id, 'payment_account', $event.target.value)"
                                                    class="text-xs bg-transparent border-none p-0 text-base-content/70 focus:text-base-content outline-none w-full placeholder:text-base-content/30"
                                                    placeholder="Payment" />
                                         </div>
@@ -595,23 +595,23 @@
                 <div class="grid grid-cols-4 gap-5 px-8 py-6">
                     <div class="stat-card">
                         <div class="stat-card-label">Total Spent</div>
-                        <div class="stat-card-value" x-text="formatCurrency(txnStats.total_spent || 0, txnStats.currency || 'INR')"></div>
+                        <div class="stat-card-value" x-text="formatCurrency($store.transactions.stats.total_spent || 0, $store.transactions.stats.currency || 'INR')"></div>
                     </div>
                     <div class="stat-card">
                         <div class="stat-card-label">Transactions</div>
-                        <div class="stat-card-value" x-text="txnStats.transaction_count || 0"></div>
+                        <div class="stat-card-value" x-text="$store.transactions.stats.transaction_count || 0"></div>
                     </div>
                     <div class="stat-card col-span-2">
                         <div class="stat-card-label mb-3">Top Categories</div>
                         <div class="flex gap-4 flex-wrap">
-                            <template x-for="cat in (txnStats.categories || []).slice(0, 3)" :key="cat.name">
+                            <template x-for="cat in ($store.transactions.stats.categories || []).slice(0, 3)" :key="cat.name">
                                 <div class="flex items-center gap-2">
                                     <div class="w-2 h-2 rounded-full bg-primary"></div>
                                     <span class="text-sm font-medium" x-text="cat.name"></span>
-                                    <span class="text-xs text-base-content/50 font-mono" x-text="formatCurrency(cat.amount, txnStats.currency)"></span>
+                                    <span class="text-xs text-base-content/50 font-mono" x-text="formatCurrency(cat.amount, $store.transactions.stats.currency)"></span>
                                 </div>
                             </template>
-                            <div x-show="!txnStats.categories?.length" class="text-sm text-base-content/40">No data available</div>
+                            <div x-show="!$store.transactions.stats.categories?.length" class="text-sm text-base-content/40">No data available</div>
                         </div>
                     </div>
                 </div>
@@ -620,16 +620,16 @@
                 <div class="px-8 pb-4 flex items-center gap-4">
                     <div class="relative flex-1 max-w-sm">
                         <svg class="absolute left-3.5 top-3 w-4 h-4 text-base-content/40" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-                        <input type="text" x-model="txnSearch" @input.debounce="filterTransactions()" placeholder="Search transactions..." class="input-box pl-10 w-full" />
+                        <input type="text" x-model="$store.transactions.search" placeholder="Search transactions..." class="input-box pl-10 w-full" />
                     </div>
                     <div class="flex gap-2 overflow-x-auto no-scrollbar">
                         <button class="filter-pill"
-                                :class="txnCategoryFilter === '' ? 'active' : ''"
-                                @click="txnCategoryFilter = ''; filterTransactions()">All</button>
-                        <template x-for="cat in (txnStats.categories || []).slice(0, 8)" :key="cat.name">
+                                :class="$store.transactions.categoryFilter === '' ? 'active' : ''"
+                                @click="$store.transactions.categoryFilter = ''">All</button>
+                        <template x-for="cat in ($store.transactions.stats.categories || []).slice(0, 8)" :key="cat.name">
                             <button class="filter-pill"
-                                    :class="txnCategoryFilter === cat.name ? 'active' : ''"
-                                    @click="txnCategoryFilter = cat.name; filterTransactions()"
+                                    :class="$store.transactions.categoryFilter === cat.name ? 'active' : ''"
+                                    @click="$store.transactions.categoryFilter = cat.name"
                                     x-text="cat.name"></button>
                         </template>
                     </div>
@@ -639,20 +639,20 @@
                 <div class="flex-1 overflow-y-auto px-8 pb-8 custom-scrollbar">
                     <div class="card-elevated overflow-hidden min-h-[400px]">
 
-                        <template x-if="filteredTransactions.length === 0">
+                        <template x-if="$store.transactions.filtered.length === 0">
                             <div class="flex flex-col items-center justify-center h-64 text-base-content/40">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="mb-2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
                                 <p>No transactions found</p>
                             </div>
                         </template>
 
-                        <div x-show="filteredTransactions.length > 0">
-                            <template x-for="(group, dateKey) in groupedTransactions" :key="dateKey">
+                        <div x-show="$store.transactions.filtered.length > 0">
+                            <template x-for="(group, dateKey) in $store.transactions.grouped" :key="dateKey">
                                 <div>
                                     <!-- Date Header -->
                                     <div class="glass-panel px-5 py-2.5 border-b border-base-200/50 flex items-center justify-between sticky top-0 z-10">
                                         <span class="text-xs font-semibold text-base-content/50 uppercase tracking-wider" x-text="formatDateRelative(dateKey) + ' · ' + new Date(dateKey).toLocaleDateString()"></span>
-                                        <span class="text-xs font-mono text-base-content/40" x-text="formatCurrency(group.reduce((sum, t) => sum + Math.abs(t.amount), 0), txnStats.currency || 'INR')"></span>
+                                        <span class="text-xs font-mono text-base-content/40" x-text="formatCurrency(group.reduce((sum, t) => sum + Math.abs(t.amount), 0), $store.transactions.stats.currency || 'INR')"></span>
                                     </div>
                                     <!-- Rows -->
                                     <template x-for="txn in group" :key="txn.id">
@@ -676,35 +676,35 @@
         </template>
 
         <!-- Ledger View -->
-        <template x-if="view === 'ledger'">
+        <template x-if="$store.router.view === 'ledger'">
             <div class="flex-1 flex flex-col h-full bg-base-50/50">
                 <div class="h-16 border-b border-base-200/60 bg-base-100 flex items-center justify-between px-8 flex-shrink-0">
                     <div>
                         <h2 class="text-xl font-display">Ledger File</h2>
-                        <div class="text-xs text-base-content/40 font-mono mt-0.5" x-text="ledgerPath"></div>
+                        <div class="text-xs text-base-content/40 font-mono mt-0.5" x-text="$store.ledger.path"></div>
                     </div>
                     <div class="flex items-center gap-3">
                         <div class="relative">
                             <svg class="absolute left-3 top-2.5 w-3.5 h-3.5 text-base-content/40" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-                            <input type="text" x-model="ledgerSearch" @input.debounce="loadLedgerFile()" placeholder="Search..." class="input-box pl-9 py-2 h-9 w-48 text-sm" />
+                            <input type="text" x-model="$store.ledger.search" @input.debounce="$store.ledger.load()" placeholder="Search..." class="input-box pl-9 py-2 h-9 w-48 text-sm" />
                         </div>
-                        <button class="px-4 py-2 rounded-lg text-sm font-medium text-base-content/60 hover:text-base-content hover:bg-base-200/80 transition-colors" @click="loadLedgerFile">Refresh</button>
+                        <button class="px-4 py-2 rounded-lg text-sm font-medium text-base-content/60 hover:text-base-content hover:bg-base-200/80 transition-colors" @click="$store.ledger.load()">Refresh</button>
                     </div>
                 </div>
 
                 <div class="flex-1 overflow-auto p-8 custom-scrollbar">
                     <div class="card-elevated p-6 min-h-[500px]">
-                        <template x-if="!ledgerContent && ledgerExists">
+                        <template x-if="!$store.ledger.content && $store.ledger.exists">
                             <div class="flex items-center justify-center h-32">
                                 <span class="loading loading-spinner text-primary"></span>
                             </div>
                         </template>
-                        <template x-if="!ledgerExists">
+                        <template x-if="!$store.ledger.exists">
                             <div class="flex flex-col items-center justify-center h-64 text-base-content/40">
                                 <p>No ledger file found.</p>
                             </div>
                         </template>
-                        <pre class="font-mono text-[13px] leading-7 text-base-content/80" x-html="highlightLedger(ledgerContent)"></pre>
+                        <pre class="font-mono text-[13px] leading-7 text-base-content/80" x-html="highlightLedger($store.ledger.content)"></pre>
                     </div>
                 </div>
             </div>
@@ -714,7 +714,7 @@
 
 </div>
 
-<!-- Toast Notifications - Refined -->
+<!-- Toast Notifications -->
 <div class="fixed bottom-6 right-6 z-50 flex flex-col gap-3 pointer-events-none"
      x-data="{ toasts: [] }"
      @notify.window="toasts.push($event.detail); setTimeout(() => toasts.shift(), 4000)">
