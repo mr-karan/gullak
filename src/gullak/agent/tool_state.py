@@ -14,7 +14,7 @@ from gullak.ledger.parser import LedgerParser
 from gullak.ledger.validator import LedgerValidator
 
 if TYPE_CHECKING:
-    from gullak.ledger.writer import LedgerWriter
+    pass
 
 logger = logging.getLogger(__name__)
 

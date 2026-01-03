@@ -1,5 +1,6 @@
 """Parser for ledger-cli format files."""
 
+import contextlib
 import re
 from datetime import date
 from decimal import Decimal, InvalidOperation
@@ -160,10 +161,8 @@ class LedgerParser:
 
             if match := self.GULLAK_SOURCE_PATTERN.search(comment):
                 source_str = match.group(1).lower()
-                try:
+                with contextlib.suppress(ValueError):
                     source = TransactionSource(source_str)
-                except ValueError:
-                    pass
                 continue
 
             if match := self.GULLAK_USER_PATTERN.search(comment):

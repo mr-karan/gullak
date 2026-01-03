@@ -32,67 +32,35 @@ class PayeeMemory:
     def get_mapping(self, payee: str) -> PayeeMapping | None:
         return self._mappings.get(payee.lower().strip())
 
-    def suggest_account(self, payee: str, threshold: float = 0.7) -> str | None:
+    def _find_best_mapping(self, payee: str, threshold: float = 0.7) -> PayeeMapping | None:
+        """Find best matching mapping using fuzzy matching."""
         payee_lower = payee.lower().strip()
 
         if payee_lower in self._mappings:
-            return self._mappings[payee_lower].expense_account
-
-        best_match = None
-        best_ratio = threshold
-
-        for known_payee, mapping in self._mappings.items():
-            if known_payee in payee_lower or payee_lower in known_payee:
-                return mapping.expense_account
-
-            ratio = SequenceMatcher(None, payee_lower, known_payee).ratio()
-            if ratio > best_ratio:
-                best_ratio = ratio
-                best_match = mapping.expense_account
-
-        return best_match
-
-    def suggest_payment_account(self, payee: str, threshold: float = 0.7) -> str | None:
-        payee_lower = payee.lower().strip()
-
-        if payee_lower in self._mappings:
-            return self._mappings[payee_lower].payment_account
-
-        best_match = None
-        best_ratio = threshold
-
-        for known_payee, mapping in self._mappings.items():
-            if known_payee in payee_lower or payee_lower in known_payee:
-                return mapping.payment_account
-
-            ratio = SequenceMatcher(None, payee_lower, known_payee).ratio()
-            if ratio > best_ratio:
-                best_ratio = ratio
-                best_match = mapping.payment_account
-
-        return best_match
-
-    def suggest_accounts(self, payee: str, threshold: float = 0.7) -> tuple[str | None, str | None]:
-        payee_lower = payee.lower().strip()
-
-        if payee_lower in self._mappings:
-            m = self._mappings[payee_lower]
-            return m.expense_account, m.payment_account
+            return self._mappings[payee_lower]
 
         best_mapping = None
         best_ratio = threshold
 
         for known_payee, mapping in self._mappings.items():
             if known_payee in payee_lower or payee_lower in known_payee:
-                return mapping.expense_account, mapping.payment_account
+                return mapping
 
             ratio = SequenceMatcher(None, payee_lower, known_payee).ratio()
             if ratio > best_ratio:
                 best_ratio = ratio
                 best_mapping = mapping
 
-        if best_mapping:
-            return best_mapping.expense_account, best_mapping.payment_account
+        return best_mapping
+
+    def suggest_account(self, payee: str, threshold: float = 0.7) -> str | None:
+        mapping = self._find_best_mapping(payee, threshold)
+        return mapping.expense_account if mapping else None
+
+    def suggest_accounts(self, payee: str, threshold: float = 0.7) -> tuple[str | None, str | None]:
+        mapping = self._find_best_mapping(payee, threshold)
+        if mapping:
+            return mapping.expense_account, mapping.payment_account
         return None, None
 
     def add_mapping(
@@ -101,12 +69,12 @@ class PayeeMemory:
         payee_lower = payee.lower().strip()
 
         existing = self._mappings.get(payee_lower)
-        if existing:
-            if (
-                existing.expense_account == expense_account
-                and existing.payment_account == payment_account
-            ):
-                return
+        if (
+            existing
+            and existing.expense_account == expense_account
+            and existing.payment_account == payment_account
+        ):
+            return
 
         self._mappings[payee_lower] = PayeeMapping(expense_account, payment_account)
         self._save_mapping(payee, expense_account, payment_account)

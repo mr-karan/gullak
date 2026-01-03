@@ -2,7 +2,6 @@
 
 import base64
 import logging
-from io import BytesIO
 
 from .models import MediaContent, MediaFile, MediaType
 

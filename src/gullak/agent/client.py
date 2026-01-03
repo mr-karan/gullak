@@ -23,13 +23,12 @@ from gullak.chat_history import ChatHistory
 from gullak.ledger.parser import LedgerParser
 from gullak.ledger.validator import LedgerValidator
 from gullak.ledger.writer import LedgerWriter
-from gullak.settings import settings
-
 from gullak.media import MediaContent
+from gullak.settings import settings
 
 from .prompts import get_system_prompt
 from .tool_state import ToolState
-from .tools import TOOLS, ToolResult, execute_tool, get_openai_tools
+from .tools import execute_tool, get_openai_tools
 
 logger = logging.getLogger(__name__)
 
@@ -186,7 +185,7 @@ class GullakAgent:
                 content_parts.append(
                     {
                         "type": "text",
-                        "text": "Please analyze this receipt/document and extract expense information.",
+                        "text": "Please analyze this receipt/document and extract expense info.",
                     }
                 )
 
@@ -277,7 +276,7 @@ class GullakAgent:
                         arguments = {}
 
                     # Execute the tool
-                    result = execute_tool(function_name, arguments, self._tool_state)
+                    result = await execute_tool(function_name, arguments, self._tool_state)
 
                     # Emit appropriate event based on result
                     if result.is_pending:

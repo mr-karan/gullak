@@ -1,7 +1,6 @@
 """Gullak - Main FastAPI application."""
 
 import shutil
-import sys
 import time
 import uuid
 from contextlib import asynccontextmanager
@@ -27,29 +26,23 @@ configure_logging(debug=settings.debug)
 logger = get_logger(__name__)
 
 
+class LedgerCLINotFoundError(Exception):
+    """Raised when ledger-cli is not found in PATH."""
+
+    pass
+
+
 def _check_ledger_cli() -> None:
-    """Check ledger CLI at import time - fail fast before app starts."""
+    """Check ledger CLI availability. Raises if not found."""
     cli_path = settings.ledger_cli
 
     if not shutil.which(cli_path):
-        print(
-            f"""
-❌ ERROR: '{cli_path}' not found in PATH.
-
-Gullak requires ledger-cli for transaction validation.
-
-Install it:
-  Ubuntu/Debian: sudo apt install ledger
-  macOS:         brew install ledger
-  Arch:          sudo pacman -S ledger
-  Nix:           nix develop  (uses flake.nix)
-""",
-            file=sys.stderr,
+        raise LedgerCLINotFoundError(
+            f"'{cli_path}' not found in PATH. "
+            "Install: apt install ledger (Debian/Ubuntu), "
+            "brew install ledger (macOS), "
+            "or nix develop (Nix)"
         )
-        sys.exit(1)
-
-
-_check_ledger_cli()
 
 
 @asynccontextmanager
@@ -57,6 +50,7 @@ async def lifespan(app: FastAPI):
     """Application lifespan handler."""
     logger.info("application_startup", version="2.0.0", debug=settings.debug)
 
+    _check_ledger_cli()
     settings.ensure_data_dir()
 
     app.state.settings = settings
@@ -173,9 +167,11 @@ async def index(request: Request):
 @app.get("/health")
 async def health():
     """Health check endpoint."""
+    ledger_ok = shutil.which(settings.ledger_cli) is not None
     return {
-        "status": "healthy",
+        "status": "healthy" if ledger_ok else "degraded",
         "version": "2.0.0",
+        "ledger_cli": ledger_ok,
     }
 
 

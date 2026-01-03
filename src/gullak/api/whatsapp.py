@@ -2,6 +2,7 @@
 
 import asyncio
 import base64
+import contextlib
 from collections import OrderedDict
 from time import time
 
@@ -150,10 +151,9 @@ async def whatsapp_webhook(request: Request, body: WebhookPayload):
     # Security: Check allowlist
     author_number = author.split("@")[0]
 
-    if settings.whatsapp_allowed_numbers:
-        if author_number not in settings.whatsapp_allowed_numbers:
-            logger.warning("unauthorized_whatsapp_sender", sender=author, number=author_number)
-            return {"status": "ignored", "reason": "unauthorized"}
+    if settings.whatsapp_allowed_numbers and author_number not in settings.whatsapp_allowed_numbers:
+        logger.warning("unauthorized_whatsapp_sender", sender=author, number=author_number)
+        return {"status": "ignored", "reason": "unauthorized"}
 
     # Ignore messages from myself
     if payload.get("fromMe", False):
@@ -196,13 +196,11 @@ async def whatsapp_webhook(request: Request, body: WebhookPayload):
             if error:
                 logger.warning("whatsapp_media_validation_failed", error=error)
                 client = get_whatsapp_client(request)
-                try:
+                with contextlib.suppress(Exception):
                     await client.post(
                         "/api/sendText",
                         json={"session": "default", "chatId": sender, "text": f"❌ {error}"},
                     )
-                except Exception:
-                    pass
                 return {"status": "ignored", "reason": "invalid_media", "error": error}
 
             logger.info(
@@ -277,8 +275,7 @@ async def whatsapp_webhook(request: Request, body: WebhookPayload):
 
     except Exception as e:
         logger.error("agent_processing_failed", error=str(e), error_type=type(e).__name__)
-        # Try to send error message back
-        try:
+        with contextlib.suppress(Exception):
             await client.post(
                 "/api/sendText",
                 json={
@@ -287,13 +284,8 @@ async def whatsapp_webhook(request: Request, body: WebhookPayload):
                     "text": "Sorry, I couldn't process that. Please try again.",
                 },
             )
-        except Exception:
-            pass
     finally:
-        # Stop typing indicator
-        try:
+        with contextlib.suppress(Exception):
             await client.post("/api/stopTyping", json={"session": "default", "chatId": sender})
-        except Exception:
-            pass
 
     return {"status": "processed"}

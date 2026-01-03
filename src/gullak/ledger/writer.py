@@ -42,57 +42,16 @@ class LedgerWriter:
         except httpx.RequestError as e:
             logger.warning(f"Could not sync with Paisa (not running?): {e}")
 
-    async def append_transaction(self, txn: Transaction, validate: bool = True) -> bool:
-        """
-        Append a transaction to the ledger file.
+    async def _validate_and_append(
+        self, ledger_text: str, validate: bool, error_prefix: str = "Content"
+    ) -> None:
+        """Common logic for validating and appending content.
 
         Args:
-            txn: Transaction to append
+            ledger_text: The ledger-format text to append
             validate: Whether to validate with ledger-cli before writing
-
-        Returns:
-            True if successful
-
-        Raises:
-            ValueError: If transaction would create invalid ledger or duplicate ID
-            IOError: If file write fails
+            error_prefix: Prefix for error message if validation fails
         """
-        ledger_text = txn.to_ledger()
-        current_content = self._read_file()
-
-        if txn.gullak_id and f"gullak:id {txn.gullak_id}" in current_content:
-            raise ValueError(f"Transaction {txn.gullak_id} already exists in ledger")
-
-        if validate:
-            if current_content:
-                temp_content = current_content.rstrip() + "\n\n" + ledger_text + "\n"
-            else:
-                temp_content = ledger_text + "\n"
-
-            # Validate
-            is_valid, error = await self.validator.validate_content(temp_content)
-            if not is_valid:
-                raise ValueError(f"Transaction would create invalid ledger: {error}")
-
-        self._append_to_file(ledger_text)
-        await self._sync_paisa()
-        return True
-
-    async def append_transactions(
-        self, transactions: list[Transaction], validate: bool = True
-    ) -> int:
-        """
-        Append multiple transactions to the ledger file.
-
-        Returns:
-            Number of transactions written
-        """
-        if not transactions:
-            return 0
-
-        # Build combined ledger text
-        ledger_text = "\n\n".join(txn.to_ledger() for txn in transactions)
-
         if validate:
             current_content = self._read_file()
             if current_content:
@@ -102,10 +61,31 @@ class LedgerWriter:
 
             is_valid, error = await self.validator.validate_content(temp_content)
             if not is_valid:
-                raise ValueError(f"Transactions would create invalid ledger: {error}")
+                raise ValueError(f"{error_prefix} would create invalid ledger: {error}")
 
         self._append_to_file(ledger_text)
         await self._sync_paisa()
+
+    async def append_transaction(self, txn: Transaction, validate: bool = True) -> bool:
+        """Append a transaction to the ledger file."""
+        ledger_text = txn.to_ledger()
+        current_content = self._read_file()
+
+        if txn.gullak_id and f"gullak:id {txn.gullak_id}" in current_content:
+            raise ValueError(f"Transaction {txn.gullak_id} already exists in ledger")
+
+        await self._validate_and_append(ledger_text, validate, "Transaction")
+        return True
+
+    async def append_transactions(
+        self, transactions: list[Transaction], validate: bool = True
+    ) -> int:
+        """Append multiple transactions to the ledger file."""
+        if not transactions:
+            return 0
+
+        ledger_text = "\n\n".join(txn.to_ledger() for txn in transactions)
+        await self._validate_and_append(ledger_text, validate, "Transactions")
         return len(transactions)
 
     def _read_file(self) -> str:

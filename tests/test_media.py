@@ -1,7 +1,9 @@
 """Tests for media processor."""
 
 import base64
+
 import pytest
+
 from gullak.media.models import MediaType
 from gullak.media.processor import MediaProcessor
 

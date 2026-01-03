@@ -2,7 +2,9 @@
 
 import asyncio
 import json
+import logging
 import tempfile
+from collections.abc import AsyncIterator
 from pathlib import Path
 from typing import Any
 
@@ -10,11 +12,16 @@ from fastapi import APIRouter, Request, UploadFile
 from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse
 
+from gullak.agent import AgentEvent
 from gullak.ledger.models import TransactionSource
 from gullak.media import MediaContent, MediaProcessor
 from gullak.settings import settings
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter(prefix="/chat", tags=["chat"])
+
+SSE_PING_INTERVAL = 15
 
 _thread_locks: dict[str, asyncio.Lock] = {}
 
@@ -23,6 +30,51 @@ def _get_thread_lock(thread_id: str) -> asyncio.Lock:
     if thread_id not in _thread_locks:
         _thread_locks[thread_id] = asyncio.Lock()
     return _thread_locks[thread_id]
+
+
+async def _create_sse_generator(
+    request: Request,
+    agent_stream: AsyncIterator[AgentEvent],
+    thread_lock: asyncio.Lock,
+) -> AsyncIterator[dict[str, Any]]:
+    """Create SSE generator with disconnect handling and keepalive.
+
+    Handles:
+    - Client disconnect detection (stops agent when browser closes)
+    - asyncio.CancelledError for graceful shutdown
+    - Ping interval to prevent proxy timeouts on long tool calls
+    """
+    async with thread_lock:
+        try:
+            async for event in agent_stream:
+                if await request.is_disconnected():
+                    logger.info("SSE client disconnected, stopping agent stream")
+                    break
+                yield {
+                    "event": event.type,
+                    "data": json.dumps(
+                        {
+                            "type": event.type,
+                            "content": event.content,
+                            "data": event.data,
+                        }
+                    ),
+                }
+        except asyncio.CancelledError:
+            logger.debug("SSE stream cancelled")
+            return
+        except Exception as e:
+            logger.exception(f"SSE stream error: {e}")
+            yield {
+                "event": "error",
+                "data": json.dumps(
+                    {
+                        "type": "error",
+                        "content": str(e),
+                        "data": {},
+                    }
+                ),
+            }
 
 
 class ChatMessage(BaseModel):
@@ -84,33 +136,10 @@ async def chat(request: Request, body: ChatMessage):
     thread_id = body.thread_id or "default"
     thread_lock = _get_thread_lock(thread_id)
 
-    async def event_generator():
-        async with thread_lock:
-            try:
-                async for event in agent.process_message(body.message, thread_id=body.thread_id):
-                    yield {
-                        "event": event.type,
-                        "data": json.dumps(
-                            {
-                                "type": event.type,
-                                "content": event.content,
-                                "data": event.data,
-                            }
-                        ),
-                    }
-            except Exception as e:
-                yield {
-                    "event": "error",
-                    "data": json.dumps(
-                        {
-                            "type": "error",
-                            "content": str(e),
-                            "data": {},
-                        }
-                    ),
-                }
+    agent_stream = agent.process_message(body.message, thread_id=body.thread_id)
+    generator = _create_sse_generator(request, agent_stream, thread_lock)
 
-    return EventSourceResponse(event_generator())
+    return EventSourceResponse(generator, ping=SSE_PING_INTERVAL)
 
 
 @router.post("/confirm")
@@ -288,32 +317,9 @@ async def chat_with_media(request: Request, body: ChatMessageWithMedia):
     thread_id = body.thread_id or "default"
     thread_lock = _get_thread_lock(thread_id)
 
-    async def event_generator():
-        async with thread_lock:
-            try:
-                async for event in agent.process_message(
-                    body.message, thread_id=body.thread_id, media=media_content
-                ):
-                    yield {
-                        "event": event.type,
-                        "data": json.dumps(
-                            {
-                                "type": event.type,
-                                "content": event.content,
-                                "data": event.data,
-                            }
-                        ),
-                    }
-            except Exception as e:
-                yield {
-                    "event": "error",
-                    "data": json.dumps(
-                        {
-                            "type": "error",
-                            "content": str(e),
-                            "data": {},
-                        }
-                    ),
-                }
+    agent_stream = agent.process_message(
+        body.message, thread_id=body.thread_id, media=media_content
+    )
+    generator = _create_sse_generator(request, agent_stream, thread_lock)
 
-    return EventSourceResponse(event_generator())
+    return EventSourceResponse(generator, ping=SSE_PING_INTERVAL)

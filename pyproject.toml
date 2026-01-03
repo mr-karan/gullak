@@ -45,6 +45,9 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
 [tool.ruff.lint.per-file-ignores]
 "src/gullak/agent/prompts.py" = ["E501"]
 "src/gullak/agent/tools.py" = ["E501"]
+"src/gullak/agent/tools_*.py" = ["E501"]
+"src/gullak/agent/client.py" = ["E402"]
+"src/gullak/settings.py" = ["E501"]
 
 [tool.mypy]
 python_version = "3.13"

@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 import aiosqlite
 
@@ -274,6 +275,3 @@ class ChatHistory:
                 rowcount = cursor.rowcount
             await db.commit()
             return rowcount
-
-
-from uuid import uuid4  # noqa: E402
