@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#4338CA"/>
+      <stop offset="100%" style="stop-color:#3730A3"/>
+    </linearGradient>
+    <linearGradient id="piggy" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#ffffff"/>
+      <stop offset="100%" style="stop-color:#E0E7FF"/>
+    </linearGradient>
+    <linearGradient id="coin" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#FBBF24"/>
+      <stop offset="100%" style="stop-color:#F59E0B"/>
+    </linearGradient>
+  </defs>
+  
+  <!-- Background -->
+  <rect width="512" height="512" rx="96" fill="url(#bg)"/>
+  
+  <!-- Piggy Bank Body -->
+  <ellipse cx="256" cy="290" rx="140" ry="110" fill="url(#piggy)"/>
+  
+  <!-- Piggy Snout -->
+  <ellipse cx="370" cy="310" rx="35" ry="28" fill="url(#piggy)"/>
+  <circle cx="362" cy="303" r="5" fill="#4338CA" opacity="0.6"/>
+  <circle cx="378" cy="303" r="5" fill="#4338CA" opacity="0.6"/>
+  
+  <!-- Ear -->
+  <path d="M190 200 Q175 160 210 170 Q230 175 220 210 Z" fill="url(#piggy)"/>
+  
+  <!-- Coin Slot -->
+  <rect x="220" y="178" width="72" height="12" rx="6" fill="#3730A3"/>
+  
+  <!-- Coin going in -->
+  <g transform="translate(256, 145)">
+    <ellipse cx="0" cy="0" rx="28" ry="28" fill="url(#coin)"/>
+    <ellipse cx="0" cy="0" rx="20" ry="20" fill="none" stroke="#D97706" stroke-width="3"/>
+    <text x="0" y="6" font-family="Arial, sans-serif" font-size="22" font-weight="bold" fill="#92400E" text-anchor="middle">$</text>
+  </g>
+  
+  <!-- Legs -->
+  <rect x="170" y="375" width="28" height="45" rx="10" fill="url(#piggy)"/>
+  <rect x="220" y="380" width="28" height="40" rx="10" fill="url(#piggy)"/>
+  <rect x="264" y="380" width="28" height="40" rx="10" fill="url(#piggy)"/>
+  <rect x="314" y="375" width="28" height="45" rx="10" fill="url(#piggy)"/>
+  
+  <!-- Eye -->
+  <circle cx="320" cy="265" r="12" fill="#3730A3"/>
+  <circle cx="323" cy="262" r="4" fill="#fff"/>
+  
+  <!-- Tail curl -->
+  <path d="M116 280 Q90 260 100 290 Q110 320 90 310" fill="none" stroke="url(#piggy)" stroke-width="14" stroke-linecap="round"/>
+</svg>

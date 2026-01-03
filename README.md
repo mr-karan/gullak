@@ -1,6 +1,22 @@
-# Gullak - AI-Powered Expense Tracker
+<p align="center">
+  <img src="./src/gullak/web/static/icons/icon.svg" alt="Gullak Logo" width="120" height="120" />
+</p>
 
-_Log and forget. AI-powered natural language expense tracking with plain-text accounting._
+<h1 align="center">Gullak</h1>
+
+<p align="center">
+  <em>Log and forget. AI-powered natural language expense tracking with plain-text accounting.</em>
+</p>
+
+<p align="center">
+  <a href="#features">Features</a> •
+  <a href="#quick-start">Quick Start</a> •
+  <a href="#configuration">Configuration</a> •
+  <a href="#whatsapp-setup">WhatsApp</a> •
+  <a href="#local-development">Development</a>
+</p>
+
+---
 
 ![Gullak Transaction Logger](./screenshots/log.png)
 

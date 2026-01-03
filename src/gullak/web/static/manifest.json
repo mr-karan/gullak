@@ -16,27 +16,15 @@
   },
   "icons": [
     {
-      "src": "/static/icons/icon-192.png",
-      "sizes": "192x192",
-      "type": "image/png",
+      "src": "/static/icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
       "purpose": "any"
     },
     {
-      "src": "/static/icons/icon-192-maskable.png",
-      "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "maskable"
-    },
-    {
-      "src": "/static/icons/icon-512.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "/static/icons/icon-512-maskable.png",
-      "sizes": "512x512",
-      "type": "image/png",
+      "src": "/static/icons/icon-maskable.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
       "purpose": "maskable"
     }
   ],
@@ -46,30 +34,14 @@
       "short_name": "Add",
       "description": "Log a new expense",
       "url": "/?action=new",
-      "icons": [{ "src": "/static/icons/shortcut-add.png", "sizes": "96x96" }]
+      "icons": [{ "src": "/static/icons/shortcut-add.svg", "sizes": "96x96", "type": "image/svg+xml" }]
     },
     {
       "name": "Transactions",
       "short_name": "Txns",
       "description": "View recent transactions",
       "url": "/#transactions",
-      "icons": [{ "src": "/static/icons/shortcut-list.png", "sizes": "96x96" }]
-    }
-  ],
-  "screenshots": [
-    {
-      "src": "/static/icons/screenshot-wide.png",
-      "sizes": "1280x720",
-      "type": "image/png",
-      "form_factor": "wide",
-      "label": "Gullak desktop view"
-    },
-    {
-      "src": "/static/icons/screenshot-narrow.png",
-      "sizes": "720x1280",
-      "type": "image/png",
-      "form_factor": "narrow",
-      "label": "Gullak mobile view"
+      "icons": [{ "src": "/static/icons/shortcut-list.svg", "sizes": "96x96", "type": "image/svg+xml" }]
     }
   ]
 }
