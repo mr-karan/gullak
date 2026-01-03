@@ -600,7 +600,7 @@
                                     :class="$store.transactions.period === 'year' ? 'bg-base-100 text-primary shadow-sm' : 'text-base-content/60 hover:text-base-content'"
                                     @click="$store.transactions.setPeriod('year')">Year</button>
                         </div>
-                        <button @click="$store.transactions.load()" class="p-2 rounded-lg text-base-content/50 hover:text-base-content hover:bg-base-200/80 transition-colors flex-shrink-0">
+                        <button @click="$store.transactions.load(); $store.pending.load()" class="p-2 rounded-lg text-base-content/50 hover:text-base-content hover:bg-base-200/80 transition-colors flex-shrink-0">
                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 5.5A10 10 0 1 1 11.26 2.8"/></svg>
                         </button>
                     </div>
