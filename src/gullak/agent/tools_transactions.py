@@ -78,6 +78,18 @@ class EditTransactionInput(BaseModel):
     note: str | None = Field(default=None, description="New note")
 
 
+class EditLastTransactionInput(BaseModel):
+    """Edit the most recently confirmed transaction in this thread."""
+
+    payee: str | None = Field(default=None, description="New payee name")
+    amount: Decimal | None = Field(default=None, gt=0, description="New amount")
+    expense_account: str | None = Field(default=None, description="New expense account")
+    payment_account: str | None = Field(default=None, description="New payment account")
+    currency: str | None = Field(default=None, description="New currency")
+    date: str | None = Field(default=None, description="New date")
+    note: str | None = Field(default=None, description="New note")
+
+
 class DeleteTransactionInput(BaseModel):
     """Delete a transaction."""
 
@@ -97,6 +109,25 @@ class ConfirmAllTransactionsInput(BaseModel):
     """Confirm and save all pending transactions to the ledger."""
 
     pass
+
+
+def _build_transaction_updates(state: ToolState, input: Any) -> dict[str, Any]:
+    updates: dict[str, Any] = {}
+    if input.payee is not None:
+        updates["payee"] = input.payee
+    if input.amount is not None:
+        updates["amount"] = input.amount
+    if input.expense_account is not None:
+        updates["expense_account"] = input.expense_account
+    if input.payment_account is not None:
+        updates["payment_account"] = input.payment_account
+    if input.currency is not None:
+        updates["currency"] = input.currency
+    if input.date is not None:
+        updates["date"] = state.parse_date(input.date)
+    if input.note is not None:
+        updates["note"] = input.note
+    return updates
 
 
 def execute_parse_expense(state: ToolState, input: ParseExpenseInput) -> ToolResult:
@@ -125,15 +156,15 @@ def execute_parse_expense(state: ToolState, input: ParseExpenseInput) -> ToolRes
             note=input.note,
             recurring_name=recurring_name,
             recurring_period=recurring_period,
-            source=state.current_source,
-            source_user=state.current_source_user,
+            source=state.get_source(),
+            source_user=state.get_source_user(),
         )
 
         pending = PendingTransaction(
             id=txn.gullak_id,
             transaction=txn,
             source_text=f"{input.payee} - {input.amount} {currency}",
-            thread_id=state.current_thread_id,
+            thread_id=state.get_thread_id(),
         )
 
         state.add_pending(pending)
@@ -180,15 +211,15 @@ def execute_parse_income(state: ToolState, input: ParseIncomeInput) -> ToolResul
             deposit_account=input.deposit_account,
             currency=currency,
             note=input.note,
-            source=state.current_source,
-            source_user=state.current_source_user,
+            source=state.get_source(),
+            source_user=state.get_source_user(),
         )
 
         pending = PendingTransaction(
             id=txn.gullak_id,
             transaction=txn,
             source_text=f"Income: {input.payee} - {input.amount} {currency}",
-            thread_id=state.current_thread_id,
+            thread_id=state.get_thread_id(),
         )
 
         state.add_pending(pending)
@@ -288,21 +319,7 @@ async def execute_edit_transaction(state: ToolState, input: EditTransactionInput
     if not input.transaction_id:
         return ToolResult(success=False, error="transaction_id is required", data={})
 
-    updates = {}
-    if input.payee is not None:
-        updates["payee"] = input.payee
-    if input.amount is not None:
-        updates["amount"] = input.amount
-    if input.expense_account is not None:
-        updates["expense_account"] = input.expense_account
-    if input.payment_account is not None:
-        updates["payment_account"] = input.payment_account
-    if input.currency is not None:
-        updates["currency"] = input.currency
-    if input.date is not None:
-        updates["date"] = state.parse_date(input.date)
-    if input.note is not None:
-        updates["note"] = input.note
+    updates = _build_transaction_updates(state, input)
 
     if not updates:
         return ToolResult(success=False, error="No updates provided", data={})
@@ -332,6 +349,51 @@ async def execute_edit_transaction(state: ToolState, input: EditTransactionInput
 
     except Exception as e:
         logger.exception(f"Error editing transaction: {e}")
+        return ToolResult(success=False, error=str(e), data={})
+
+
+async def execute_edit_last_transaction(
+    state: ToolState, input: EditLastTransactionInput
+) -> ToolResult:
+    """Edit the most recently confirmed transaction for this thread."""
+    thread_id = state.get_thread_id()
+    transaction_id = state.get_last_confirmed(thread_id)
+    if not transaction_id:
+        return ToolResult(
+            success=False,
+            error="No recently confirmed transaction found for this thread",
+            data={},
+        )
+
+    updates = _build_transaction_updates(state, input)
+    if not updates:
+        return ToolResult(success=False, error="No updates provided", data={})
+
+    try:
+        writer = LedgerWriter(state.ledger_path, state.validator, settings.paisa_url)
+        updated_txn = await writer.update_transaction(transaction_id, updates)
+
+        if updated_txn is None:
+            return ToolResult(
+                success=False,
+                error=f"Transaction {transaction_id} not found",
+                data={},
+            )
+
+        return ToolResult(
+            success=True,
+            message="Transaction updated successfully.",
+            data={
+                "id": updated_txn.gullak_id,
+                "date": str(updated_txn.date),
+                "payee": updated_txn.payee,
+                "amount": float(updated_txn.total_amount),
+                "preview": updated_txn.to_ledger(),
+            },
+        )
+
+    except Exception as e:
+        logger.exception(f"Error editing last transaction: {e}")
         return ToolResult(success=False, error=str(e), data={})
 
 
@@ -405,6 +467,9 @@ async def execute_confirm_transaction(
         writer = LedgerWriter(state.ledger_path, state.validator, settings.paisa_url)
         await writer.append_transaction(pending.transaction)
         state.clear_pending(pending.id)
+        state.set_last_confirmed(
+            pending.thread_id or state.get_thread_id(), pending.transaction.gullak_id
+        )
 
         if state.memory:
             txn = pending.transaction
@@ -418,6 +483,7 @@ async def execute_confirm_transaction(
             message=f"Confirmed and saved: {pending.transaction.payee} for {pending.transaction.total_amount}",
             data={
                 "id": pending.id,
+                "transaction_id": pending.transaction.gullak_id,
                 "payee": pending.transaction.payee,
                 "amount": float(pending.transaction.total_amount),
             },
@@ -430,7 +496,7 @@ async def execute_confirm_transaction(
 async def execute_confirm_all_transactions(
     state: ToolState, input: ConfirmAllTransactionsInput
 ) -> ToolResult:
-    pending_all = state.get_pending(thread_id=state.current_thread_id)
+    pending_all = state.get_pending(thread_id=state.get_thread_id())
     if not pending_all:
         return ToolResult(success=False, error="No pending transactions to confirm", data={})
 
@@ -438,9 +504,13 @@ async def execute_confirm_all_transactions(
         writer = LedgerWriter(state.ledger_path, state.validator, settings.paisa_url)
         confirmed_list = []
 
-        for pending in pending_all.values():
+        for pending in sorted(pending_all.values(), key=lambda p: p.created_at):
             await writer.append_transaction(pending.transaction)
             state.clear_pending(pending.id)
+            state.set_last_confirmed(
+                pending.thread_id or state.get_thread_id(),
+                pending.transaction.gullak_id,
+            )
             if state.memory:
                 txn = pending.transaction
                 if txn.postings and txn.postings[0].account.startswith("Expenses:"):
@@ -457,6 +527,7 @@ async def execute_confirm_all_transactions(
                 "transactions": [
                     {
                         "id": c.id,
+                        "transaction_id": c.transaction.gullak_id,
                         "payee": c.transaction.payee,
                         "amount": float(c.transaction.total_amount),
                     }
@@ -513,6 +584,17 @@ Requires transaction_id - use get_recent_transactions first if you don't have it
 For transactions just created in this conversation, use edit_pending_transaction instead.""",
         input_model=EditTransactionInput,
         executor=execute_edit_transaction,
+        is_async=True,
+    ),
+    "edit_last_transaction": ToolDefinition(
+        name="edit_last_transaction",
+        description="""Edit the most recently confirmed transaction in this thread.
+
+Use when the user refers to "that/this transaction" shortly after confirming,
+and no transaction ID is provided. If there's no recent confirmed transaction,
+fall back to get_recent_transactions and ask for clarification.""",
+        input_model=EditLastTransactionInput,
+        executor=execute_edit_last_transaction,
         is_async=True,
     ),
     "delete_transaction": ToolDefinition(

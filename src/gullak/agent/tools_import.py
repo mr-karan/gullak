@@ -101,7 +101,7 @@ def execute_import_csv(state: ToolState, input: ImportCsvInput) -> ToolResult:
                 id=txn.gullak_id,
                 transaction=txn,
                 source_text=f"CSV import row {imp_txn.source_row}: {imp_txn.payee}",
-                thread_id=state.current_thread_id,
+                thread_id=state.get_thread_id(),
             )
 
             state.add_pending(pending)

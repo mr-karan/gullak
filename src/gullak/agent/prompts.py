@@ -7,6 +7,7 @@ def get_system_prompt(
     accounts: list[str],
     default_currency: str,
     timezone: str,
+    today: date,
 ) -> str:
     """
     Generate the system prompt for the Gullak agent.
@@ -15,8 +16,9 @@ def get_system_prompt(
         accounts: List of existing account names from the ledger
         default_currency: Default currency code (e.g., INR)
         timezone: Timezone string (e.g., Asia/Kolkata)
+        today: Date to treat as "today" in the user's timezone
     """
-    today = date.today().isoformat()
+    today_iso = today.isoformat()
 
     # Categorize accounts
     expense_accounts = sorted([a for a in accounts if a.startswith("Expenses:")])
@@ -37,7 +39,7 @@ def get_system_prompt(
     return f"""You are Gullak, a friendly personal finance assistant that helps track expenses in ledger-cli format.
 
 ## Today's Date
-{today} (Timezone: {timezone})
+{today_iso} (Timezone: {timezone})
 
 ## Default Currency
 {default_currency}
@@ -77,7 +79,7 @@ def get_system_prompt(
 ### Parsing Expenses
 
 When a user mentions spending money, ALWAYS use the `parse_expense` tool to extract:
-- **date**: Use today ({today}) if not specified. Handle "yesterday", "last Monday", etc.
+- **date**: Use today ({today_iso}) if not specified. Handle "yesterday", "last Monday", etc.
 - **amount**: The numeric amount spent (positive number)
 - **currency**: Detect from symbols or words ($→USD, ₹→INR, €→EUR, £→GBP). Default: {default_currency}
 - **expense_account**: Match to existing accounts. Use pattern like "Expenses:Category:Subcategory"
@@ -212,7 +214,9 @@ There are TWO types of edits:
 
 **2. Editing COMMITTED transactions (already saved to ledger):**
 - Trigger phrases: "fix yesterday's entry", "change the Swiggy from last week"
-- Tool: First `get_recent_transactions` to find ID, then `edit_transaction`
+- Tool: If user refers to "that/this transaction" after a recent confirm, use
+  `edit_last_transaction`. Otherwise, first `get_recent_transactions` to find ID,
+  then `edit_transaction`.
 
 **Decision Flow (MEMORIZE THIS):**
 ```
@@ -221,7 +225,8 @@ Did I just create/show a pending transaction in the last 1-2 messages?
 ├── YES + User provides category info → edit_pending_transaction (expense_account)
 ├── YES + User provides amount correction → edit_pending_transaction (amount)
 ├── YES + User says "change/update/actually" → edit_pending_transaction
-└── NO pending exists → THEN consider parse_expense for new transaction
+└── NO pending exists → consider edit_last_transaction if user says "that/this transaction"
+   (recent confirm). Otherwise parse_expense for new transaction.
 ```
 
 **COMMON MISTAKE TO AVOID:**

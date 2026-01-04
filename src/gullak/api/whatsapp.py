@@ -4,6 +4,7 @@ import asyncio
 import base64
 import contextlib
 from collections import OrderedDict
+from datetime import datetime, timezone
 from time import time
 
 import httpx
@@ -58,6 +59,21 @@ def _is_duplicate_message(message_id: str) -> bool:
 
     _processed_messages[message_id] = now
     return False
+
+
+def _extract_message_time(payload: dict) -> datetime | None:
+    for key in ("timestamp", "messageTimestamp", "messageTimestampMs", "t"):
+        raw_value = payload.get(key)
+        if raw_value is None:
+            continue
+        try:
+            ts = int(raw_value)
+        except (TypeError, ValueError):
+            continue
+        if ts > 10_000_000_000:
+            ts = ts / 1000
+        return datetime.fromtimestamp(ts, tz=timezone.utc)  # noqa: UP017
+    return None
 
 
 def get_whatsapp_client(request: Request) -> httpx.AsyncClient:
@@ -136,6 +152,7 @@ async def whatsapp_webhook(request: Request, body: WebhookPayload):
 
     payload = body.payload
     message_id = payload.get("id", "")
+    message_time = _extract_message_time(payload)
 
     # Deduplication: Skip if we've already processed this message
     if message_id and _is_duplicate_message(message_id):
@@ -218,7 +235,11 @@ async def whatsapp_webhook(request: Request, body: WebhookPayload):
     client = get_whatsapp_client(request)
     agent = request.app.state.agent
 
-    thread_id = f"wa_{sender.replace('@', '_')}"
+    if is_group:
+        group_id = sender.split("@")[0]
+        thread_id = f"wa:group:{group_id}"
+    else:
+        thread_id = f"wa:dm:{author_number}"
 
     push_name = payload.get("pushName")
     source_user = push_name or author_number
@@ -253,7 +274,7 @@ async def whatsapp_webhook(request: Request, body: WebhookPayload):
                 agent._tool_state.set_source_context(TransactionSource.WHATSAPP, source_user)
 
             async for event in agent.process_message(
-                message_body, thread_id=thread_id, media=media_content
+                message_body, thread_id=thread_id, media=media_content, message_time=message_time
             ):
                 if event.type == "text":
                     response_text += event.content

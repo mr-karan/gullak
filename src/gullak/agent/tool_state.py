@@ -2,10 +2,12 @@
 
 import json
 import logging
+from contextvars import ContextVar
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 from typing import TYPE_CHECKING
+from zoneinfo import ZoneInfo
 
 from gullak.ledger.categories import suggest_category
 from gullak.ledger.memory import PayeeMemory
@@ -39,15 +41,21 @@ class ToolState:
         default_currency: str = "INR",
         parser: LedgerParser | None = None,
         validator: LedgerValidator | None = None,
+        timezone: str = "Asia/Kolkata",
     ):
         self.ledger_path = ledger_path
         self.default_currency = default_currency
         self.parser = parser or LedgerParser()
         self.validator = validator or LedgerValidator()
         self.memory = PayeeMemory(ledger_path)
-        self.current_thread_id: str | None = None
-        self.current_source: TransactionSource | None = None
-        self.current_source_user: str | None = None
+        self._thread_id: ContextVar[str | None] = ContextVar("gullak_thread_id", default=None)
+        self._source: ContextVar[TransactionSource | None] = ContextVar(
+            "gullak_source", default=None
+        )
+        self._source_user: ContextVar[str | None] = ContextVar("gullak_source_user", default=None)
+        self._timezone = ZoneInfo(timezone)
+        self._now: ContextVar[datetime | None] = ContextVar("gullak_time_context", default=None)
+        self._last_confirmed_by_thread: dict[str, str] = {}
 
         self._pending: dict[str, PendingTransaction] = {}
         self._last_created_id: str | None = None
@@ -99,12 +107,14 @@ class ToolState:
         return {k: v for k, v in self._pending.items() if v.thread_id == thread_id}
 
     def get_last_pending(self) -> PendingTransaction | None:
+        thread_id = self.get_thread_id()
+
         if self._last_created_id and self._last_created_id in self._pending:
             pending = self._pending[self._last_created_id]
-            if self.current_thread_id is None or pending.thread_id == self.current_thread_id:
+            if thread_id is None or pending.thread_id == thread_id:
                 return pending
 
-        thread_pending = self.get_pending(thread_id=self.current_thread_id)
+        thread_pending = self.get_pending(thread_id=thread_id)
         if not thread_pending:
             return None
 
@@ -156,13 +166,30 @@ class ToolState:
     # Date Parsing
     # -------------------------------------------------------------------------
 
+    def set_time_context(self, now: datetime | None) -> None:
+        """Set a per-request time context for relative date parsing."""
+        if now is None:
+            self._now.set(None)
+            return
+        if now.tzinfo is None:
+            now = now.replace(tzinfo=self._timezone)
+        else:
+            now = now.astimezone(self._timezone)
+        self._now.set(now)
+
+    def _today(self) -> date:
+        now = self._now.get()
+        if now is not None:
+            return now.date()
+        return datetime.now(self._timezone).date()
+
     def parse_date(self, date_str: str) -> date:
         """Parse date string, handling relative dates like 'yesterday', 'last Monday'."""
         if not date_str:
-            return date.today()
+            return self._today()
 
         date_str = date_str.lower().strip()
-        today = date.today()
+        today = self._today()
 
         # Relative dates
         if date_str in ("today", "now"):
@@ -286,15 +313,31 @@ class ToolState:
     # -------------------------------------------------------------------------
 
     def set_thread_id(self, thread_id: str | None) -> None:
-        self.current_thread_id = thread_id
+        self._thread_id.set(thread_id)
 
     def get_thread_id(self) -> str | None:
-        return self.current_thread_id
+        return self._thread_id.get()
+
+    def set_last_confirmed(self, thread_id: str | None, transaction_id: str) -> None:
+        if not thread_id or not transaction_id:
+            return
+        self._last_confirmed_by_thread[thread_id] = transaction_id
+
+    def get_last_confirmed(self, thread_id: str | None) -> str | None:
+        if not thread_id:
+            return None
+        return self._last_confirmed_by_thread.get(thread_id)
+
+    def get_source(self) -> TransactionSource | None:
+        return self._source.get()
+
+    def get_source_user(self) -> str | None:
+        return self._source_user.get()
 
     def set_source_context(
         self,
         source: TransactionSource | None,
         source_user: str | None = None,
     ) -> None:
-        self.current_source = source
-        self.current_source_user = source_user
+        self._source.set(source)
+        self._source_user.set(source_user)

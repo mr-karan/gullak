@@ -8,9 +8,11 @@ import logging
 import os
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
+from zoneinfo import ZoneInfo
 
 # Keep LiteLLM logs quiet unless explicitly enabled.
 os.environ.setdefault("LITELLM_LOG", "WARNING")
@@ -20,6 +22,7 @@ import litellm
 litellm.suppress_debug_info = True
 
 from gullak.chat_history import ChatHistory
+from gullak.ledger.models import TransactionSource
 from gullak.ledger.parser import LedgerParser
 from gullak.ledger.validator import LedgerValidator
 from gullak.ledger.writer import LedgerWriter
@@ -84,6 +87,7 @@ class GullakAgent:
     _system_prompt: str = field(default="", init=False)
     _chat_history: ChatHistory | None = field(default=None, init=False)
     _tools: list[dict[str, Any]] = field(default_factory=list, init=False)
+    _accounts: list[str] = field(default_factory=list, init=False)
 
     def __post_init__(self) -> None:
         """Initialize the agent components."""
@@ -96,18 +100,14 @@ class GullakAgent:
             default_currency=self.default_currency,
             parser=self._parser,
             validator=self._validator,
+            timezone=self.timezone,
         )
 
         # Get accounts for system prompt
         accounts: list[str] = []
         if self.ledger_path.exists():
             accounts = list(self._parser.extract_accounts(self.ledger_path))
-
-        self._system_prompt = get_system_prompt(
-            accounts=accounts,
-            default_currency=self.default_currency,
-            timezone=self.timezone,
-        )
+        self._accounts = accounts
 
         # Generate OpenAI-format tool definitions
         self._tools = get_openai_tools()
@@ -124,11 +124,22 @@ class GullakAgent:
                 "Set OPENROUTER_API_KEY, OPENAI_API_KEY, GOOGLE_API_KEY, or ANTHROPIC_API_KEY."
             )
 
+    def _resolve_now(self, now: datetime | None) -> datetime:
+        tz = ZoneInfo(self.timezone)
+        if now is None:
+            return datetime.now(tz)
+        if now.tzinfo is None:
+            return now.replace(tzinfo=tz)
+        return now.astimezone(tz)
+
     async def process_message(
         self,
         user_message: str,
         thread_id: str | None = None,
         media: MediaContent | list[MediaContent] | None = None,
+        message_time: datetime | None = None,
+        source: TransactionSource | None = None,
+        source_user: str | None = None,
     ) -> AsyncIterator[AgentEvent]:
         """
         Process a user message and yield events.
@@ -138,6 +149,7 @@ class GullakAgent:
         Args:
             user_message: The user's input text
             thread_id: Optional thread ID for conversation continuity
+            message_time: Optional message timestamp for deterministic date handling
             media: Optional media content (images/PDFs) for vision processing
 
         Yields:
@@ -159,16 +171,28 @@ class GullakAgent:
         if thread_id is None:
             thread_id = uuid4().hex[:12]
 
-        # Set thread context for pending transactions
-        if self._tool_state:
-            self._tool_state.set_thread_id(thread_id)
+        tool_state = self._tool_state
+        if tool_state is None:
+            yield AgentEvent(type="error", content="Tool state not initialized")
+            return
 
+        tool_state.set_thread_id(thread_id)
+        tool_state.set_source_context(source, source_user)
+
+        resolved_now = self._resolve_now(message_time)
+        tool_state.set_time_context(resolved_now)
+
+        self._system_prompt = get_system_prompt(
+            accounts=self._accounts,
+            default_currency=self.default_currency,
+            timezone=self.timezone,
+            today=resolved_now.date(),
+        )
         messages: list[dict[str, Any]] = [{"role": "system", "content": self._system_prompt}]
 
-        if self._tool_state:
-            pending_context = self._build_pending_context(thread_id)
-            if pending_context:
-                messages.append({"role": "system", "content": pending_context})
+        pending_context = self._build_pending_context(thread_id)
+        if pending_context:
+            messages.append({"role": "system", "content": pending_context})
 
         if self._chat_history:
             loaded = await self._chat_history.load_messages(thread_id, limit=10)
@@ -215,7 +239,7 @@ class GullakAgent:
                 chunks: list[Any] = []
                 current_text = ""
 
-                response = await litellm.acompletion(
+                response: Any = await litellm.acompletion(
                     model=active_model,
                     messages=messages,
                     tools=self._tools if self._tools else None,
@@ -237,7 +261,7 @@ class GullakAgent:
                             yield AgentEvent(type="text", content=delta.content)
 
                 # Reconstruct full response to get tool calls
-                full_response = litellm.stream_chunk_builder(chunks, messages=messages)
+                full_response: Any = litellm.stream_chunk_builder(chunks, messages=messages)
 
                 if not full_response or not full_response.choices:
                     logger.warning("Empty response from LLM")
@@ -276,7 +300,7 @@ class GullakAgent:
                         arguments = {}
 
                     # Execute the tool
-                    result = await execute_tool(function_name, arguments, self._tool_state)
+                    result = await execute_tool(function_name, arguments, tool_state)
 
                     # Emit appropriate event based on result
                     if result.is_pending:
@@ -341,6 +365,11 @@ class GullakAgent:
 
         try:
             await self._writer.append_transaction(pending.transaction)
+            if self._tool_state:
+                self._tool_state.set_last_confirmed(
+                    pending.thread_id or self._tool_state.get_thread_id(),
+                    pending.transaction.gullak_id,
+                )
             return True, f"Transaction saved: {pending.transaction.payee}"
         except Exception as e:
             # Restore pending on failure
@@ -447,8 +476,12 @@ class GullakAgent:
             currency = txn.postings[0].currency if txn.postings else self.default_currency
             expense_acc = txn.postings[0].account if txn.postings else "Unknown"
             payment_acc = txn.postings[1].account if len(txn.postings) > 1 else "Unknown"
-            lines.append(
-                f"- ID: {p.id} | {txn.payee}: {amount} {currency} | {expense_acc} <- {payment_acc}"
+            created_by = txn.source_user or ""
+            created_by_segment = f" | by {created_by}" if created_by else ""
+            line = (
+                f"- ID: {p.id} | {txn.payee}: {amount} {currency} | "
+                f"{expense_acc} <- {payment_acc}{created_by_segment}"
             )
+            lines.append(line)
 
         return "\n".join(lines)
