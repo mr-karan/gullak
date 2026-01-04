@@ -171,6 +171,7 @@ document.addEventListener('alpine:init', () => {
                     await this._applyChatRoute(nextRoute.params);
                 } else if (nextRoute.name === 'transactions') {
                     await Alpine.store('transactions').load();
+                    await Alpine.store('pending').load();
                 } else if (nextRoute.name === 'ledger') {
                     await Alpine.store('ledger').load();
                 } else if (nextRoute.name === 'settings') {
@@ -833,7 +834,9 @@ document.addEventListener('alpine:init', () => {
         _debounceTimers: {},
 
         async load() {
-            const threadId = Alpine.store('threads').currentId;
+            const router = Alpine.store('router');
+            const isTransactionsView = router.view === 'transactions';
+            const threadId = isTransactionsView ? null : Alpine.store('threads').currentId;
             try {
                 const url = threadId
                     ? `/api/chat/pending?thread_id=${threadId}`
