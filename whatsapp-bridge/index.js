@@ -19,6 +19,21 @@ const API_KEY = process.env.GULLAK_WHATSAPP_API_KEY || "";
 const LOG_LEVEL = process.env.LOG_LEVEL || "warn";
 const VERSION = "1.0.0";
 
+// Allowed group names (comma-separated). If set, only messages from groups with these names are processed.
+// Example: "Family Budget,Household Expenses"
+const ALLOWED_GROUPS = process.env.ALLOWED_GROUPS
+  ? process.env.ALLOWED_GROUPS.split(",").map((n) => n.trim().toLowerCase()).filter(Boolean)
+  : [];
+
+// Allowed phone numbers (comma-separated). If set, only DMs from these authors are processed.
+// Example: "919876543210,918851607899" (no @s.whatsapp.net suffix needed)
+const ALLOWED_PHONE_NUMBERS = process.env.ALLOWED_PHONE_NUMBERS
+  ? process.env.ALLOWED_PHONE_NUMBERS.split(",").map((n) => n.trim()).filter(Boolean)
+  : [];
+
+// Cache for group metadata to avoid repeated lookups
+const groupMetadataCache = new Map();
+
 const logger = pino({ level: LOG_LEVEL });
 const app = express();
 app.use(express.json());
@@ -175,6 +190,50 @@ async function connectWhatsApp() {
       if (msg.key.fromMe) continue;
       if (!msg.message) continue;
 
+      const chatId = msg.key.remoteJid;
+      const isGroup = chatId.endsWith("@g.us");
+      const author = msg.key.participant || chatId;
+
+      // Extract phone number from author (works for @s.whatsapp.net format, not @lid)
+      const authorNumber = author.split("@")[0];
+
+      // Gate messages by group name (for groups) or phone number (for DMs)
+      if (isGroup) {
+        if (ALLOWED_GROUPS.length > 0) {
+          // Get group name from cache or fetch it
+          let groupName = groupMetadataCache.get(chatId);
+          if (!groupName) {
+            try {
+              const metadata = await sock.groupMetadata(chatId);
+              groupName = metadata.subject?.toLowerCase() || "";
+              groupMetadataCache.set(chatId, groupName);
+              logger.info({ groupId: chatId, groupName: metadata.subject }, "Fetched group metadata");
+            } catch (err) {
+              logger.warn({ groupId: chatId, err: err.message }, "Failed to fetch group metadata");
+              groupName = "";
+            }
+          }
+
+          if (!ALLOWED_GROUPS.includes(groupName)) {
+            logger.info({ from: chatId, groupName }, "Message ignored: group not in allowed list");
+            continue;
+          }
+        }
+      } else {
+        // For DMs: if phone numbers are configured, check against them
+        // If no phone filter is set, block all DMs when group filtering is enabled
+        if (ALLOWED_PHONE_NUMBERS.length > 0) {
+          if (!ALLOWED_PHONE_NUMBERS.includes(authorNumber)) {
+            logger.info({ from: chatId, author: authorNumber }, "Message ignored: sender not in allowed phone numbers");
+            continue;
+          }
+        } else if (ALLOWED_GROUPS.length > 0) {
+          // Groups are configured but no phone allowlist - block all DMs
+          logger.info({ from: chatId }, "Message ignored: DMs blocked (only group messages allowed)");
+          continue;
+        }
+      }
+
       const content = normalizeMessageContent(msg.message);
       if (!content) continue;
 
@@ -266,6 +325,8 @@ app.get("/api/status", (req, res) => {
     connected: connectionStatus === "WORKING",
     status: connectionStatus,
     me: me ? { id: me.id, name: me.name } : null,
+    allowedGroups: ALLOWED_GROUPS.length > 0 ? ALLOWED_GROUPS : "all",
+    allowedPhoneNumbers: ALLOWED_PHONE_NUMBERS.length > 0 ? ALLOWED_PHONE_NUMBERS : "all",
   });
 });
 
