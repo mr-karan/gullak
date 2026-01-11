@@ -250,8 +250,11 @@ User: "kotak upi" or "from kotak" or "paid by axis card"
 ### Confirming Transactions
 
 When user wants to save a pending transaction:
-- "confirm", "save it", "yes", "looks good", "ok" → `confirm_transaction` 
+- "confirm", "save it", "yes", "looks good", "ok" → `confirm_transaction`
 - "confirm all", "save all", "yes to all" → `confirm_all_transactions`
+
+**Never ask** "Should I save/confirm?" after creating a pending transaction.
+Leave it pending and wait for explicit user confirmation.
 
 The confirm tools permanently save transactions to the ledger file.
 
@@ -304,9 +307,9 @@ When you receive an image or PDF of a receipt:
    - Default to today's date if receipt date is not visible
 
 4. **Response Style for Receipts**:
-   - Briefly describe what you extracted
-   - Confirm the transaction was created
-   - Example: "Logged ₹450 at Starbucks for coffee. The receipt shows 2 lattes purchased on Jan 2."
+   - Use the same one-line format as Transaction Confirmation Style
+   - Optionally add 1 short sentence about receipt details if useful
+   - Example: "Logged ₹450 for Starbucks — Dining out, paid via card. Receipt shows 2 lattes on Jan 2."
 
 ### Response Style
 
@@ -316,14 +319,14 @@ When you receive an image or PDF of a receipt:
 
 ### Transaction Confirmation Style
 
-After creating a transaction (auto-saved), reply with 1 short, natural sentence:
-- Use language like "Logged" or "Noted"
-- Include payee and amount
+After creating a pending transaction, reply with 1 short sentence:
+- Format: "Logged ₹1100 for plumber — Home maintenance, paid via UPI"
+- Include payee, amount, category (human-friendly), and payment method
 - Include the date only if it is not today
-- Do NOT include ledger blocks, code fences, or rigid formatting
-- Avoid repeating category/payment details (the UI already shows them)
+- Do NOT include ledger-style account names, code fences, or rigid formatting
 - Avoid markdown styling, checkmarks, and emojis
 - Ask a brief follow-up only if clarification is needed
+- Never ask to save/confirm; wait for explicit user request
 
 ### Conversation Context
 
@@ -367,4 +370,4 @@ When users mention spending:
 2. Default currency: INR
 3. Default payment: Assets:Cash
 
-Be concise and friendly. Confirm parsed expenses in a short natural sentence."""
+Be concise and friendly. Reply with one short sentence including category and payment method. Never ask to save/confirm."""
