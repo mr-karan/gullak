@@ -683,23 +683,23 @@
                 <div class="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-5 px-4 md:px-8 py-4 md:py-6">
                     <div class="stat-card">
                         <div class="stat-card-label">Total Spent</div>
-                        <div class="stat-card-value text-xl md:text-[28px]" x-text="formatCurrency($store.transactions.stats.total_spent || 0, $store.transactions.stats.currency || 'INR')"></div>
+                        <div class="stat-card-value text-xl md:text-[28px]" x-text="formatCurrency($store.transactions.activeStats.total_spent || 0, $store.transactions.activeStats.currency || 'INR')"></div>
                     </div>
                     <div class="stat-card">
                         <div class="stat-card-label">Transactions</div>
-                        <div class="stat-card-value text-xl md:text-[28px]" x-text="$store.transactions.stats.transaction_count || 0"></div>
+                        <div class="stat-card-value text-xl md:text-[28px]" x-text="$store.transactions.activeStats.transaction_count || 0"></div>
                     </div>
                     <div class="stat-card col-span-2">
                         <div class="stat-card-label mb-2 md:mb-3">Top Categories</div>
                         <div class="flex gap-3 md:gap-4 flex-wrap">
-                            <template x-for="cat in ($store.transactions.stats.categories || []).slice(0, 3)" :key="cat.name">
+                            <template x-for="cat in ($store.transactions.activeStats.categories || []).slice(0, 3)" :key="cat.name">
                                 <div class="flex items-center gap-1.5 md:gap-2">
                                     <div class="w-2 h-2 rounded-full bg-primary"></div>
                                     <span class="text-xs md:text-sm font-medium" x-text="cat.name"></span>
-                                    <span class="text-[10px] md:text-xs text-base-content/50 font-mono" x-text="formatCurrency(cat.amount, $store.transactions.stats.currency)"></span>
+                                    <span class="text-[10px] md:text-xs text-base-content/50 font-mono" x-text="formatCurrency(cat.amount, $store.transactions.activeStats.currency)"></span>
                                 </div>
                             </template>
-                            <div x-show="!$store.transactions.stats.categories?.length" class="text-sm text-base-content/40">No data available</div>
+                            <div x-show="!$store.transactions.activeStats.categories?.length" class="text-sm text-base-content/40">No data available</div>
                         </div>
                     </div>
                 </div>
@@ -713,11 +713,11 @@
                     <div class="flex gap-2 overflow-x-auto no-scrollbar -mx-4 px-4 md:mx-0 md:px-0">
                         <button class="filter-pill"
                                 :class="$store.transactions.categoryFilter === '' ? 'active' : ''"
-                                @click="$store.transactions.categoryFilter = ''">All</button>
+                                @click="$store.transactions.setCategory('')">All</button>
                         <template x-for="cat in ($store.transactions.stats.categories || []).slice(0, 8)" :key="cat.name">
                             <button class="filter-pill"
                                     :class="$store.transactions.categoryFilter === cat.name ? 'active' : ''"
-                                    @click="$store.transactions.categoryFilter = cat.name"
+                                    @click="$store.transactions.setCategory(cat.name)"
                                     x-text="cat.name"></button>
                         </template>
                     </div>

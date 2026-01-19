@@ -1041,6 +1041,7 @@ document.addEventListener('alpine:init', () => {
     Alpine.store('transactions', {
         list: [],
         stats: {},
+        filteredStats: null,
         search: '',
         categoryFilter: '',
         period: 'month',
@@ -1064,11 +1065,18 @@ document.addEventListener('alpine:init', () => {
 
             if (this.categoryFilter) {
                 result = result.filter(t =>
-                    t.accounts.some(a => a.includes(this.categoryFilter))
+                    t.accounts.some(a => {
+                        const parts = a.split(':');
+                        return parts[0] === 'Expenses' && parts[1] === this.categoryFilter;
+                    })
                 );
             }
 
             return result;
+        },
+
+        get activeStats() {
+            return this.filteredStats || this.stats;
         },
 
         get grouped() {
@@ -1091,6 +1099,7 @@ document.addEventListener('alpine:init', () => {
                 const data = await response.json();
                 this.list = data.transactions || [];
                 await this.loadStats();
+                await this.refreshFilteredStats();
             } catch (error) {
                 console.error('Failed to load transactions:', error);
                 Alpine.store('notify').error('Failed to load transactions');
@@ -1106,9 +1115,32 @@ document.addEventListener('alpine:init', () => {
             }
         },
 
+        async refreshFilteredStats() {
+            if (!this.categoryFilter) {
+                this.filteredStats = null;
+                return;
+            }
+
+            this.filteredStats = null;
+            try {
+                const category = encodeURIComponent(this.categoryFilter);
+                const response = await fetch(
+                    `/api/ledger/stats?period=${this.period}&category=${category}`
+                );
+                this.filteredStats = await response.json();
+            } catch (error) {
+                console.error('Failed to load filtered stats:', error);
+            }
+        },
+
         async setPeriod(newPeriod) {
             this.period = newPeriod;
             await this.load();
+        },
+
+        async setCategory(category) {
+            this.categoryFilter = category;
+            await this.refreshFilteredStats();
         },
 
         openEdit(txn) {

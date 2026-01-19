@@ -222,6 +222,7 @@ async def get_ledger_file(
 async def get_transaction_stats(
     request: Request,
     period: str = Query("month", description="Period: week, month, year, all"),
+    category: str = Query("", description="Top-level expense category filter"),
 ) -> dict[str, Any]:
     """Get transaction statistics for dashboard."""
     from collections import defaultdict
@@ -256,14 +257,29 @@ async def get_transaction_stats(
     total_spent = 0
     category_totals: dict[str, float] = defaultdict(float)
     daily_totals: dict[str, float] = defaultdict(float)
+    category_filter = category.strip()
+    transaction_count = len(filtered)
+
+    if category_filter:
+        transaction_count = 0
 
     for txn in filtered:
+        txn_matches = False
         for posting in txn.postings:
-            if posting.account.startswith("Expenses:") and posting.amount > 0:
-                total_spent += float(posting.amount)
-                category = posting.account.split(":")[1] if ":" in posting.account else "Other"
-                category_totals[category] += float(posting.amount)
-                daily_totals[str(txn.date)] += float(posting.amount)
+            if not (posting.account.startswith("Expenses:") and posting.amount > 0):
+                continue
+            posting_category = (
+                posting.account.split(":")[1] if ":" in posting.account else "Other"
+            )
+            if category_filter and posting_category != category_filter:
+                continue
+            total_spent += float(posting.amount)
+            category_totals[posting_category] += float(posting.amount)
+            daily_totals[str(txn.date)] += float(posting.amount)
+            txn_matches = True
+
+        if category_filter and txn_matches:
+            transaction_count += 1
 
     categories = sorted(
         [{"name": k, "amount": v} for k, v in category_totals.items()],
@@ -273,7 +289,7 @@ async def get_transaction_stats(
 
     return {
         "total_spent": total_spent,
-        "transaction_count": len(filtered),
+        "transaction_count": transaction_count,
         "categories": categories,
         "daily_spending": [{"date": k, "amount": v} for k, v in sorted(daily_totals.items())],
         "period": period,
