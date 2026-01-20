@@ -4,6 +4,9 @@
             <div class="text-[10px] font-semibold uppercase tracking-wider text-base-content/50">Total Spent</div>
             <div class="text-xl md:text-2xl font-semibold text-base-content"
                  x-text="formatCurrency($store.transactions.activeStats.total_spent || 0, $store.transactions.activeStats.currency || 'INR')"></div>
+            <div class="text-[10px] text-base-content/50 mt-1"
+                 x-show="$store.transactions.activeStats.projection?.available"
+                 x-text="`Projected: ${formatCurrency($store.transactions.activeStats.projection?.projected_total_spent || 0, $store.transactions.activeStats.currency || 'INR')}`"></div>
         </div>
         <div class="text-xs font-mono"
              :class="$store.transactions.deltaClass($store.transactions.activeStats.comparison)"

@@ -1042,54 +1042,43 @@ document.addEventListener('alpine:init', () => {
         list: [],
         stats: {},
         filteredStats: null,
+        categoryStats: null,
         search: '',
+        payeeFilter: '',
         categoryFilter: '',
         subCategoryFilter: '',
         mappingInputs: {},
         mappingSaving: {},
         period: 'month',
+        offset: 0,
+        limit: 50,
+        total: 0,
+        hasMore: false,
+        loadingList: false,
+        loadingMore: false,
+        loadingStats: false,
         editing: null,
         showEditModal: false,
         deleting: false,
         swipedId: null,
         _swipeState: null,
+        _searchTimer: null,
 
         get filtered() {
-            let result = [...this.list];
+            return this.list;
+        },
 
-            if (this.search) {
-                const s = this.search.toLowerCase();
-                result = result.filter(t =>
-                    t.payee.toLowerCase().includes(s) ||
-                    t.accounts.some(a => a.toLowerCase().includes(s)) ||
-                    (t.note && t.note.toLowerCase().includes(s))
-                );
-            }
-
-            if (this.categoryFilter) {
-                result = result.filter(t =>
-                    t.accounts.some(a => {
-                        const parts = a.split(':');
-                        return parts[0] === 'Expenses' && parts[1] === this.categoryFilter;
-                    })
-                );
-            }
-
-            if (this.categoryFilter && this.subCategoryFilter) {
-                result = result.filter(t =>
-                    t.accounts.some(a => {
-                        const parts = a.split(':');
-                        return parts[0] === 'Expenses' &&
-                            parts[1] === this.categoryFilter &&
-                            parts[2] === this.subCategoryFilter;
-                    })
-                );
-            }
-
-            return result;
+        get filtersActive() {
+            return Boolean(
+                this.categoryFilter ||
+                this.subCategoryFilter ||
+                this.payeeFilter ||
+                this.search
+            );
         },
 
         get activeStats() {
+            if (!this.filtersActive) return this.stats;
             return this.filteredStats || this.stats;
         },
 
@@ -1107,45 +1096,111 @@ document.addEventListener('alpine:init', () => {
             return sorted;
         },
 
-        async load() {
-            try {
-                const response = await fetch(`/api/ledger/transactions?limit=100&period=${this.period}`);
-                const data = await response.json();
-                this.list = data.transactions || [];
-                await this.loadStats();
-                await this.refreshFilteredStats();
-            } catch (error) {
-                console.error('Failed to load transactions:', error);
-                Alpine.store('notify').error('Failed to load transactions');
+        buildStatsParams(options = {}) {
+            const { includeSubcategory = true } = options;
+            const params = new URLSearchParams();
+            params.set('period', this.period);
+            if (this.categoryFilter) params.set('category', this.categoryFilter);
+            if (includeSubcategory && this.subCategoryFilter) {
+                params.set('subcategory', this.subCategoryFilter);
             }
+            if (this.payeeFilter) params.set('payee', this.payeeFilter);
+            if (this.search) params.set('search', this.search);
+            return params;
+        },
+
+        buildListParams(offset, limit) {
+            const params = this.buildStatsParams({ includeSubcategory: true });
+            params.set('limit', limit);
+            params.set('offset', offset);
+            return params;
+        },
+
+        async load() {
+            await this.loadStats();
+            await this.refreshFilteredStats();
+            await this.loadList(true);
         },
 
         async loadStats() {
+            this.loadingStats = true;
             try {
                 const response = await fetch(`/api/ledger/stats?period=${this.period}`);
                 this.stats = await response.json();
                 this.prepareReviewMappings(this.stats.needs_review);
             } catch (error) {
                 console.error('Failed to load stats:', error);
+            } finally {
+                this.loadingStats = false;
             }
         },
 
         async refreshFilteredStats() {
-            if (!this.categoryFilter) {
+            this.filteredStats = null;
+            this.categoryStats = null;
+            if (!this.filtersActive) {
                 this.filteredStats = null;
                 return;
             }
 
-            this.filteredStats = null;
             try {
-                const category = encodeURIComponent(this.categoryFilter);
-                const response = await fetch(
-                    `/api/ledger/stats?period=${this.period}&category=${category}`
-                );
+                const response = await fetch(`/api/ledger/stats?${this.buildStatsParams()}`);
                 this.filteredStats = await response.json();
             } catch (error) {
                 console.error('Failed to load filtered stats:', error);
             }
+
+            if (!this.categoryFilter) return;
+
+            try {
+                const response = await fetch(
+                    `/api/ledger/stats?${this.buildStatsParams({ includeSubcategory: false })}`
+                );
+                this.categoryStats = await response.json();
+            } catch (error) {
+                console.error('Failed to load category stats:', error);
+            }
+        },
+
+        async loadList(reset = false) {
+            if (this.loadingList || this.loadingMore) return;
+            const offset = reset ? 0 : this.offset;
+            const params = this.buildListParams(offset, this.limit);
+
+            if (reset) {
+                this.loadingList = true;
+                this.list = [];
+                this.offset = 0;
+                this.hasMore = false;
+            } else {
+                this.loadingMore = true;
+            }
+
+            try {
+                const response = await fetch(`/api/ledger/transactions?${params}`);
+                const data = await response.json();
+                const items = data.transactions || [];
+                this.list = reset ? items : [...this.list, ...items];
+                this.total = data.total || 0;
+                this.hasMore = Boolean(data.has_more);
+                this.offset = data.next_offset ?? (offset + items.length);
+            } catch (error) {
+                console.error('Failed to load transactions:', error);
+                Alpine.store('notify').error('Failed to load transactions');
+            } finally {
+                this.loadingList = false;
+                this.loadingMore = false;
+            }
+        },
+
+        async loadMore() {
+            if (!this.hasMore || this.loadingMore || this.loadingList) return;
+            await this.loadList(false);
+        },
+
+        async applyFilters() {
+            await this.refreshFilteredStats();
+            await this.loadList(true);
         },
 
         async setPeriod(newPeriod) {
@@ -1156,19 +1211,37 @@ document.addEventListener('alpine:init', () => {
         async setCategory(category) {
             this.categoryFilter = category;
             this.subCategoryFilter = '';
-            await this.refreshFilteredStats();
+            await this.applyFilters();
         },
 
-        setSubCategory(subCategory) {
+        async setSubCategory(subCategory) {
             this.subCategoryFilter = subCategory;
+            await this.applyFilters();
         },
 
-        applyPayeeFilter(payee) {
-            this.search = payee;
+        async applyPayeeFilter(payee) {
+            this.payeeFilter = payee;
+            this.search = '';
+            await this.applyFilters();
             const list = document.querySelector('[data-transactions-list]');
             if (list) {
                 list.scrollIntoView({ behavior: 'smooth', block: 'start' });
             }
+        },
+
+        queueFilterUpdate() {
+            if (this._searchTimer) clearTimeout(this._searchTimer);
+            this._searchTimer = setTimeout(() => {
+                this.applyFilters();
+            }, 350);
+        },
+
+        async clearFilters() {
+            this.search = '';
+            this.payeeFilter = '';
+            this.categoryFilter = '';
+            this.subCategoryFilter = '';
+            await this.applyFilters();
         },
 
         prepareReviewMappings(items) {
@@ -1427,26 +1500,24 @@ function transactionsDashboard() {
         },
 
         get flowCategories() {
-            return this.buildFlow(this.stats.categories || [], this.totalSpent);
+            const source = this.store.categoryFilter ? this.store.stats : this.stats;
+            const total = source?.total_spent || 0;
+            return this.buildFlow(source?.categories || [], total);
         },
 
         get categoryTotal() {
             if (!this.store.categoryFilter) return this.totalSpent || 0;
-            const match = (this.stats.categories || []).find(
-                (cat) => cat.name === this.store.categoryFilter
-            );
-            return match ? match.amount : this.totalSpent;
+            const source = this.store.categoryStats || this.store.filteredStats || {};
+            return source.total_spent || 0;
         },
 
         get flowSubcategories() {
             if (!this.store.categoryFilter) return [];
-            return this.buildFlow(this.stats.subcategories || [], this.categoryTotal);
+            const source = this.store.categoryStats || this.store.filteredStats || {};
+            return this.buildFlow(source.subcategories || [], this.categoryTotal);
         },
 
         get flowPayees() {
-            if (this.store.subCategoryFilter) {
-                return this.buildPayees(this.store.filtered);
-            }
             return this.stats.top_payees || [];
         },
 
@@ -1458,6 +1529,7 @@ function transactionsDashboard() {
             const parts = ['All'];
             if (this.store.categoryFilter) parts.push(this.store.categoryFilter);
             if (this.store.subCategoryFilter) parts.push(this.store.subCategoryFilter);
+            if (this.store.payeeFilter) parts.push(`Payee: ${this.store.payeeFilter}`);
             if (this.store.search) parts.push(`Search: ${this.store.search}`);
             return parts.join(' > ');
         },
@@ -1478,6 +1550,13 @@ function transactionsDashboard() {
                     key: `sub-${this.store.subCategoryFilter}`
                 });
             }
+            if (this.store.payeeFilter) {
+                chips.push({
+                    type: 'payee',
+                    label: this.store.payeeFilter,
+                    key: `payee-${this.store.payeeFilter}`
+                });
+            }
             if (this.store.search) {
                 chips.push({
                     type: 'search',
@@ -1489,17 +1568,16 @@ function transactionsDashboard() {
         },
 
         get hasFilters() {
-            return Boolean(
-                this.store.categoryFilter || this.store.subCategoryFilter || this.store.search
-            );
+            return this.store.filtersActive;
         },
 
         get listSummary() {
-            const filtered = this.store.filtered?.length || 0;
-            const total = this.store.list?.length || 0;
-            if (!total) return '0 transactions';
-            if (filtered === total) return `${total} transactions`;
-            return `${filtered} of ${total} transactions`;
+            const total = this.store.total || 0;
+            const shown = this.store.list?.length || 0;
+            if (!total && !shown) return '0 transactions';
+            if (!total) return `${shown} transactions`;
+            if (shown >= total) return `${total} transactions`;
+            return `Showing ${shown} of ${total}`;
         },
 
         buildFlow(items, total) {
@@ -1541,32 +1619,37 @@ function transactionsDashboard() {
             this.scrollToList();
         },
 
-        selectSubcategory(name) {
-            this.store.setSubCategory(name);
+        async selectSubcategory(name) {
+            await this.store.setSubCategory(name);
             this.scrollToList();
         },
 
-        selectPayee(name) {
-            this.store.applyPayeeFilter(name);
+        async selectPayee(name) {
+            await this.store.applyPayeeFilter(name);
         },
 
-        clearFilter(type) {
+        async clearFilter(type) {
             if (type === 'category') {
-                this.store.setCategory('');
+                await this.store.setCategory('');
                 return;
             }
             if (type === 'subcategory') {
-                this.store.setSubCategory('');
+                await this.store.setSubCategory('');
+                return;
+            }
+            if (type === 'payee') {
+                this.store.payeeFilter = '';
+                await this.store.applyFilters();
                 return;
             }
             if (type === 'search') {
                 this.store.search = '';
+                await this.store.applyFilters();
             }
         },
 
-        clearAllFilters() {
-            this.store.search = '';
-            this.store.setCategory('');
+        async clearAllFilters() {
+            await this.store.clearFilters();
         },
 
         scrollToList() {

@@ -12,7 +12,11 @@
 
         <div class="relative">
             <svg class="absolute left-3.5 top-3 w-4 h-4 text-base-content/40" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-            <input type="text" x-model="$store.transactions.search" placeholder="Search payee, note, account..." class="input-box pl-10 w-full" />
+            <input type="text"
+                   x-model="$store.transactions.search"
+                   @input="$store.transactions.queueFilterUpdate()"
+                   placeholder="Search payee, note, account..."
+                   class="input-box pl-10 w-full" />
         </div>
 
         <div class="flex flex-wrap gap-2">
@@ -27,14 +31,20 @@
 </div>
 
 <div class="card-elevated overflow-hidden min-h-[400px]" data-transactions-list>
-    <template x-if="$store.transactions.filtered.length === 0">
+    <template x-if="$store.transactions.loadingList">
+        <div class="flex flex-col items-center justify-center h-64 text-base-content/40">
+            <div class="loading loading-dots loading-sm mb-2"></div>
+            <p>Loading transactions</p>
+        </div>
+    </template>
+    <template x-if="!$store.transactions.loadingList && $store.transactions.list.length === 0">
         <div class="flex flex-col items-center justify-center h-64 text-base-content/40">
             <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="mb-2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
             <p>No transactions found</p>
         </div>
     </template>
 
-    <div x-show="$store.transactions.filtered.length > 0">
+    <div x-show="!$store.transactions.loadingList && $store.transactions.list.length > 0">
         <template x-for="(group, dateKey) in $store.transactions.grouped" :key="dateKey">
             <div>
                 <!-- Date Header -->
@@ -93,5 +103,14 @@
                 </template>
             </div>
         </template>
+        <div class="flex items-center justify-center p-4 border-t border-base-200/50"
+             x-show="$store.transactions.hasMore">
+            <button class="btn btn-ghost btn-sm"
+                    @click="$store.transactions.loadMore()"
+                    :disabled="$store.transactions.loadingMore">
+                <span x-show="!$store.transactions.loadingMore">Load more</span>
+                <span x-show="$store.transactions.loadingMore">Loading...</span>
+            </button>
+        </div>
     </div>
 </div>

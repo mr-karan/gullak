@@ -1,5 +1,6 @@
 """Ledger API endpoints."""
 
+import calendar
 from collections import defaultdict
 from datetime import date, timedelta
 from decimal import Decimal, InvalidOperation
@@ -45,6 +46,10 @@ def _parse_date(value: str) -> date:
     return date.fromisoformat(value.replace("/", "-"))
 
 
+def _normalize_text(value: str) -> str:
+    return value.strip().lower()
+
+
 def _get_category(account: str) -> str:
     parts = account.split(":")
     return parts[1] if len(parts) > 1 else "Other"
@@ -57,6 +62,17 @@ def _get_subcategory(account: str) -> str:
 
 def _is_uncategorized(account: str) -> bool:
     return account.startswith(UNKNOWN_EXPENSE_PREFIXES)
+
+
+def _matches_search(query: str, payee: str, note: str | None, accounts: list[str]) -> bool:
+    if not query:
+        return True
+    q = query.lower()
+    if q in payee.lower():
+        return True
+    if note and q in note.lower():
+        return True
+    return any(q in account.lower() for account in accounts)
 
 
 def _build_daily_series(
@@ -244,26 +260,46 @@ async def get_balance(
 @router.get("/transactions")
 async def list_transactions(
     request: Request,
-    limit: int = Query(50, description="Maximum number of transactions"),
+    limit: int = Query(
+        50,
+        ge=1,
+        le=200,
+        description="Maximum number of transactions",
+    ),
+    offset: int = Query(0, ge=0, description="Pagination offset"),
     account: str = Query("", description="Filter by account"),
     period: str = Query("all", description="Period filter: week, month, year, all"),
+    category: str = Query("", description="Top-level expense category filter"),
+    subcategory: str = Query("", description="Subcategory expense filter"),
+    payee: str = Query("", description="Payee filter"),
+    search: str = Query("", description="Search across payee, note, accounts"),
 ) -> dict[str, Any]:
     """
     List recent transactions from the ledger.
 
     Args:
         limit: Maximum number of transactions to return
+        offset: Pagination offset
         account: Filter by account pattern
         period: Time period filter (week, month, year, all)
+        category: Expense category filter
+        subcategory: Expense subcategory filter
+        payee: Payee filter
+        search: Search across payee, note, accounts
     """
-    from datetime import date, timedelta
 
     settings = request.app.state.settings
     parser: LedgerParser = request.app.state.parser
 
     transactions = parser.parse_file(settings.ledger_path)
+    account_filter = account.strip()
+    category_filter = category.strip()
+    subcategory_filter = subcategory.strip()
+    payee_filter = _normalize_text(payee)
+    search_filter = _normalize_text(search)
 
     # Filter by period
+    start_date = date.min
     if period != "all":
         today = date.today()
         if period == "week":
@@ -272,34 +308,93 @@ async def list_transactions(
             start_date = today.replace(day=1)
         elif period == "year":
             start_date = today.replace(month=1, day=1)
-        else:
-            start_date = date.min
-        transactions = [t for t in transactions if t.date >= start_date]
 
-    # Filter by account
-    if account:
-        transactions = [
-            t for t in transactions if any(p.account.startswith(account) for p in t.postings)
+    filtered: list[dict[str, Any]] = []
+    for txn in transactions:
+        if txn.date < start_date:
+            continue
+        if payee_filter and payee_filter not in txn.payee.lower():
+            continue
+
+        accounts = [p.account for p in txn.postings]
+        if account_filter and not any(a.startswith(account_filter) for a in accounts):
+            continue
+        if search_filter and not _matches_search(
+            search_filter, txn.payee, txn.note, accounts
+        ):
+            continue
+
+        expense_postings = [
+            p for p in txn.postings if p.account.startswith("Expenses:") and p.amount > 0
         ]
+        matching_accounts: list[str] = []
+        matching_amount = 0.0
+        for posting in expense_postings:
+            if category_filter and _get_category(posting.account) != category_filter:
+                continue
+            if subcategory_filter and _get_subcategory(posting.account) != subcategory_filter:
+                continue
+            matching_amount += float(posting.amount)
+            matching_accounts.append(posting.account)
 
-    # Get most recent
-    recent = transactions[-limit:]
+        if (category_filter or subcategory_filter) and not matching_accounts:
+            continue
+
+        amount = (
+            matching_amount
+            if (category_filter or subcategory_filter)
+            else sum(float(p.amount) for p in expense_postings)
+        )
+        if amount == 0:
+            amount = float(txn.total_amount)
+
+        display_accounts = accounts
+        if matching_accounts:
+            display_accounts = matching_accounts + [
+                a for a in accounts if a not in matching_accounts
+            ]
+
+        filtered.append(
+            {
+                "id": txn.gullak_id,
+                "date": txn.date,
+                "payee": txn.payee,
+                "amount": amount,
+                "currency": (
+                    txn.postings[0].currency
+                    if txn.postings
+                    else settings.default_currency
+                ),
+                "accounts": display_accounts,
+                "note": txn.note,
+            }
+        )
+
+    filtered.sort(key=lambda item: item["date"], reverse=True)
+    total = len(filtered)
+    page = filtered[offset : offset + limit]
+    has_more = offset + len(page) < total
+    next_offset = offset + len(page) if has_more else None
 
     return {
         "transactions": [
             {
-                "id": t.gullak_id,
-                "date": str(t.date),
-                "payee": t.payee,
-                "amount": float(t.total_amount),
-                "currency": t.postings[0].currency if t.postings else "INR",
-                "accounts": [p.account for p in t.postings],
-                "note": t.note,
+                "id": t["id"],
+                "date": str(t["date"]),
+                "payee": t["payee"],
+                "amount": t["amount"],
+                "currency": t["currency"],
+                "accounts": t["accounts"],
+                "note": t["note"],
             }
-            for t in reversed(recent)  # Most recent first
+            for t in page
         ],
-        "count": len(recent),
-        "total": len(transactions),
+        "count": len(page),
+        "total": total,
+        "offset": offset,
+        "limit": limit,
+        "has_more": has_more,
+        "next_offset": next_offset,
         "period": period,
     }
 
@@ -359,6 +454,9 @@ async def get_transaction_stats(
     request: Request,
     period: str = Query("month", description="Period: week, month, year, all"),
     category: str = Query("", description="Top-level expense category filter"),
+    subcategory: str = Query("", description="Subcategory expense filter"),
+    payee: str = Query("", description="Payee filter"),
+    search: str = Query("", description="Search across payee, note, accounts"),
 ) -> dict[str, Any]:
     """Get transaction statistics for dashboard."""
     settings = request.app.state.settings
@@ -373,13 +471,22 @@ async def get_transaction_stats(
             "daily_spending": [],
             "top_payees": [],
             "largest_transactions": [],
+            "repeat_payees": [],
+            "one_offs": [],
             "budgets": [],
             "needs_review": [],
+            "category_deltas": [],
             "comparison": {
                 "available": False,
                 "previous_total_spent": 0,
                 "delta_amount": 0,
                 "delta_percent": None,
+            },
+            "projection": {
+                "available": False,
+                "projected_total_spent": 0,
+                "days_elapsed": 0,
+                "period_days": 0,
             },
             "period": period,
             "currency": settings.default_currency,
@@ -388,6 +495,10 @@ async def get_transaction_stats(
         }
 
     transactions = parser.parse_file(settings.ledger_path)
+    category_filter = category.strip()
+    subcategory_filter = subcategory.strip()
+    payee_filter = _normalize_text(payee)
+    search_filter = _normalize_text(search)
 
     today = date.today()
     if period == "week":
@@ -399,7 +510,19 @@ async def get_transaction_stats(
     else:
         start_date = date.min
 
-    filtered = [t for t in transactions if t.date >= start_date]
+    filtered = []
+    for txn in transactions:
+        if txn.date < start_date:
+            continue
+        accounts = [p.account for p in txn.postings]
+        if payee_filter and payee_filter not in txn.payee.lower():
+            continue
+        if search_filter and not _matches_search(
+            search_filter, txn.payee, txn.note, accounts
+        ):
+            continue
+        filtered.append(txn)
+
     period_start = start_date
     if period == "all":
         period_start = min((t.date for t in transactions), default=today)
@@ -411,9 +534,8 @@ async def get_transaction_stats(
     daily_totals: dict[str, float] = defaultdict(float)
     payee_totals: dict[str, float] = defaultdict(float)
     payee_counts: dict[str, int] = defaultdict(int)
-    largest_transactions: list[dict[str, Any]] = []
-    category_filter = category.strip()
-    transaction_count = len(filtered) if not category_filter else 0
+    transaction_entries: list[dict[str, Any]] = []
+    transaction_count = 0
 
     for txn in filtered:
         txn_total = 0.0
@@ -422,14 +544,17 @@ async def get_transaction_stats(
             if not (posting.account.startswith("Expenses:") and posting.amount > 0):
                 continue
             posting_category = _get_category(posting.account)
+            posting_subcategory = _get_subcategory(posting.account)
             if category_filter and posting_category != category_filter:
                 continue
             amount = float(posting.amount)
+            if category_filter:
+                subcategory_totals[posting_subcategory] += amount
+            if subcategory_filter and posting_subcategory != subcategory_filter:
+                continue
             total_spent += amount
             category_totals[posting_category] += amount
             daily_totals[str(txn.date)] += amount
-            if category_filter:
-                subcategory_totals[_get_subcategory(posting.account)] += amount
             payee_totals[txn.payee] += amount
             txn_total += amount
             if txn_account is None:
@@ -437,7 +562,8 @@ async def get_transaction_stats(
 
         if txn_total > 0:
             payee_counts[txn.payee] += 1
-            largest_transactions.append(
+            transaction_count += 1
+            transaction_entries.append(
                 {
                     "id": txn.gullak_id,
                     "payee": txn.payee,
@@ -447,8 +573,6 @@ async def get_transaction_stats(
                     "account": txn_account or "",
                 }
             )
-            if category_filter:
-                transaction_count += 1
 
     categories = sorted(
         [{"name": k, "amount": v} for k, v in category_totals.items()],
@@ -481,10 +605,31 @@ async def get_transaction_stats(
     )[:5]
 
     largest_transactions = sorted(
-        largest_transactions,
+        transaction_entries,
         key=lambda x: x["amount"],
         reverse=True,
     )[:5]
+
+    repeat_payees = [
+        {
+            "name": k,
+            "amount": v,
+            "count": payee_counts.get(k, 0),
+            "average": v / payee_counts[k] if payee_counts.get(k, 0) else 0,
+        }
+        for k, v in payee_totals.items()
+        if payee_counts.get(k, 0) >= 2
+    ]
+    repeat_payees.sort(key=lambda x: (x["count"], x["amount"]), reverse=True)
+    repeat_payees = repeat_payees[:5]
+
+    one_offs = [
+        entry
+        for entry in transaction_entries
+        if payee_counts.get(entry["payee"], 0) == 1
+    ]
+    one_offs.sort(key=lambda x: x["amount"], reverse=True)
+    one_offs = one_offs[:5]
 
     budgets: list[dict[str, Any]] = []
     if period == "month":
@@ -499,6 +644,7 @@ async def get_transaction_stats(
         ]
         budget_totals: dict[str, float] = defaultdict(float)
         budget_currency: dict[str, str] = {}
+        budget_periods: dict[str, tuple[date, date]] = {}
         for budget in active_budgets:
             for entry in budget["entries"]:
                 account = entry["account"]
@@ -506,8 +652,13 @@ async def get_transaction_stats(
                     continue
                 if category_filter and _get_category(account) != category_filter:
                     continue
+                if subcategory_filter and _get_subcategory(account) != subcategory_filter:
+                    continue
                 budget_totals[account] += entry["amount"]
                 budget_currency[account] = entry["currency"]
+                budget_periods.setdefault(
+                    account, (budget["start_date"], budget["end_date"])
+                )
 
         if budget_totals:
             actual_totals: dict[str, float] = defaultdict(float)
@@ -522,6 +673,10 @@ async def get_transaction_stats(
                         posting.account
                     ) != category_filter:
                         continue
+                    if subcategory_filter and _get_subcategory(
+                        posting.account
+                    ) != subcategory_filter:
+                        continue
                     for account in budget_accounts:
                         if posting.account.startswith(account):
                             actual_totals[account] += float(posting.amount)
@@ -529,6 +684,15 @@ async def get_transaction_stats(
             for account, amount in budget_totals.items():
                 actual = actual_totals.get(account, 0.0)
                 progress = actual / amount if amount > 0 else 0
+                projected = actual
+                period_range = budget_periods.get(account)
+                if period_range:
+                    period_start, period_end = period_range
+                    period_days = (period_end - period_start).days + 1
+                    days_elapsed = (today - period_start).days + 1
+                    if period_days > 0 and days_elapsed > 0:
+                        days_elapsed = min(days_elapsed, period_days)
+                        projected = (actual / days_elapsed) * period_days
                 status = "ok"
                 if actual > amount:
                     status = "over"
@@ -545,12 +709,14 @@ async def get_transaction_stats(
                         ),
                         "progress": progress,
                         "status": status,
+                        "projected": projected,
+                        "projected_over": projected > amount if amount > 0 else False,
                     }
                 )
             budgets.sort(key=lambda x: x["progress"], reverse=True)
 
     needs_review: list[dict[str, Any]] = []
-    if not category_filter:
+    if not (category_filter or subcategory_filter or payee_filter or search_filter):
         memory = PayeeMemory(settings.ledger_path)
         review_map: dict[str, dict[str, Any]] = {}
         for txn in filtered:
@@ -606,6 +772,78 @@ async def get_transaction_stats(
             needs_review, key=lambda x: x["amount"], reverse=True
         )[:5]
 
+    category_deltas: list[dict[str, Any]] = []
+    if period in {"week", "month", "year"} and not (
+        category_filter or subcategory_filter
+    ):
+        period_days = (period_end - period_start).days + 1
+        previous_end = period_start - timedelta(days=1)
+        previous_start = previous_end - timedelta(days=period_days - 1)
+
+        def category_totals_for_range(start: date, end: date) -> dict[str, float]:
+            totals: dict[str, float] = defaultdict(float)
+            for txn in transactions:
+                if txn.date < start or txn.date > end:
+                    continue
+                accounts = [p.account for p in txn.postings]
+                if payee_filter and payee_filter not in txn.payee.lower():
+                    continue
+                if search_filter and not _matches_search(
+                    search_filter, txn.payee, txn.note, accounts
+                ):
+                    continue
+                for posting in txn.postings:
+                    if not (
+                        posting.account.startswith("Expenses:") and posting.amount > 0
+                    ):
+                        continue
+                    totals[_get_category(posting.account)] += float(posting.amount)
+            return totals
+
+        previous_totals = category_totals_for_range(previous_start, previous_end)
+        for name in set(category_totals) | set(previous_totals):
+            current = category_totals.get(name, 0.0)
+            previous = previous_totals.get(name, 0.0)
+            if current == 0 and previous == 0:
+                continue
+            delta_amount = current - previous
+            delta_percent = (delta_amount / previous) * 100 if previous else None
+            category_deltas.append(
+                {
+                    "name": name,
+                    "amount": current,
+                    "previous_amount": previous,
+                    "delta_amount": delta_amount,
+                    "delta_percent": delta_percent,
+                }
+            )
+
+        category_deltas.sort(key=lambda x: x["delta_amount"], reverse=True)
+        category_deltas = category_deltas[:5]
+
+    projection = {
+        "available": False,
+        "projected_total_spent": 0,
+        "days_elapsed": 0,
+        "period_days": 0,
+    }
+    if period in {"week", "month", "year"}:
+        if period == "week":
+            period_days = 7
+        elif period == "month":
+            period_days = calendar.monthrange(today.year, today.month)[1]
+        else:
+            period_days = 366 if calendar.isleap(today.year) else 365
+        days_elapsed = (today - period_start).days + 1
+        if days_elapsed > 0:
+            projected_total = (total_spent / days_elapsed) * period_days
+            projection = {
+                "available": True,
+                "projected_total_spent": projected_total,
+                "days_elapsed": days_elapsed,
+                "period_days": period_days,
+            }
+
     comparison = {
         "available": False,
         "previous_total_spent": 0,
@@ -623,6 +861,13 @@ async def get_transaction_stats(
             for txn in transactions:
                 if txn.date < start or txn.date > end:
                     continue
+                accounts = [p.account for p in txn.postings]
+                if payee_filter and payee_filter not in txn.payee.lower():
+                    continue
+                if search_filter and not _matches_search(
+                    search_filter, txn.payee, txn.note, accounts
+                ):
+                    continue
                 for posting in txn.postings:
                     if not (
                         posting.account.startswith("Expenses:") and posting.amount > 0
@@ -631,6 +876,10 @@ async def get_transaction_stats(
                     if category_filter and _get_category(
                         posting.account
                     ) != category_filter:
+                        continue
+                    if subcategory_filter and _get_subcategory(
+                        posting.account
+                    ) != subcategory_filter:
                         continue
                     total += float(posting.amount)
             return total
@@ -656,9 +905,13 @@ async def get_transaction_stats(
         "daily_spending": daily_spending,
         "top_payees": top_payees,
         "largest_transactions": largest_transactions,
+        "repeat_payees": repeat_payees,
+        "one_offs": one_offs,
         "budgets": budgets,
         "needs_review": needs_review,
+        "category_deltas": category_deltas,
         "comparison": comparison,
+        "projection": projection,
         "period": period,
         "currency": settings.default_currency,
         "period_start": str(period_start),
