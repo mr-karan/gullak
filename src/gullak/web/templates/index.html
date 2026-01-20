@@ -704,6 +704,190 @@
                     </div>
                 </div>
 
+                <!-- Insights -->
+                <div class="px-4 md:px-8 pb-4">
+                    <div class="grid gap-3 md:gap-5 md:grid-cols-2 xl:grid-cols-3">
+                        <!-- Spend Trend -->
+                        <div class="card-elevated p-4 md:p-5">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <div class="text-[10px] font-semibold uppercase tracking-wider text-base-content/50">Spend Trend</div>
+                                    <div class="text-sm font-medium text-base-content/80"
+                                         x-text="$store.transactions.period.charAt(0).toUpperCase() + $store.transactions.period.slice(1)"></div>
+                                </div>
+                                <div class="text-xs font-mono"
+                                     :class="$store.transactions.deltaClass($store.transactions.activeStats.comparison)"
+                                     x-text="$store.transactions.deltaLabel($store.transactions.activeStats.comparison)"></div>
+                            </div>
+                            <div class="mt-3">
+                                <svg viewBox="0 0 120 40" class="w-full h-12">
+                                    <polyline fill="none"
+                                              stroke="currentColor"
+                                              stroke-width="2"
+                                              class="text-primary"
+                                              :points="$store.transactions.sparklinePoints($store.transactions.activeStats.daily_spending, 120, 40)"></polyline>
+                                </svg>
+                            </div>
+                            <div class="mt-2 flex items-center justify-between text-[10px] text-base-content/40 font-mono">
+                                <span x-text="$store.transactions.activeStats.period_start"></span>
+                                <span x-text="$store.transactions.activeStats.period_end"></span>
+                            </div>
+                        </div>
+
+                        <!-- Top Payees -->
+                        <div class="card-elevated p-4 md:p-5">
+                            <div class="flex items-center justify-between mb-3">
+                                <div class="text-[10px] font-semibold uppercase tracking-wider text-base-content/50">Top Payees</div>
+                                <div class="text-[10px] text-base-content/40">Tap to filter</div>
+                            </div>
+                            <div class="space-y-2">
+                                <template x-for="payee in ($store.transactions.activeStats.top_payees || [])" :key="payee.name">
+                                    <button class="w-full flex items-center justify-between px-2 py-1.5 rounded-lg hover:bg-base-200/60 transition-colors"
+                                            @click="$store.transactions.applyPayeeFilter(payee.name)">
+                                        <div class="flex flex-col text-left min-w-0">
+                                            <span class="text-sm font-medium truncate" x-text="payee.name"></span>
+                                            <span class="text-[10px] text-base-content/40" x-text="`${payee.count} txns`"></span>
+                                        </div>
+                                        <span class="text-xs font-mono text-base-content/50"
+                                              x-text="formatCurrency(payee.amount, $store.transactions.activeStats.currency)"></span>
+                                    </button>
+                                </template>
+                                <div x-show="!$store.transactions.activeStats.top_payees?.length" class="text-sm text-base-content/40">No data available</div>
+                            </div>
+                        </div>
+
+                        <!-- Largest Transactions -->
+                        <div class="card-elevated p-4 md:p-5">
+                            <div class="flex items-center justify-between mb-3">
+                                <div class="text-[10px] font-semibold uppercase tracking-wider text-base-content/50">Largest Transactions</div>
+                                <div class="text-[10px] text-base-content/40">Tap to filter</div>
+                            </div>
+                            <div class="space-y-2">
+                                <template x-for="txn in ($store.transactions.activeStats.largest_transactions || [])" :key="txn.id">
+                                    <button class="w-full flex items-center justify-between px-2 py-1.5 rounded-lg hover:bg-base-200/60 transition-colors"
+                                            @click="$store.transactions.applyPayeeFilter(txn.payee)">
+                                        <div class="flex flex-col text-left min-w-0">
+                                            <span class="text-sm font-medium truncate" x-text="txn.payee"></span>
+                                            <span class="text-[10px] text-base-content/40" x-text="txn.date"></span>
+                                        </div>
+                                        <span class="text-xs font-mono text-base-content/50"
+                                              x-text="formatCurrency(txn.amount, txn.currency)"></span>
+                                    </button>
+                                </template>
+                                <div x-show="!$store.transactions.activeStats.largest_transactions?.length" class="text-sm text-base-content/40">No data available</div>
+                            </div>
+                        </div>
+
+                        <!-- Subcategories -->
+                        <div class="card-elevated p-4 md:p-5"
+                             x-show="$store.transactions.categoryFilter"
+                             x-cloak>
+                            <div class="flex items-center justify-between mb-3">
+                                <div class="text-[10px] font-semibold uppercase tracking-wider text-base-content/50">Subcategories</div>
+                                <button class="text-[10px] text-base-content/40 hover:text-base-content"
+                                        x-show="$store.transactions.subCategoryFilter"
+                                        @click="$store.transactions.setSubCategory('')">Clear</button>
+                            </div>
+                            <div class="space-y-2">
+                                <template x-for="sub in ($store.transactions.activeStats.subcategories || [])" :key="sub.name">
+                                    <button class="w-full px-2 py-1.5 rounded-lg border border-transparent transition-colors"
+                                            :class="$store.transactions.subCategoryFilter === sub.name ? 'bg-primary/10 text-primary' : 'hover:bg-base-200/60 text-base-content'"
+                                            @click="$store.transactions.setSubCategory(sub.name)">
+                                        <div class="flex items-center justify-between">
+                                            <span class="text-sm font-medium truncate" x-text="sub.name"></span>
+                                            <span class="text-xs font-mono text-base-content/50"
+                                                  x-text="formatCurrency(sub.amount, $store.transactions.activeStats.currency)"></span>
+                                        </div>
+                                        <div class="mt-1 h-1.5 bg-base-200/70 rounded-full overflow-hidden">
+                                            <div class="h-full bg-primary"
+                                                 :style="`width:${Math.min(100, (sub.amount / ($store.transactions.activeStats.total_spent || 1)) * 100)}%`"></div>
+                                        </div>
+                                    </button>
+                                </template>
+                                <div x-show="!$store.transactions.activeStats.subcategories?.length" class="text-sm text-base-content/40">No subcategories yet</div>
+                            </div>
+                        </div>
+
+                        <!-- Budgets -->
+                        <div class="card-elevated p-4 md:p-5"
+                             x-show="($store.transactions.activeStats.budgets || []).length > 0"
+                             x-cloak>
+                            <div class="flex items-center justify-between mb-3">
+                                <div class="text-[10px] font-semibold uppercase tracking-wider text-base-content/50">Budgets</div>
+                                <div class="text-[10px] text-base-content/40">This month</div>
+                            </div>
+                            <div class="space-y-3">
+                                <template x-for="budget in ($store.transactions.activeStats.budgets || [])" :key="budget.account">
+                                    <div class="space-y-1">
+                                        <div class="flex items-center justify-between">
+                                            <span class="text-sm font-medium truncate" x-text="budget.account.replace('Expenses:', '')"></span>
+                                            <span class="text-xs font-mono text-base-content/50"
+                                                  x-text="formatCurrency(budget.actual, budget.currency) + ' / ' + formatCurrency(budget.amount, budget.currency)"></span>
+                                        </div>
+                                        <div class="h-1.5 bg-base-200/70 rounded-full overflow-hidden">
+                                            <div class="h-full rounded-full"
+                                                 :class="budget.status === 'over' ? 'bg-error' : (budget.status === 'near' ? 'bg-warning' : 'bg-primary')"
+                                                 :style="`width:${Math.min(100, budget.progress * 100)}%`"></div>
+                                        </div>
+                                        <div class="flex items-center justify-between text-[10px] text-base-content/40">
+                                            <span x-text="budget.status === 'over' ? 'Over budget' : (budget.status === 'near' ? 'At risk' : 'On track')"></span>
+                                            <span x-text="formatCurrency(budget.remaining, budget.currency) + ' left'"></span>
+                                        </div>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+
+                        <!-- Needs Review -->
+                        <div class="card-elevated p-4 md:p-5">
+                            <div class="flex items-center justify-between mb-3">
+                                <div class="text-[10px] font-semibold uppercase tracking-wider text-base-content/50">Needs Review</div>
+                                <div class="text-[10px] font-semibold text-warning bg-warning/10 px-2 py-0.5 rounded-full"
+                                     x-show="$store.transactions.stats.needs_review?.length"
+                                     x-text="$store.transactions.stats.needs_review?.length"></div>
+                            </div>
+                            <div class="space-y-3" x-show="$store.transactions.stats.needs_review?.length">
+                                <template x-for="review in ($store.transactions.stats.needs_review || [])" :key="review.payee">
+                                    <div class="border border-base-200/60 rounded-lg p-3 space-y-2">
+                                        <div class="flex items-center justify-between">
+                                            <div class="min-w-0">
+                                                <div class="text-sm font-medium truncate" x-text="review.payee"></div>
+                                                <div class="text-[10px] text-base-content/40"
+                                                     x-text="`${review.count} txns`"></div>
+                                            </div>
+                                            <div class="text-xs font-mono text-base-content/50"
+                                                 x-text="formatCurrency(review.amount, $store.transactions.stats.currency)"></div>
+                                        </div>
+                                        <div class="flex flex-wrap gap-2">
+                                            <template x-for="reason in (review.reasons || [])" :key="reason">
+                                                <span class="text-[10px] px-2 py-0.5 rounded-full bg-base-200/70 text-base-content/60"
+                                                      x-text="reason.replace('_', ' ')"></span>
+                                            </template>
+                                            <button class="text-[10px] text-primary hover:text-primary/80"
+                                                    x-show="review.suggested_account"
+                                                    @click="$store.transactions.mappingInputs[review.payee] = review.suggested_account">
+                                                Use suggested
+                                            </button>
+                                        </div>
+                                        <div class="flex items-center gap-2">
+                                            <input type="text"
+                                                   x-model="$store.transactions.mappingInputs[review.payee]"
+                                                   class="input-box flex-1 h-8 text-xs"
+                                                   placeholder="Expenses:Food:Delivery" />
+                                            <button class="px-3 py-1.5 rounded-lg text-[10px] font-semibold bg-primary text-white hover:bg-primary/90 transition-colors"
+                                                    :disabled="$store.transactions.mappingSaving[review.payee]"
+                                                    @click="$store.transactions.learnPayeeMapping(review.payee)">
+                                                Remember
+                                            </button>
+                                        </div>
+                                    </div>
+                                </template>
+                            </div>
+                            <div x-show="!$store.transactions.stats.needs_review?.length" class="text-sm text-base-content/40">All clear</div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Filters -->
                 <div class="px-4 md:px-8 pb-3 md:pb-4 flex flex-col md:flex-row md:items-center gap-3 md:gap-4">
                     <div class="relative flex-1 md:max-w-sm">

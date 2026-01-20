@@ -1044,6 +1044,9 @@ document.addEventListener('alpine:init', () => {
         filteredStats: null,
         search: '',
         categoryFilter: '',
+        subCategoryFilter: '',
+        mappingInputs: {},
+        mappingSaving: {},
         period: 'month',
         editing: null,
         showEditModal: false,
@@ -1068,6 +1071,17 @@ document.addEventListener('alpine:init', () => {
                     t.accounts.some(a => {
                         const parts = a.split(':');
                         return parts[0] === 'Expenses' && parts[1] === this.categoryFilter;
+                    })
+                );
+            }
+
+            if (this.categoryFilter && this.subCategoryFilter) {
+                result = result.filter(t =>
+                    t.accounts.some(a => {
+                        const parts = a.split(':');
+                        return parts[0] === 'Expenses' &&
+                            parts[1] === this.categoryFilter &&
+                            parts[2] === this.subCategoryFilter;
                     })
                 );
             }
@@ -1110,6 +1124,7 @@ document.addEventListener('alpine:init', () => {
             try {
                 const response = await fetch(`/api/ledger/stats?period=${this.period}`);
                 this.stats = await response.json();
+                this.prepareReviewMappings(this.stats.needs_review);
             } catch (error) {
                 console.error('Failed to load stats:', error);
             }
@@ -1140,7 +1155,90 @@ document.addEventListener('alpine:init', () => {
 
         async setCategory(category) {
             this.categoryFilter = category;
+            this.subCategoryFilter = '';
             await this.refreshFilteredStats();
+        },
+
+        setSubCategory(subCategory) {
+            this.subCategoryFilter = subCategory;
+        },
+
+        applyPayeeFilter(payee) {
+            this.search = payee;
+        },
+
+        prepareReviewMappings(items) {
+            if (!Array.isArray(items)) return;
+            for (const item of items) {
+                if (!this.mappingInputs[item.payee] && item.suggested_account) {
+                    this.mappingInputs[item.payee] = item.suggested_account;
+                }
+            }
+        },
+
+        sparklinePoints(series, width = 120, height = 40) {
+            if (!Array.isArray(series) || series.length === 0) {
+                const mid = (height / 2).toFixed(1);
+                return `0,${mid} ${width},${mid}`;
+            }
+
+            const values = series.map(item => Number(item.amount) || 0);
+            const max = Math.max(...values);
+            const min = Math.min(...values);
+            const range = max - min || 1;
+            const step = values.length > 1 ? width / (values.length - 1) : width;
+
+            return values.map((value, index) => {
+                const x = (step * index).toFixed(1);
+                const y = (height - ((value - min) / range) * height).toFixed(1);
+                return `${x},${y}`;
+            }).join(' ');
+        },
+
+        deltaLabel(comparison) {
+            if (!comparison || !comparison.available) return '—';
+            if (comparison.delta_percent === null || comparison.delta_percent === undefined) {
+                return '—';
+            }
+            const sign = comparison.delta_percent > 0 ? '+' : '';
+            return `${sign}${comparison.delta_percent.toFixed(1)}% vs prev`;
+        },
+
+        deltaClass(comparison) {
+            if (!comparison || !comparison.available) return 'text-base-content/40';
+            return (comparison.delta_amount || 0) >= 0 ? 'text-success' : 'text-error';
+        },
+
+        async learnPayeeMapping(payee) {
+            const account = (this.mappingInputs[payee] || '').trim();
+            if (!account) {
+                Alpine.store('notify').error('Account is required');
+                return;
+            }
+
+            if (this.mappingSaving[payee]) return;
+            this.mappingSaving[payee] = true;
+
+            try {
+                const response = await fetch('/api/ledger/payee-mapping', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ payee, account })
+                });
+                const result = await response.json();
+                if (result.success) {
+                    Alpine.store('notify').success('Payee mapping saved');
+                    await this.loadStats();
+                    await this.refreshFilteredStats();
+                } else {
+                    Alpine.store('notify').error(result.error || 'Failed to save mapping');
+                }
+            } catch (error) {
+                console.error('Failed to save payee mapping:', error);
+                Alpine.store('notify').error('Failed to save mapping');
+            } finally {
+                this.mappingSaving[payee] = false;
+            }
         },
 
         openEdit(txn) {
