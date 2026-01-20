@@ -1,0 +1,97 @@
+<div class="card-elevated p-4 md:p-5">
+    <div class="flex flex-col gap-3">
+        <div class="flex items-center justify-between">
+            <div>
+                <div class="text-[10px] font-semibold uppercase tracking-wider text-base-content/50">Entries</div>
+                <div class="text-sm text-base-content/60" x-text="listSummary"></div>
+            </div>
+            <button class="text-[10px] text-base-content/40 hover:text-base-content"
+                    x-show="hasFilters"
+                    @click="clearAllFilters()">Clear filters</button>
+        </div>
+
+        <div class="relative">
+            <svg class="absolute left-3.5 top-3 w-4 h-4 text-base-content/40" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <input type="text" x-model="$store.transactions.search" placeholder="Search payee, note, account..." class="input-box pl-10 w-full" />
+        </div>
+
+        <div class="flex flex-wrap gap-2">
+            <template x-for="chip in activeChips" :key="chip.key">
+                <button class="filter-pill active"
+                        @click="clearFilter(chip.type)"
+                        x-text="chip.label"></button>
+            </template>
+            <div x-show="!activeChips.length" class="text-[10px] text-base-content/40">No filters applied</div>
+        </div>
+    </div>
+</div>
+
+<div class="card-elevated overflow-hidden min-h-[400px]" data-transactions-list>
+    <template x-if="$store.transactions.filtered.length === 0">
+        <div class="flex flex-col items-center justify-center h-64 text-base-content/40">
+            <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="mb-2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            <p>No transactions found</p>
+        </div>
+    </template>
+
+    <div x-show="$store.transactions.filtered.length > 0">
+        <template x-for="(group, dateKey) in $store.transactions.grouped" :key="dateKey">
+            <div>
+                <!-- Date Header -->
+                <div class="glass-panel px-5 py-2.5 border-b border-base-200/50 flex items-center justify-between sticky top-0 z-10">
+                    <span class="text-xs font-semibold text-base-content/50 uppercase tracking-wider" x-text="formatDateRelative(dateKey) + ' · ' + new Date(dateKey).toLocaleDateString()"></span>
+                    <span class="text-xs font-mono text-base-content/40" x-text="formatCurrency(group.reduce((sum, t) => sum + Math.abs(t.amount), 0), $store.transactions.activeStats.currency || 'INR')"></span>
+                </div>
+                <!-- Rows -->
+                <template x-for="txn in group" :key="txn.id">
+                    <div class="txn-swipe-container">
+                        <!-- Swipe action buttons (revealed on swipe) -->
+                        <div class="txn-swipe-actions">
+                            <button @click="$store.transactions.openEdit(txn); $store.transactions.swipedId = null"
+                                    class="txn-action-btn edit">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                            </button>
+                            <button @click="$store.transactions.delete(txn.id)"
+                                    :disabled="$store.transactions.deleting"
+                                    class="txn-action-btn delete">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                            </button>
+                        </div>
+                        <!-- Swipeable content -->
+                        <div class="txn-item group"
+                             x-ref="txnRow"
+                             @touchstart="$store.transactions.handleTouchStart($event, txn.id)"
+                             @touchmove="$store.transactions.handleTouchMove($event, txn.id, $el)"
+                             @touchend="$store.transactions.handleTouchEnd($event, txn.id, $el)"
+                             @click="if($store.transactions.swipedId === txn.id) { $store.transactions.closeSwipe($el) }">
+                            <div class="flex items-center gap-4 flex-1 min-w-0">
+                                <div class="w-10 h-10 rounded-xl flex items-center justify-center text-base flex-shrink-0" :class="getCategoryColor(txn.accounts[0])" x-text="getCategoryEmoji(txn.accounts[0])"></div>
+                                <div class="flex flex-col min-w-0">
+                                    <span class="text-sm font-medium text-base-content truncate" x-text="txn.payee"></span>
+                                    <span class="text-xs text-base-content/50 truncate" x-text="txn.note || txn.accounts[0]"></span>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-3 flex-shrink-0">
+                                <div class="font-mono text-sm font-semibold" :class="txn.amount > 0 ? 'text-base-content' : 'text-success'" x-text="formatCurrency(Math.abs(txn.amount), txn.currency)"></div>
+                                <!-- Desktop hover actions -->
+                                <div class="hidden md:flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <button @click.stop="$store.transactions.openEdit(txn)" 
+                                            class="w-7 h-7 rounded-md bg-base-200 text-base-content/50 hover:text-primary hover:bg-primary/10 flex items-center justify-center transition-colors"
+                                            title="Edit">
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                                    </button>
+                                    <button @click.stop="$store.transactions.delete(txn.id)" 
+                                            class="w-7 h-7 rounded-md bg-base-200 text-base-content/50 hover:text-error hover:bg-error/10 flex items-center justify-center transition-colors"
+                                            :disabled="$store.transactions.deleting"
+                                            title="Delete">
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </template>
+            </div>
+        </template>
+    </div>
+</div>

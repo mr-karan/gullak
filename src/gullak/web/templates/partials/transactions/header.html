@@ -1,0 +1,19 @@
+<div class="min-h-14 md:h-16 border-b border-base-200/60 bg-base-100 flex flex-col md:flex-row md:items-center justify-between px-4 md:px-8 py-3 md:py-0 gap-3 md:gap-0 flex-shrink-0">
+    <h2 class="text-lg md:text-xl font-display">Transactions</h2>
+    <div class="flex items-center gap-2 md:gap-3">
+        <div class="flex bg-base-200/80 p-1 rounded-xl flex-1 md:flex-none">
+            <button class="flex-1 md:flex-none px-3 md:px-4 py-1.5 rounded-lg text-xs font-medium transition-all duration-150"
+                    :class="$store.transactions.period === 'week' ? 'bg-base-100 text-primary shadow-sm' : 'text-base-content/60 hover:text-base-content'"
+                    @click="$store.transactions.setPeriod('week')">Week</button>
+            <button class="flex-1 md:flex-none px-3 md:px-4 py-1.5 rounded-lg text-xs font-medium transition-all duration-150"
+                    :class="$store.transactions.period === 'month' ? 'bg-base-100 text-primary shadow-sm' : 'text-base-content/60 hover:text-base-content'"
+                    @click="$store.transactions.setPeriod('month')">Month</button>
+            <button class="flex-1 md:flex-none px-3 md:px-4 py-1.5 rounded-lg text-xs font-medium transition-all duration-150"
+                    :class="$store.transactions.period === 'year' ? 'bg-base-100 text-primary shadow-sm' : 'text-base-content/60 hover:text-base-content'"
+                    @click="$store.transactions.setPeriod('year')">Year</button>
+        </div>
+        <button @click="$store.transactions.load(); $store.pending.load()" class="p-2 rounded-lg text-base-content/50 hover:text-base-content hover:bg-base-200/80 transition-colors flex-shrink-0">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 5.5A10 10 0 1 1 11.26 2.8"/></svg>
+        </button>
+    </div>
+</div>

@@ -1165,6 +1165,10 @@ document.addEventListener('alpine:init', () => {
 
         applyPayeeFilter(payee) {
             this.search = payee;
+            const list = document.querySelector('[data-transactions-list]');
+            if (list) {
+                list.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
         },
 
         prepareReviewMappings(items) {
@@ -1403,6 +1407,176 @@ document.addEventListener('alpine:init', () => {
     });
 
 });
+
+
+// =============================================================================
+// TRANSACTIONS DASHBOARD COMPONENT - Drilldown explorer + list helpers
+// =============================================================================
+function transactionsDashboard() {
+    return {
+        get store() {
+            return Alpine.store('transactions');
+        },
+
+        get stats() {
+            return this.store.activeStats || {};
+        },
+
+        get totalSpent() {
+            return this.stats.total_spent || 0;
+        },
+
+        get flowCategories() {
+            return this.buildFlow(this.stats.categories || [], this.totalSpent);
+        },
+
+        get categoryTotal() {
+            if (!this.store.categoryFilter) return this.totalSpent || 0;
+            const match = (this.stats.categories || []).find(
+                (cat) => cat.name === this.store.categoryFilter
+            );
+            return match ? match.amount : this.totalSpent;
+        },
+
+        get flowSubcategories() {
+            if (!this.store.categoryFilter) return [];
+            return this.buildFlow(this.stats.subcategories || [], this.categoryTotal);
+        },
+
+        get flowPayees() {
+            if (this.store.subCategoryFilter) {
+                return this.buildPayees(this.store.filtered);
+            }
+            return this.stats.top_payees || [];
+        },
+
+        get budgetAlerts() {
+            return (this.stats.budgets || []).filter((budget) => budget.status !== 'ok');
+        },
+
+        get breadcrumb() {
+            const parts = ['All'];
+            if (this.store.categoryFilter) parts.push(this.store.categoryFilter);
+            if (this.store.subCategoryFilter) parts.push(this.store.subCategoryFilter);
+            if (this.store.search) parts.push(`Search: ${this.store.search}`);
+            return parts.join(' > ');
+        },
+
+        get activeChips() {
+            const chips = [];
+            if (this.store.categoryFilter) {
+                chips.push({
+                    type: 'category',
+                    label: this.store.categoryFilter,
+                    key: `cat-${this.store.categoryFilter}`
+                });
+            }
+            if (this.store.subCategoryFilter) {
+                chips.push({
+                    type: 'subcategory',
+                    label: this.store.subCategoryFilter,
+                    key: `sub-${this.store.subCategoryFilter}`
+                });
+            }
+            if (this.store.search) {
+                chips.push({
+                    type: 'search',
+                    label: `Search: ${this.store.search}`,
+                    key: `search-${this.store.search}`
+                });
+            }
+            return chips;
+        },
+
+        get hasFilters() {
+            return Boolean(
+                this.store.categoryFilter || this.store.subCategoryFilter || this.store.search
+            );
+        },
+
+        get listSummary() {
+            const filtered = this.store.filtered?.length || 0;
+            const total = this.store.list?.length || 0;
+            if (!total) return '0 transactions';
+            if (filtered === total) return `${total} transactions`;
+            return `${filtered} of ${total} transactions`;
+        },
+
+        buildFlow(items, total) {
+            const safeTotal = total > 0 ? total : 1;
+            return items.map((item) => ({
+                ...item,
+                percent: Math.min(100, (item.amount / safeTotal) * 100)
+            }));
+        },
+
+        buildPayees(list) {
+            const totals = {};
+            const counts = {};
+            for (const txn of list || []) {
+                const amount = Math.abs(txn.amount || 0);
+                totals[txn.payee] = (totals[txn.payee] || 0) + amount;
+                counts[txn.payee] = (counts[txn.payee] || 0) + 1;
+            }
+            return Object.entries(totals)
+                .map(([name, amount]) => ({
+                    name,
+                    amount,
+                    count: counts[name] || 0
+                }))
+                .sort((a, b) => b.amount - a.amount)
+                .slice(0, 5);
+        },
+
+        isActiveCategory(name) {
+            return this.store.categoryFilter === name;
+        },
+
+        isActiveSubcategory(name) {
+            return this.store.subCategoryFilter === name;
+        },
+
+        async selectCategory(name) {
+            await this.store.setCategory(name);
+            this.scrollToList();
+        },
+
+        selectSubcategory(name) {
+            this.store.setSubCategory(name);
+            this.scrollToList();
+        },
+
+        selectPayee(name) {
+            this.store.applyPayeeFilter(name);
+        },
+
+        clearFilter(type) {
+            if (type === 'category') {
+                this.store.setCategory('');
+                return;
+            }
+            if (type === 'subcategory') {
+                this.store.setSubCategory('');
+                return;
+            }
+            if (type === 'search') {
+                this.store.search = '';
+            }
+        },
+
+        clearAllFilters() {
+            this.store.search = '';
+            this.store.setCategory('');
+        },
+
+        scrollToList() {
+            const list = document.querySelector('[data-transactions-list]');
+            if (list) {
+                list.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+        }
+    };
+}
 
 
 // =============================================================================
