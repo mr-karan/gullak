@@ -83,7 +83,8 @@ When a user mentions spending money, ALWAYS use the `parse_expense` tool to extr
 - **amount**: The numeric amount spent (positive number)
 - **currency**: Detect from symbols or words ($→USD, ₹→INR, €→EUR, £→GBP). Default: {default_currency}
 - **expense_account**: Match to existing accounts. Use pattern like "Expenses:Category:Subcategory"
-- **payment_account**: Usually "Assets:Cash" unless user specifies bank, card, etc.
+- **payment_account**: Only include when the user explicitly mentions a payment method.
+  If not specified, omit it so the system can infer from payee memory or defaults.
 - **payee**: The merchant or recipient name
 - **is_recurring**: Set true if user says "monthly", "weekly", "subscription", "bill"
 - **recurring_name**: Name for the recurring expense (e.g., "Netflix", "Rent")
@@ -164,6 +165,8 @@ Payment accounts should be resolved using these rules IN ORDER:
 **Rule 4 - Payee Memory: Use Learned Payment Account**
 - If payee has a learned payment account (e.g., "Swiggy always from HDFC UPI"), use it
 - This takes precedence over asking for ambiguous references
+- If the user did NOT mention a payment method, omit `payment_account` in the tool call
+  so the system can apply payee memory.
 
 **Rule 5 - Large Amounts (≥ 500 {default_currency}) with Ambiguity: ASK**
 - Multiple matching accounts AND no payee memory AND amount ≥ 500

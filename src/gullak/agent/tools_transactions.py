@@ -21,9 +21,10 @@ class ParseExpenseInput(BaseModel):
     payee: str = Field(description="Merchant or payee name (e.g., 'BigBasket', 'Swiggy')")
     amount: Decimal = Field(gt=0, description="Positive amount of the expense")
     expense_account: str = Field(description="Expense account path like 'Expenses:Food:Groceries'")
-    payment_account: str = Field(
-        default="Assets:Cash",
-        description="Payment source like 'Assets:Cash', 'Assets:Bank:HDFC'",
+    payment_account: str | None = Field(
+        default=None,
+        description="Payment source like 'Assets:Cash', 'Assets:Bank:HDFC'. "
+        "Leave empty if not specified by the user.",
     )
     currency: str = Field(default="INR", description="Currency code")
     transaction_date: str = Field(
@@ -136,9 +137,17 @@ def execute_parse_expense(state: ToolState, input: ParseExpenseInput) -> ToolRes
         txn_date = state.parse_date(input.transaction_date)
         currency = input.currency or state.default_currency
 
+        suggested_expense, suggested_payment = state.suggest_accounts(
+            input.payee, input.amount
+        )
+
         expense_account = input.expense_account
         if not expense_account or expense_account == "Expenses:Unknown":
-            expense_account = state.suggest_account(input.payee, input.amount)
+            expense_account = suggested_expense
+
+        payment_account = input.payment_account
+        if not payment_account:
+            payment_account = suggested_payment or "Assets:Cash"
 
         recurring_name = None
         recurring_period = None
@@ -151,7 +160,7 @@ def execute_parse_expense(state: ToolState, input: ParseExpenseInput) -> ToolRes
             payee=input.payee,
             amount=input.amount,
             expense_account=expense_account,
-            payment_account=input.payment_account,
+            payment_account=payment_account,
             currency=currency,
             note=input.note,
             recurring_name=recurring_name,
@@ -169,7 +178,7 @@ def execute_parse_expense(state: ToolState, input: ParseExpenseInput) -> ToolRes
 
         state.add_pending(pending)
 
-        is_default_cash = input.payment_account == "Assets:Cash"
+        is_default_cash = payment_account == "Assets:Cash"
         is_small_amount = input.amount < 100
         auto_confirmable = not is_default_cash or is_small_amount
 
@@ -187,7 +196,7 @@ def execute_parse_expense(state: ToolState, input: ParseExpenseInput) -> ToolRes
                     "amount": float(input.amount),
                     "currency": currency,
                     "expense_account": expense_account,
-                    "payment_account": input.payment_account,
+                    "payment_account": payment_account,
                 },
             },
         )
