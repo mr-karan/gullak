@@ -78,7 +78,7 @@ document.addEventListener('alpine:init', () => {
         _applying: false,
         _pendingRoute: null,
 
-        validViews: ['chat', 'transactions', 'ledger', 'settings'],
+        validViews: ['chat', 'transactions', 'reports', 'ledger', 'settings'],
 
         get view() {
             return this.route.name === 'settings' ? 'setup' : this.route.name;
@@ -172,6 +172,8 @@ document.addEventListener('alpine:init', () => {
                 } else if (nextRoute.name === 'transactions') {
                     await Alpine.store('transactions').load();
                     await Alpine.store('pending').load();
+                } else if (nextRoute.name === 'reports') {
+                    await Alpine.store('reports').load();
                 } else if (nextRoute.name === 'ledger') {
                     await Alpine.store('ledger').load();
                 } else if (nextRoute.name === 'settings') {
@@ -1479,6 +1481,39 @@ document.addEventListener('alpine:init', () => {
         }
     });
 
+    // =========================================================================
+    // REPORTS STORE - Yearly spending grid
+    // =========================================================================
+    Alpine.store('reports', {
+        data: null,
+        year: new Date().getFullYear(),
+        loading: false,
+        expandedCategories: {},
+
+        async load() {
+            this.loading = true;
+            try {
+                const response = await fetch(`/api/ledger/reports/yearly?year=${this.year}`);
+                this.data = await response.json();
+            } catch (error) {
+                console.error('Failed to load reports:', error);
+                Alpine.store('notify').error('Failed to load reports');
+            } finally {
+                this.loading = false;
+            }
+        },
+
+        async setYear(y) {
+            this.year = y;
+            this.expandedCategories = {};
+            await this.load();
+        },
+
+        toggleCategory(name) {
+            this.expandedCategories[name] = !this.expandedCategories[name];
+        }
+    });
+
 });
 
 
@@ -1657,6 +1692,51 @@ function transactionsDashboard() {
             if (list) {
                 list.scrollIntoView({ behavior: 'smooth', block: 'start' });
             }
+        }
+    };
+}
+
+
+// =============================================================================
+// REPORTS VIEW COMPONENT - Yearly spending grid helpers
+// =============================================================================
+function reportsView() {
+    return {
+        get store() {
+            return Alpine.store('reports');
+        },
+
+        get data() {
+            return this.store.data;
+        },
+
+        get availableYears() {
+            return this.data?.available_years || [new Date().getFullYear()];
+        },
+
+        get currency() {
+            return this.data?.currency || 'INR';
+        },
+
+        fmtAmount(amount) {
+            if (!amount || amount === 0) return null;
+            return new Intl.NumberFormat('en-IN', {
+                style: 'currency',
+                currency: this.currency,
+                minimumFractionDigits: 0,
+                maximumFractionDigits: 0
+            }).format(amount);
+        },
+
+        fmtCompact(amount) {
+            if (!amount || amount === 0) return null;
+            if (amount >= 100000) {
+                return (amount / 100000).toFixed(1).replace(/\.0$/, '') + 'L';
+            }
+            if (amount >= 1000) {
+                return (amount / 1000).toFixed(1).replace(/\.0$/, '') + 'K';
+            }
+            return Math.round(amount).toLocaleString('en-IN');
         }
     };
 }

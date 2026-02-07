@@ -1826,3 +1826,135 @@ textarea:focus-visible {
         min-width: 44px;
     }
 }
+
+/* ============================================
+   Reports Grid - YNAB-style Spending Grid
+   ============================================ */
+
+.reports-grid-wrapper {
+    position: relative;
+}
+
+.reports-grid-scroll {
+    -webkit-overflow-scrolling: touch;
+}
+
+.reports-grid {
+    border-collapse: separate;
+    border-spacing: 0;
+    min-width: 900px;
+}
+
+/* Sticky first column (category name) */
+.reports-grid-sticky-col {
+    position: sticky;
+    left: 0;
+    z-index: 2;
+    background: oklch(var(--b1));
+    min-width: 160px;
+    max-width: 200px;
+}
+
+/* Header row */
+.reports-grid-header {
+    border-bottom: 2px solid oklch(var(--bc) / 0.08);
+}
+
+.reports-grid-header th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: oklch(var(--b1));
+}
+
+.reports-grid-header .reports-grid-sticky-col {
+    z-index: 3;
+}
+
+/* Category rows */
+.reports-grid-cat-row {
+    border-bottom: 1px solid oklch(var(--bc) / 0.05);
+}
+
+.reports-grid-cat-row:hover td {
+    background: oklch(var(--bc) / 0.025);
+}
+
+.reports-grid-cat-row:hover .reports-grid-sticky-col {
+    background: oklch(var(--bc) / 0.025);
+}
+
+/* Subcategory rows */
+.reports-grid-sub-row {
+    border-bottom: 1px solid oklch(var(--bc) / 0.03);
+}
+
+.reports-grid-sub-row td {
+    background: oklch(var(--b2) / 0.3);
+}
+
+.reports-grid-sticky-col-sub {
+    background: oklch(var(--b2) / 0.3) !important;
+}
+
+.reports-grid-sub-row:hover td {
+    background: oklch(var(--bc) / 0.03);
+}
+
+.reports-grid-sub-row:hover .reports-grid-sticky-col {
+    background: oklch(var(--bc) / 0.03) !important;
+}
+
+/* Footer row */
+.reports-grid-footer {
+    border-top: 2px solid oklch(var(--bc) / 0.1);
+}
+
+.reports-grid-footer td {
+    background: oklch(var(--b1));
+}
+
+.reports-grid-footer .reports-grid-sticky-col {
+    z-index: 3;
+}
+
+/* Sticky column shadow hint */
+.reports-grid-scroll::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 160px;
+    width: 12px;
+    pointer-events: none;
+    background: linear-gradient(90deg, oklch(var(--bc) / 0.04), transparent);
+    z-index: 1;
+    opacity: 0;
+    transition: opacity var(--duration-fast) ease;
+}
+
+.reports-grid-scroll:not(:has(:first-child)):hover::after {
+    opacity: 1;
+}
+
+/* Mobile adjustments */
+@media (max-width: 767px) {
+    .reports-grid {
+        min-width: 750px;
+    }
+
+    .reports-grid-sticky-col {
+        min-width: 120px;
+        max-width: 140px;
+    }
+
+    .reports-grid th,
+    .reports-grid td {
+        padding-left: 6px;
+        padding-right: 6px;
+    }
+
+    .reports-grid-sticky-col {
+        padding-left: 12px !important;
+    }
+}

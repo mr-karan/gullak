@@ -1,0 +1,111 @@
+<!-- Loading State -->
+<template x-if="store.loading && !data">
+    <div class="flex items-center justify-center h-64">
+        <span class="loading loading-spinner text-primary"></span>
+    </div>
+</template>
+
+<!-- Empty State -->
+<template x-if="!store.loading && data && data.categories.length === 0">
+    <div class="flex flex-col items-center justify-center h-64 text-base-content/40">
+        <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="mb-4 opacity-40"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+        <p class="text-sm">No expense data for <span x-text="store.year"></span></p>
+    </div>
+</template>
+
+<!-- Grid -->
+<template x-if="data && data.categories.length > 0">
+    <div class="reports-grid-wrapper card-elevated overflow-hidden">
+        <div class="reports-grid-scroll overflow-x-auto custom-scrollbar">
+            <table class="reports-grid w-full">
+                <!-- Header -->
+                <thead>
+                    <tr class="reports-grid-header">
+                        <th class="reports-grid-sticky-col text-left py-3 px-4 text-xs font-semibold uppercase tracking-wider text-base-content/50">
+                            Category
+                        </th>
+                        <template x-for="(month, i) in data.months" :key="i">
+                            <th class="py-3 px-3 text-right text-xs font-semibold uppercase tracking-wider text-base-content/50 whitespace-nowrap"
+                                x-text="month"></th>
+                        </template>
+                        <th class="py-3 px-3 text-right text-xs font-semibold uppercase tracking-wider text-base-content/40 whitespace-nowrap">Avg</th>
+                        <th class="py-3 px-3 text-right text-xs font-semibold uppercase tracking-wider text-primary whitespace-nowrap">Total</th>
+                    </tr>
+                </thead>
+
+                <!-- Each category gets its own tbody (valid HTML, avoids nesting) -->
+                <template x-for="cat in data.categories" :key="cat.name">
+                    <tbody>
+                        <!-- Category Row -->
+                        <tr class="reports-grid-cat-row cursor-pointer transition-colors"
+                            @click="store.toggleCategory(cat.name)">
+                            <td class="reports-grid-sticky-col py-2.5 px-4">
+                                <div class="flex items-center gap-2">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24"
+                                         fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                                         class="text-base-content/30 transition-transform duration-200 flex-shrink-0"
+                                         :class="store.expandedCategories[cat.name] && 'rotate-90'">
+                                            <polyline points="9 18 15 12 9 6"/>
+                                    </svg>
+                                    <span class="text-sm font-semibold text-base-content truncate" x-text="cat.name"></span>
+                                </div>
+                            </td>
+                            <template x-for="(val, mi) in cat.months" :key="mi">
+                                <td class="py-2.5 px-3 text-right font-mono text-sm whitespace-nowrap"
+                                    :class="val > 0 ? 'text-base-content' : 'text-base-content/20'">
+                                    <span x-text="val > 0 ? fmtCompact(val) : '—'"></span>
+                                </td>
+                            </template>
+                            <td class="py-2.5 px-3 text-right font-mono text-sm text-base-content/50 whitespace-nowrap"
+                                x-text="fmtCompact(cat.average) || '—'"></td>
+                            <td class="py-2.5 px-3 text-right font-mono text-sm font-semibold text-base-content whitespace-nowrap"
+                                x-text="fmtCompact(cat.total) || '—'"></td>
+                        </tr>
+
+                        <!-- Subcategory Rows -->
+                        <template x-for="sub in cat.subcategories" :key="sub.name">
+                            <tr class="reports-grid-sub-row transition-colors"
+                                x-show="store.expandedCategories[cat.name]"
+                                x-transition:enter="transition ease-out duration-150"
+                                x-transition:enter-start="opacity-0"
+                                x-transition:enter-end="opacity-100">
+                                <td class="reports-grid-sticky-col reports-grid-sticky-col-sub py-2 px-4 pl-10">
+                                    <span class="text-xs text-base-content/50 truncate block" x-text="sub.name"></span>
+                                </td>
+                                <template x-for="(val, mi) in sub.months" :key="mi">
+                                    <td class="py-2 px-3 text-right font-mono text-xs whitespace-nowrap"
+                                        :class="val > 0 ? 'text-base-content/60' : 'text-base-content/15'">
+                                        <span x-text="val > 0 ? fmtCompact(val) : '—'"></span>
+                                    </td>
+                                </template>
+                                <td class="py-2 px-3 text-right font-mono text-xs text-base-content/35 whitespace-nowrap"
+                                    x-text="fmtCompact(sub.average) || '—'"></td>
+                                <td class="py-2 px-3 text-right font-mono text-xs text-base-content/60 whitespace-nowrap"
+                                    x-text="fmtCompact(sub.total) || '—'"></td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </template>
+
+                <!-- Footer -->
+                <tfoot>
+                    <tr class="reports-grid-footer">
+                        <td class="reports-grid-sticky-col py-3 px-4 text-sm font-semibold text-base-content">
+                            Total
+                        </td>
+                        <template x-for="(val, mi) in data.month_totals" :key="mi">
+                            <td class="py-3 px-3 text-right font-mono text-sm font-semibold whitespace-nowrap"
+                                :class="val > 0 ? 'text-base-content' : 'text-base-content/20'">
+                                <span x-text="val > 0 ? fmtCompact(val) : '—'"></span>
+                            </td>
+                        </template>
+                        <td class="py-3 px-3 text-right font-mono text-sm font-semibold text-base-content/50 whitespace-nowrap"
+                            x-text="fmtCompact(data.grand_average) || '—'"></td>
+                        <td class="py-3 px-3 text-right font-mono text-sm font-bold text-primary whitespace-nowrap"
+                            x-text="fmtAmount(data.grand_total) || '—'"></td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+</template>

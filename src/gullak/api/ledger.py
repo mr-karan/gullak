@@ -919,6 +919,118 @@ async def get_transaction_stats(
     }
 
 
+def _extract_declared_expense_accounts(path: Path) -> set[str]:
+    """Extract expense account names from 'account' declarations in the ledger file."""
+    accounts: set[str] = set()
+    if not path.exists():
+        return accounts
+    for line in path.read_text().splitlines():
+        stripped = line.strip()
+        if stripped.startswith("account Expenses:"):
+            accounts.add(stripped[8:])  # Remove "account " prefix
+    return accounts
+
+
+@router.get("/reports/yearly")
+async def yearly_report(
+    request: Request,
+    year: int = Query(0, description="Year for report (default: current year)"),
+) -> dict[str, Any]:
+    """Get yearly spending grid — months as columns, expense categories as rows."""
+    settings = request.app.state.settings
+    parser: LedgerParser = request.app.state.parser
+
+    if year <= 0:
+        year = date.today().year
+
+    transactions = parser.parse_file(settings.ledger_path)
+
+    # Collect available years
+    available_years: set[int] = set()
+    for txn in transactions:
+        available_years.add(txn.date.year)
+    if not available_years:
+        available_years.add(year)
+
+    # Seed categories/subcategories from account declarations
+    declared_accounts = _extract_declared_expense_accounts(settings.ledger_path)
+    cat_sub_months: dict[str, dict[str, list[float]]] = defaultdict(
+        lambda: defaultdict(lambda: [0.0] * 12)
+    )
+    cat_months: dict[str, list[float]] = defaultdict(lambda: [0.0] * 12)
+    month_totals = [0.0] * 12
+
+    # Pre-populate from declared accounts so empty categories still appear
+    for account in declared_accounts:
+        cat = _get_category(account)
+        sub = _get_subcategory(account)
+        # Touch the defaultdict to ensure the key exists
+        _ = cat_months[cat]
+        _ = cat_sub_months[cat][sub]
+
+    # Accumulate from transactions
+    for txn in transactions:
+        if txn.date.year != year:
+            continue
+        month_idx = txn.date.month - 1
+        for posting in txn.postings:
+            if not (posting.account.startswith("Expenses:") and posting.amount > 0):
+                continue
+            amount = float(posting.amount)
+            cat = _get_category(posting.account)
+            sub = _get_subcategory(posting.account)
+            cat_months[cat][month_idx] += amount
+            cat_sub_months[cat][sub][month_idx] += amount
+            month_totals[month_idx] += amount
+
+    # Build categories list sorted by total descending
+    categories = []
+    for cat_name, months in cat_months.items():
+        cat_total = sum(months)
+        active_months = sum(1 for m in months if m > 0)
+        cat_avg = cat_total / active_months if active_months > 0 else 0.0
+
+        subcategories = []
+        for sub_name, sub_months in cat_sub_months[cat_name].items():
+            sub_total = sum(sub_months)
+            sub_active = sum(1 for m in sub_months if m > 0)
+            sub_avg = sub_total / sub_active if sub_active > 0 else 0.0
+            subcategories.append({
+                "name": sub_name,
+                "months": sub_months,
+                "total": sub_total,
+                "average": round(sub_avg, 2),
+            })
+        subcategories.sort(key=lambda x: x["total"], reverse=True)
+
+        categories.append({
+            "name": cat_name,
+            "months": months,
+            "total": cat_total,
+            "average": round(cat_avg, 2),
+            "subcategories": subcategories,
+        })
+    categories.sort(key=lambda x: x["total"], reverse=True)
+
+    grand_total = sum(month_totals)
+    active_months_count = sum(1 for m in month_totals if m > 0)
+    grand_average = (
+        round(grand_total / active_months_count, 2) if active_months_count > 0 else 0.0
+    )
+
+    return {
+        "year": year,
+        "months": ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"],
+        "categories": categories,
+        "month_totals": month_totals,
+        "grand_total": grand_total,
+        "grand_average": grand_average,
+        "available_years": sorted(available_years, reverse=True),
+        "currency": settings.default_currency,
+    }
+
+
 @router.get("/health")
 async def health_check(request: Request) -> dict[str, Any]:
     """Check ledger and validator health."""
