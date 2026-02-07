@@ -273,6 +273,8 @@ async def list_transactions(
     subcategory: str = Query("", description="Subcategory expense filter"),
     payee: str = Query("", description="Payee filter"),
     search: str = Query("", description="Search across payee, note, accounts"),
+    start_date: str = Query("", description="Inclusive start date (YYYY-MM-DD)"),
+    end_date: str = Query("", description="Inclusive end date (YYYY-MM-DD)"),
 ) -> dict[str, Any]:
     """
     List recent transactions from the ledger.
@@ -298,20 +300,28 @@ async def list_transactions(
     payee_filter = _normalize_text(payee)
     search_filter = _normalize_text(search)
 
-    # Filter by period
-    start_date = date.min
-    if period != "all":
-        today = date.today()
-        if period == "week":
-            start_date = today - timedelta(days=7)
-        elif period == "month":
-            start_date = today.replace(day=1)
-        elif period == "year":
-            start_date = today.replace(month=1, day=1)
+    # Filter by date range (explicit) or period (fallback)
+    explicit_start = _parse_date(start_date) if start_date.strip() else None
+    explicit_end = _parse_date(end_date) if end_date.strip() else None
+
+    if explicit_start or explicit_end:
+        filter_start = explicit_start or date.min
+        filter_end = explicit_end or date.max
+    else:
+        filter_start = date.min
+        filter_end = date.max
+        if period != "all":
+            today = date.today()
+            if period == "week":
+                filter_start = today - timedelta(days=7)
+            elif period == "month":
+                filter_start = today.replace(day=1)
+            elif period == "year":
+                filter_start = today.replace(month=1, day=1)
 
     filtered: list[dict[str, Any]] = []
     for txn in transactions:
-        if txn.date < start_date:
+        if txn.date < filter_start or txn.date > filter_end:
             continue
         if payee_filter and payee_filter not in txn.payee.lower():
             continue

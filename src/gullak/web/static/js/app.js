@@ -1489,6 +1489,17 @@ document.addEventListener('alpine:init', () => {
         year: new Date().getFullYear(),
         loading: false,
         expandedCategories: {},
+        drawer: {
+            open: false,
+            loading: false,
+            category: '',
+            subcategory: '',
+            monthIndex: -1,
+            monthName: '',
+            total: 0,
+            transactions: [],
+            count: 0
+        },
 
         async load() {
             this.loading = true;
@@ -1506,11 +1517,57 @@ document.addEventListener('alpine:init', () => {
         async setYear(y) {
             this.year = y;
             this.expandedCategories = {};
+            this.closeDrawer();
             await this.load();
         },
 
         toggleCategory(name) {
             this.expandedCategories[name] = !this.expandedCategories[name];
+        },
+
+        async openDrawer(category, subcategory, monthIndex, cellValue) {
+            if (!cellValue || cellValue <= 0) return;
+
+            const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+                            'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+            this.drawer.category = category;
+            this.drawer.subcategory = subcategory;
+            this.drawer.monthIndex = monthIndex;
+            this.drawer.monthName = months[monthIndex] + ' ' + this.year;
+            this.drawer.total = cellValue;
+            this.drawer.transactions = [];
+            this.drawer.count = 0;
+            this.drawer.open = true;
+            this.drawer.loading = true;
+
+            try {
+                const month = monthIndex + 1;
+                const lastDay = new Date(this.year, month, 0).getDate();
+                const startDate = `${this.year}-${String(month).padStart(2, '0')}-01`;
+                const endDate = `${this.year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+
+                const params = new URLSearchParams();
+                params.set('category', category);
+                if (subcategory) params.set('subcategory', subcategory);
+                params.set('start_date', startDate);
+                params.set('end_date', endDate);
+                params.set('limit', '200');
+
+                const response = await fetch(`/api/ledger/transactions?${params}`);
+                const data = await response.json();
+                this.drawer.transactions = data.transactions || [];
+                this.drawer.count = data.total || 0;
+            } catch (error) {
+                console.error('Failed to load drawer transactions:', error);
+                Alpine.store('notify').error('Failed to load transactions');
+            } finally {
+                this.drawer.loading = false;
+            }
+        },
+
+        closeDrawer() {
+            this.drawer.open = false;
         }
     });
 

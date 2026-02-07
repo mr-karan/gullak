@@ -1937,6 +1937,39 @@ textarea:focus-visible {
     opacity: 1;
 }
 
+/* Clickable cells */
+.reports-grid-cell-clickable {
+    cursor: pointer;
+    transition: background var(--duration-fast) ease;
+}
+
+.reports-grid-cell-clickable:hover {
+    background: oklch(var(--p) / 0.06);
+}
+
+/* Active cell highlight */
+.reports-grid-cell-active {
+    background: oklch(var(--p) / 0.1) !important;
+    box-shadow: inset 0 0 0 1.5px oklch(var(--p) / 0.3);
+}
+
+/* Drill-down drawer panel */
+.reports-drill-drawer {
+    background: oklch(var(--b1));
+    border-left: 1px solid oklch(var(--bc) / 0.08);
+    box-shadow: var(--shadow-2xl);
+    display: flex;
+    flex-direction: column;
+}
+
+@media (max-width: 767px) {
+    .reports-drill-drawer {
+        border-left: none;
+        border-top: 1px solid oklch(var(--bc) / 0.08);
+        box-shadow: 0 -10px 30px oklch(var(--bc) / 0.12), 0 -4px 10px oklch(var(--bc) / 0.06);
+    }
+}
+
 /* Mobile adjustments */
 @media (max-width: 767px) {
     .reports-grid {
