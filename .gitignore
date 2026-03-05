@@ -64,3 +64,9 @@ data/
 
 # Build artifacts
 *.bin
+target/
+
+# Rust rewrite (lives on native branch)
+rust-backend/
+rust-whatsapp-worker/
+web/
