@@ -16,7 +16,7 @@ from gullak.ledger.parser import LedgerParser
 from gullak.ledger.validator import LedgerValidator
 
 if TYPE_CHECKING:
-    pass
+    from gullak.ledger.writer import LedgerWriter
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +47,9 @@ class ToolState:
         self.default_currency = default_currency
         self.parser = parser or LedgerParser()
         self.validator = validator or LedgerValidator()
+        self.writer: LedgerWriter | None = None
         self.memory = PayeeMemory(ledger_path)
+        self._memory_mtime: float | None = self._get_ledger_mtime()
         self._thread_id: ContextVar[str | None] = ContextVar("gullak_thread_id", default=None)
         self._source: ContextVar[TransactionSource | None] = ContextVar(
             "gullak_source", default=None
@@ -60,6 +62,19 @@ class ToolState:
         self._pending: dict[str, PendingTransaction] = {}
         self._last_created_id: str | None = None
         self._load_pending()
+
+    def _get_ledger_mtime(self) -> float | None:
+        try:
+            return self.ledger_path.stat().st_mtime if self.ledger_path.exists() else None
+        except OSError:
+            return None
+
+    def _refresh_memory_if_stale(self) -> None:
+        """Reload payee memory if the ledger file has been modified externally."""
+        current_mtime = self._get_ledger_mtime()
+        if current_mtime != self._memory_mtime:
+            self.memory = PayeeMemory(self.ledger_path)
+            self._memory_mtime = current_mtime
 
     # -------------------------------------------------------------------------
     # Pending Transaction Management
@@ -156,8 +171,9 @@ class ToolState:
         if "note" in updates:
             txn.note = updates["note"]
 
-        # Regenerate preview
+        # Regenerate preview from updated transaction
         pending.transaction = txn
+        pending.ledger_preview = txn.to_ledger()
         self._save_pending()
 
         return pending
@@ -246,6 +262,7 @@ class ToolState:
 
     def suggest_account(self, payee: str, amount: Decimal | None = None) -> str:
         """Suggest expense account based on payee using memory and patterns."""
+        self._refresh_memory_if_stale()
         # Check payee memory first
         if self.memory:
             suggested = self.memory.suggest_account(payee)
@@ -267,6 +284,7 @@ class ToolState:
             Tuple of (expense_account, payment_account).
             payment_account may be None if not learned.
         """
+        self._refresh_memory_if_stale()
         expense_account: str | None = None
         payment_account: str | None = None
 

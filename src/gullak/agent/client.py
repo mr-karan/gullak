@@ -29,7 +29,7 @@ from gullak.ledger.writer import LedgerWriter
 from gullak.media import MediaContent
 from gullak.settings import settings
 
-from .prompts import get_system_prompt
+from .prompts import WHATSAPP_PREAMBLE, get_system_prompt
 from .tool_state import ToolState
 from .tools import execute_tool, get_openai_tools
 
@@ -102,6 +102,8 @@ class GullakAgent:
             validator=self._validator,
             timezone=self.timezone,
         )
+
+        self._tool_state.writer = self._writer
 
         # Get accounts for system prompt
         accounts: list[str] = []
@@ -182,13 +184,23 @@ class GullakAgent:
         resolved_now = self._resolve_now(message_time)
         tool_state.set_time_context(resolved_now)
 
+        # Refresh accounts list to pick up newly created accounts
+        if self.ledger_path.exists():
+            self._accounts = list(self._parser.extract_accounts(self.ledger_path))
+
         self._system_prompt = get_system_prompt(
             accounts=self._accounts,
             default_currency=self.default_currency,
             timezone=self.timezone,
             today=resolved_now.date(),
         )
-        messages: list[dict[str, Any]] = [{"role": "system", "content": self._system_prompt}]
+
+        # Add WhatsApp-specific instructions when source is WhatsApp
+        system_content = self._system_prompt
+        if source == TransactionSource.WHATSAPP:
+            system_content += "\n\n" + WHATSAPP_PREAMBLE
+
+        messages: list[dict[str, Any]] = [{"role": "system", "content": system_content}]
 
         pending_context = self._build_pending_context(thread_id)
         if pending_context:
@@ -229,6 +241,7 @@ class GullakAgent:
         try:
             # Run the agentic loop
             assistant_response = ""
+            tool_actions: list[str] = []
             iteration = 0
 
             while iteration < MAX_AGENT_ITERATIONS:
@@ -302,6 +315,18 @@ class GullakAgent:
                     # Execute the tool
                     result = await execute_tool(function_name, arguments, tool_state)
 
+                    # Record action summary for chat history
+                    if result.is_pending:
+                        txn_data = result.data.get("transaction", {})
+                        tool_actions.append(
+                            f"{function_name}({txn_data.get('payee', '?')}, "
+                            f"{txn_data.get('amount', '?')} {txn_data.get('currency', '')})"
+                        )
+                    elif function_name.startswith("confirm"):
+                        tool_actions.append(f"{function_name}({result.data.get('payee', 'ok')})")
+                    elif result.success:
+                        tool_actions.append(function_name)
+
                     # Emit appropriate event based on result
                     if result.is_pending:
                         # Special handling for pending transaction previews
@@ -332,9 +357,14 @@ class GullakAgent:
                         }
                     )
 
-            # Save assistant response to history
-            if self._chat_history and assistant_response:
-                await self._chat_history.save_message(thread_id, "assistant", assistant_response)
+            # Save assistant response + tool action summary to history
+            if self._chat_history:
+                save_content = assistant_response
+                if tool_actions:
+                    summary = " | ".join(tool_actions)
+                    save_content = f"{assistant_response}\n[Actions: {summary}]" if assistant_response else f"[Actions: {summary}]"
+                if save_content:
+                    await self._chat_history.save_message(thread_id, "assistant", save_content)
 
             yield AgentEvent(
                 type="done",
@@ -348,6 +378,11 @@ class GullakAgent:
     async def confirm_transaction(self, txn_id: str) -> tuple[bool, str]:
         """
         Confirm and write a pending transaction to the ledger.
+
+        This is the single confirm path used by both API endpoints and the
+        WhatsApp command handler.  It writes the transaction, learns the payee
+        mapping, and records the last-confirmed ID — matching the behaviour of
+        the tool-based confirm path.
 
         Returns:
             Tuple of (success, message)
@@ -365,12 +400,21 @@ class GullakAgent:
 
         try:
             await self._writer.append_transaction(pending.transaction)
-            if self._tool_state:
-                self._tool_state.set_last_confirmed(
-                    pending.thread_id or self._tool_state.get_thread_id(),
-                    pending.transaction.gullak_id,
-                )
-            return True, f"Transaction saved: {pending.transaction.payee}"
+
+            # Record last confirmed for edit-last-transaction support
+            self._tool_state.set_last_confirmed(
+                pending.thread_id or self._tool_state.get_thread_id(),
+                pending.transaction.gullak_id,
+            )
+
+            # Learn payee → account mapping (same as tool-based confirm)
+            txn = pending.transaction
+            if self._tool_state.memory and txn.postings and txn.postings[0].account.startswith("Expenses:"):
+                expense_account = txn.postings[0].account
+                payment_account = txn.postings[1].account if len(txn.postings) > 1 else None
+                self._tool_state.memory.add_mapping(txn.payee, expense_account, payment_account)
+
+            return True, f"Transaction saved: {txn.payee}"
         except Exception as e:
             # Restore pending on failure
             self._tool_state.add_pending(pending)

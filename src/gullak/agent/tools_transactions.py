@@ -19,7 +19,11 @@ class ParseExpenseInput(BaseModel):
     """Parse natural language expense into a transaction preview."""
 
     payee: str = Field(description="Merchant or payee name (e.g., 'BigBasket', 'Swiggy')")
-    amount: Decimal = Field(gt=0, description="Positive amount of the expense")
+    amount: Decimal | None = Field(
+        default=None,
+        description="Positive amount of the expense. "
+        "Set to null/omit if the user did not mention an amount — do NOT guess.",
+    )
     expense_account: str = Field(description="Expense account path like 'Expenses:Food:Groceries'")
     payment_account: str | None = Field(
         default=None,
@@ -133,6 +137,13 @@ def _build_transaction_updates(state: ToolState, input: Any) -> dict[str, Any]:
 
 def execute_parse_expense(state: ToolState, input: ParseExpenseInput) -> ToolResult:
     """Create a pending expense transaction."""
+    if input.amount is None or input.amount <= 0:
+        return ToolResult(
+            success=True,
+            message=f"Noted {input.payee}, but I need the amount. How much was it?",
+            data={"needs_amount": True, "payee": input.payee},
+        )
+
     try:
         txn_date = state.parse_date(input.transaction_date)
         currency = input.currency or state.default_currency

@@ -37,7 +37,7 @@ class SetAllocationTargetsInput(BaseModel):
     targets: list[dict[str, Any]] = Field(description="List of {name, target, accounts} entries")
 
 
-def execute_set_budget(state: ToolState, input: SetBudgetInput) -> ToolResult:
+async def execute_set_budget(state: ToolState, input: SetBudgetInput) -> ToolResult:
     """Set monthly budgets."""
     if not input.budgets:
         return ToolResult(success=False, error="No budget entries provided", data={})
@@ -71,7 +71,21 @@ def execute_set_budget(state: ToolState, input: SetBudgetInput) -> ToolResult:
             state.ledger_path.parent.mkdir(parents=True, exist_ok=True)
             new_content = ledger_text + "\n"
 
+        # Validate before writing
+        if state.validator:
+            is_valid, error = await state.validator.validate_content(new_content)
+            if not is_valid:
+                return ToolResult(
+                    success=False,
+                    error=f"Budget would create invalid ledger: {error}",
+                    data={},
+                )
+
         state.ledger_path.write_text(new_content)
+
+        # Trigger Paisa sync via writer if available
+        if state.writer:
+            await state.writer._sync_paisa()
 
         return ToolResult(
             success=True,
@@ -174,6 +188,7 @@ CONFIG_TOOLS: dict[str, ToolDefinition] = {
 Use when user wants spending limits: "budget 15k for rent, 10k for food".""",
         input_model=SetBudgetInput,
         executor=execute_set_budget,
+        is_async=True,
     ),
     "add_credit_card": ToolDefinition(
         name="add_credit_card",

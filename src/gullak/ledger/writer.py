@@ -10,6 +10,19 @@ from .validator import LedgerValidator
 
 logger = logging.getLogger(__name__)
 
+# Characters that could inject ledger directives or comments when embedded in text fields
+_UNSAFE_CHARS = re.compile(r"[\n\r\x00-\x08\x0b\x0c\x0e-\x1f]")
+
+
+def _sanitize_ledger_text(value: str | None) -> str | None:
+    """Strip newlines and control characters from text that will be written into the ledger.
+
+    Prevents injection of extra postings, comments, or directives via payee/note/tag values.
+    """
+    if value is None:
+        return None
+    return _UNSAFE_CHARS.sub(" ", value).strip()
+
 
 class LedgerWriter:
     def __init__(
@@ -112,7 +125,9 @@ class LedgerWriter:
         """
         Delete a transaction by its gullak ID.
 
-        This reads the entire file, removes the transaction, and rewrites.
+        Uses span-based removal: finds the exact line range of the transaction
+        block (header line through last non-empty line containing gullak:id)
+        and removes only those lines, preserving all surrounding content.
 
         Returns:
             True if transaction was found and deleted
@@ -121,35 +136,55 @@ class LedgerWriter:
         if not content:
             return False
 
-        # Find and remove the transaction block
         lines = content.split("\n")
-        new_lines: list[str] = []
-        skip_until_empty = False
-        found = False
+        txn_start, txn_end = self._find_transaction_span(lines, gullak_id)
 
-        for line in lines:
-            # Check if this transaction should be skipped
-            if f"gullak:id {gullak_id}" in line:
-                skip_until_empty = True
-                found = True
-                # Also remove the header line (previous non-empty line)
-                while new_lines and new_lines[-1].strip():
-                    new_lines.pop()
-                continue
+        if txn_start is None:
+            return False
 
-            if skip_until_empty:
-                if not line.strip():
-                    skip_until_empty = False
-                continue
+        new_lines = lines[:txn_start] + lines[txn_end:]
+        cleaned = self._clean_empty_lines("\n".join(new_lines))
+        self.path.write_text(cleaned)
+        await self._sync_paisa()
+        return True
 
-            new_lines.append(line)
+    @staticmethod
+    def _find_transaction_span(lines: list[str], gullak_id: str) -> tuple[int | None, int | None]:
+        """Find the start and end line indices for a transaction block.
 
-        if found:
-            cleaned = self._clean_empty_lines("\n".join(new_lines))
-            self.path.write_text(cleaned)
-            await self._sync_paisa()
+        Returns (start, end) where lines[start:end] is the full transaction.
+        Returns (None, None) if not found.
+        """
+        marker = f"gullak:id {gullak_id}"
+        marker_line = None
 
-        return found
+        for i, line in enumerate(lines):
+            if marker in line:
+                marker_line = i
+                break
+
+        if marker_line is None:
+            return None, None
+
+        # Walk backwards from the marker to find the transaction header (date line)
+        txn_start = marker_line
+        for i in range(marker_line - 1, -1, -1):
+            line = lines[i]
+            if not line.strip():
+                break
+            if re.match(r"^\d{4}[-/]\d{2}[-/]\d{2}", line):
+                txn_start = i
+                break
+
+        # Walk forwards from the marker to find the end of the transaction block
+        txn_end = marker_line + 1
+        for i in range(marker_line + 1, len(lines)):
+            if not lines[i].strip():
+                txn_end = i
+                break
+            txn_end = i + 1
+
+        return txn_start, txn_end
 
     def _clean_empty_lines(self, content: str) -> str:
         """Remove excessive empty lines, keeping max 2 consecutive."""
@@ -160,7 +195,11 @@ class LedgerWriter:
 
     async def update_transaction(self, gullak_id: str, updates: dict) -> Transaction | None:
         """
-        Update a transaction by its gullak ID.
+        Update a transaction by its gullak ID using span-based editing.
+
+        Finds the exact line range of the target transaction, parses only that
+        block, applies updates, and replaces just those lines — preserving all
+        other content (comments, directives, price entries) in the file.
 
         Args:
             gullak_id: The gullak:id of the transaction to update
@@ -175,33 +214,33 @@ class LedgerWriter:
         if not content:
             return None
 
-        # Parse existing transactions
-        parser = LedgerParser()
-        transactions = parser.parse_string(content)
+        lines = content.split("\n")
+        txn_start, txn_end = self._find_transaction_span(lines, gullak_id)
 
-        # Find transaction to update
-        target_idx = None
-        target_txn = None
-        for i, txn in enumerate(transactions):
-            if txn.gullak_id == gullak_id:
-                target_idx = i
-                target_txn = txn
-                break
-
-        if target_txn is None:
+        if txn_start is None:
             return None
 
-        # Apply updates to create new transaction
+        # Parse only the target transaction block
+        block_text = "\n".join(lines[txn_start:txn_end])
+        parser = LedgerParser()
+        parsed = parser.parse_string(block_text)
+        if not parsed:
+            return None
+
+        target_txn = parsed[0]
+
+        # Apply updates
         updated_data = {
             "date": updates.get("date", target_txn.date),
-            "payee": updates.get("payee", target_txn.payee),
+            "payee": _sanitize_ledger_text(updates["payee"]) if "payee" in updates else target_txn.payee,
             "status": target_txn.status,
-            "note": updates.get("note", target_txn.note),
+            "note": _sanitize_ledger_text(updates["note"]) if "note" in updates else target_txn.note,
             "tags": target_txn.tags,
-            "gullak_id": gullak_id,  # Keep same ID
+            "gullak_id": gullak_id,
+            "source": target_txn.source,
+            "source_user": target_txn.source_user,
         }
 
-        # Handle postings update
         if "postings" in updates:
             updated_data["postings"] = updates["postings"]
         elif (
@@ -210,7 +249,6 @@ class LedgerWriter:
             or "payment_account" in updates
             or "currency" in updates
         ):
-            # Partial posting update - rebuild postings
             old_postings = target_txn.postings
             if len(old_postings) >= 2:
                 expense_posting = old_postings[0]
@@ -232,11 +270,12 @@ class LedgerWriter:
 
         updated_txn = Transaction(**updated_data)
 
-        # Rebuild file content
-        transactions[target_idx] = updated_txn
-        new_content = self._rebuild_ledger_content(content, transactions)
+        # Splice updated transaction into the file
+        replacement_lines = updated_txn.to_ledger().split("\n")
+        new_lines = lines[:txn_start] + replacement_lines + lines[txn_end:]
+        new_content = "\n".join(new_lines)
 
-        # Validate new content
+        # Validate
         is_valid, error = await self.validator.validate_content(new_content)
         if not is_valid:
             raise ValueError(f"Update would create invalid ledger: {error}")
@@ -244,25 +283,3 @@ class LedgerWriter:
         self.path.write_text(new_content)
         await self._sync_paisa()
         return updated_txn
-
-    def _rebuild_ledger_content(
-        self, original_content: str, transactions: list[Transaction]
-    ) -> str:
-        """Rebuild ledger content preserving non-transaction parts."""
-        # Extract header comments (lines before first transaction)
-        lines = original_content.split("\n")
-        header_lines = []
-        for line in lines:
-            if re.match(r"^\d{4}[-/]\d{2}[-/]\d{2}", line):
-                break
-            header_lines.append(line)
-
-        # Build new content
-        parts = []
-        if header_lines:
-            parts.append("\n".join(header_lines).rstrip())
-
-        for txn in transactions:
-            parts.append(txn.to_ledger())
-
-        return "\n\n".join(parts) + "\n"

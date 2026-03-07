@@ -259,6 +259,16 @@ async def whatsapp_webhook(request: Request, body: WebhookPayload):
         if thread is None or thread.get("title") is None:
             await chat_history.update_thread_title(thread_id, f"WhatsApp: {push_name}")
 
+    # Handle confirm/cancel commands directly without LLM round-trip
+    command_response = await _handle_command(agent, message_body.strip(), thread_id, sender, client)
+    if command_response is not None:
+        return command_response
+
+    # Skip obvious non-financial messages to avoid wasting LLM calls
+    if not media_content and _is_noise_message(message_body.strip()):
+        logger.debug("noise_message_skipped", body=message_body[:50])
+        return {"status": "ignored", "reason": "noise"}
+
     try:
         await client.post("/api/sendSeen", json={"session": "default", "chatId": sender})
         await client.post("/api/startTyping", json={"session": "default", "chatId": sender})
@@ -270,11 +280,13 @@ async def whatsapp_webhook(request: Request, body: WebhookPayload):
 
     try:
         async with thread_lock:
-            if agent._tool_state:
-                agent._tool_state.set_source_context(TransactionSource.WHATSAPP, source_user)
-
             async for event in agent.process_message(
-                message_body, thread_id=thread_id, media=media_content, message_time=message_time
+                message_body,
+                thread_id=thread_id,
+                media=media_content,
+                message_time=message_time,
+                source=TransactionSource.WHATSAPP,
+                source_user=source_user,
             ):
                 if event.type == "text":
                     response_text += event.content
@@ -283,30 +295,133 @@ async def whatsapp_webhook(request: Request, body: WebhookPayload):
 
         # Send response back to WhatsApp
         if response_text.strip():
-            try:
-                resp = await client.post(
-                    "/api/sendText",
-                    json={"session": "default", "chatId": sender, "text": response_text},
-                )
-                resp.raise_for_status()
-            except httpx.HTTPStatusError as e:
-                logger.error("whatsapp_send_failed", status_code=e.response.status_code)
-            except httpx.RequestError as e:
-                logger.error("whatsapp_send_connection_error", error=type(e).__name__)
+            await _send_whatsapp_text(client, sender, response_text)
 
     except Exception as e:
         logger.error("agent_processing_failed", error=str(e), error_type=type(e).__name__)
         with contextlib.suppress(Exception):
-            await client.post(
-                "/api/sendText",
-                json={
-                    "session": "default",
-                    "chatId": sender,
-                    "text": "Sorry, I couldn't process that. Please try again.",
-                },
+            await _send_whatsapp_text(
+                client, sender, "Sorry, I couldn't process that. Please try again."
             )
     finally:
         with contextlib.suppress(Exception):
             await client.post("/api/stopTyping", json={"session": "default", "chatId": sender})
 
     return {"status": "processed"}
+
+
+_NOISE_PATTERNS = {
+    "hi", "hello", "hey", "good morning", "good night", "gm", "gn",
+    "thanks", "thank you", "ok thanks", "bye", "👍", "🙏", "😊", "😂",
+    "haha", "lol", "hmm", "acha", "theek hai", "sahi hai",
+}
+
+# Short words that look like noise but are valid finance shorthand / corrections
+_FINANCE_SHORT_WORDS = {
+    "upi", "cc", "emi", "sip", "fd", "neft", "imps", "atm", "cod",
+    "5k", "10k", "1k", "2k", "15k", "20k", "25k", "50k",
+}
+
+
+def _is_noise_message(message: str) -> bool:
+    """Return True if the message is clearly not about finances."""
+    lower = message.lower().strip().rstrip("!?.…")
+    if lower in _NOISE_PATTERNS:
+        return True
+    # Short messages: only noise if they have no digits and aren't finance keywords
+    if len(message) <= 3:
+        if any(c.isdigit() for c in message):
+            return False
+        if lower in _FINANCE_SHORT_WORDS:
+            return False
+        return True
+    return False
+
+
+async def _send_whatsapp_text(client: httpx.AsyncClient, chat_id: str, text: str) -> None:
+    """Send a text message via WhatsApp bridge."""
+    try:
+        resp = await client.post(
+            "/api/sendText",
+            json={"session": "default", "chatId": chat_id, "text": text},
+        )
+        resp.raise_for_status()
+    except httpx.HTTPStatusError as e:
+        logger.error("whatsapp_send_failed", status_code=e.response.status_code)
+    except httpx.RequestError as e:
+        logger.error("whatsapp_send_connection_error", error=type(e).__name__)
+
+
+_CONFIRM_WORDS = {"confirm", "save", "yes", "ok", "looks good", "lgtm", "done", "haan", "ha"}
+_CONFIRM_ALL_WORDS = {"confirm all", "save all", "yes to all", "yes all"}
+_CANCEL_WORDS = {"cancel", "no", "nahi", "nah", "delete that", "remove", "drop"}
+_CANCEL_ALL_WORDS = {"cancel all", "remove all", "delete all", "drop all"}
+
+
+async def _handle_command(
+    agent, message: str, thread_id: str, chat_id: str, client: httpx.AsyncClient
+) -> dict | None:
+    """Handle confirm/cancel commands directly, bypassing the LLM.
+
+    Returns a response dict if handled, None to continue to LLM.
+    """
+    lower = message.lower().strip()
+
+    # Confirm all
+    if lower in _CONFIRM_ALL_WORDS:
+        pending = agent.get_pending(thread_id=thread_id)
+        if not pending:
+            await _send_whatsapp_text(client, chat_id, "No pending transactions to confirm.")
+            return {"status": "processed", "command": "confirm_all", "count": 0}
+        confirmed = 0
+        for p in pending:
+            ok, _ = await agent.confirm_transaction(p["id"])
+            if ok:
+                confirmed += 1
+        await _send_whatsapp_text(client, chat_id, f"Confirmed {confirmed} transaction(s).")
+        return {"status": "processed", "command": "confirm_all", "count": confirmed}
+
+    # Cancel all
+    if lower in _CANCEL_ALL_WORDS:
+        pending = agent.get_pending(thread_id=thread_id)
+        if not pending:
+            await _send_whatsapp_text(client, chat_id, "No pending transactions to cancel.")
+            return {"status": "processed", "command": "cancel_all", "count": 0}
+        cancelled = 0
+        for p in pending:
+            if agent.cancel_transaction(p["id"]):
+                cancelled += 1
+        await _send_whatsapp_text(client, chat_id, f"Cancelled {cancelled} transaction(s).")
+        return {"status": "processed", "command": "cancel_all", "count": cancelled}
+
+    # Single confirm
+    if lower in _CONFIRM_WORDS:
+        pending = agent.get_pending(thread_id=thread_id)
+        if not pending:
+            return None  # Let LLM handle — might be a conversational "yes"
+        last = pending[-1]
+        ok, msg = await agent.confirm_transaction(last["id"])
+        if ok:
+            txn = last["transaction"]
+            await _send_whatsapp_text(
+                client,
+                chat_id,
+                f"Saved: {txn['payee']} for {txn['amount']} {txn['currency']}",
+            )
+        else:
+            await _send_whatsapp_text(client, chat_id, f"Could not confirm: {msg}")
+        return {"status": "processed", "command": "confirm"}
+
+    # Single cancel
+    if lower in _CANCEL_WORDS:
+        pending = agent.get_pending(thread_id=thread_id)
+        if not pending:
+            return None  # Let LLM handle
+        last = pending[-1]
+        agent.cancel_transaction(last["id"])
+        await _send_whatsapp_text(
+            client, chat_id, f"Cancelled: {last['transaction']['payee']}"
+        )
+        return {"status": "processed", "command": "cancel"}
+
+    return None

@@ -5,11 +5,13 @@ import json
 import logging
 import tempfile
 from collections.abc import AsyncIterator
+from decimal import Decimal
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 from fastapi import APIRouter, Request, UploadFile
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sse_starlette.sse import EventSourceResponse
 
 from gullak.agent import AgentEvent
@@ -111,11 +113,23 @@ class ThreadFilterRequest(BaseModel):
     thread_id: str | None = None
 
 
+class PendingTransactionUpdates(BaseModel):
+    """Typed fields for updating a pending transaction."""
+
+    payee: str | None = None
+    date: str | None = None
+    amount: Decimal | None = Field(default=None, gt=0)
+    expense_account: str | None = None
+    payment_account: str | None = None
+    currency: str | None = None
+    note: str | None = None
+
+
 class UpdatePendingRequest(BaseModel):
     """Update pending transaction request."""
 
     transaction_id: str
-    updates: dict
+    updates: PendingTransactionUpdates
 
 
 class ChatMessageWithMedia(BaseModel):
@@ -130,13 +144,14 @@ class ChatMessageWithMedia(BaseModel):
 async def chat(request: Request, body: ChatMessage):
     agent = request.app.state.agent
 
-    if agent._tool_state:
-        agent._tool_state.set_source_context(TransactionSource.WEB)
-
-    thread_id = body.thread_id or "default"
+    thread_id = body.thread_id or f"web:{uuid4().hex[:12]}"
     thread_lock = _get_thread_lock(thread_id)
 
-    agent_stream = agent.process_message(body.message, thread_id=body.thread_id)
+    agent_stream = agent.process_message(
+        body.message,
+        thread_id=thread_id,
+        source=TransactionSource.WEB,
+    )
     generator = _create_sse_generator(request, agent_stream, thread_lock)
 
     return EventSourceResponse(generator, ping=SSE_PING_INTERVAL)
@@ -259,7 +274,7 @@ async def update_pending(request: Request, body: UpdatePendingRequest) -> dict:
     """Update a pending transaction before confirmation."""
     agent = request.app.state.agent
 
-    result = agent.update_pending(body.transaction_id, body.updates)
+    result = agent.update_pending(body.transaction_id, body.updates.model_dump(exclude_none=True))
 
     if result is None:
         return {"success": False, "error": "Transaction not found"}
@@ -307,18 +322,18 @@ async def upload_receipt(request: Request, file: UploadFile) -> dict:
 async def chat_with_media(request: Request, body: ChatMessageWithMedia):
     agent = request.app.state.agent
 
-    if agent._tool_state:
-        agent._tool_state.set_source_context(TransactionSource.WEB)
-
     media_content = None
     if body.media:
         media_content = MediaContent(**body.media)
 
-    thread_id = body.thread_id or "default"
+    thread_id = body.thread_id or f"web:{uuid4().hex[:12]}"
     thread_lock = _get_thread_lock(thread_id)
 
     agent_stream = agent.process_message(
-        body.message, thread_id=body.thread_id, media=media_content
+        body.message,
+        thread_id=thread_id,
+        media=media_content,
+        source=TransactionSource.WEB,
     )
     generator = _create_sse_generator(request, agent_stream, thread_lock)
 

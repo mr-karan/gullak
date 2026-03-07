@@ -1,5 +1,6 @@
 """Data models for ledger transactions."""
 
+import re
 from datetime import date, datetime
 from decimal import Decimal
 from enum import Enum
@@ -7,6 +8,14 @@ from typing import Self
 from uuid import uuid4
 
 from pydantic import BaseModel, Field, computed_field
+
+# Characters that could inject ledger directives or comments
+_UNSAFE_CHARS = re.compile(r"[\n\r\x00-\x08\x0b\x0c\x0e-\x1f]")
+
+
+def _sanitize(value: str) -> str:
+    """Strip newlines and control characters from text written into ledger format."""
+    return _UNSAFE_CHARS.sub(" ", value).strip()
 
 
 class TransactionStatus(str, Enum):
@@ -28,7 +37,7 @@ class Posting(BaseModel):
         """Convert posting to ledger format."""
         # Format amount with 2 decimal places (no thousand separators - ledger doesn't support them)
         amount_str = f"{self.amount:.2f}"
-        return f"    {self.account}  {amount_str} {self.currency}"
+        return f"    {_sanitize(self.account)}  {amount_str} {_sanitize(self.currency)}"
 
 
 class TransactionSource(str, Enum):
@@ -51,7 +60,8 @@ class Transaction(BaseModel):
 
     def to_ledger(self) -> str:
         status_char = f" {self.status.value}" if self.status.value else ""
-        header = f"{self.date.isoformat().replace('-', '/')}{status_char} {self.payee}"
+        safe_payee = _sanitize(self.payee)
+        header = f"{self.date.isoformat().replace('-', '/')}{status_char} {safe_payee}"
 
         lines = [header]
 
@@ -61,13 +71,13 @@ class Transaction(BaseModel):
             lines.append(f"    ; gullak:source {self.source.value}")
 
         if self.source_user:
-            lines.append(f"    ; gullak:user {self.source_user}")
+            lines.append(f"    ; gullak:user {_sanitize(self.source_user)}")
 
         if self.note:
-            lines.append(f"    ; {self.note}")
+            lines.append(f"    ; {_sanitize(self.note)}")
 
         for key, value in self.tags.items():
-            lines.append(f"    ; {key}: {value}")
+            lines.append(f"    ; {_sanitize(key)}: {_sanitize(value)}")
 
         for posting in self.postings:
             lines.append(posting.to_ledger())
