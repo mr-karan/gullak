@@ -9,7 +9,8 @@ from gullak.agent.tool_state import ToolState
 from gullak.agent.tools_base import ToolDefinition, ToolResult
 from gullak.import_.processor import CSVProcessor
 from gullak.ledger.categories import suggest_category
-from gullak.ledger.models import PendingTransaction
+from gullak.ledger.writer import LedgerWriter
+from gullak.settings import settings
 
 logger = logging.getLogger(__name__)
 
@@ -52,8 +53,8 @@ def execute_learn_payee_mapping(state: ToolState, input: LearnPayeeMappingInput)
     )
 
 
-def execute_import_csv(state: ToolState, input: ImportCsvInput) -> ToolResult:
-    """Import transactions from CSV."""
+async def execute_import_csv(state: ToolState, input: ImportCsvInput) -> ToolResult:
+    """Import transactions from CSV and save them directly."""
     file_path = Path(input.file_path)
 
     if not file_path.exists():
@@ -75,7 +76,7 @@ def execute_import_csv(state: ToolState, input: ImportCsvInput) -> ToolResult:
         if result.errors:
             return ToolResult(success=False, error="; ".join(result.errors), data={})
 
-        pending_ids = []
+        transactions = []
         for imp_txn in result.transactions:
             suggested_account = input.default_expense_account
             if state.memory:
@@ -96,27 +97,24 @@ def execute_import_csv(state: ToolState, input: ImportCsvInput) -> ToolResult:
                 expense_account=suggested_account,
                 payment_account=input.payment_account,
             )
+            transactions.append(txn)
 
-            pending = PendingTransaction(
-                id=txn.gullak_id,
-                transaction=txn,
-                source_text=f"CSV import row {imp_txn.source_row}: {imp_txn.payee}",
-                thread_id=state.get_thread_id(),
-            )
-
-            state.add_pending(pending)
-            pending_ids.append(pending.id)
+        # Write all transactions at once
+        if transactions:
+            writer = LedgerWriter(state.ledger_path, state.validator, settings.paisa_url)
+            count = await writer.append_transactions(transactions)
+        else:
+            count = 0
 
         return ToolResult(
             success=True,
-            message=f"Imported {len(result.transactions)} transactions. {len(result.duplicates)} duplicates skipped.",
+            message=f"Imported and saved {count} transactions. {len(result.duplicates)} duplicates skipped.",
             data={
                 "total_rows": result.total_rows,
-                "imported": len(result.transactions),
+                "imported": count,
                 "duplicates": len(result.duplicates),
                 "skipped": result.skipped_rows,
                 "template": result.template_used,
-                "pending_ids": pending_ids,
             },
         )
 
@@ -140,5 +138,6 @@ Use when user says "Swiggy should always be Food:Delivery".""",
 Use when user uploads a bank statement or CSV file.""",
         input_model=ImportCsvInput,
         executor=execute_import_csv,
+        is_async=True,
     ),
 }

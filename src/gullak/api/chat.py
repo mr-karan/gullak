@@ -5,13 +5,12 @@ import json
 import logging
 import tempfile
 from collections.abc import AsyncIterator
-from decimal import Decimal
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
 from fastapi import APIRouter, Request, UploadFile
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse
 
 from gullak.agent import AgentEvent
@@ -86,58 +85,25 @@ class ChatMessage(BaseModel):
     thread_id: str | None = None
 
 
-class ConfirmRequest(BaseModel):
-    """Transaction confirmation request."""
-
-    transaction_id: str
-    thread_id: str | None = None
-
-
-class ConfirmResponse(BaseModel):
-    """Transaction confirmation response."""
-
-    success: bool
-    message: str
-
-
-class BatchConfirmRequest(BaseModel):
-    """Batch transaction confirmation request."""
-
-    transaction_ids: list[str]
-    thread_id: str | None = None
-
-
-class ThreadFilterRequest(BaseModel):
-    """Request with optional thread filter."""
-
-    thread_id: str | None = None
-
-
-class PendingTransactionUpdates(BaseModel):
-    """Typed fields for updating a pending transaction."""
-
-    payee: str | None = None
-    date: str | None = None
-    amount: Decimal | None = Field(default=None, gt=0)
-    expense_account: str | None = None
-    payment_account: str | None = None
-    currency: str | None = None
-    note: str | None = None
-
-
-class UpdatePendingRequest(BaseModel):
-    """Update pending transaction request."""
-
-    transaction_id: str
-    updates: PendingTransactionUpdates
-
-
 class ChatMessageWithMedia(BaseModel):
     """Chat message with optional media attachment."""
 
     message: str = ""
     thread_id: str | None = None
     media: dict | None = None
+
+
+class UndoRequest(BaseModel):
+    """Transaction undo request."""
+
+    transaction_id: str
+
+
+class UndoResponse(BaseModel):
+    """Transaction undo response."""
+
+    success: bool
+    message: str
 
 
 @router.post("")
@@ -157,42 +123,14 @@ async def chat(request: Request, body: ChatMessage):
     return EventSourceResponse(generator, ping=SSE_PING_INTERVAL)
 
 
-@router.post("/confirm")
-async def confirm_transaction(request: Request, body: ConfirmRequest) -> ConfirmResponse:
-    """Confirm and write a pending transaction to the ledger."""
-    agent = request.app.state.agent
-
-    success, message = await agent.confirm_transaction(body.transaction_id)
-
-    return ConfirmResponse(success=success, message=message)
-
-
 @router.post("/undo")
-async def undo_transaction(request: Request, body: ConfirmRequest) -> ConfirmResponse:
+async def undo_transaction(request: Request, body: UndoRequest) -> UndoResponse:
     """Undo a saved transaction."""
     agent = request.app.state.agent
 
     success, message = await agent.undo_transaction(body.transaction_id)
 
-    return ConfirmResponse(success=success, message=message)
-
-
-@router.post("/cancel")
-async def cancel_transaction(request: Request, body: ConfirmRequest) -> ConfirmResponse:
-    """Cancel a pending transaction."""
-    agent = request.app.state.agent
-
-    if agent.cancel_transaction(body.transaction_id):
-        return ConfirmResponse(success=True, message="Transaction cancelled")
-    else:
-        return ConfirmResponse(success=False, message="Transaction not found")
-
-
-@router.get("/pending")
-async def get_pending(request: Request, thread_id: str | None = None) -> list[dict[str, Any]]:
-    """Get pending transactions, optionally filtered by thread."""
-    agent = request.app.state.agent
-    return agent.get_pending(thread_id=thread_id)
+    return UndoResponse(success=success, message=message)
 
 
 @router.post("/upload")
@@ -219,71 +157,6 @@ async def upload_file(request: Request, file: UploadFile) -> dict:
         }
     except Exception as e:
         return {"success": False, "error": str(e)}
-
-
-@router.post("/confirm-all")
-async def confirm_all_transactions(
-    request: Request, body: ThreadFilterRequest | None = None
-) -> dict:
-    """Confirm all pending transactions for a thread."""
-    agent = request.app.state.agent
-    thread_id = body.thread_id if body else None
-    pending = agent.get_pending(thread_id=thread_id)
-
-    results = []
-    success_count = 0
-
-    for txn in pending:
-        success, message = await agent.confirm_transaction(txn["id"])
-        results.append({"id": txn["id"], "success": success, "message": message})
-        if success:
-            success_count += 1
-
-    return {
-        "success": True,
-        "confirmed": success_count,
-        "total": len(pending),
-        "results": results,
-        "message": f"Confirmed {success_count} of {len(pending)} transactions",
-    }
-
-
-@router.post("/cancel-all")
-async def cancel_all_transactions(
-    request: Request, body: ThreadFilterRequest | None = None
-) -> dict:
-    """Cancel all pending transactions for a thread."""
-    agent = request.app.state.agent
-    thread_id = body.thread_id if body else None
-    pending = agent.get_pending(thread_id=thread_id)
-
-    cancelled = 0
-    for txn in pending:
-        if agent.cancel_transaction(txn["id"]):
-            cancelled += 1
-
-    return {
-        "success": True,
-        "cancelled": cancelled,
-        "message": f"Cancelled {cancelled} transactions",
-    }
-
-
-@router.post("/update-pending")
-async def update_pending(request: Request, body: UpdatePendingRequest) -> dict:
-    """Update a pending transaction before confirmation."""
-    agent = request.app.state.agent
-
-    result = agent.update_pending(body.transaction_id, body.updates.model_dump(exclude_none=True))
-
-    if result is None:
-        return {"success": False, "error": "Transaction not found"}
-
-    return {
-        "success": True,
-        "preview": result["preview"],
-        "message": "Transaction updated",
-    }
 
 
 @router.post("/upload-receipt")

@@ -1,7 +1,7 @@
 """Data models for ledger transactions."""
 
 import re
-from datetime import date, datetime
+from datetime import date
 from decimal import Decimal
 from enum import Enum
 from typing import Self
@@ -149,20 +149,6 @@ class Transaction(BaseModel):
         """Total positive amount (sum of positive postings)."""
         return sum(p.amount for p in self.postings if p.amount > 0)
 
-
-class PendingTransaction(BaseModel):
-    """A transaction awaiting user confirmation."""
-
-    id: str
-    transaction: Transaction
-    source_text: str
-    thread_id: str | None = None
-    created_at: datetime = Field(default_factory=datetime.now)
-    ledger_preview: str = ""
-
-    def model_post_init(self, __context: object) -> None:
-        if not self.ledger_preview:
-            self.ledger_preview = self.transaction.to_ledger()
 
 
 class BudgetEntry(BaseModel):

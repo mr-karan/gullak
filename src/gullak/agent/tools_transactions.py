@@ -1,4 +1,4 @@
-"""Transaction tools: parse, edit, confirm, delete."""
+"""Transaction tools: parse, edit, delete."""
 
 import logging
 from decimal import Decimal
@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 
 from gullak.agent.tool_state import ToolState
 from gullak.agent.tools_base import ToolDefinition, ToolResult
-from gullak.ledger.models import PendingTransaction, Transaction
+from gullak.ledger.models import Transaction
 from gullak.ledger.writer import LedgerWriter
 from gullak.settings import settings
 
@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 
 class ParseExpenseInput(BaseModel):
-    """Parse natural language expense into a transaction preview."""
+    """Parse natural language expense into a transaction."""
 
     payee: str = Field(description="Merchant or payee name (e.g., 'BigBasket', 'Swiggy')")
     amount: Decimal | None = Field(
@@ -43,7 +43,7 @@ class ParseExpenseInput(BaseModel):
 
 
 class ParseIncomeInput(BaseModel):
-    """Parse income/earnings into a transaction preview."""
+    """Parse income/earnings into a transaction."""
 
     payee: str = Field(description="Source of income (e.g., 'Employer', 'HDFC Bank Interest')")
     amount: Decimal = Field(gt=0, description="Amount received")
@@ -54,24 +54,8 @@ class ParseIncomeInput(BaseModel):
     note: str | None = Field(default=None, description="Optional note")
 
 
-class EditPendingTransactionInput(BaseModel):
-    """Edit a pending (not yet saved) transaction."""
-
-    transaction_id: str | None = Field(
-        default=None,
-        description="Transaction ID. If not provided, edits the most recent pending transaction.",
-    )
-    payee: str | None = Field(default=None, description="New payee name")
-    amount: Decimal | None = Field(default=None, gt=0, description="New amount")
-    expense_account: str | None = Field(default=None, description="New expense account")
-    payment_account: str | None = Field(default=None, description="New payment account")
-    currency: str | None = Field(default=None, description="New currency")
-    date: str | None = Field(default=None, description="New date")
-    note: str | None = Field(default=None, description="New note")
-
-
 class EditTransactionInput(BaseModel):
-    """Edit an existing (already saved) transaction in the ledger."""
+    """Edit an existing transaction in the ledger."""
 
     transaction_id: str = Field(description="Transaction ID (8-char hex from gullak_id)")
     payee: str | None = Field(default=None, description="New payee name")
@@ -84,7 +68,7 @@ class EditTransactionInput(BaseModel):
 
 
 class EditLastTransactionInput(BaseModel):
-    """Edit the most recently confirmed transaction in this thread."""
+    """Edit the most recently saved transaction in this thread."""
 
     payee: str | None = Field(default=None, description="New payee name")
     amount: Decimal | None = Field(default=None, gt=0, description="New amount")
@@ -99,21 +83,6 @@ class DeleteTransactionInput(BaseModel):
     """Delete a transaction."""
 
     transaction_id: str = Field(description="Transaction ID (8-char hex)")
-
-
-class ConfirmTransactionInput(BaseModel):
-    """Confirm and save a pending transaction to the ledger."""
-
-    transaction_id: str | None = Field(
-        default=None,
-        description="Transaction ID to confirm. If not provided, confirms the most recent.",
-    )
-
-
-class ConfirmAllTransactionsInput(BaseModel):
-    """Confirm and save all pending transactions to the ledger."""
-
-    pass
 
 
 def _build_transaction_updates(state: ToolState, input: Any) -> dict[str, Any]:
@@ -135,8 +104,8 @@ def _build_transaction_updates(state: ToolState, input: Any) -> dict[str, Any]:
     return updates
 
 
-def execute_parse_expense(state: ToolState, input: ParseExpenseInput) -> ToolResult:
-    """Create a pending expense transaction."""
+async def execute_parse_expense(state: ToolState, input: ParseExpenseInput) -> ToolResult:
+    """Create and save an expense transaction immediately."""
     if input.amount is None or input.amount <= 0:
         return ToolResult(
             success=True,
@@ -180,27 +149,25 @@ def execute_parse_expense(state: ToolState, input: ParseExpenseInput) -> ToolRes
             source_user=state.get_source_user(),
         )
 
-        pending = PendingTransaction(
-            id=txn.gullak_id,
-            transaction=txn,
-            source_text=f"{input.payee} - {input.amount} {currency}",
-            thread_id=state.get_thread_id(),
-        )
+        # Write immediately
+        writer = LedgerWriter(state.ledger_path, state.validator, settings.paisa_url)
+        await writer.append_transaction(txn)
 
-        state.add_pending(pending)
+        # Track for edit_last_transaction
+        thread_id = state.get_thread_id()
+        state.set_last_confirmed(thread_id, txn.gullak_id)
 
-        is_default_cash = payment_account == "Assets:Cash"
-        is_small_amount = input.amount < 100
-        auto_confirmable = not is_default_cash or is_small_amount
+        # Learn payee mapping
+        if state.memory and txn.postings and txn.postings[0].account.startswith("Expenses:"):
+            payment_acc = txn.postings[1].account if len(txn.postings) > 1 else None
+            state.memory.add_mapping(txn.payee, expense_account, payment_acc)
 
         return ToolResult(
             success=True,
-            is_pending=True,
-            message=f"Created pending expense: {input.payee} for {input.amount} {currency}",
+            message=f"Saved: {input.payee} for {input.amount} {currency}",
             data={
-                "id": pending.id,
-                "preview": pending.ledger_preview,
-                "auto_confirmable": auto_confirmable,
+                "id": txn.gullak_id,
+                "preview": txn.to_ledger(),
                 "transaction": {
                     "date": str(txn.date),
                     "payee": txn.payee,
@@ -217,8 +184,8 @@ def execute_parse_expense(state: ToolState, input: ParseExpenseInput) -> ToolRes
         return ToolResult(success=False, error=str(e), data={})
 
 
-def execute_parse_income(state: ToolState, input: ParseIncomeInput) -> ToolResult:
-    """Create a pending income transaction."""
+async def execute_parse_income(state: ToolState, input: ParseIncomeInput) -> ToolResult:
+    """Create and save an income transaction immediately."""
     try:
         txn_date = state.parse_date(input.transaction_date)
         currency = input.currency or state.default_currency
@@ -235,22 +202,20 @@ def execute_parse_income(state: ToolState, input: ParseIncomeInput) -> ToolResul
             source_user=state.get_source_user(),
         )
 
-        pending = PendingTransaction(
-            id=txn.gullak_id,
-            transaction=txn,
-            source_text=f"Income: {input.payee} - {input.amount} {currency}",
-            thread_id=state.get_thread_id(),
-        )
+        # Write immediately
+        writer = LedgerWriter(state.ledger_path, state.validator, settings.paisa_url)
+        await writer.append_transaction(txn)
 
-        state.add_pending(pending)
+        # Track for edit_last_transaction
+        thread_id = state.get_thread_id()
+        state.set_last_confirmed(thread_id, txn.gullak_id)
 
         return ToolResult(
             success=True,
-            is_pending=True,
-            message=f"Created pending income: {input.payee} for {input.amount} {currency}",
+            message=f"Saved income: {input.payee} for {input.amount} {currency}",
             data={
-                "id": pending.id,
-                "preview": pending.ledger_preview,
+                "id": txn.gullak_id,
+                "preview": txn.to_ledger(),
                 "transaction": {
                     "date": str(txn.date),
                     "payee": txn.payee,
@@ -267,75 +232,8 @@ def execute_parse_income(state: ToolState, input: ParseIncomeInput) -> ToolResul
         return ToolResult(success=False, error=str(e), data={})
 
 
-def execute_edit_pending_transaction(
-    state: ToolState, input: EditPendingTransactionInput
-) -> ToolResult:
-    if input.transaction_id:
-        pending = state.get_pending().get(input.transaction_id)
-        if not pending:
-            return ToolResult(
-                success=False,
-                error=f"Pending transaction {input.transaction_id} not found",
-                data={},
-            )
-    else:
-        pending = state.get_last_pending()
-        if not pending:
-            return ToolResult(
-                success=False,
-                error="No pending transactions to edit. Create a transaction first.",
-                data={},
-            )
-
-    updates: dict[str, Any] = {}
-    if input.payee is not None:
-        updates["payee"] = input.payee
-    if input.amount is not None:
-        updates["amount"] = input.amount
-    if input.expense_account is not None:
-        updates["expense_account"] = input.expense_account
-    if input.payment_account is not None:
-        updates["payment_account"] = input.payment_account
-    if input.currency is not None:
-        updates["currency"] = input.currency
-    if input.date is not None:
-        updates["date"] = input.date
-    if input.note is not None:
-        updates["note"] = input.note
-
-    if not updates:
-        return ToolResult(success=False, error="No updates provided", data={})
-
-    updated = state.update_pending(pending.id, updates)
-    if updated is None:
-        return ToolResult(
-            success=False,
-            error=f"Failed to update pending transaction {pending.id}",
-            data={},
-        )
-
-    txn = updated.transaction
-    return ToolResult(
-        success=True,
-        is_pending=True,
-        message=f"Updated pending transaction: {txn.payee} for {txn.total_amount} {txn.postings[0].currency if txn.postings else state.default_currency}",
-        data={
-            "id": updated.id,
-            "preview": updated.ledger_preview,
-            "transaction": {
-                "date": str(txn.date),
-                "payee": txn.payee,
-                "amount": float(txn.total_amount),
-                "currency": txn.postings[0].currency if txn.postings else state.default_currency,
-                "expense_account": txn.postings[0].account if txn.postings else "",
-                "payment_account": txn.postings[1].account if len(txn.postings) > 1 else "",
-            },
-        },
-    )
-
-
 async def execute_edit_transaction(state: ToolState, input: EditTransactionInput) -> ToolResult:
-    """Edit an existing (committed) transaction in the ledger."""
+    """Edit an existing transaction in the ledger."""
     if not input.transaction_id:
         return ToolResult(success=False, error="transaction_id is required", data={})
 
@@ -375,13 +273,13 @@ async def execute_edit_transaction(state: ToolState, input: EditTransactionInput
 async def execute_edit_last_transaction(
     state: ToolState, input: EditLastTransactionInput
 ) -> ToolResult:
-    """Edit the most recently confirmed transaction for this thread."""
+    """Edit the most recently saved transaction for this thread."""
     thread_id = state.get_thread_id()
     transaction_id = state.get_last_confirmed(thread_id)
     if not transaction_id:
         return ToolResult(
             success=False,
-            error="No recently confirmed transaction found for this thread",
+            error="No recently saved transaction found for this thread",
             data={},
         )
 
@@ -463,156 +361,52 @@ async def execute_delete_transaction(state: ToolState, input: DeleteTransactionI
         return ToolResult(success=False, error=str(e), data={})
 
 
-async def execute_confirm_transaction(
-    state: ToolState, input: ConfirmTransactionInput
-) -> ToolResult:
-    if input.transaction_id:
-        pending = state.get_pending().get(input.transaction_id)
-        if not pending:
-            return ToolResult(
-                success=False,
-                error=f"Pending transaction {input.transaction_id} not found",
-                data={},
-            )
-    else:
-        pending = state.get_last_pending()
-        if not pending:
-            return ToolResult(
-                success=False,
-                error="No pending transactions to confirm",
-                data={},
-            )
-
-    try:
-        writer = LedgerWriter(state.ledger_path, state.validator, settings.paisa_url)
-        await writer.append_transaction(pending.transaction)
-        state.clear_pending(pending.id)
-        state.set_last_confirmed(
-            pending.thread_id or state.get_thread_id(), pending.transaction.gullak_id
-        )
-
-        if state.memory:
-            txn = pending.transaction
-            if txn.postings and txn.postings[0].account.startswith("Expenses:"):
-                expense_account = txn.postings[0].account
-                payment_account = txn.postings[1].account if len(txn.postings) > 1 else None
-                state.memory.add_mapping(txn.payee, expense_account, payment_account)
-
-        return ToolResult(
-            success=True,
-            message=f"Confirmed and saved: {pending.transaction.payee} for {pending.transaction.total_amount}",
-            data={
-                "id": pending.id,
-                "transaction_id": pending.transaction.gullak_id,
-                "payee": pending.transaction.payee,
-                "amount": float(pending.transaction.total_amount),
-            },
-        )
-    except Exception as e:
-        logger.exception(f"Error confirming transaction: {e}")
-        return ToolResult(success=False, error=str(e), data={})
-
-
-async def execute_confirm_all_transactions(
-    state: ToolState, input: ConfirmAllTransactionsInput
-) -> ToolResult:
-    pending_all = state.get_pending(thread_id=state.get_thread_id())
-    if not pending_all:
-        return ToolResult(success=False, error="No pending transactions to confirm", data={})
-
-    try:
-        writer = LedgerWriter(state.ledger_path, state.validator, settings.paisa_url)
-        confirmed_list = []
-
-        for pending in sorted(pending_all.values(), key=lambda p: p.created_at):
-            await writer.append_transaction(pending.transaction)
-            state.clear_pending(pending.id)
-            state.set_last_confirmed(
-                pending.thread_id or state.get_thread_id(),
-                pending.transaction.gullak_id,
-            )
-            if state.memory:
-                txn = pending.transaction
-                if txn.postings and txn.postings[0].account.startswith("Expenses:"):
-                    expense_account = txn.postings[0].account
-                    payment_account = txn.postings[1].account if len(txn.postings) > 1 else None
-                    state.memory.add_mapping(txn.payee, expense_account, payment_account)
-            confirmed_list.append(pending)
-
-        return ToolResult(
-            success=True,
-            message=f"Confirmed {len(confirmed_list)} transactions",
-            data={
-                "count": len(confirmed_list),
-                "transactions": [
-                    {
-                        "id": c.id,
-                        "transaction_id": c.transaction.gullak_id,
-                        "payee": c.transaction.payee,
-                        "amount": float(c.transaction.total_amount),
-                    }
-                    for c in confirmed_list
-                ],
-            },
-        )
-    except Exception as e:
-        logger.exception(f"Error confirming transactions: {e}")
-        return ToolResult(success=False, error=str(e), data={})
-
-
 # Tool definitions for this module
 TRANSACTION_TOOLS: dict[str, ToolDefinition] = {
     "parse_expense": ToolDefinition(
         name="parse_expense",
-        description="""Parse natural language expense and create a transaction preview.
+        description="""Parse natural language expense and save it to the ledger.
 Use when user mentions spending: "chai 50 rupees", "ordered from Swiggy 350",
-"paid rent 15000", "petrol 2000 from ICICI card".""",
+"paid rent 15000", "petrol 2000 from ICICI card".
+The transaction is saved immediately — no confirmation needed.""",
         input_model=ParseExpenseInput,
         executor=execute_parse_expense,
+        is_async=True,
     ),
     "parse_income": ToolDefinition(
         name="parse_income",
-        description="""Parse income/earnings and create a transaction preview.
+        description="""Parse income/earnings and save it to the ledger.
 Use when user mentions receiving: "salary credited 75000", "FD interest 5000",
-"got refund from Amazon", "dividend from stocks".""",
+"got refund from Amazon", "dividend from stocks".
+The transaction is saved immediately — no confirmation needed.""",
         input_model=ParseIncomeInput,
         executor=execute_parse_income,
-    ),
-    "edit_pending_transaction": ToolDefinition(
-        name="edit_pending_transaction",
-        description="""Edit a pending (not yet saved) transaction.
-
-IMPORTANT: Use this tool when user wants to modify a transaction they JUST created in this conversation.
-Trigger phrases: "actually", "wait", "change that", "make it X instead", "update the amount", 
-"it was paid by X card", "change category to Y".
-
-This is MUCH faster than edit_transaction and doesn't require a transaction ID - it automatically 
-finds the most recent pending transaction in the current thread.
-
-DO NOT use parse_expense when user wants to modify an existing pending transaction - that creates 
-a duplicate. Use edit_pending_transaction instead.""",
-        input_model=EditPendingTransactionInput,
-        executor=execute_edit_pending_transaction,
+        is_async=True,
     ),
     "edit_transaction": ToolDefinition(
         name="edit_transaction",
-        description="""Edit an existing (already saved) transaction in the ledger.
+        description="""Edit an existing transaction in the ledger.
 
-Use this ONLY for transactions that have already been confirmed and saved to the ledger file.
-Requires transaction_id - use get_recent_transactions first if you don't have it.
+Use this when the user wants to modify a saved transaction and provides a transaction ID.
+Use get_recent_transactions first if you don't have the ID.
 
-For transactions just created in this conversation, use edit_pending_transaction instead.""",
+For the most recent transaction, prefer edit_last_transaction instead.""",
         input_model=EditTransactionInput,
         executor=execute_edit_transaction,
         is_async=True,
     ),
     "edit_last_transaction": ToolDefinition(
         name="edit_last_transaction",
-        description="""Edit the most recently confirmed transaction in this thread.
+        description="""Edit the most recently saved transaction in this thread.
 
-Use when the user refers to "that/this transaction" shortly after confirming,
-and no transaction ID is provided. If there's no recent confirmed transaction,
-fall back to get_recent_transactions and ask for clarification.""",
+Use when user says "actually", "change that", "make it X", "update the amount",
+"it was paid by X card", "change category to Y", "from kotak", "using upi"
+RIGHT AFTER a transaction was just created.
+
+This is the preferred tool for immediate corrections — no transaction ID needed.
+
+DO NOT use parse_expense when user wants to modify the last transaction — that creates
+a duplicate. Use edit_last_transaction instead.""",
         input_model=EditLastTransactionInput,
         executor=execute_edit_last_transaction,
         is_async=True,
@@ -623,27 +417,6 @@ fall back to get_recent_transactions and ask for clarification.""",
 Use when user says "delete that", "remove it", "that was a mistake".""",
         input_model=DeleteTransactionInput,
         executor=execute_delete_transaction,
-        is_async=True,
-    ),
-    "confirm_transaction": ToolDefinition(
-        name="confirm_transaction",
-        description="""Confirm and save a pending transaction to the ledger.
-
-Use when user says "confirm", "save it", "yes", "looks good", "ok" after reviewing a transaction.
-If no transaction_id provided, confirms the most recent pending transaction.
-
-This permanently saves the transaction to the ledger file.""",
-        input_model=ConfirmTransactionInput,
-        executor=execute_confirm_transaction,
-        is_async=True,
-    ),
-    "confirm_all_transactions": ToolDefinition(
-        name="confirm_all_transactions",
-        description="""Confirm and save ALL pending transactions to the ledger.
-
-Use when user says "confirm all", "save all", "yes to all" to bulk-confirm pending transactions.""",
-        input_model=ConfirmAllTransactionsInput,
-        executor=execute_confirm_all_transactions,
         is_async=True,
     ),
 }

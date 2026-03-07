@@ -16,7 +16,6 @@ class ToolResult:
     data: dict[str, Any]
     message: str = ""
     error: str | None = None
-    is_pending: bool = False
 
     def to_json(self) -> str:
         """Serialize for LLM consumption."""

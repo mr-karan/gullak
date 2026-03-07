@@ -47,7 +47,6 @@ class AgentEvent:
     - "text": Streaming text content from the assistant
     - "thinking": Agent is using a tool (shows tool name)
     - "tool_result": Result from a tool execution
-    - "preview": Pending transaction preview (special handling for UI)
     - "done": Processing complete
     - "error": An error occurred
     """
@@ -202,10 +201,6 @@ class GullakAgent:
 
         messages: list[dict[str, Any]] = [{"role": "system", "content": system_content}]
 
-        pending_context = self._build_pending_context(thread_id)
-        if pending_context:
-            messages.append({"role": "system", "content": pending_context})
-
         if self._chat_history:
             loaded = await self._chat_history.load_messages(thread_id, limit=10)
             for m in loaded:
@@ -316,36 +311,20 @@ class GullakAgent:
                     result = await execute_tool(function_name, arguments, tool_state)
 
                     # Record action summary for chat history
-                    if result.is_pending:
-                        txn_data = result.data.get("transaction", {})
+                    txn_data = result.data.get("transaction", {})
+                    if txn_data:
                         tool_actions.append(
                             f"{function_name}({txn_data.get('payee', '?')}, "
                             f"{txn_data.get('amount', '?')} {txn_data.get('currency', '')})"
                         )
-                    elif function_name.startswith("confirm"):
-                        tool_actions.append(f"{function_name}({result.data.get('payee', 'ok')})")
                     elif result.success:
                         tool_actions.append(function_name)
 
-                    # Emit appropriate event based on result
-                    if result.is_pending:
-                        # Special handling for pending transaction previews
-                        yield AgentEvent(
-                            type="preview",
-                            content=result.message,
-                            data={
-                                "id": result.data.get("id", ""),
-                                "preview": result.data.get("preview", ""),
-                                "transaction": result.data.get("transaction", {}),
-                                "status": "pending",
-                            },
-                        )
-                    else:
-                        yield AgentEvent(
-                            type="tool_result",
-                            content=result.message,
-                            data=result.data,
-                        )
+                    yield AgentEvent(
+                        type="tool_result",
+                        content=result.message,
+                        data=result.data,
+                    )
 
                     # Append tool result to messages
                     messages.append(
@@ -375,51 +354,6 @@ class GullakAgent:
             logger.exception(f"Error processing message: {e}")
             yield AgentEvent(type="error", content=str(e))
 
-    async def confirm_transaction(self, txn_id: str) -> tuple[bool, str]:
-        """
-        Confirm and write a pending transaction to the ledger.
-
-        This is the single confirm path used by both API endpoints and the
-        WhatsApp command handler.  It writes the transaction, learns the payee
-        mapping, and records the last-confirmed ID — matching the behaviour of
-        the tool-based confirm path.
-
-        Returns:
-            Tuple of (success, message)
-        """
-        if not self._tool_state:
-            return False, "Tool state not initialized"
-
-        pending = self._tool_state.clear_pending(txn_id)
-
-        if pending is None:
-            return False, f"Transaction {txn_id} not found"
-
-        if self._writer is None:
-            return False, "Writer not initialized"
-
-        try:
-            await self._writer.append_transaction(pending.transaction)
-
-            # Record last confirmed for edit-last-transaction support
-            self._tool_state.set_last_confirmed(
-                pending.thread_id or self._tool_state.get_thread_id(),
-                pending.transaction.gullak_id,
-            )
-
-            # Learn payee → account mapping (same as tool-based confirm)
-            txn = pending.transaction
-            if self._tool_state.memory and txn.postings and txn.postings[0].account.startswith("Expenses:"):
-                expense_account = txn.postings[0].account
-                payment_account = txn.postings[1].account if len(txn.postings) > 1 else None
-                self._tool_state.memory.add_mapping(txn.payee, expense_account, payment_account)
-
-            return True, f"Transaction saved: {txn.payee}"
-        except Exception as e:
-            # Restore pending on failure
-            self._tool_state.add_pending(pending)
-            return False, f"Failed to write transaction: {e}"
-
     async def undo_transaction(self, txn_id: str) -> tuple[bool, str]:
         """
         Undo a previously saved transaction by ID.
@@ -438,94 +372,5 @@ class GullakAgent:
         except Exception as e:
             return False, f"Failed to undo transaction: {e}"
 
-    def cancel_transaction(self, txn_id: str) -> bool:
-        """Cancel a pending transaction."""
-        if not self._tool_state:
-            return False
-        return self._tool_state.clear_pending(txn_id) is not None
-
-    def get_pending(self, thread_id: str | None = None) -> list[dict[str, Any]]:
-        """Get pending transactions, optionally filtered by thread."""
-        if not self._tool_state:
-            return []
-
-        return [
-            {
-                "id": p.id,
-                "preview": p.ledger_preview,
-                "source_text": p.source_text,
-                "created_at": p.created_at.isoformat(),
-                "thread_id": p.thread_id,
-                "transaction": {
-                    "date": str(p.transaction.date),
-                    "payee": p.transaction.payee,
-                    "amount": float(p.transaction.total_amount),
-                    "currency": p.transaction.postings[0].currency
-                    if p.transaction.postings
-                    else self.default_currency,
-                    "expense_account": p.transaction.postings[0].account
-                    if p.transaction.postings
-                    else "",
-                    "payment_account": p.transaction.postings[1].account
-                    if len(p.transaction.postings) > 1
-                    else "",
-                },
-            }
-            for p in self._tool_state.get_pending(thread_id=thread_id).values()
-        ]
-
-    def update_pending(self, txn_id: str, updates: dict[str, Any]) -> dict[str, Any] | None:
-        """Update a pending transaction."""
-        if not self._tool_state:
-            return None
-
-        pending = self._tool_state.update_pending(txn_id, updates)
-        if pending is None:
-            return None
-
-        return {
-            "id": pending.id,
-            "preview": pending.ledger_preview,
-            "transaction": {
-                "date": str(pending.transaction.date),
-                "payee": pending.transaction.payee,
-                "amount": float(pending.transaction.total_amount),
-                "currency": pending.transaction.postings[0].currency
-                if pending.transaction.postings
-                else self.default_currency,
-                "expense_account": pending.transaction.postings[0].account
-                if pending.transaction.postings
-                else "",
-                "payment_account": pending.transaction.postings[1].account
-                if len(pending.transaction.postings) > 1
-                else "",
-            },
-        }
-
     def get_chat_history(self) -> ChatHistory | None:
         return self._chat_history
-
-    def _build_pending_context(self, thread_id: str | None) -> str:
-        if not self._tool_state:
-            return ""
-
-        pending = self._tool_state.get_pending(thread_id=thread_id)
-        if not pending:
-            return ""
-
-        lines = ["[PENDING TRANSACTIONS - Use edit_pending_transaction to modify these]"]
-        for p in pending.values():
-            txn = p.transaction
-            amount = txn.total_amount
-            currency = txn.postings[0].currency if txn.postings else self.default_currency
-            expense_acc = txn.postings[0].account if txn.postings else "Unknown"
-            payment_acc = txn.postings[1].account if len(txn.postings) > 1 else "Unknown"
-            created_by = txn.source_user or ""
-            created_by_segment = f" | by {created_by}" if created_by else ""
-            line = (
-                f"- ID: {p.id} | {txn.payee}: {amount} {currency} | "
-                f"{expense_acc} <- {payment_acc}{created_by_segment}"
-            )
-            lines.append(line)
-
-        return "\n".join(lines)

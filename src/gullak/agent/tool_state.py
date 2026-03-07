@@ -1,6 +1,5 @@
 """Shared state for Gullak tools with dependency injection."""
 
-import json
 import logging
 from contextvars import ContextVar
 from datetime import date, datetime, timedelta
@@ -11,7 +10,7 @@ from zoneinfo import ZoneInfo
 
 from gullak.ledger.categories import suggest_category
 from gullak.ledger.memory import PayeeMemory
-from gullak.ledger.models import PendingTransaction, TransactionSource
+from gullak.ledger.models import TransactionSource
 from gullak.ledger.parser import LedgerParser
 from gullak.ledger.validator import LedgerValidator
 
@@ -27,7 +26,6 @@ class ToolState:
 
     This class manages:
     - Ledger path and configuration
-    - Pending transactions (preview before confirm)
     - Payee memory for auto-categorization
     - Parser and validator instances
     - Thread context for multi-conversation support
@@ -59,10 +57,6 @@ class ToolState:
         self._now: ContextVar[datetime | None] = ContextVar("gullak_time_context", default=None)
         self._last_confirmed_by_thread: dict[str, str] = {}
 
-        self._pending: dict[str, PendingTransaction] = {}
-        self._last_created_id: str | None = None
-        self._load_pending()
-
     def _get_ledger_mtime(self) -> float | None:
         try:
             return self.ledger_path.stat().st_mtime if self.ledger_path.exists() else None
@@ -75,108 +69,6 @@ class ToolState:
         if current_mtime != self._memory_mtime:
             self.memory = PayeeMemory(self.ledger_path)
             self._memory_mtime = current_mtime
-
-    # -------------------------------------------------------------------------
-    # Pending Transaction Management
-    # -------------------------------------------------------------------------
-
-    def _get_pending_file(self) -> Path:
-        """Get path to pending transactions file."""
-        return self.ledger_path.parent / ".pending.json"
-
-    def _load_pending(self) -> None:
-        """Load pending transactions from disk."""
-        pending_file = self._get_pending_file()
-        if not pending_file.exists():
-            return
-
-        try:
-            data = json.loads(pending_file.read_text())
-            for k, v in data.items():
-                self._pending[k] = PendingTransaction.model_validate(v)
-            logger.debug(f"Loaded {len(self._pending)} pending transactions")
-        except (json.JSONDecodeError, Exception) as e:
-            logger.warning(f"Error loading pending transactions: {e}")
-
-    def _save_pending(self) -> None:
-        """Persist pending transactions to disk."""
-        pending_file = self._get_pending_file()
-
-        if not self._pending:
-            if pending_file.exists():
-                pending_file.unlink()
-            return
-
-        data = {k: v.model_dump(mode="json") for k, v in self._pending.items()}
-        pending_file.write_text(json.dumps(data, indent=2, default=str))
-
-    def add_pending(self, pending: PendingTransaction) -> None:
-        self._pending[pending.id] = pending
-        self._last_created_id = pending.id
-        self._save_pending()
-        logger.info(f"Added pending transaction: {pending.id}")
-
-    def get_pending(self, thread_id: str | None = None) -> dict[str, PendingTransaction]:
-        if thread_id is None:
-            return self._pending.copy()
-        return {k: v for k, v in self._pending.items() if v.thread_id == thread_id}
-
-    def get_last_pending(self) -> PendingTransaction | None:
-        thread_id = self.get_thread_id()
-
-        if self._last_created_id and self._last_created_id in self._pending:
-            pending = self._pending[self._last_created_id]
-            if thread_id is None or pending.thread_id == thread_id:
-                return pending
-
-        thread_pending = self.get_pending(thread_id=thread_id)
-        if not thread_pending:
-            return None
-
-        return max(thread_pending.values(), key=lambda p: p.created_at)
-
-    def clear_pending(self, txn_id: str) -> PendingTransaction | None:
-        """Remove and return a pending transaction."""
-        result = self._pending.pop(txn_id, None)
-        if result:
-            self._save_pending()
-            logger.info(f"Cleared pending transaction: {txn_id}")
-        return result
-
-    def update_pending(self, txn_id: str, updates: dict) -> PendingTransaction | None:
-        """Update a pending transaction's fields."""
-        pending = self._pending.get(txn_id)
-        if not pending:
-            return None
-
-        txn = pending.transaction
-
-        # Apply updates to transaction
-        if "payee" in updates:
-            txn.payee = updates["payee"]
-        if "date" in updates:
-            txn.date = self.parse_date(updates["date"])
-        if "amount" in updates and txn.postings:
-            new_amount = Decimal(str(updates["amount"]))
-            txn.postings[0].amount = new_amount
-            if len(txn.postings) > 1:
-                txn.postings[1].amount = -new_amount
-        if "expense_account" in updates and txn.postings:
-            txn.postings[0].account = updates["expense_account"]
-        if "payment_account" in updates and len(txn.postings) > 1:
-            txn.postings[1].account = updates["payment_account"]
-        if "currency" in updates and txn.postings:
-            for posting in txn.postings:
-                posting.currency = updates["currency"]
-        if "note" in updates:
-            txn.note = updates["note"]
-
-        # Regenerate preview from updated transaction
-        pending.transaction = txn
-        pending.ledger_preview = txn.to_ledger()
-        self._save_pending()
-
-        return pending
 
     # -------------------------------------------------------------------------
     # Date Parsing
