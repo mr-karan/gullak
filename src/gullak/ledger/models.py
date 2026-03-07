@@ -181,6 +181,7 @@ class PeriodicBudget(BaseModel):
             end = date(year, month, 1).isoformat()
 
         lines = [f"~ {self.period} from {start} to {end}"]
+        lines.append("    ; gullak:budget")
 
         for entry in self.entries:
             lines.append(f"    {entry.account}  {entry.amount:.0f} {entry.currency}")

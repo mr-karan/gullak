@@ -27,7 +27,7 @@ CATEGORY_PATTERNS: list[tuple[re.Pattern[str], str]] = [
     ),
     (
         re.compile(
-            r"bigbasket|blinkit|zepto|jiomart|grofers|d-?mart|more\s+supermarket|reliance\s+fresh|supermarket|grocery",
+            r"bigbasket|blinkit|zepto|jiomart|grofers|d-?mart|more\s+supermarket|reliance\s+fresh|supermarket|grocery|licious|freshtohome|country\s*delight",
             re.IGNORECASE,
         ),
         "Expenses:Food:Groceries",
@@ -138,7 +138,7 @@ CATEGORY_PATTERNS: list[tuple[re.Pattern[str], str]] = [
     ),
     # Services
     (
-        re.compile(r"urban\s*company|urbanclap|housejoy|plumber|electrician", re.IGNORECASE),
+        re.compile(r"urban\s*company|urbanclap|housejoy|plumber|electrician|maid|cleaning|domestic\s*help", re.IGNORECASE),
         "Expenses:Services:HomeServices",
     ),
     (re.compile(r"laundry|dry\s*clean|wash", re.IGNORECASE), "Expenses:Services:Laundry"),

@@ -1,9 +1,10 @@
 """Configuration management for Gullak."""
 
+import json
 from pathlib import Path
 from typing import Literal
 
-from pydantic import Field
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -86,9 +87,9 @@ class Settings(BaseSettings):
     # WhatsApp Integration
     whatsapp_bridge_url: str = "http://whatsapp-bridge:3000"
     whatsapp_api_key: str | None = Field(default=None, validation_alias="GULLAK_WHATSAPP_API_KEY")
-    whatsapp_allowed_numbers: list[str] = Field(
-        default_factory=list,
-        description="List of allowed phone numbers (e.g., 919999999999) that can interact with the bot",
+    whatsapp_allowed_numbers: str = Field(
+        default="",
+        description="Allowed phone numbers. Comma-separated or JSON array (e.g., '919999999999,918888888888').",
     )
     whatsapp_group_require_mention: bool = Field(
         default=False,
@@ -113,6 +114,16 @@ class Settings(BaseSettings):
     debug: bool = False
     host: str = "0.0.0.0"
     port: int = 8000
+
+    @property
+    def whatsapp_allowed_numbers_list(self) -> list[str]:
+        """Parse allowed numbers from string (comma-separated or JSON array)."""
+        v = self.whatsapp_allowed_numbers.strip()
+        if not v:
+            return []
+        if v.startswith("["):
+            return json.loads(v)
+        return [n.strip() for n in v.split(",") if n.strip()]
 
     @property
     def ledger_path(self) -> Path:

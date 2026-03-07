@@ -52,20 +52,37 @@ async def execute_set_budget(state: ToolState, input: SetBudgetInput) -> ToolRes
     try:
         if state.ledger_path.exists():
             content = state.ledger_path.read_text()
-            if "~ Monthly" in content:
-                lines = content.split("\n")
-                new_lines = []
-                skip_until_blank = False
-                for line in lines:
-                    if line.startswith("~ Monthly"):
-                        skip_until_blank = True
-                        continue
-                    if skip_until_blank:
-                        if not line.strip():
-                            skip_until_blank = False
-                        continue
-                    new_lines.append(line)
-                content = "\n".join(new_lines)
+            # Only remove periodic blocks tagged with ; gullak:budget
+            lines = content.split("\n")
+            new_lines = []
+            skip_until_blank = False
+            in_periodic_block = False
+            is_gullak_budget = False
+            block_buffer: list[str] = []
+            for line in lines:
+                if line.startswith("~ "):
+                    in_periodic_block = True
+                    is_gullak_budget = False
+                    block_buffer = [line]
+                    continue
+                if in_periodic_block:
+                    if not line.strip():
+                        # End of block — flush or discard
+                        in_periodic_block = False
+                        if not is_gullak_budget:
+                            new_lines.extend(block_buffer)
+                        new_lines.append(line)
+                        block_buffer = []
+                    else:
+                        if "gullak:budget" in line:
+                            is_gullak_budget = True
+                        block_buffer.append(line)
+                    continue
+                new_lines.append(line)
+            # Handle block at end of file (no trailing blank line)
+            if in_periodic_block and not is_gullak_budget:
+                new_lines.extend(block_buffer)
+            content = "\n".join(new_lines)
             new_content = ledger_text + "\n\n" + content.lstrip()
         else:
             state.ledger_path.parent.mkdir(parents=True, exist_ok=True)
