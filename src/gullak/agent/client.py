@@ -236,7 +236,7 @@ class GullakAgent:
             # Include media description so history reflects what the model saw
             if media:
                 media_list = media if isinstance(media, list) else [media]
-                media_desc = ", ".join(f"[{m.media_type}]" for m in media_list)
+                media_desc = ", ".join(f"[{m.type}]" for m in media_list)
                 save_text = f"{user_message}\n{media_desc}" if user_message.strip() else media_desc
             else:
                 save_text = user_message
