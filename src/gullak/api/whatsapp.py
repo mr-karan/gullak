@@ -166,11 +166,32 @@ async def whatsapp_webhook(request: Request, body: WebhookPayload):
     message_body = payload.get("body", "")
 
     # Security: Check allowlist (guaranteed non-empty — app won't boot without it)
+    # WhatsApp may send LID (@lid) instead of phone JID (@s.whatsapp.net).
+    # Check both the author field and participant/pushName for phone numbers.
     author_number = author.split("@")[0]
 
-    if author_number not in settings.whatsapp_allowed_numbers_list:
-        logger.warning("unauthorized_whatsapp_sender", sender=author, number=author_number)
+    # Also try participant field (some bridges include phone number here)
+    participant = payload.get("participant", "")
+    participant_number = participant.split("@")[0] if participant else ""
+
+    allowed = settings.whatsapp_allowed_numbers_list
+    if author_number not in allowed and participant_number not in allowed:
+        # Log full payload keys for debugging LID issues
+        logger.warning(
+            "unauthorized_whatsapp_sender",
+            sender=author,
+            number=author_number,
+            participant=participant,
+            participant_number=participant_number,
+            payload_keys=list(payload.keys()),
+        )
         return {"status": "ignored", "reason": "unauthorized"}
+
+    # Use the matched number for thread/user identification
+    if author_number in allowed:
+        resolved_number = author_number
+    else:
+        resolved_number = participant_number
 
     # Ignore messages from myself
     if payload.get("fromMe", False):
@@ -239,15 +260,15 @@ async def whatsapp_webhook(request: Request, body: WebhookPayload):
         group_id = sender.split("@")[0]
         thread_id = f"wa:group:{group_id}"
     else:
-        thread_id = f"wa:dm:{author_number}"
+        thread_id = f"wa:dm:{resolved_number}"
 
     push_name = payload.get("pushName")
-    source_user = push_name or author_number
+    source_user = push_name or resolved_number
 
     logger.info(
         "processing_whatsapp_message",
         chat_id=sender,
-        author=author_number,
+        author=resolved_number,
         source_user=source_user,
         body_length=len(message_body),
         has_media=media_content is not None,
