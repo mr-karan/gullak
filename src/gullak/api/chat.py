@@ -139,8 +139,8 @@ async def upload_file(request: Request, file: UploadFile) -> dict:
     if not file.filename:
         return {"success": False, "error": "No file provided"}
 
-    if not file.filename.lower().endswith((".csv", ".xlsx", ".xls")):
-        return {"success": False, "error": "Only CSV and Excel files are supported"}
+    if not file.filename.lower().endswith(".csv"):
+        return {"success": False, "error": "Only CSV files are supported"}
 
     try:
         suffix = Path(file.filename).suffix

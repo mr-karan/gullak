@@ -59,12 +59,13 @@ async def lifespan(app: FastAPI):
     app.state.validator = LedgerValidator(cli_path=settings.ledger_cli)
     app.state.writer = LedgerWriter(settings.ledger_path, app.state.validator, settings.paisa_url)
 
-    # Initialize agent
+    # Initialize agent with shared writer so all mutations share one lock
     app.state.agent = GullakAgent(
         ledger_path=settings.ledger_path,
         default_currency=settings.default_currency,
         timezone=settings.timezone,
         ledger_cli=settings.ledger_cli,
+        writer=app.state.writer,
     )
 
     logger.info(

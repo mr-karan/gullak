@@ -2,7 +2,7 @@
 
 from datetime import date
 from decimal import Decimal
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -18,24 +18,24 @@ from gullak.agent.tools_transactions import (
     execute_parse_income,
 )
 from gullak.ledger.models import Transaction
-from gullak.ledger.writer import LedgerWriter
 
 
 @pytest.fixture
 def mock_writer():
-    """Mock LedgerWriter for tools that create it internally."""
-    with patch("gullak.agent.tools_transactions.LedgerWriter") as MockWriter:
-        instance = MockWriter.return_value
-        instance.append_transaction = AsyncMock(return_value=True)
-        instance.update_transaction = AsyncMock(return_value=None)
-        instance.delete_transaction = AsyncMock(return_value=True)
-        yield instance
+    """Mock LedgerWriter injected via state.writer."""
+    writer = MagicMock()
+    writer.append_transaction = AsyncMock(return_value=True)
+    writer.update_transaction = AsyncMock(return_value=None)
+    writer.delete_transaction = AsyncMock(return_value=True)
+    return writer
 
 
 @pytest.fixture
-def state(temp_ledger_path):
+def state(temp_ledger_path, mock_writer):
     temp_ledger_path.write_text("")
-    return ToolState(ledger_path=temp_ledger_path, default_currency="INR")
+    s = ToolState(ledger_path=temp_ledger_path, default_currency="INR")
+    s.writer = mock_writer
+    return s
 
 
 class TestParseExpense:

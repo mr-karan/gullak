@@ -1,7 +1,10 @@
+import asyncio
 import re
 from dataclasses import dataclass
 from difflib import SequenceMatcher
 from pathlib import Path
+
+from .writer import _sanitize_ledger_text
 
 
 @dataclass
@@ -13,8 +16,9 @@ class PayeeMapping:
 class PayeeMemory:
     PAYEE_MAP_PATTERN = re.compile(r";\s*gullak:payee_map\s+(.+?)=([^|\n]+)(?:\|(.+))?")
 
-    def __init__(self, ledger_path: Path):
+    def __init__(self, ledger_path: Path, write_lock: asyncio.Lock | None = None):
         self.path = ledger_path
+        self._write_lock = write_lock
         self._mappings: dict[str, PayeeMapping] = {}
         self._load_mappings()
 
@@ -85,15 +89,20 @@ class PayeeMemory:
         if not self.path.exists():
             return
 
+        # Sanitize all values to prevent ledger injection
+        payee_safe = _sanitize_ledger_text(payee) or ""
+        expense_safe = _sanitize_ledger_text(expense_account) or ""
+        payment_safe = _sanitize_ledger_text(payment_account) if payment_account else None
+
         content = self.path.read_text()
 
-        payee_escaped = re.escape(payee.lower().strip())
+        payee_escaped = re.escape(payee_safe.lower().strip())
         pattern = re.compile(rf";\s*gullak:payee_map\s+{payee_escaped}=[^\n]+", re.IGNORECASE)
 
-        if payment_account:
-            new_line = f"; gullak:payee_map {payee}={expense_account}|{payment_account}"
+        if payment_safe:
+            new_line = f"; gullak:payee_map {payee_safe}={expense_safe}|{payment_safe}"
         else:
-            new_line = f"; gullak:payee_map {payee}={expense_account}"
+            new_line = f"; gullak:payee_map {payee_safe}={expense_safe}"
 
         if pattern.search(content):
             content = pattern.sub(new_line, content)

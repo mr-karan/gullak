@@ -9,8 +9,6 @@ from pydantic import BaseModel, Field
 from gullak.agent.tool_state import ToolState
 from gullak.agent.tools_base import ToolDefinition, ToolResult
 from gullak.ledger.models import Transaction
-from gullak.ledger.writer import LedgerWriter
-from gullak.settings import settings
 
 logger = logging.getLogger(__name__)
 
@@ -149,13 +147,15 @@ async def execute_parse_expense(state: ToolState, input: ParseExpenseInput) -> T
             source_user=state.get_source_user(),
         )
 
-        # Write immediately
-        writer = LedgerWriter(state.ledger_path, state.validator, settings.paisa_url)
-        await writer.append_transaction(txn)
+        # Write immediately using shared writer
+        if not state.writer:
+            return ToolResult(success=False, error="Writer not initialized", data={})
+        await state.writer.append_transaction(txn)
 
         # Track for edit_last_transaction
         thread_id = state.get_thread_id()
-        state.set_last_confirmed(thread_id, txn.gullak_id)
+        source_user = state.get_source_user()
+        state.set_last_confirmed(thread_id, txn.gullak_id, source_user)
 
         # Learn payee mapping
         if state.memory and txn.postings and txn.postings[0].account.startswith("Expenses:"):
@@ -202,13 +202,15 @@ async def execute_parse_income(state: ToolState, input: ParseIncomeInput) -> Too
             source_user=state.get_source_user(),
         )
 
-        # Write immediately
-        writer = LedgerWriter(state.ledger_path, state.validator, settings.paisa_url)
-        await writer.append_transaction(txn)
+        # Write immediately using shared writer
+        if not state.writer:
+            return ToolResult(success=False, error="Writer not initialized", data={})
+        await state.writer.append_transaction(txn)
 
         # Track for edit_last_transaction
         thread_id = state.get_thread_id()
-        state.set_last_confirmed(thread_id, txn.gullak_id)
+        source_user = state.get_source_user()
+        state.set_last_confirmed(thread_id, txn.gullak_id, source_user)
 
         return ToolResult(
             success=True,
@@ -243,8 +245,9 @@ async def execute_edit_transaction(state: ToolState, input: EditTransactionInput
         return ToolResult(success=False, error="No updates provided", data={})
 
     try:
-        writer = LedgerWriter(state.ledger_path, state.validator, settings.paisa_url)
-        updated_txn = await writer.update_transaction(input.transaction_id, updates)
+        if not state.writer:
+            return ToolResult(success=False, error="Writer not initialized", data={})
+        updated_txn = await state.writer.update_transaction(input.transaction_id, updates)
 
         if updated_txn is None:
             return ToolResult(
@@ -273,9 +276,10 @@ async def execute_edit_transaction(state: ToolState, input: EditTransactionInput
 async def execute_edit_last_transaction(
     state: ToolState, input: EditLastTransactionInput
 ) -> ToolResult:
-    """Edit the most recently saved transaction for this thread."""
+    """Edit the most recently saved transaction for this thread/user."""
     thread_id = state.get_thread_id()
-    transaction_id = state.get_last_confirmed(thread_id)
+    source_user = state.get_source_user()
+    transaction_id = state.get_last_confirmed(thread_id, source_user)
     if not transaction_id:
         return ToolResult(
             success=False,
@@ -288,8 +292,9 @@ async def execute_edit_last_transaction(
         return ToolResult(success=False, error="No updates provided", data={})
 
     try:
-        writer = LedgerWriter(state.ledger_path, state.validator, settings.paisa_url)
-        updated_txn = await writer.update_transaction(transaction_id, updates)
+        if not state.writer:
+            return ToolResult(success=False, error="Writer not initialized", data={})
+        updated_txn = await state.writer.update_transaction(transaction_id, updates)
 
         if updated_txn is None:
             return ToolResult(
@@ -335,8 +340,9 @@ async def execute_delete_transaction(state: ToolState, input: DeleteTransactionI
         )
 
     try:
-        writer = LedgerWriter(state.ledger_path, state.validator, settings.paisa_url)
-        deleted = await writer.delete_transaction(input.transaction_id)
+        if not state.writer:
+            return ToolResult(success=False, error="Writer not initialized", data={})
+        deleted = await state.writer.delete_transaction(input.transaction_id)
 
         if not deleted:
             return ToolResult(

@@ -1,7 +1,7 @@
 """Tests for payee mapping behavior in transaction parsing."""
 
 from decimal import Decimal
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -15,11 +15,10 @@ def _write_payee_mapping(ledger_path, mapping_line: str) -> None:
 
 @pytest.fixture
 def mock_writer():
-    """Mock LedgerWriter to avoid file validation and Paisa sync."""
-    with patch("gullak.agent.tools_transactions.LedgerWriter") as MockWriter:
-        instance = MockWriter.return_value
-        instance.append_transaction = AsyncMock(return_value=True)
-        yield instance
+    """Mock LedgerWriter injected via state.writer."""
+    writer = MagicMock()
+    writer.append_transaction = AsyncMock(return_value=True)
+    return writer
 
 
 async def test_parse_expense_applies_payment_mapping_when_missing(temp_ledger_path, mock_writer):
@@ -28,6 +27,7 @@ async def test_parse_expense_applies_payment_mapping_when_missing(temp_ledger_pa
         "; gullak:payee_map Swiggy=Expenses:Food:Delivery|Liabilities:CreditCard:Axis",
     )
     state = ToolState(ledger_path=temp_ledger_path, default_currency="INR")
+    state.writer = mock_writer
 
     result = await execute_parse_expense(
         state,
@@ -50,6 +50,7 @@ async def test_parse_expense_keeps_explicit_payment_account(temp_ledger_path, mo
         "; gullak:payee_map Swiggy=Expenses:Food:Delivery|Liabilities:CreditCard:Axis",
     )
     state = ToolState(ledger_path=temp_ledger_path, default_currency="INR")
+    state.writer = mock_writer
 
     result = await execute_parse_expense(
         state,

@@ -76,6 +76,7 @@ class GullakAgent:
     default_currency: str = "INR"
     timezone: str = "Asia/Kolkata"
     ledger_cli: str = "ledger"
+    writer: LedgerWriter | None = None
     model: str = field(default_factory=lambda: settings.inference_model)
     vision_model: str = field(default_factory=lambda: settings.effective_vision_model)
 
@@ -91,7 +92,8 @@ class GullakAgent:
     def __post_init__(self) -> None:
         """Initialize the agent components."""
         self._validator = LedgerValidator(cli_path=self.ledger_cli)
-        self._writer = LedgerWriter(self.ledger_path, self._validator, settings.paisa_url)
+        # Use shared writer if provided, otherwise create one
+        self._writer = self.writer or LedgerWriter(self.ledger_path, self._validator, settings.paisa_url)
 
         # Initialize tool state with dependency injection
         self._tool_state = ToolState(
@@ -231,7 +233,14 @@ class GullakAgent:
             messages.append({"role": "user", "content": user_message})
 
         if self._chat_history:
-            await self._chat_history.save_message(thread_id, "user", user_message)
+            # Include media description so history reflects what the model saw
+            if media:
+                media_list = media if isinstance(media, list) else [media]
+                media_desc = ", ".join(f"[{m.media_type}]" for m in media_list)
+                save_text = f"{user_message}\n{media_desc}" if user_message.strip() else media_desc
+            else:
+                save_text = user_message
+            await self._chat_history.save_message(thread_id, "user", save_text)
 
         try:
             # Run the agentic loop

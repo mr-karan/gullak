@@ -55,7 +55,8 @@ class ToolState:
         self._source_user: ContextVar[str | None] = ContextVar("gullak_source_user", default=None)
         self._timezone = ZoneInfo(timezone)
         self._now: ContextVar[datetime | None] = ContextVar("gullak_time_context", default=None)
-        self._last_confirmed_by_thread: dict[str, str] = {}
+        # Keyed by (thread_id, source_user) to prevent cross-user edits in groups
+        self._last_confirmed: dict[tuple[str, str | None], str] = {}
 
     def _get_ledger_mtime(self) -> float | None:
         try:
@@ -228,15 +229,19 @@ class ToolState:
     def get_thread_id(self) -> str | None:
         return self._thread_id.get()
 
-    def set_last_confirmed(self, thread_id: str | None, transaction_id: str) -> None:
+    def set_last_confirmed(
+        self, thread_id: str | None, transaction_id: str, source_user: str | None = None
+    ) -> None:
         if not thread_id or not transaction_id:
             return
-        self._last_confirmed_by_thread[thread_id] = transaction_id
+        self._last_confirmed[(thread_id, source_user)] = transaction_id
 
-    def get_last_confirmed(self, thread_id: str | None) -> str | None:
+    def get_last_confirmed(
+        self, thread_id: str | None, source_user: str | None = None
+    ) -> str | None:
         if not thread_id:
             return None
-        return self._last_confirmed_by_thread.get(thread_id)
+        return self._last_confirmed.get((thread_id, source_user))
 
     def get_source(self) -> TransactionSource | None:
         return self._source.get()

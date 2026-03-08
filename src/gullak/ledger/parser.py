@@ -102,16 +102,38 @@ class LedgerParser:
 
         return transactions
 
+    # Match account directives: account Expenses:Food:Groceries
+    ACCOUNT_DIRECTIVE_PATTERN = re.compile(r"^account\s+(\S+)")
+
     def extract_accounts(self, path: Path) -> set[str]:
-        """Extract unique account names from ledger file."""
+        """Extract unique account names from ledger file.
+
+        Reads both account directives (account X) and accounts used in
+        transaction postings.
+        """
         accounts: set[str] = set()
-        for txn in self.parse_file(path):
+
+        if not path.exists():
+            return accounts
+
+        # First pass: scan for account directives (fast line scan)
+        content = path.read_text()
+        for line in content.split("\n"):
+            if match := self.ACCOUNT_DIRECTIVE_PATTERN.match(line):
+                account = match.group(1).strip()
+                accounts.add(account)
+                parts = account.split(":")
+                for i in range(1, len(parts)):
+                    accounts.add(":".join(parts[:i]))
+
+        # Second pass: accounts from transaction postings
+        for txn in self.parse_string(content):
             for posting in txn.postings:
                 accounts.add(posting.account)
-                # Also add parent accounts
                 parts = posting.account.split(":")
                 for i in range(1, len(parts)):
                     accounts.add(":".join(parts[:i]))
+
         return accounts
 
     def extract_payees(self, path: Path) -> set[str]:

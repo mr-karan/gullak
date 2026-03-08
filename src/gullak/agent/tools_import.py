@@ -1,6 +1,7 @@
 """Import tools: CSV import, payee mapping."""
 
 import logging
+import tempfile
 from pathlib import Path
 
 from pydantic import BaseModel, Field
@@ -9,8 +10,6 @@ from gullak.agent.tool_state import ToolState
 from gullak.agent.tools_base import ToolDefinition, ToolResult
 from gullak.import_.processor import CSVProcessor
 from gullak.ledger.categories import suggest_category
-from gullak.ledger.writer import LedgerWriter
-from gullak.settings import settings
 
 logger = logging.getLogger(__name__)
 
@@ -55,7 +54,16 @@ def execute_learn_payee_mapping(state: ToolState, input: LearnPayeeMappingInput)
 
 async def execute_import_csv(state: ToolState, input: ImportCsvInput) -> ToolResult:
     """Import transactions from CSV and save them directly."""
-    file_path = Path(input.file_path)
+    file_path = Path(input.file_path).resolve()
+
+    # Restrict to system temp directory to prevent arbitrary file reads
+    temp_dir = Path(tempfile.gettempdir()).resolve()
+    if not str(file_path).startswith(str(temp_dir)):
+        return ToolResult(
+            success=False,
+            error="Import only accepts files from the upload directory",
+            data={},
+        )
 
     if not file_path.exists():
         return ToolResult(success=False, error=f"File not found: {file_path}", data={})
@@ -99,10 +107,11 @@ async def execute_import_csv(state: ToolState, input: ImportCsvInput) -> ToolRes
             )
             transactions.append(txn)
 
-        # Write all transactions at once
+        # Write all transactions at once using shared writer
         if transactions:
-            writer = LedgerWriter(state.ledger_path, state.validator, settings.paisa_url)
-            count = await writer.append_transactions(transactions)
+            if not state.writer:
+                return ToolResult(success=False, error="Writer not initialized", data={})
+            count = await state.writer.append_transactions(transactions)
         else:
             count = 0
 
