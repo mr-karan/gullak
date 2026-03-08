@@ -34,6 +34,46 @@ const ALLOWED_PHONE_NUMBERS = process.env.ALLOWED_PHONE_NUMBERS
 // Cache for group metadata to avoid repeated lookups
 const groupMetadataCache = new Map();
 
+// Cache LID -> phone number mappings (TTL-based)
+const lidToPhoneCache = new Map(); // lid -> { phone, expires }
+const LID_CACHE_TTL_MS = 2 * 60 * 60 * 1000; // 2 hours
+
+function cacheLidMapping(lid, phone) {
+  if (!lid || !phone) return;
+  const lidKey = lid.split("@")[0].split(":")[0]; // strip @lid and :device
+  lidToPhoneCache.set(lidKey, { phone, expires: Date.now() + LID_CACHE_TTL_MS });
+}
+
+function resolvePhoneFromLidCache(lid) {
+  const lidKey = lid.split("@")[0].split(":")[0];
+  const entry = lidToPhoneCache.get(lidKey);
+  if (!entry) return null;
+  if (Date.now() > entry.expires) {
+    lidToPhoneCache.delete(lidKey);
+    return null;
+  }
+  return entry.phone;
+}
+
+async function resolveGroupLidMappings(chatId) {
+  if (!sock) return;
+  try {
+    const metadata = await sock.groupMetadata(chatId);
+    for (const p of metadata.participants || []) {
+      if (p.lid && p.phoneNumber) {
+        cacheLidMapping(p.lid, p.phoneNumber.split("@")[0].split(":")[0]);
+      }
+      // Also cache id -> phoneNumber if id is a LID
+      if (p.id?.includes("@lid") && p.phoneNumber) {
+        cacheLidMapping(p.id, p.phoneNumber.split("@")[0].split(":")[0]);
+      }
+    }
+    logger.info({ groupId: chatId, mappings: lidToPhoneCache.size }, "Resolved LID mappings from group metadata");
+  } catch (err) {
+    logger.warn({ groupId: chatId, err: err.message }, "Failed to resolve LID mappings");
+  }
+}
+
 const logger = pino({ level: LOG_LEVEL });
 const app = express();
 app.use(express.json());
@@ -194,8 +234,22 @@ async function connectWhatsApp() {
       const isGroup = chatId.endsWith("@g.us");
       const author = msg.key.participant || chatId;
 
-      // Extract phone number from author (works for @s.whatsapp.net format, not @lid)
-      const authorNumber = author.split("@")[0];
+      // Resolve phone number: handle both @s.whatsapp.net and @lid formats
+      let authorNumber = author.split("@")[0].split(":")[0];
+      let resolvedPhone = null;
+
+      if (author.includes("@lid")) {
+        // Try cache first, then fetch group metadata
+        resolvedPhone = resolvePhoneFromLidCache(author);
+        if (!resolvedPhone && isGroup) {
+          await resolveGroupLidMappings(chatId);
+          resolvedPhone = resolvePhoneFromLidCache(author);
+        }
+        if (resolvedPhone) {
+          authorNumber = resolvedPhone;
+          logger.debug({ lid: author, resolved: resolvedPhone }, "Resolved LID to phone");
+        }
+      }
 
       // Gate messages by group name (for groups) or phone number (for DMs)
       if (isGroup) {
@@ -261,6 +315,7 @@ async function connectWhatsApp() {
         from: msg.key.remoteJid,
         fromMe: msg.key.fromMe,
         author: msg.key.participant || msg.key.remoteJid,
+        authorPhone: resolvedPhone || authorNumber,
         pushName: msg.pushName || null,
         body: text,
         timestamp: msg.messageTimestamp,
