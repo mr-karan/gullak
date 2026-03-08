@@ -237,6 +237,11 @@ async def whatsapp_webhook(request: Request, body: WebhookPayload):
         except Exception as e:
             logger.error("whatsapp_media_decode_failed", error=str(e))
 
+    # Prepend quoted message context for replies (corrections, follow-ups)
+    quoted_text = payload.get("quotedText")
+    if quoted_text and quoted_text.strip():
+        message_body = f'[Replying to: "{quoted_text.strip()}"]\n{message_body}'
+
     # Skip if no text and no valid media
     if not message_body.strip() and not media_content:
         return {"status": "ignored", "reason": "empty_message"}

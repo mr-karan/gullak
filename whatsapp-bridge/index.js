@@ -310,6 +310,24 @@ async function connectWhatsApp() {
 
       if (!text.trim() && !hasMedia) continue;
 
+      // Extract quoted message context from replies
+      const contextInfo = content.extendedTextMessage?.contextInfo ||
+        content.imageMessage?.contextInfo ||
+        content.videoMessage?.contextInfo ||
+        content.documentMessage?.contextInfo;
+      let quotedText = null;
+      if (contextInfo?.quotedMessage) {
+        const quoted = normalizeMessageContent(contextInfo.quotedMessage);
+        if (quoted) {
+          quotedText = quoted.conversation ||
+            quoted.extendedTextMessage?.text ||
+            quoted.imageMessage?.caption ||
+            quoted.videoMessage?.caption ||
+            quoted.documentMessage?.caption ||
+            null;
+        }
+      }
+
       const payload = {
         id: msg.key.id,
         from: msg.key.remoteJid,
@@ -318,6 +336,7 @@ async function connectWhatsApp() {
         authorPhone: resolvedPhone || authorNumber,
         pushName: msg.pushName || null,
         body: text,
+        quotedText: quotedText,
         timestamp: msg.messageTimestamp,
         media: null,
       };
