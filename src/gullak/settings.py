@@ -88,8 +88,8 @@ class Settings(BaseSettings):
     whatsapp_bridge_url: str = "http://whatsapp-bridge:3000"
     whatsapp_api_key: str | None = Field(default=None, validation_alias="GULLAK_WHATSAPP_API_KEY")
     whatsapp_allowed_numbers: str = Field(
-        default="",
-        description="Allowed phone numbers. Comma-separated or JSON array (e.g., '919999999999,918888888888').",
+        description="Allowed phone numbers. Comma-separated or JSON array (e.g., '919999999999,918888888888'). "
+        "REQUIRED — app will not start without this set.",
     )
     whatsapp_group_require_mention: bool = Field(
         default=False,
@@ -115,12 +115,20 @@ class Settings(BaseSettings):
     host: str = "0.0.0.0"
     port: int = 8000
 
+    @model_validator(mode="after")
+    def _validate_whatsapp_allowlist(self) -> "Settings":
+        """Fail at boot if no WhatsApp allowlist is configured."""
+        if not self.whatsapp_allowed_numbers or not self.whatsapp_allowed_numbers.strip():
+            raise ValueError(
+                "GULLAK_WHATSAPP_ALLOWED_NUMBERS is required. "
+                "Set it to a comma-separated list of phone numbers with country code (e.g., '919650318721,919990577075')."
+            )
+        return self
+
     @property
     def whatsapp_allowed_numbers_list(self) -> list[str]:
         """Parse allowed numbers from string (comma-separated or JSON array)."""
         v = self.whatsapp_allowed_numbers.strip()
-        if not v:
-            return []
         if v.startswith("["):
             return json.loads(v)
         return [n.strip() for n in v.split(",") if n.strip()]

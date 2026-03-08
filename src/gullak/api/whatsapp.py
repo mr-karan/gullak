@@ -165,11 +165,10 @@ async def whatsapp_webhook(request: Request, body: WebhookPayload):
     author = payload.get("author", sender) if is_group else sender
     message_body = payload.get("body", "")
 
-    # Security: Check allowlist
+    # Security: Check allowlist (guaranteed non-empty — app won't boot without it)
     author_number = author.split("@")[0]
 
-    allowed = settings.whatsapp_allowed_numbers_list
-    if allowed and author_number not in allowed:
+    if author_number not in settings.whatsapp_allowed_numbers_list:
         logger.warning("unauthorized_whatsapp_sender", sender=author, number=author_number)
         return {"status": "ignored", "reason": "unauthorized"}
 
