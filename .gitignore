@@ -70,3 +70,4 @@ target/
 rust-backend/
 rust-whatsapp-worker/
 web/
+test_data/
