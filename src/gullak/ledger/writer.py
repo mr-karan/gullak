@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import re
 from decimal import Decimal
@@ -34,6 +35,7 @@ class LedgerWriter:
         self.path = ledger_path
         self.validator = validator or LedgerValidator()
         self.paisa_url = paisa_url
+        self._write_lock = asyncio.Lock()
 
     async def _sync_paisa(self) -> None:
         if not self.paisa_url:
@@ -60,23 +62,22 @@ class LedgerWriter:
     ) -> None:
         """Common logic for validating and appending content.
 
-        Args:
-            ledger_text: The ledger-format text to append
-            validate: Whether to validate with ledger-cli before writing
-            error_prefix: Prefix for error message if validation fails
+        All writes are serialized through _write_lock to prevent races
+        between concurrent confirm/cancel/budget/undo operations.
         """
-        if validate:
-            current_content = self._read_file()
-            if current_content:
-                temp_content = current_content.rstrip() + "\n\n" + ledger_text + "\n"
-            else:
-                temp_content = ledger_text + "\n"
+        async with self._write_lock:
+            if validate:
+                current_content = self._read_file()
+                if current_content:
+                    temp_content = current_content.rstrip() + "\n\n" + ledger_text + "\n"
+                else:
+                    temp_content = ledger_text + "\n"
 
-            is_valid, error = await self.validator.validate_content(temp_content)
-            if not is_valid:
-                raise ValueError(f"{error_prefix} would create invalid ledger: {error}")
+                is_valid, error = await self.validator.validate_content(temp_content)
+                if not is_valid:
+                    raise ValueError(f"{error_prefix} would create invalid ledger: {error}")
 
-        self._append_to_file(ledger_text)
+            self._append_to_file(ledger_text)
         await self._sync_paisa()
 
     async def append_transaction(self, txn: Transaction, validate: bool = True) -> bool:
@@ -132,19 +133,20 @@ class LedgerWriter:
         Returns:
             True if transaction was found and deleted
         """
-        content = self._read_file()
-        if not content:
-            return False
+        async with self._write_lock:
+            content = self._read_file()
+            if not content:
+                return False
 
-        lines = content.split("\n")
-        txn_start, txn_end = self._find_transaction_span(lines, gullak_id)
+            lines = content.split("\n")
+            txn_start, txn_end = self._find_transaction_span(lines, gullak_id)
 
-        if txn_start is None:
-            return False
+            if txn_start is None:
+                return False
 
-        new_lines = lines[:txn_start] + lines[txn_end:]
-        cleaned = self._clean_empty_lines("\n".join(new_lines))
-        self.path.write_text(cleaned)
+            new_lines = lines[:txn_start] + lines[txn_end:]
+            cleaned = self._clean_empty_lines("\n".join(new_lines))
+            self.path.write_text(cleaned)
         await self._sync_paisa()
         return True
 
@@ -270,16 +272,24 @@ class LedgerWriter:
 
         updated_txn = Transaction(**updated_data)
 
-        # Splice updated transaction into the file
-        replacement_lines = updated_txn.to_ledger().split("\n")
-        new_lines = lines[:txn_start] + replacement_lines + lines[txn_end:]
-        new_content = "\n".join(new_lines)
+        async with self._write_lock:
+            # Re-read inside lock to get latest content
+            content = self._read_file()
+            lines = content.split("\n")
+            txn_start, txn_end = self._find_transaction_span(lines, gullak_id)
+            if txn_start is None:
+                return None
 
-        # Validate
-        is_valid, error = await self.validator.validate_content(new_content)
-        if not is_valid:
-            raise ValueError(f"Update would create invalid ledger: {error}")
+            # Splice updated transaction into the file
+            replacement_lines = updated_txn.to_ledger().split("\n")
+            new_lines = lines[:txn_start] + replacement_lines + lines[txn_end:]
+            new_content = "\n".join(new_lines)
 
-        self.path.write_text(new_content)
+            # Validate
+            is_valid, error = await self.validator.validate_content(new_content)
+            if not is_valid:
+                raise ValueError(f"Update would create invalid ledger: {error}")
+
+            self.path.write_text(new_content)
         await self._sync_paisa()
         return updated_txn

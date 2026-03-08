@@ -26,18 +26,22 @@ class TestWhatsAppAllowedNumbers:
             s = Settings()
             assert s.whatsapp_allowed_numbers_list == ["918851607899"]
 
-    def test_empty_string(self):
+    def test_empty_string_raises(self):
+        """Empty allowlist must prevent app from starting (fail-closed)."""
+        from pydantic import ValidationError
         with patch.dict("os.environ", {"GULLAK_WHATSAPP_ALLOWED_NUMBERS": ""}):
             from gullak.settings import Settings
-            s = Settings()
-            assert s.whatsapp_allowed_numbers_list == []
+            with pytest.raises(ValidationError, match="GULLAK_WHATSAPP_ALLOWED_NUMBERS"):
+                Settings()
 
-    def test_not_set(self):
+    def test_not_set_raises(self):
+        """Missing allowlist must prevent app from starting (fail-closed)."""
+        from pydantic import ValidationError
         env = {k: v for k, v in __import__("os").environ.items() if "WHATSAPP_ALLOWED" not in k}
         with patch.dict("os.environ", env, clear=True):
             from gullak.settings import Settings
-            s = Settings(_env_file=None)
-            assert s.whatsapp_allowed_numbers_list == []
+            with pytest.raises((ValidationError, Exception)):
+                Settings(_env_file=None)
 
     def test_comma_separated_with_spaces(self):
         with patch.dict("os.environ", {"GULLAK_WHATSAPP_ALLOWED_NUMBERS": "918851607899, 919650318721"}):
