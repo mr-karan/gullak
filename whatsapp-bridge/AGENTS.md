@@ -1,67 +1,63 @@
-# WHATSAPP BRIDGE
+# WhatsApp Bridge
 
-Node.js service using Baileys. Separate from Python codebase.
+Node/Bun service that connects WhatsApp (via [Baileys](https://github.com/WhiskeySockets/Baileys)) to `pi-server`. It posts inbound messages as webhooks and exposes a small HTTP API that `pi-server` uses to send replies, typing indicators, and read receipts.
 
-## OVERVIEW
-
-Bridges WhatsApp messages to Gullak API. Uses Baileys (unofficial WhatsApp Web API).
-
-## STACK
-
-- **Runtime**: Node.js / Bun
-- **Library**: @whiskeysockets/baileys
-- **Auth**: QR code scan, session persisted to `auth_state/`
-
-## FILES
+## Files
 
 ```
 whatsapp-bridge/
-├── index.js       # Main entry, message handling
-├── package.json   # Dependencies
-└── Dockerfile     # Container build
+├── index.js       # Baileys socket, webhook forwarder, HTTP API
+├── package.json
+├── Dockerfile
+└── .env.example
 ```
 
-## MESSAGE FLOW
+## Message flow
 
-1. User sends WhatsApp message
-2. Baileys receives via WebSocket
-3. `index.js` extracts text/media
-4. POST to `http://gullak:8000/api/whatsapp/webhook`
-5. Gullak processes, returns response
-6. Bridge sends reply to WhatsApp
+1. User sends a WhatsApp message.
+2. Baileys receives it over WebSocket.
+3. `index.js` extracts text (and optionally media as base64) and POSTs `{event: "message", payload}` to `WEBHOOK_URL`.
+4. `pi-server` processes it via `WhatsAppService` and POSTs back to `/api/sendText`.
 
-## MEDIA HANDLING
+## Environment
 
-```javascript
-// Uses normalizeMessageContent for ephemeral/view-once messages
-const content = normalizeMessageContent(msg.message)
-const mediaTypes = ['imageMessage', 'documentMessage', 'stickerMessage']
-```
+| Var | Default | Purpose |
+|-----|---------|---------|
+| `PORT` | `3000` | HTTP listen port |
+| `WEBHOOK_URL` | `http://localhost:8787/v1/whatsapp/webhook` | Where to forward inbound messages |
+| `AUTH_DIR` | `./auth_state` | Baileys multi-file auth state dir |
+| `GULLAK_WHATSAPP_API_KEY` | – | Shared secret; required on `/api/*` calls when set |
+| `ALLOWED_PHONE_NUMBERS` | – | Comma-separated allowlist for DMs. Empty = allow all. |
+| `ALLOWED_GROUPS` | – | Comma-separated group-name allowlist. Empty = allow all. |
+| `LOG_LEVEL` | `warn` | pino level |
 
-Media is downloaded, base64 encoded, sent to Gullak for OCR.
+## Auth / QR
 
-## CONFIGURATION
+Session is persisted under `AUTH_DIR/` (Baileys `useMultiFileAuthState`). On first run there is no UI — the bridge exposes:
 
-| Env Var | Purpose |
-|---------|---------|
-| `GULLAK_API_URL` | Gullak backend URL |
-| `GULLAK_WHATSAPP_ALLOWED_NUMBERS` | JSON array of allowed phone numbers |
+- `POST /api/default/auth/start` — begin a session
+- `GET  /api/default/auth/qr` — returns a PNG QR code to scan
 
-## SECURITY
+Scan from your phone's WhatsApp → Linked Devices.
 
-- Set `GULLAK_WHATSAPP_ALLOWED_NUMBERS` to restrict access
-- Format: `["919876543210"]` (country code + number, no +)
+## HTTP API (consumed by pi-server)
 
-## COMMANDS
+- `POST /api/sendText` `{chatId, text}`
+- `POST /api/sendSeen` `{chatId}`
+- `POST /api/startTyping` `{chatId}`
+- `POST /api/stopTyping` `{chatId}`
+- `GET  /api/status`
+- `GET  /health`
+
+## Commands
 
 ```bash
-npm install          # Install deps
-npm start            # Run bridge
-docker build -t whatsapp-bridge .
+pnpm install
+pnpm start             # bun run index.js
 ```
 
-## GOTCHAS
+## Gotchas
 
-- Session expires if phone disconnects for ~14 days
-- QR code must be scanned from Gullak UI (`/api/whatsapp/qr`)
-- Baileys is unofficial - may break with WhatsApp updates
+- Session can expire if the phone is offline for ~14 days — re-scan QR.
+- Baileys is an unofficial WhatsApp Web client; breakage on WhatsApp updates is expected.
+- LID (`@lid`) senders in groups get resolved to phone numbers via `groupMetadata` and cached for 2h.

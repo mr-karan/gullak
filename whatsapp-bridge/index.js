@@ -13,8 +13,8 @@ import { Boom } from "@hapi/boom";
 import { mkdirSync, existsSync, copyFileSync, readFileSync } from "fs";
 
 const PORT = process.env.PORT || 3000;
-const WEBHOOK_URL = process.env.WEBHOOK_URL || "http://gullak:8000/api/whatsapp/webhook";
-const AUTH_DIR = process.env.AUTH_DIR || "/data/whatsapp-session";
+const WEBHOOK_URL = process.env.WEBHOOK_URL || "http://localhost:8787/v1/whatsapp/webhook";
+const AUTH_DIR = process.env.AUTH_DIR || "./auth_state";
 const API_KEY = process.env.GULLAK_WHATSAPP_API_KEY || "";
 const LOG_LEVEL = process.env.LOG_LEVEL || "warn";
 const VERSION = "1.0.0";
