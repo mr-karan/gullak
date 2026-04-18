@@ -1,0 +1,30 @@
+{
+  "name": "gullak-pi-server",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "test": "tsx --test test/**/*.test.ts",
+    "recap:weekly": "tsx src/cli/weekly-recap.ts"
+  },
+  "dependencies": {
+    "@mariozechner/pi-agent-core": "^0.67.3",
+    "@mariozechner/pi-ai": "^0.67.3",
+    "@sinclair/typebox": "^0.34.49",
+    "express": "^4.21.2",
+    "luxon": "^3.6.1"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.3",
+    "@types/luxon": "^3.6.2",
+    "@types/node": "^24.3.0",
+    "tsx": "^4.20.3",
+    "typescript": "^5.7.3"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "packageManager": "pnpm@10.33.0"
+}
