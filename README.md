@@ -1,127 +1,94 @@
-<p align="center">
-  <img src="./src/gullak/web/static/icons/icon.svg" alt="Gullak Logo" width="120" height="120" />
-</p>
+# Gullak
 
-<h1 align="center">Gullak</h1>
+Ledger-first expense tracker. Natural-language messages in, plain-text [`ledger-cli`](https://ledger-cli.org/) entries out.
 
-<p align="center">
-  <em>Log and forget. AI-powered natural language expense tracking with plain-text accounting.</em>
-</p>
+> _"Spent 450 on groceries at Blinkit on HDFC UPI"_ → a structured, double-entry transaction appended to `data/main.ledger`.
 
-<p align="center">
-  <a href="#features">Features</a> •
-  <a href="#quick-start">Quick Start</a> •
-  <a href="#configuration">Configuration</a> •
-  <a href="#whatsapp-setup">WhatsApp</a> •
-  <a href="#local-development">Development</a>
-</p>
+## Why
 
----
-
-![Gullak Transaction Logger](./screenshots/log.png)
-
-Gullak is a minimalist expense tracker that turns natural language sentences into structured ledger entries. It combines the ease of a chat interface with the structure of plain-text accounting.
-
-## Why Gullak?
-
-Traditional budgeting apps are tedious. You have to open the app, navigate to "Add Transaction," select a category, pick a date, and type the amount. Gullak simplifies this to a single sentence: _"Spent 150 on coffee at Starbucks using HDFC card."_
-
-Gullak uses LLMs to parse your intent, categorize the expense, and write it to a human-readable `.ledger` file. It's designed for speed, privacy (your data stays in text files), and flexibility.
-
-## Features
-
-- 🧠 **Natural Language Processing**: Type (or speak) your expenses naturally. Powered by LiteLLM.
-- 📝 **Plain-Text Accounting**: Uses `ledger-cli` format. Your data is yours, stored in human-readable text files.
-- 🤖 **Multi-Provider LLM Support**: Works with OpenRouter (recommended), OpenAI, Anthropic, Gemini, or local Ollama.
-- 📊 **Paisa Integration**: Built-in integration with [Paisa](https://paisa.fyi) for detailed charts and financial reports.
-- 📱 **WhatsApp Integration**: Log expenses by messaging yourself on WhatsApp via a built-in bridge.
-- 💬 **Threaded Conversations**: Context-aware chat history allows for natural follow-up corrections.
-- 📸 **Receipt OCR**: Upload receipt images or PDFs via Web UI or WhatsApp. Gullak extracts expense details automatically.
-- 🔍 **Transaction Previews**: Review and edit AI-parsed transactions before they are committed to your ledger.
-- 🐳 **Docker First**: One-command deployment with Docker Compose.
+Paisa-style dashboards and fancy UIs get in the way. Gullak keeps a single plain-text ledger file as the source of truth, uses a small LLM to turn messages into postings, and exposes everything through a minimal JSON HTTP API. WhatsApp is a thin transport on top.
 
 ## Architecture
 
-Gullak runs as a stack of three lightweight services:
+```
+              ┌──────────────┐         ┌──────────────┐
+  WhatsApp ──▶│   bridge     │──POST──▶│  pi-server   │──▶ data/main.ledger
+              │ (Baileys)    │         │ (TypeScript) │──▶ data/pi-state.json
+              └──────────────┘         └──────┬───────┘
+                    ▲                         │
+                    └─────── /api/sendText ◀──┘
+```
 
-1.  **Gullak (FastAPI)**: The main engine handling the AI agent, web UI, and ledger management.
-2.  **Paisa**: A visualization engine that reads your ledger files and provides a dashboard.
-3.  **WhatsApp Bridge (Node.js)**: A Baileys-based bridge that connects Gullak to your WhatsApp account.
+- **`pi-server/`** — Express JSON API, pi-sdk agent, ledger IO, weekly recap. Node ≥ 20.
+- **`whatsapp-bridge/`** — Baileys WhatsApp socket; posts `{event, payload}` webhooks to `pi-server`.
+- **`data/main.ledger`** — the only persistent store. App state (payee memory, dedupe, recap history) sits next to it in `pi-state.json`.
 
-## Quick Start
+## Quick start
 
-The recommended way to run Gullak is using Docker Compose.
+Requires `pnpm`, `node >=20`, and `ledger` (for write validation — optional, can be disabled).
 
-1.  **Clone the repository**:
-    ```bash
-    git clone https://github.com/mr-karan/gullak.git
-    cd gullak
-    ```
+```bash
+# pi-server
+cd pi-server
+cp .env.example .env           # fill in model + api keys
+pnpm install
+pnpm dev                       # http://127.0.0.1:8787
 
-2.  **Configure Environment**:
-    ```bash
-    cp .env.example .env
-    # Edit .env and add your API keys (e.g., OPENROUTER_API_KEY)
-    ```
+# whatsapp-bridge (separate terminal; optional)
+cd whatsapp-bridge
+cp .env.example .env
+pnpm install
+pnpm start                     # prints a URL to fetch the QR
+```
 
-3.  **Start Services**:
-    ```bash
-    docker compose up -d
-    ```
+Scan the QR at `http://localhost:3000/api/default/auth/qr` from WhatsApp → Linked Devices.
 
-4.  **Setup**:
-    - Access the UI at `http://localhost:8000`.
-    - Follow the **Setup Wizard** to configure your currency, bank accounts, and categories.
-    - Start logging!
+## HTTP API
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| POST | `/v1/messages` | Free-form natural-language message → agent |
+| GET  | `/v1/accounts` | List accounts from the ledger |
+| GET  | `/v1/transactions` | Query transactions (filter by date, payee, account) |
+| PATCH | `/v1/transactions/:id` | Edit an app-authored transaction |
+| DELETE | `/v1/transactions/:id` | Remove an app-authored transaction |
+| GET  | `/v1/summary` | Totals for a period |
+| POST | `/v1/recaps/weekly/run` | Generate (and optionally send) a weekly recap |
+| POST | `/v1/whatsapp/webhook` | Inbound WhatsApp messages (alias: `/api/whatsapp/webhook`) |
+
+Auth: set `GULLAK_HTTP_API_KEY` and pass it via `X-Api-Key`. Webhook paths are exempt.
+
+## Weekly recap
+
+```bash
+cd pi-server
+pnpm recap:weekly                       # writes data/recaps/<iso-week>.md
+pnpm recap:weekly --send-whatsapp       # also posts to GULLAK_RECAP_WHATSAPP_CHAT_ID
+```
+
+Math is deterministic — the LLM only phrases the summary.
 
 ## Configuration
 
-Gullak is configured via environment variables. The most important ones are:
+All env is documented in [`pi-server/.env.example`](./pi-server/.env.example) and [`whatsapp-bridge/.env.example`](./whatsapp-bridge/.env.example). Key pieces:
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `GULLAK_INFERENCE_MODEL` | LiteLLM model string (e.g., `openrouter/google/gemini-2.0-flash-001`) | `openrouter/google/gemini-2.0-flash-001` |
-| `GULLAK_INFERENCE_VISION_MODEL` | Model for receipt OCR (optional, falls back to main model) | - |
-| `OPENROUTER_API_KEY` | API key if using OpenRouter | - |
-| `GULLAK_DEFAULT_CURRENCY` | Your primary currency (e.g., `INR`, `USD`) | `INR` |
-| `GULLAK_TIMEZONE` | Your timezone | `Asia/Kolkata` |
-| `GULLAK_DATA_DIR` | Directory to store ledger and history | `/data` |
+- `GULLAK_LEDGER_PATH` — path to `main.ledger` (default `../data/main.ledger`)
+- `GULLAK_MODEL_*` — model endpoint, id, key. Works with any OpenAI-compatible API (Ollama, OpenRouter, etc.)
+- `GULLAK_WHATSAPP_ALLOWED_NUMBERS` — DM allowlist
+- `GULLAK_VALIDATE_WRITES` — run `ledger source` on every write (default `true`)
 
-See [.env.example](.env.example) for a full list of configuration options.
+## Repo layout
 
-## WhatsApp Setup
-
-Gullak includes a WhatsApp bridge that lets you log expenses on the go.
-
-1.  Open the Gullak UI and go to **Settings > WhatsApp Integration**.
-2.  Click **Start Session** and scan the QR code with your WhatsApp.
-3.  **Security**: It is highly recommended to set `GULLAK_WHATSAPP_ALLOWED_NUMBERS` in your `.env` to restrict who can message the bot.
-    ```bash
-    GULLAK_WHATSAPP_ALLOWED_NUMBERS='["919876543210"]'
-    ```
-4.  Send a message like `"Lunch 500"` to the linked number to log your first expense.
-
-## Local Development
-
-Gullak uses [uv](https://github.com/astral-sh/uv) for Python dependency management and [Just](https://github.com/casey/just) as a command runner.
-
-**Prerequisites**:
-- Python 3.13+
-- [uv](https://github.com/astral-sh/uv)
-- [Just](https://github.com/casey/just)
-- [ledger-cli](https://ledger-cli.org/)
-
-**Setup**:
-```bash
-# Install dependencies
-just install
-
-# Run development server
-just dev
 ```
-
-Check the `Justfile` for more commands like `test`, `lint`, and `fmt`.
+gullak/
+├── pi-server/          # the app
+├── whatsapp-bridge/    # Baileys bridge
+├── data/               # main.ledger (gitignored)
+├── docs/               # architecture notes
+├── AGENTS.md / CLAUDE.md
+└── README.md
+```
 
 ## License
 
-Gullak is licensed under the [AGPL v3](./LICENSE) license.
+[AGPL v3](./LICENSE)

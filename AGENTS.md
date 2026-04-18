@@ -1,116 +1,84 @@
-# GULLAK - AI ASSISTANT KNOWLEDGE BASE
+# Gullak — Agent Knowledge Base
 
-**Generated:** 2026-01-02  
-**Commit:** cfe4c3b  
-**Branch:** main
+Ledger-first expense tracker. The Python/Paisa stack has been removed; everything runs through `pi-server/` + `whatsapp-bridge/`.
 
-## OVERVIEW
-
-AI-powered expense tracker using plain-text accounting (ledger-cli). Python 3.13 FastAPI + LiteLLM agent + Alpine.js UI + WhatsApp bridge.
-
-## STRUCTURE
+## Layout
 
 ```
 gullak/
-├── src/gullak/
-│   ├── agent/        # AI agent (tools.py is 1132 lines - complexity hotspot)
-│   ├── api/          # FastAPI routers (32 endpoints)
-│   ├── ledger/       # ledger-cli parsing, writing, validation
-│   ├── media/        # Receipt OCR processing
-│   ├── config/       # Paisa dashboard integration
-│   ├── import_/      # Bank CSV import (trailing underscore: reserved keyword)
-│   └── web/          # Jinja2 templates + static assets
-├── whatsapp-bridge/  # Node.js service (separate stack - see its AGENTS.md)
-├── tests/            # pytest suite (47 tests)
-└── docs/             # User documentation
+├── pi-server/          # TypeScript app (node >=20, pnpm)
+│   └── src/
+│       ├── app.ts            # Express JSON HTTP server
+│       ├── runtime.ts        # Wires services together
+│       ├── config.ts         # Env loading
+│       ├── agent/            # pi-sdk model, prompts, tools, message pipeline
+│       ├── ledger/           # Parse, write, validate, summarise data/main.ledger
+│       ├── state/            # JSON sidecar (payee memory, dedupe, recap history)
+│       ├── whatsapp/         # Webhook handler + bridge client
+│       ├── recap/            # Weekly recap generation
+│       └── cli/weekly-recap.ts
+├── whatsapp-bridge/    # Node Baileys bridge, posts into pi-server
+├── data/               # main.ledger + pi-state.json (gitignored)
+└── docs/architecture.md
 ```
 
-## WHERE TO LOOK
+## Where to look
 
-| Task | Location | Notes |
-|------|----------|-------|
-| Add agent tool | `src/gullak/agent/tools.py` | Follow existing pattern: Pydantic input + executor function |
-| Modify AI behavior | `src/gullak/agent/prompts.py` | Edit `get_system_prompt()` |
-| Add API endpoint | `src/gullak/api/*.py` | Create router, include in `main.py` |
-| Ledger format changes | `src/gullak/ledger/models.py` | Transaction/Posting Pydantic models |
-| Category mappings | `src/gullak/ledger/categories.py` | Regex patterns for merchant→account |
-| Payee memory | `src/gullak/ledger/memory.py` | Learned payee→account stored in ledger comments |
-| Configuration | `src/gullak/settings.py` | Pydantic Settings, access via `settings` global |
-| Tests | `tests/test_*.py` | Follow existing class-based pattern |
+| Task | File |
+|------|------|
+| Add HTTP endpoint | `pi-server/src/app.ts` |
+| Modify agent behaviour | `pi-server/src/agent/prompts.ts`, `tools.ts` |
+| Ledger parse/write | `pi-server/src/ledger/parser.ts`, `writer.ts` |
+| Summaries / reports | `pi-server/src/ledger/service.ts` |
+| Write validation | `pi-server/src/ledger/validator.ts` (runs `ledger source`) |
+| WhatsApp handling | `pi-server/src/whatsapp/service.ts` |
+| Weekly recap | `pi-server/src/recap/weekly.ts` |
+| Env / config | `pi-server/src/config.ts`, `pi-server/.env.example` |
 
-## CONVENTIONS
+## Conventions
 
-### Code Style
-- **Line length**: 100 chars (ruff)
-- **Type hints**: Mandatory on all signatures
-- **Async**: Prefer for I/O (file, network, LLM calls)
-- **Logging**: `structlog` - use `logger = logging.getLogger(__name__)`
-- **Models**: Pydantic BaseModel for all data structures
+- `data/main.ledger` is the source of truth. App state (payee memory, dedupe, recap history) lives in `data/pi-state.json`, not in ledger comments.
+- Only two-posting transactions authored by this app (have a `gullak:id`) are editable via API.
+- Writes validate through `ledger source` when the CLI is available; skippable via `GULLAK_VALIDATE_WRITES=false`.
+- Weekly recap math is deterministic; the LLM only phrases the recap.
+- JSON-only HTTP. No UI.
+- pnpm is the package manager for both apps (see `packageManager` field in each `package.json`).
 
-### Project-Specific
-- **Account hierarchy**: `Expenses:Food:Groceries` (colon-separated)
-- **Ledger metadata**: Comments prefixed with `gullak:` (e.g., `; gullak:id abc123`)
-- **Payee mappings**: `; gullak:payee_map Swiggy=Expenses:Food:Delivery|Assets:Bank:HDFC:UPI`
-- **Transaction sources**: `TransactionSource` enum (web, whatsapp, csv, api)
-
-### Naming
-- `import_/` directory: Trailing underscore avoids Python keyword collision
-- API routers: Named by domain (`chat.py`, `ledger.py`, `threads.py`)
-
-## ANTI-PATTERNS
-
-| Pattern | Why | Instead |
-|---------|-----|---------|
-| Call `parse_expense` when editing pending | Creates duplicate transactions | Use `edit_pending_transaction` tool |
-| Direct ledger file writes | Bypasses validation | Use `LedgerWriter` class |
-| `as any`, `@ts-ignore` | Type safety violation | Fix the type |
-| Sync I/O in async context | Blocks event loop | Use `aiofiles` or run in executor |
-
-## COMMANDS
+## Commands
 
 ```bash
-just install          # Setup deps with uv
-just dev              # Dev server with hot reload
-just test             # Run pytest
-just lint             # Ruff check
-just fmt              # Ruff format
-just docker-up        # Full stack (gullak + paisa + whatsapp)
-just prod-up          # Production deployment
+cd pi-server
+pnpm install
+pnpm dev             # tsx watch
+pnpm build           # tsc
+pnpm test            # node --test over test/**/*.test.ts
+pnpm recap:weekly
 ```
 
-## TESTING
+```bash
+cd whatsapp-bridge
+pnpm install
+pnpm start           # bun run index.js
+```
 
-- **Framework**: pytest with `asyncio_mode="auto"`
-- **Structure**: Class-based (`TestChatHistory`, `TestLedgerParser`)
-- **Fixtures**: `conftest.py` - temp files, HTTP client, sample data
-- **Run**: `just test` or `pytest tests/`
+## Endpoints
 
-## ARCHITECTURE NOTES
+- `POST /v1/messages`
+- `GET  /v1/accounts`
+- `GET  /v1/transactions`
+- `PATCH /v1/transactions/:id`
+- `DELETE /v1/transactions/:id`
+- `GET  /v1/summary`
+- `POST /v1/recaps/weekly/run`
+- `POST /v1/whatsapp/webhook` (alias: `/api/whatsapp/webhook`)
 
-### Agent Flow
-1. User message → `GullakAgent.process()`
-2. LiteLLM streaming with tool calls (max 10 iterations)
-3. Tools create `PendingTransaction` (preview)
-4. User confirms → `LedgerWriter.write()` → ledger-cli validation → Paisa sync
+## Agent flow
 
-### Pending Transaction System
-- Stored in `.pending.json` (per-thread)
-- `ToolState` manages pending CRUD
-- Confirm tools auto-learn payee→account mappings
+1. Inbound message → `AgentService.handleMessage`.
+2. `pi-agent-core` runs the tool loop against `agent/tools.ts`.
+3. Tools mutate the ledger via `LedgerWriter` and app state via `StateStore`.
+4. Response text is returned to the caller (HTTP reply or WhatsApp bridge).
 
-### Multi-Provider LLM
-- LiteLLM abstraction (OpenRouter, OpenAI, Anthropic, Gemini, Ollama)
-- Model configured via `GULLAK_INFERENCE_MODEL` env var
-- Streaming responses with event types: `text`, `thinking`, `tool_result`, `preview`, `done`
+## Deleted surfaces
 
-## KEY FILES
-
-| File | Lines | Purpose |
-|------|-------|---------|
-| `agent/tools.py` | 1132 | 15 tool definitions + executors |
-| `agent/prompts.py` | 348 | System prompt generation |
-| `agent/client.py` | 450 | LiteLLM agent loop |
-| `agent/tool_state.py` | 300 | Shared state, pending txns |
-| `ledger/models.py` | 200 | Transaction/Posting models |
-| `api/chat.py` | 302 | Chat endpoints (11 routes) |
-| `settings.py` | 80 | All configuration |
+The Python FastAPI app (`src/gullak/`), its tests, Paisa integration, Dockerfiles, old Vite UI (`web/`), and the abandoned Rust rewrite (`rust-backend/`, `rust-whatsapp-worker/`) have all been removed. Don't look for them.

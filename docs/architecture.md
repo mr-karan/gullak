@@ -1,105 +1,71 @@
----
-summary: "Gullak system architecture, services, and data flow"
-read_when:
-  - Understanding how Gullak works
-  - Debugging service interactions
-  - Contributing to Gullak
----
+# Architecture
 
-# System Architecture
+Gullak is a ledger-first expense tracker. `data/main.ledger` is the single source of truth; everything else is plumbing around it.
 
-Gullak is designed as a set of lightweight, interoperable services that work together to provide a streamlined expense tracking experience. It uses Large Language Models (LLMs) to bridge the gap between natural language and structured plain-text accounting.
+## Components
 
-## High-Level Overview
+### `pi-server/` — runtime
 
-The system consists of three primary services orchestrated via Docker Compose:
+- Express JSON HTTP server (`src/app.ts`)
+- Pi-SDK agent loop (`src/agent/`) — model config, system prompts, tools
+- Ledger IO (`src/ledger/`) — parse, write, validate, summarise
+- Sidecar state store (`src/state/`) — payee memory, WhatsApp dedupe, recap history
+- WhatsApp glue (`src/whatsapp/`) — webhook handler + outbound bridge client
+- Weekly recap (`src/recap/`) + CLI entrypoint (`src/cli/weekly-recap.ts`)
 
-1.  **Gullak (FastAPI)**: The core engine and web interface.
-2.  **Paisa**: The visualization and reporting dashboard.
-3.  **WhatsApp Bridge**: The interface for mobile logging via WhatsApp.
+Runs on Node ≥ 20, pnpm-managed. Configured via env (`src/config.ts`).
 
-## Service Descriptions
+### `whatsapp-bridge/` — transport
 
-### Gullak (FastAPI)
-The central component of the architecture. It is built with FastAPI and is responsible for:
-- **AI Agent**: Orchestrating the LLM (via LiteLLM) to parse natural language into ledger entries.
-- **Ledger Management**: Parsing, writing, and validating `.ledger` files using `ledger-cli`.
-- **API Services**: Providing REST endpoints for the web UI and external integrations (like WhatsApp).
-- **Web UI**: A minimalist management interface for reviewing transactions and configuring the system.
+Node/Bun service using [Baileys](https://github.com/WhiskeySockets/Baileys). Receives WhatsApp messages, posts `{event: "message", payload}` to `pi-server`'s webhook, and exposes `/api/sendText`, `/api/sendSeen`, `/api/startTyping`, `/api/stopTyping` for outbound replies.
 
-### Paisa
-An external visualization engine for `ledger-cli` files. Gullak integrates with Paisa by:
-- Sharing the same ledger data directory.
-- Providing deep links to Paisa charts from the Gullak UI.
-- Allowing Paisa to handle complex financial reporting while Gullak focuses on data entry.
+Auth/session state is multi-file (Baileys `useMultiFileAuthState`) under `AUTH_DIR` (default `./auth_state`).
 
-### WhatsApp Bridge (Baileys)
-A Node.js service based on the [Baileys](https://github.com/adiwajshing/Baileys) library. It:
-- Maintains a WhatsApp Web session.
-- Receives messages and forwards them to Gullak via webhooks.
-- Allows users to log expenses on-the-go without opening a dedicated app.
+### `data/` — storage
 
-## Data Flow
+- `main.ledger` — plain-text ledger (human readable, ledger-cli compatible)
+- `pi-state.json` — sidecar for app state (generated at startup)
+- `recaps/` — generated weekly recap markdown files
 
-The following diagram illustrates how a natural language input is transformed into a structured ledger entry and eventually visualized.
+## Data flow
 
-```text
-User Input (WhatsApp/Web)
-       │
-       ▼
-┌──────────────────┐      ┌──────────────────────────┐
-│ WhatsApp Bridge  │ ───▶ │     Gullak (FastAPI)     │
-└──────────────────┘      │  ┌────────────────────┐  │      ┌─────────────┐
-                          │  │      AI Agent      │ ──┼───▶ │  LLM (API)  │
-                          │  └────────────────────┘  │      └─────────────┘
-                                     │
-                                     ▼
-                          ┌────────────────────┐      ┌─────────────────┐
-                          │  Ledger Processor  │ ───▶ │  ledger-cli     │
-                          └────────────────────┘      │  (Validation)   │
-                                     │                └─────────────────┘
-                                     ▼
-                          ┌────────────────────┐
-                          │    main.ledger     │
-                          └────────────────────┘
-                                     │
-                                     ▼
-                          ┌────────────────────┐
-                          │       Paisa        │
-                          │ (Charts/Reporting) │
-                          └────────────────────┘
+```
+User → WhatsApp → whatsapp-bridge → POST /v1/whatsapp/webhook
+                                          │
+                                          ▼
+                                    AgentService
+                                     ├─ pi-agent-core loop
+                                     │   ├─ read_transactions
+                                     │   ├─ add_transaction   ──▶ LedgerWriter ──▶ main.ledger
+                                     │   ├─ edit_transaction  ──▶ (validated via `ledger source`)
+                                     │   └─ delete_transaction
+                                     └─ StateStore (dedupe, payee memory, threads)
+                                          │
+                                          ▼
+                                    reply text
+                                          │
+                               bridge /api/sendText ──▶ WhatsApp
 ```
 
-## File Structure Overview
+HTTP callers hit the same `AgentService` through `POST /v1/messages`.
 
-- `src/gullak/agent/`: Contains the AI agent logic, system prompts, and tool definitions.
-- `src/gullak/api/`: FastAPI route handlers for chat, threads, ledger operations, and webhooks.
-- `src/gullak/ledger/`: Core logic for parsing, writing, and validating ledger files.
-- `src/gullak/import_/`: Logic for importing transactions from various bank formats.
-- `src/gullak/config/`: Configuration management and Paisa-specific settings.
-- `src/gullak/web/`: Frontend components, including Jinja2 templates and Alpine.js logic.
-- `whatsapp-bridge/`: Node.js source code for the WhatsApp protocol bridge.
-- `data/`: Shared volume containing `.ledger` files, SQLite chat history, and WhatsApp sessions.
+## Design defaults
 
-## Key Components
+- **Ledger is canonical.** App state does *not* live in ledger comments — it's in `pi-state.json`.
+- **Editability is scoped.** Only two-posting transactions authored by this app (marked with a `gullak:id` comment) are editable/deletable via API.
+- **Validation is optional but on by default.** Writes are validated through `ledger source`; disable with `GULLAK_VALIDATE_WRITES=false`. If the CLI isn't on `PATH`, validation silently no-ops.
+- **Recap math is deterministic.** The LLM only phrases the recap — totals, top categories, and week-over-week deltas are computed before the prompt.
+- **JSON-only HTTP.** No UI. No server-rendered templates.
 
-### AI Agent
-The agent is powered by **LiteLLM**, enabling support for various providers (OpenRouter, OpenAI, Anthropic, etc.). It uses a "tool-calling" loop:
-1.  **Parsing**: Identifies entities (amount, payee, category) from user text.
-2.  **Validation**: Formats a draft transaction and validates it against `ledger-cli`.
-3.  **Confirmation**: (Optional) Prompts the user to review before committing.
+## Environment
 
-### Ledger Engine
-A Python implementation for managing plain-text accounting files.
-- **Parser**: Extracts accounts and recent transactions for LLM context.
-- **Writer**: Appends new transactions with proper formatting and unique IDs.
-- **Validator**: Wraps the `ledger` command-line tool to ensure file integrity.
+See [`pi-server/.env.example`](../pi-server/.env.example) and [`whatsapp-bridge/.env.example`](../whatsapp-bridge/.env.example) for the full set. Key knobs:
 
-### Web UI
-Built with **Alpine.js** and **Tailwind CSS**, providing a fast, reactive experience without a complex build step. It communicates with the FastAPI backend via streaming SSE (Server-Sent Events) for real-time AI responses.
-
-### API Routes
-- `/api/chat`: Streaming endpoint for AI interactions.
-- `/api/ledger`: Management of ledger entries and accounts.
-- `/api/whatsapp`: Webhook receiver for the WhatsApp bridge.
-- `/api/setup`: Initial configuration wizard.
+| Var | Purpose |
+|-----|---------|
+| `GULLAK_LEDGER_PATH` | Path to the ledger file |
+| `GULLAK_VALIDATE_WRITES` | Gate writes on `ledger source` |
+| `GULLAK_MODEL_*` | OpenAI-compatible model endpoint |
+| `GULLAK_HTTP_API_KEY` | Bearer-style key required on `/v1/*` (except webhooks) |
+| `GULLAK_WHATSAPP_ALLOWED_NUMBERS` | DM allowlist |
+| `GULLAK_RECAP_WHATSAPP_CHAT_ID` | Where the weekly recap goes when `--send-whatsapp` |
