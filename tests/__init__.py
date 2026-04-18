@@ -1,1 +1,0 @@
-"""Gullak test suite."""
