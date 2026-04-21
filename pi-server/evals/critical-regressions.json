@@ -22,7 +22,53 @@
         "needsClarification": false,
         "ledgerChanged": true,
         "replyContains": ["302.00", "INR"],
-        "replyExcludes": ["I apologize", "which payee", "To which payee"]
+        "replyExcludes": ["I apologize", "which payee", "To which payee"],
+        "ledgerContains": ["302.00 INR"]
+      }
+    },
+    {
+      "id": "multi-shorthand-expense-batch",
+      "title": "Multiple shorthand expenses in one message should save every item without a payee loop",
+      "tags": ["expense", "batch", "shorthand", "regression"],
+      "request": {
+        "threadId": "eval:batch-shorthand",
+        "text": "302 groceries\n871 groceries"
+      },
+      "expectations": {
+        "needsClarification": false,
+        "ledgerChanged": true,
+        "replyContains": ["Saved these 2 expenses"],
+        "replyExcludes": ["I apologize", "which payee", "To which payee"],
+        "ledgerContains": ["302.00 INR", "871.00 INR"]
+      }
+    },
+    {
+      "id": "quoted-text-fallback-targets-swiggy",
+      "title": "Quoted text alone should still target the Swiggy transaction when the quoted message id is missing",
+      "tags": ["quoted-reply", "edit", "targeting", "fallback", "regression"],
+      "initialState": {
+        "threads": {
+          "eval:quoted-text-fallback": {
+            "messages": [],
+            "lastTransactionId": "7cbc18e7",
+            "recentTransactionIds": ["7cbc18e7", "0a717873"],
+            "replyContexts": {},
+            "updatedAt": "2026-04-21T11:20:00.000Z"
+          }
+        }
+      },
+      "request": {
+        "threadId": "eval:quoted-text-fallback",
+        "text": "paid via hdfc upi",
+        "quotedText": "Got it. Saved 1200.00 INR for Swiggy."
+      },
+      "expectations": {
+        "transactionId": "0a717873",
+        "referencedTransactionIds": ["0a717873"],
+        "needsClarification": false,
+        "ledgerChanged": true,
+        "replyContains": ["Updated", "0a717873"],
+        "ledgerContains": ["Assets:Bank:HDFC:UPI  -1200.00 INR"]
       }
     },
     {
@@ -58,7 +104,36 @@
         "referencedTransactionIds": ["0a717873"],
         "needsClarification": false,
         "ledgerChanged": true,
-        "replyContains": ["Updated", "0a717873"]
+        "replyContains": ["Updated", "0a717873"],
+        "ledgerContains": ["Assets:Bank:HDFC:UPI  -1200.00 INR"]
+      }
+    },
+    {
+      "id": "plain-followup-edits-last-transaction",
+      "title": "Plain payment follow-ups should edit the last thread transaction instead of saving a new expense",
+      "tags": ["follow-up", "edit", "payment-mode", "regression"],
+      "initialState": {
+        "threads": {
+          "eval:last-transaction-followup": {
+            "messages": [],
+            "lastTransactionId": "7cbc18e7",
+            "recentTransactionIds": ["7cbc18e7", "0a717873"],
+            "replyContexts": {},
+            "updatedAt": "2026-04-21T11:20:15.000Z"
+          }
+        }
+      },
+      "request": {
+        "threadId": "eval:last-transaction-followup",
+        "text": "paid via hdfc upi"
+      },
+      "expectations": {
+        "transactionId": "7cbc18e7",
+        "referencedTransactionIds": ["7cbc18e7"],
+        "needsClarification": false,
+        "ledgerChanged": true,
+        "replyContains": ["Updated", "7cbc18e7"],
+        "ledgerContains": ["Assets:Bank:HDFC:UPI  -323.00 INR"]
       }
     },
     {
@@ -89,10 +164,51 @@
         "quotedMessageId": "wa-out-clarify"
       },
       "expectations": {
+        "referencedTransactionIds": ["0a717873", "7cbc18e7"],
         "needsClarification": true,
         "ledgerChanged": false,
-        "replyContains": ["Swiggy", "Printo"],
+        "replyContains": ["Which one do you mean", "Swiggy", "Printo"],
+        "replyMaxLength": 100,
         "replyExcludes": ["I apologize", "Please clarify what this refers to"]
+      }
+    },
+    {
+      "id": "quoted-both-of-them-updates-both-transactions",
+      "title": "Quoted multi-target follow-ups should update both referenced transactions",
+      "tags": ["quoted-reply", "edit", "multi-target", "regression"],
+      "initialState": {
+        "threads": {
+          "eval:bulk-followup": {
+            "messages": [],
+            "lastTransactionId": "7cbc18e7",
+            "recentTransactionIds": ["7cbc18e7", "0a717873"],
+            "replyContexts": {
+              "wa-out-clarify": {
+                "transactionIds": ["0a717873", "7cbc18e7"],
+                "recentTransactionIds": ["7cbc18e7", "0a717873"],
+                "createdAt": "2026-04-21T11:20:30.000Z"
+              }
+            },
+            "updatedAt": "2026-04-21T11:20:30.000Z"
+          }
+        }
+      },
+      "request": {
+        "threadId": "eval:bulk-followup",
+        "text": "Both of them paid via hdfc upi.",
+        "quotedText": "Did you mean to edit the last Swiggy transaction for 1200 INR, or the most recent Printo transaction?",
+        "quotedMessageId": "wa-out-clarify"
+      },
+      "expectations": {
+        "referencedTransactionIds": ["0a717873", "7cbc18e7"],
+        "needsClarification": false,
+        "ledgerChanged": true,
+        "replyContains": ["Updated"],
+        "replyExcludes": ["I apologize"],
+        "ledgerContains": [
+          "Assets:Bank:HDFC:UPI  -1200.00 INR",
+          "Assets:Bank:HDFC:UPI  -323.00 INR"
+        ]
       }
     }
   ]

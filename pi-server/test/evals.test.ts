@@ -36,6 +36,9 @@ test("evaluateExpectations checks action, reply content, and ledger writes", () 
       ledgerChanged: true,
       replyContains: ["Updated"],
       replyExcludes: ["I apologize"],
+      replyMaxLength: 40,
+      ledgerContains: ["Assets:Bank:HDFC"],
+      ledgerExcludes: ["Liabilities:Card:Axis"],
     },
     {
       action: "edit_transaction",
@@ -45,6 +48,11 @@ test("evaluateExpectations checks action, reply content, and ledger writes", () 
       reply: "Done. Updated it.\nRef: txn-1",
     },
     true,
+    [
+      "2026/04/20 Swiggy",
+      "    Expenses:Food:Delivery  1200.00 INR",
+      "    Assets:Bank:HDFC  -1200.00 INR",
+    ].join("\n"),
   );
 
   assert.equal(checks.every((check) => check.passed), true);

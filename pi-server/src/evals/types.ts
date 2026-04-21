@@ -21,6 +21,9 @@ export interface EvalExpectations {
   ledgerChanged?: boolean;
   replyContains?: string[];
   replyExcludes?: string[];
+  replyMaxLength?: number;
+  ledgerContains?: string[];
+  ledgerExcludes?: string[];
 }
 
 export interface EvalCaseFixture {

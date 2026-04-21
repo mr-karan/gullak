@@ -114,7 +114,7 @@ export async function executeEvalCase(
   const durationMs = Date.now() - startedAt;
   const ledgerAfter = await deps.readLedger();
   const ledgerChanged = ledgerBefore !== ledgerAfter;
-  const checks = evaluateExpectations(testCase.expectations, response, ledgerChanged);
+  const checks = evaluateExpectations(testCase.expectations, response, ledgerChanged, ledgerAfter);
 
   return {
     id: testCase.id,
@@ -159,6 +159,7 @@ export function evaluateExpectations(
     needsClarification: boolean;
   },
   ledgerChanged: boolean,
+  ledgerContent: string,
 ): EvalCheck[] {
   const checks: EvalCheck[] = [];
 
@@ -224,6 +225,33 @@ export function evaluateExpectations(
       passed: !response.reply.includes(needle),
       expected: `reply to exclude "${needle}"`,
       actual: truncate(response.reply),
+    });
+  }
+
+  if (expectations.replyMaxLength !== undefined) {
+    checks.push({
+      name: "replyMaxLength",
+      passed: response.reply.length <= expectations.replyMaxLength,
+      expected: `reply length <= ${expectations.replyMaxLength}`,
+      actual: String(response.reply.length),
+    });
+  }
+
+  for (const needle of expectations.ledgerContains ?? []) {
+    checks.push({
+      name: `ledgerContains:${needle}`,
+      passed: ledgerContent.includes(needle),
+      expected: `ledger to contain "${needle}"`,
+      actual: truncate(ledgerContent),
+    });
+  }
+
+  for (const needle of expectations.ledgerExcludes ?? []) {
+    checks.push({
+      name: `ledgerExcludes:${needle}`,
+      passed: !ledgerContent.includes(needle),
+      expected: `ledger to exclude "${needle}"`,
+      actual: truncate(ledgerContent),
     });
   }
 
