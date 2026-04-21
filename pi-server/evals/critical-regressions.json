@@ -1,0 +1,99 @@
+{
+  "id": "critical-regressions",
+  "title": "Critical Regression Cases",
+  "defaults": {
+    "ledgerFixture": "./fixtures/apr-21-regressions.ledger",
+    "request": {
+      "source": "api",
+      "sourceUser": "eval-runner"
+    }
+  },
+  "cases": [
+    {
+      "id": "single-shorthand-expense",
+      "title": "Single shorthand expense should save without a payee clarification loop",
+      "tags": ["expense", "shorthand", "regression"],
+      "request": {
+        "threadId": "eval:shorthand",
+        "text": "302 groceries"
+      },
+      "expectations": {
+        "action": "record_expense",
+        "needsClarification": false,
+        "ledgerChanged": true,
+        "replyContains": ["302.00", "INR"],
+        "replyExcludes": ["I apologize", "which payee", "To which payee"]
+      }
+    },
+    {
+      "id": "quoted-payment-edit-targets-swiggy",
+      "title": "Quoted payment correction should edit the quoted Swiggy transaction",
+      "tags": ["quoted-reply", "edit", "targeting", "regression"],
+      "initialState": {
+        "threads": {
+          "eval:quoted-edit": {
+            "messages": [],
+            "lastTransactionId": "7cbc18e7",
+            "recentTransactionIds": ["7cbc18e7", "0a717873"],
+            "replyContexts": {
+              "wa-out-swiggy": {
+                "transactionIds": ["0a717873"],
+                "recentTransactionIds": ["7cbc18e7", "0a717873"],
+                "createdAt": "2026-04-21T11:20:00.000Z"
+              }
+            },
+            "updatedAt": "2026-04-21T11:20:00.000Z"
+          }
+        }
+      },
+      "request": {
+        "threadId": "eval:quoted-edit",
+        "text": "paid via hdfc upi",
+        "quotedText": "Got it. Saved 1200.00 INR for Swiggy.",
+        "quotedMessageId": "wa-out-swiggy"
+      },
+      "expectations": {
+        "action": "edit_transaction",
+        "transactionId": "0a717873",
+        "referencedTransactionIds": ["0a717873"],
+        "needsClarification": false,
+        "ledgerChanged": true,
+        "replyContains": ["Updated", "0a717873"]
+      }
+    },
+    {
+      "id": "ambiguous-this-after-clarification",
+      "title": "Bare 'This.' after a two-candidate clarification should not mutate the ledger",
+      "tags": ["quoted-reply", "ambiguity", "clarification", "regression"],
+      "initialState": {
+        "threads": {
+          "eval:ambiguous-this": {
+            "messages": [],
+            "lastTransactionId": "7cbc18e7",
+            "recentTransactionIds": ["7cbc18e7", "0a717873"],
+            "replyContexts": {
+              "wa-out-clarify": {
+                "transactionIds": ["0a717873", "7cbc18e7"],
+                "recentTransactionIds": ["7cbc18e7", "0a717873"],
+                "createdAt": "2026-04-21T11:20:30.000Z"
+              }
+            },
+            "updatedAt": "2026-04-21T11:20:30.000Z"
+          }
+        }
+      },
+      "request": {
+        "threadId": "eval:ambiguous-this",
+        "text": "This.",
+        "quotedText": "Did you mean to edit the last Swiggy transaction for 1200 INR, or the most recent Printo transaction?",
+        "quotedMessageId": "wa-out-clarify"
+      },
+      "expectations": {
+        "needsClarification": true,
+        "ledgerChanged": false,
+        "replyContains": ["Swiggy", "Printo"],
+        "replyExcludes": ["I apologize", "Please clarify what this refers to"]
+      }
+    }
+  ]
+}

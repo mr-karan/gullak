@@ -14,6 +14,8 @@ export interface PayeeMemoryEntry {
 export interface ThreadState {
   messages: Message[];
   lastTransactionId?: string;
+  recentTransactionIds?: string[];
+  replyContexts?: Record<string, ReplyContext>;
   updatedAt: string;
 }
 
@@ -22,6 +24,12 @@ export interface RecapRecord {
   filePath: string;
   generatedAt: string;
   sentAt?: string;
+}
+
+export interface ReplyContext {
+  transactionIds: string[];
+  recentTransactionIds: string[];
+  createdAt: string;
 }
 
 interface AppState {
@@ -47,15 +55,23 @@ export class StateStore {
 
   async getThread(threadId: string): Promise<ThreadState> {
     const state = await this.readState();
-    return state.threads[threadId] ?? { messages: [], updatedAt: new Date().toISOString() };
+    return state.threads[threadId] ?? {
+      messages: [],
+      recentTransactionIds: [],
+      replyContexts: {},
+      updatedAt: new Date().toISOString(),
+    };
   }
 
   async saveThread(threadId: string, messages: Message[], lastTransactionId?: string): Promise<void> {
     await this.lock.runExclusive(async () => {
       const state = await this.readState();
+      const existing = state.threads[threadId];
       state.threads[threadId] = {
         messages: messages.slice(-24),
         lastTransactionId,
+        recentTransactionIds: existing?.recentTransactionIds ?? [],
+        replyContexts: existing?.replyContexts ?? {},
         updatedAt: new Date().toISOString(),
       };
       await this.writeState(state);
@@ -72,9 +88,110 @@ export class StateStore {
       const state = await this.readState();
       const thread = state.threads[threadId] ?? {
         messages: [],
+        recentTransactionIds: [],
+        replyContexts: {},
         updatedAt: new Date().toISOString(),
       };
       thread.lastTransactionId = transactionId;
+      thread.updatedAt = new Date().toISOString();
+      state.threads[threadId] = thread;
+      await this.writeState(state);
+    });
+  }
+
+  async getRecentTransactionIds(threadId: string, limit = 5): Promise<string[]> {
+    const state = await this.readState();
+    return (state.threads[threadId]?.recentTransactionIds ?? []).slice(0, limit);
+  }
+
+  async pushRecentTransactionId(threadId: string, transactionId: string): Promise<void> {
+    await this.lock.runExclusive(async () => {
+      const state = await this.readState();
+      const thread = state.threads[threadId] ?? {
+        messages: [],
+        recentTransactionIds: [],
+        replyContexts: {},
+        updatedAt: new Date().toISOString(),
+      };
+
+      thread.lastTransactionId = transactionId;
+      thread.recentTransactionIds = [
+        transactionId,
+        ...(thread.recentTransactionIds ?? []).filter((id) => id !== transactionId),
+      ].slice(0, 5);
+      thread.updatedAt = new Date().toISOString();
+      state.threads[threadId] = thread;
+      await this.writeState(state);
+    });
+  }
+
+  async getReplyContext(threadId: string, messageId: string): Promise<ReplyContext | undefined> {
+    if (!messageId) {
+      return undefined;
+    }
+
+    const state = await this.readState();
+    return state.threads[threadId]?.replyContexts?.[messageId];
+  }
+
+  async saveReplyContext(threadId: string, messageId: string, context: ReplyContext): Promise<void> {
+    if (!messageId) {
+      return;
+    }
+
+    await this.lock.runExclusive(async () => {
+      const state = await this.readState();
+      const thread = state.threads[threadId] ?? {
+        messages: [],
+        recentTransactionIds: [],
+        replyContexts: {},
+        updatedAt: new Date().toISOString(),
+      };
+
+      const replyContexts = {
+        ...(thread.replyContexts ?? {}),
+        [messageId]: {
+          transactionIds: [...new Set(context.transactionIds)],
+          recentTransactionIds: [...new Set(context.recentTransactionIds)].slice(0, 5),
+          createdAt: context.createdAt,
+        },
+      };
+
+      const prunedReplyContexts = Object.fromEntries(
+        Object.entries(replyContexts)
+          .sort((left, right) => left[1].createdAt.localeCompare(right[1].createdAt))
+          .slice(-50),
+      );
+
+      thread.replyContexts = prunedReplyContexts;
+      thread.updatedAt = new Date().toISOString();
+      state.threads[threadId] = thread;
+      await this.writeState(state);
+    });
+  }
+
+  async forgetTransactionId(threadId: string, transactionId: string): Promise<void> {
+    await this.lock.runExclusive(async () => {
+      const state = await this.readState();
+      const thread = state.threads[threadId];
+      if (!thread) {
+        return;
+      }
+
+      thread.recentTransactionIds = (thread.recentTransactionIds ?? []).filter((id) => id !== transactionId);
+      thread.replyContexts = Object.fromEntries(
+        Object.entries(thread.replyContexts ?? {}).map(([messageId, context]) => [
+          messageId,
+          {
+            ...context,
+            transactionIds: context.transactionIds.filter((id) => id !== transactionId),
+            recentTransactionIds: context.recentTransactionIds.filter((id) => id !== transactionId),
+          },
+        ]),
+      );
+      if (thread.lastTransactionId === transactionId) {
+        thread.lastTransactionId = thread.recentTransactionIds[0];
+      }
       thread.updatedAt = new Date().toISOString();
       state.threads[threadId] = thread;
       await this.writeState(state);
@@ -162,7 +279,17 @@ export class StateStore {
         ...DEFAULT_STATE,
         ...parsed,
         payeeMemory: parsed.payeeMemory ?? {},
-        threads: parsed.threads ?? {},
+        threads: Object.fromEntries(
+          Object.entries(parsed.threads ?? {}).map(([threadId, thread]) => [
+            threadId,
+            {
+              ...thread,
+              messages: thread.messages ?? [],
+              recentTransactionIds: thread.recentTransactionIds ?? [],
+              replyContexts: thread.replyContexts ?? {},
+            },
+          ]),
+        ),
         whatsappSeen: parsed.whatsappSeen ?? {},
         recaps: parsed.recaps ?? {},
       };

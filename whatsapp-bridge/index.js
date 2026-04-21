@@ -19,17 +19,28 @@ const API_KEY = process.env.GULLAK_WHATSAPP_API_KEY || "";
 const LOG_LEVEL = process.env.LOG_LEVEL || "warn";
 const VERSION = "1.0.0";
 
+function getListEnv(...names) {
+  for (const name of names) {
+    const value = process.env[name];
+    if (value && value.trim()) {
+      return value.split(",").map((item) => item.trim()).filter(Boolean);
+    }
+  }
+
+  return [];
+}
+
 // Allowed group names (comma-separated). If set, only messages from groups with these names are processed.
 // Example: "Family Budget,Household Expenses"
-const ALLOWED_GROUPS = process.env.ALLOWED_GROUPS
-  ? process.env.ALLOWED_GROUPS.split(",").map((n) => n.trim().toLowerCase()).filter(Boolean)
-  : [];
+const ALLOWED_GROUPS = getListEnv("ALLOWED_GROUPS", "GULLAK_WHATSAPP_ALLOWED_GROUPS")
+  .map((n) => n.toLowerCase());
 
 // Allowed phone numbers (comma-separated). If set, only DMs from these authors are processed.
 // Example: "919876543210,918851607899" (no @s.whatsapp.net suffix needed)
-const ALLOWED_PHONE_NUMBERS = process.env.ALLOWED_PHONE_NUMBERS
-  ? process.env.ALLOWED_PHONE_NUMBERS.split(",").map((n) => n.trim()).filter(Boolean)
-  : [];
+const ALLOWED_PHONE_NUMBERS = getListEnv(
+  "ALLOWED_PHONE_NUMBERS",
+  "GULLAK_WHATSAPP_ALLOWED_NUMBERS",
+);
 
 // Cache for group metadata to avoid repeated lookups
 const groupMetadataCache = new Map();
@@ -316,7 +327,9 @@ async function connectWhatsApp() {
         content.videoMessage?.contextInfo ||
         content.documentMessage?.contextInfo;
       let quotedText = null;
+      let quotedMessageId = null;
       if (contextInfo?.quotedMessage) {
+        quotedMessageId = contextInfo.stanzaId || null;
         const quoted = normalizeMessageContent(contextInfo.quotedMessage);
         if (quoted) {
           quotedText = quoted.conversation ||
@@ -337,6 +350,7 @@ async function connectWhatsApp() {
         pushName: msg.pushName || null,
         body: text,
         quotedText: quotedText,
+        quotedMessageId: quotedMessageId,
         timestamp: msg.messageTimestamp,
         media: null,
       };
@@ -475,8 +489,8 @@ app.post("/api/sendText", async (req, res) => {
   }
 
   try {
-    await sock.sendMessage(chatId, { text });
-    res.json({ success: true });
+    const sentMessage = await sock.sendMessage(chatId, { text });
+    res.json({ success: true, messageId: sentMessage?.key?.id || null });
   } catch (err) {
     logger.error({ err: err.message, chatId }, "Send failed");
     res.status(500).json({ error: err.message });

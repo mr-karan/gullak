@@ -27,19 +27,17 @@ const CATEGORY_PATTERNS: Array<{ pattern: RegExp; account: string }> = [
   { pattern: /atm\s*withdraw|cash\s*withdraw|withdrawal/i, account: "Expenses:Cash" },
 ];
 
-export function suggestExpenseAccount(payee: string, amount: number): string {
+export function suggestExpenseAccount(payee: string, amount: number, note?: string): string {
+  const haystack = `${payee} ${note ?? ""}`.trim();
+
   for (const entry of CATEGORY_PATTERNS) {
-    if (entry.account.startsWith("Expenses:") && entry.pattern.test(payee)) {
+    if (entry.account.startsWith("Expenses:") && entry.pattern.test(haystack)) {
       return entry.account;
     }
   }
 
-  if (amount < 100) {
-    return "Expenses:Food:Snacks";
-  }
-
-  if (amount < 500) {
-    return "Expenses:Food:Meals";
+  if (/lunch|dinner|breakfast|brunch|meal|cafe|bakery/i.test(haystack)) {
+    return "Expenses:Food:Restaurants";
   }
 
   return "Expenses:Other";
@@ -92,6 +90,95 @@ export function suggestDepositAccount(
     (account) => account.startsWith("Assets:") || account.startsWith("Liabilities:"),
   );
   return fallback ?? "Assets:Cash";
+}
+
+export function resolveExpenseAccountHint(hint: string | undefined, knownAccounts: string[]): string | undefined {
+  return resolveAccountHint(hint, knownAccounts, ["Expenses:"]);
+}
+
+export function resolvePaymentAccountHint(hint: string | undefined, knownAccounts: string[]): string | undefined {
+  return resolveAccountHint(hint, knownAccounts, ["Assets:", "Liabilities:"]);
+}
+
+export function resolveIncomeAccountHint(hint: string | undefined, knownAccounts: string[]): string | undefined {
+  return resolveAccountHint(hint, knownAccounts, ["Income:"]);
+}
+
+export function resolveDepositAccountHint(hint: string | undefined, knownAccounts: string[]): string | undefined {
+  return resolveAccountHint(hint, knownAccounts, ["Assets:", "Liabilities:"]);
+}
+
+function resolveAccountHint(
+  hint: string | undefined,
+  knownAccounts: string[],
+  allowedPrefixes: string[],
+): string | undefined {
+  if (!hint) {
+    return undefined;
+  }
+
+  const trimmed = hint.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+
+  const candidates = knownAccounts.filter((account) =>
+    allowedPrefixes.some((prefix) => account.startsWith(prefix))
+  );
+
+  const exact = candidates.find((account) => account.toLowerCase() === trimmed.toLowerCase());
+  if (exact) {
+    return exact;
+  }
+
+  if (trimmed.includes(":")) {
+    return undefined;
+  }
+
+  const normalizedHint = normalize(trimmed);
+  const hintTokens = tokenize(trimmed);
+  let best: { account: string; score: number } | undefined;
+
+  for (const account of candidates) {
+    const accountLower = account.toLowerCase();
+    let score = 0;
+
+    if (accountLower.includes(trimmed.toLowerCase()) || normalizedHint.includes(normalize(account))) {
+      score += 10;
+    }
+
+    const accountTokens = tokenize(account);
+    for (const token of hintTokens) {
+      if (accountTokens.includes(token)) {
+        score += token.length >= 4 ? 4 : 2;
+      }
+    }
+
+    if (/cash/i.test(trimmed) && /cash/i.test(account)) {
+      score += 8;
+    }
+
+    if (/upi/i.test(trimmed) && /bank|upi/i.test(account)) {
+      score += 3;
+    }
+
+    if (/card/i.test(trimmed) && /card|credit/i.test(account)) {
+      score += 4;
+    }
+
+    if (score > (best?.score ?? 0)) {
+      best = { account, score };
+    }
+  }
+
+  return (best?.score ?? 0) >= 4 ? best!.account : undefined;
+}
+function normalize(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, "");
+}
+
+function tokenize(value: string): string[] {
+  return value.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
 }
 
 function mostCommon(values: string[]): string | undefined {

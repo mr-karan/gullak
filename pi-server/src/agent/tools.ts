@@ -4,15 +4,27 @@ import type { AgentTool } from "@mariozechner/pi-agent-core";
 
 import type { AppConfig } from "../config.js";
 import { formatAmount, type SimpleTransaction, type TransactionSource } from "../ledger/models.js";
-import { suggestDepositAccount, suggestExpenseAccount, suggestIncomeAccount, suggestPaymentAccount } from "../ledger/inference.js";
+import {
+  resolveDepositAccountHint,
+  resolveExpenseAccountHint,
+  resolveIncomeAccountHint,
+  resolvePaymentAccountHint,
+  suggestDepositAccount,
+  suggestExpenseAccount,
+  suggestIncomeAccount,
+  suggestPaymentAccount,
+} from "../ledger/inference.js";
 import type { LedgerSummary, LedgerService } from "../ledger/service.js";
 import type { StateStore } from "../state/store.js";
 
 export interface ToolDetails {
   action:
     | "record_expense"
+    | "record_expense_batch"
     | "record_income"
+    | "edit_transaction"
     | "edit_last_transaction"
+    | "edit_recent_transactions"
     | "delete_transaction"
     | "list_recent_transactions"
     | "get_accounts"
@@ -53,7 +65,26 @@ const recordIncomeSchema = Type.Object({
   note: Type.Optional(Type.String()),
 });
 
+const recordExpenseBatchSchema = Type.Object({
+  items: Type.Array(recordExpenseSchema, { minItems: 2, maxItems: 20 }),
+});
+
 const editLastSchema = Type.Object({
+  transactionId: Type.Optional(Type.String()),
+  payee: Type.Optional(Type.String()),
+  amount: Type.Optional(Type.Number({ exclusiveMinimum: 0 })),
+  expenseAccount: Type.Optional(Type.String()),
+  paymentAccount: Type.Optional(Type.String()),
+  incomeAccount: Type.Optional(Type.String()),
+  depositAccount: Type.Optional(Type.String()),
+  date: Type.Optional(Type.String({ description: "YYYY-MM-DD" })),
+  currency: Type.Optional(Type.String()),
+  note: Type.Optional(Type.String()),
+});
+
+const editRecentSchema = Type.Object({
+  count: Type.Optional(Type.Number({ minimum: 1, maximum: 5 })),
+  transactionIds: Type.Optional(Type.Array(Type.String(), { minItems: 1, maxItems: 5 })),
   payee: Type.Optional(Type.String()),
   amount: Type.Optional(Type.Number({ exclusiveMinimum: 0 })),
   expenseAccount: Type.Optional(Type.String()),
@@ -88,8 +119,10 @@ const getSummarySchema = Type.Object({
 });
 
 type RecordExpenseArgs = Static<typeof recordExpenseSchema>;
+type RecordExpenseBatchArgs = Static<typeof recordExpenseBatchSchema>;
 type RecordIncomeArgs = Static<typeof recordIncomeSchema>;
 type EditLastArgs = Static<typeof editLastSchema>;
+type EditRecentArgs = Static<typeof editRecentSchema>;
 type DeleteArgs = Static<typeof deleteTransactionSchema>;
 type ListRecentArgs = Static<typeof listRecentSchema>;
 type GetAccountsArgs = Static<typeof getAccountsSchema>;
@@ -103,30 +136,7 @@ export function createTools(context: ToolContext): AgentTool<any, ToolDetails>[]
       description: "Save an expense into the ledger, inferring accounts when possible.",
       parameters: recordExpenseSchema,
       execute: async (_toolCallId: string, args: RecordExpenseArgs) => {
-        const accounts = await context.ledgerService.listAccounts();
-        const recentTransactions = await context.ledgerService.listTransactions({ limit: 20 });
-        const memory = await context.stateStore.findPayeeMemory(args.payee);
-        const expenseAccount =
-          args.expenseAccount ?? memory?.expenseAccount ?? suggestExpenseAccount(args.payee, args.amount);
-        const paymentAccount =
-          args.paymentAccount ??
-          memory?.paymentAccount ??
-          suggestPaymentAccount(accounts, recentTransactions, args.amount);
-
-        const transaction = await context.ledgerService.appendExpense({
-          date: resolveDate(args.date, context.config.timezone),
-          payee: args.payee,
-          amount: args.amount,
-          expenseAccount,
-          paymentAccount,
-          currency: args.currency ?? context.config.defaultCurrency,
-          note: args.note,
-          source: context.source,
-          sourceUser: context.sourceUser,
-        });
-
-        await context.stateStore.rememberPayee(args.payee, expenseAccount, paymentAccount);
-        await context.stateStore.setLastTransactionId(context.threadId, transaction.id);
+        const transaction = await recordExpenseWithInference(context, args);
 
         return {
           content: [
@@ -143,6 +153,27 @@ export function createTools(context: ToolContext): AgentTool<any, ToolDetails>[]
       },
     },
     {
+      label: "Record expense batch",
+      name: "record_expense_batch",
+      description: "Save multiple expense transactions from a single user message. Use this when the user sent multiple separate expenses.",
+      parameters: recordExpenseBatchSchema,
+      execute: async (_toolCallId: string, args: RecordExpenseBatchArgs) => {
+        const transactions: SimpleTransaction[] = [];
+
+        for (const item of args.items) {
+          transactions.push(await recordExpenseWithInference(context, item));
+        }
+
+        return {
+          content: [{ type: "text", text: `Saved ${transactions.length} expense transaction(s).` }],
+          details: {
+            action: "record_expense_batch",
+            transactions,
+          },
+        };
+      },
+    },
+    {
       label: "Record income",
       name: "record_income",
       description: "Save an income transaction into the ledger.",
@@ -154,15 +185,25 @@ export function createTools(context: ToolContext): AgentTool<any, ToolDetails>[]
           date: resolveDate(args.date, context.config.timezone),
           payee: args.payee,
           amount: args.amount,
-          incomeAccount: args.incomeAccount ?? suggestIncomeAccount(args.payee),
-          depositAccount: args.depositAccount ?? suggestDepositAccount(accounts, recentTransactions),
+          incomeAccount: requireResolvedAccountHint(
+            "incomeAccount",
+            args.incomeAccount,
+            accounts,
+            resolveIncomeAccountHint,
+          ) ?? suggestIncomeAccount(args.payee),
+          depositAccount: requireResolvedAccountHint(
+            "depositAccount",
+            args.depositAccount,
+            accounts,
+            resolveDepositAccountHint,
+          ) ?? suggestDepositAccount(accounts, recentTransactions),
           currency: args.currency ?? context.config.defaultCurrency,
           note: args.note,
           source: context.source,
           sourceUser: context.sourceUser,
         });
 
-        await context.stateStore.setLastTransactionId(context.threadId, transaction.id);
+        await context.stateStore.pushRecentTransactionId(context.threadId, transaction.id);
 
         return {
           content: [
@@ -179,35 +220,102 @@ export function createTools(context: ToolContext): AgentTool<any, ToolDetails>[]
       },
     },
     {
-      label: "Edit last transaction",
-      name: "edit_last_transaction",
-      description: "Edit the most recent transaction saved in this conversation thread.",
+      label: "Edit transaction by id",
+      name: "edit_transaction",
+      description: "Edit a specific transaction by explicit transaction id.",
       parameters: editLastSchema,
       execute: async (_toolCallId: string, args: EditLastArgs) => {
-        const lastTransactionId = await context.stateStore.getLastTransactionId(context.threadId);
-        if (!lastTransactionId) {
+        if (!args.transactionId) {
+          throw new Error("transactionId is required when editing a specific transaction.");
+        }
+
+        const updated = await context.ledgerService.updateTransaction(
+          args.transactionId,
+          await normalizeUpdateArgs(context, args),
+        );
+        if (!updated) {
+          throw new Error(`Transaction ${args.transactionId} was not found.`);
+        }
+
+        await rememberUpdatedTransaction(context, updated);
+
+        return {
+          content: [{ type: "text", text: `Updated ${updated.payee} (${updated.id}).` }],
+          details: {
+            action: "edit_transaction",
+            transaction: updated,
+          },
+        };
+      },
+    },
+    {
+      label: "Edit last transaction",
+      name: "edit_last_transaction",
+      description: "Edit the most recent transaction saved in this conversation thread, or an explicit transaction id if provided.",
+      parameters: editLastSchema,
+      execute: async (_toolCallId: string, args: EditLastArgs) => {
+        const targetTransactionId = args.transactionId
+          ?? await context.stateStore.getLastTransactionId(context.threadId);
+        if (!targetTransactionId) {
           throw new Error("No recent transaction found in this conversation thread.");
         }
 
-        const updated = await context.ledgerService.updateTransaction(lastTransactionId, args);
+        const updated = await context.ledgerService.updateTransaction(
+          targetTransactionId,
+          await normalizeUpdateArgs(context, args),
+        );
         if (!updated) {
-          throw new Error(`Transaction ${lastTransactionId} was not found.`);
+          throw new Error(`Transaction ${targetTransactionId} was not found.`);
         }
 
-        await context.stateStore.setLastTransactionId(context.threadId, updated.id);
-        if (updated.expenseAccount) {
-          await context.stateStore.rememberPayee(
-            updated.payee,
-            updated.expenseAccount,
-            updated.paymentAccount,
-          );
-        }
+        await rememberUpdatedTransaction(context, updated);
 
         return {
           content: [{ type: "text", text: `Updated ${updated.payee} (${updated.id}).` }],
           details: {
             action: "edit_last_transaction",
             transaction: updated,
+          },
+        };
+      },
+    },
+    {
+      label: "Edit recent transactions",
+      name: "edit_recent_transactions",
+      description: "Edit multiple transactions with the same updates, using explicit ids when provided or recent thread transactions otherwise.",
+      parameters: editRecentSchema,
+      execute: async (_toolCallId: string, args: EditRecentArgs) => {
+        const targetIds = args.transactionIds?.length
+          ? [...new Set(args.transactionIds)]
+          : await context.stateStore.getRecentTransactionIds(context.threadId, args.count ?? 2);
+        if (targetIds.length === 0) {
+          throw new Error("No recent transactions found in this conversation thread.");
+        }
+
+        const updates = await normalizeUpdateArgs(context, args);
+        const transactions: SimpleTransaction[] = [];
+
+        for (const transactionId of targetIds) {
+          const updated = await context.ledgerService.updateTransaction(transactionId, updates);
+          if (!updated) {
+            continue;
+          }
+
+          transactions.push(updated);
+          await rememberUpdatedTransaction(context, updated);
+        }
+
+        if (transactions.length === 0) {
+          throw new Error("Recent transactions could not be updated.");
+        }
+
+        await context.stateStore.pushRecentTransactionId(context.threadId, transactions[0].id);
+
+        return {
+          content: [{ type: "text", text: `Updated ${transactions.length} recent transaction(s): ${transactions.map((transaction) => transaction.payee).join(", ")}.` }],
+          details: {
+            action: "edit_recent_transactions",
+            transactions,
           },
         };
       },
@@ -229,7 +337,7 @@ export function createTools(context: ToolContext): AgentTool<any, ToolDetails>[]
           throw new Error(`Transaction ${transactionId} was not found.`);
         }
 
-        await context.stateStore.setLastTransactionId(context.threadId, undefined);
+        await context.stateStore.forgetTransactionId(context.threadId, transactionId);
 
         return {
           content: [{ type: "text", text: `Deleted transaction ${transactionId}.` }],
@@ -310,6 +418,88 @@ export function createTools(context: ToolContext): AgentTool<any, ToolDetails>[]
       },
     },
   ];
+}
+
+async function normalizeUpdateArgs(
+  context: ToolContext,
+  args: EditLastArgs | EditRecentArgs,
+) {
+  const accounts = await context.ledgerService.listAccounts();
+
+  return {
+    payee: args.payee,
+    amount: args.amount,
+    date: args.date,
+    currency: args.currency,
+    note: args.note,
+    expenseAccount: requireResolvedAccountHint("expenseAccount", args.expenseAccount, accounts, resolveExpenseAccountHint),
+    paymentAccount: requireResolvedAccountHint("paymentAccount", args.paymentAccount, accounts, resolvePaymentAccountHint),
+    incomeAccount: requireResolvedAccountHint("incomeAccount", args.incomeAccount, accounts, resolveIncomeAccountHint),
+    depositAccount: requireResolvedAccountHint("depositAccount", args.depositAccount, accounts, resolveDepositAccountHint),
+  };
+}
+
+async function recordExpenseWithInference(
+  context: ToolContext,
+  args: RecordExpenseArgs,
+): Promise<SimpleTransaction> {
+  const accounts = await context.ledgerService.listAccounts();
+  const recentTransactions = await context.ledgerService.listTransactions({ limit: 20 });
+  const memory = await context.stateStore.findPayeeMemory(args.payee);
+  const expenseAccount =
+    requireResolvedAccountHint("expenseAccount", args.expenseAccount, accounts, resolveExpenseAccountHint)
+    ?? memory?.expenseAccount
+    ?? suggestExpenseAccount(args.payee, args.amount, args.note);
+  const paymentAccount =
+    requireResolvedAccountHint("paymentAccount", args.paymentAccount, accounts, resolvePaymentAccountHint)
+    ?? memory?.paymentAccount
+    ?? suggestPaymentAccount(accounts, recentTransactions, args.amount);
+
+  const transaction = await context.ledgerService.appendExpense({
+    date: resolveDate(args.date, context.config.timezone),
+    payee: args.payee,
+    amount: args.amount,
+    expenseAccount,
+    paymentAccount,
+    currency: args.currency ?? context.config.defaultCurrency,
+    note: args.note,
+    source: context.source,
+    sourceUser: context.sourceUser,
+  });
+
+  await context.stateStore.rememberPayee(args.payee, expenseAccount, paymentAccount);
+  await context.stateStore.pushRecentTransactionId(context.threadId, transaction.id);
+
+  return transaction;
+}
+
+function requireResolvedAccountHint(
+  field: string,
+  hint: string | undefined,
+  knownAccounts: string[],
+  resolver: (hint: string | undefined, knownAccounts: string[]) => string | undefined,
+): string | undefined {
+  if (!hint) {
+    return undefined;
+  }
+
+  const resolved = resolver(hint, knownAccounts);
+  if (!resolved) {
+    throw new Error(`Unknown ${field} '${hint}'. Use an existing ledger account name.`);
+  }
+
+  return resolved;
+}
+
+async function rememberUpdatedTransaction(context: ToolContext, updated: SimpleTransaction): Promise<void> {
+  await context.stateStore.pushRecentTransactionId(context.threadId, updated.id);
+  if (updated.expenseAccount) {
+    await context.stateStore.rememberPayee(
+      updated.payee,
+      updated.expenseAccount,
+      updated.paymentAccount,
+    );
+  }
 }
 
 function resolveDate(input: string | undefined, timezone: string): string {

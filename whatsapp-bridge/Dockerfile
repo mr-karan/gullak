@@ -1,18 +1,14 @@
-FROM oven/bun:1
+FROM node:20-bookworm-slim
 
 WORKDIR /usr/src/app
 
-# Install dependencies first for layer caching
-COPY package.json bun.lock* ./
-RUN bun install --production
+COPY package.json pnpm-lock.yaml ./
+RUN corepack enable && pnpm install --prod --frozen-lockfile
 
-# Copy application code
 COPY index.js ./
 
-# Create session directory with proper permissions
-RUN mkdir -p /data/whatsapp-session && chown -R bun:bun /data
+RUN mkdir -p /data/whatsapp-session
 
-USER bun
 EXPOSE 3000/tcp
 
-ENTRYPOINT ["bun", "run", "index.js"]
+CMD ["node", "index.js"]

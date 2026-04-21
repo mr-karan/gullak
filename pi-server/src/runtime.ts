@@ -5,6 +5,7 @@ import { LedgerValidator } from "./ledger/validator.js";
 import { LedgerWriter } from "./ledger/writer.js";
 import { WeeklyRecapService } from "./recap/weekly.js";
 import { StateStore } from "./state/store.js";
+import { ModelReceiptVisionService } from "./whatsapp/media.js";
 import { WhatsAppBridgeClient, WhatsAppService } from "./whatsapp/service.js";
 
 export interface Runtime {
@@ -26,11 +27,13 @@ export function createRuntime(config: AppConfig = loadConfig()): Runtime {
   const ledgerService = new LedgerService(config, writer);
   const agentService = new AgentService(config, ledgerService, stateStore);
   const bridgeClient = new WhatsAppBridgeClient(config);
+  const receiptVisionService = new ModelReceiptVisionService(config);
   const whatsappService = new WhatsAppService(
     config,
     bridgeClient,
     agentService,
-    async (messageId) => stateStore.isDuplicateWhatsappMessage(messageId),
+    stateStore,
+    receiptVisionService,
   );
   const weeklyRecapService = new WeeklyRecapService(
     config,

@@ -4,7 +4,7 @@ import type { Runtime } from "./runtime.js";
 
 export function createApp(runtime: Runtime) {
   const app = express();
-  app.use(express.json({ limit: "2mb" }));
+  app.use(express.json({ limit: "10mb" }));
 
   app.use((request, response, next) => {
     if (!runtime.config.httpApiKey) {
@@ -39,6 +39,7 @@ export function createApp(runtime: Runtime) {
       threadId: request.body.threadId,
       source: request.body.source,
       sourceUser: request.body.sourceUser,
+      quotedMessageId: request.body.quotedMessageId,
     });
     response.json(result);
   }));

@@ -13,6 +13,17 @@ function getOptionalEnv(name: string): string | undefined {
   return value && value.trim().length > 0 ? value.trim() : undefined;
 }
 
+function getFirstOptionalEnv(...names: string[]): string | undefined {
+  for (const name of names) {
+    const value = getOptionalEnv(name);
+    if (value) {
+      return value;
+    }
+  }
+
+  return undefined;
+}
+
 function getBooleanEnv(name: string, fallback: boolean): boolean {
   const value = process.env[name];
   if (!value) {
@@ -76,6 +87,33 @@ export function loadConfig(): AppConfig {
   const ledgerPath = resolve(getEnv("GULLAK_LEDGER_PATH", `${dataDir}/main.ledger`));
   const statePath = resolve(getEnv("GULLAK_STATE_PATH", `${dataDir}/pi-state.json`));
   const recapDir = resolve(`${dataDir}/recaps`);
+  const allowAmbientModelKeys = getBooleanEnv("GULLAK_ALLOW_AMBIENT_MODEL_KEYS", false);
+  const openRouterApiKey = allowAmbientModelKeys ? getOptionalEnv("OPENROUTER_API_KEY") : undefined;
+  const openAiApiKey = allowAmbientModelKeys ? getOptionalEnv("OPENAI_API_KEY") : undefined;
+  const modelApiKey = getFirstOptionalEnv(
+    "GULLAK_MODEL_API_KEY",
+    "OPENROUTER_API_KEY",
+    "OPENAI_API_KEY",
+  ) ?? "dummy";
+  const modelBaseUrl = getFirstOptionalEnv(
+    "GULLAK_MODEL_BASE_URL",
+    "OPENROUTER_BASE_URL",
+    "OPENAI_BASE_URL",
+  ) ?? (openRouterApiKey
+    ? "https://openrouter.ai/api/v1"
+    : openAiApiKey
+      ? "https://api.openai.com/v1"
+      : "http://localhost:11434/v1");
+  const modelId = getFirstOptionalEnv("GULLAK_MODEL_ID") ?? (openRouterApiKey
+    ? "google/gemini-2.5-flash"
+    : openAiApiKey
+      ? "gpt-4.1-mini"
+    : "gpt-oss:20b");
+  const modelName = getFirstOptionalEnv("GULLAK_MODEL_NAME") ?? (openRouterApiKey
+    ? "Gemini 2.5 Flash"
+    : openAiApiKey
+      ? "GPT-4.1 Mini"
+    : "GPT-OSS 20B");
 
   mkdirSync(dataDir, { recursive: true });
   mkdirSync(recapDir, { recursive: true });
@@ -93,10 +131,10 @@ export function loadConfig(): AppConfig {
     host: getEnv("GULLAK_HOST", "127.0.0.1"),
     port: Number.parseInt(getEnv("GULLAK_PORT", "8787"), 10),
     httpApiKey: getOptionalEnv("GULLAK_HTTP_API_KEY"),
-    modelBaseUrl: getEnv("GULLAK_MODEL_BASE_URL", "http://localhost:11434/v1"),
-    modelId: getEnv("GULLAK_MODEL_ID", "gpt-oss:20b"),
-    modelName: getEnv("GULLAK_MODEL_NAME", "GPT-OSS 20B"),
-    modelApiKey: getEnv("GULLAK_MODEL_API_KEY", "dummy"),
+    modelBaseUrl,
+    modelId,
+    modelName,
+    modelApiKey,
     modelReasoning: getBooleanEnv("GULLAK_MODEL_REASONING", true),
     modelThinkingLevel: getThinkingLevel(),
     whatsappBridgeUrl: getEnv("GULLAK_WHATSAPP_BRIDGE_URL", "http://localhost:3000"),
