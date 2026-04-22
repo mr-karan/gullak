@@ -11,17 +11,17 @@ export function formatReplyFromTool(details: ToolDetails | undefined): string | 
       return details.transaction ? formatSavedExpense(details.transaction) : undefined;
     case "record_expense_batch":
       return details.transactions?.length
-        ? `Got it. Saved these ${details.transactions.length} expenses:\n${details.transactions.map(formatTransactionBullet).join("\n")}`
+        ? `Added ${details.transactions.length} expenses:\n${details.transactions.map(formatSavedTransactionBullet).join("\n")}`
         : undefined;
     case "record_income":
       return details.transaction ? formatSavedIncome(details.transaction) : undefined;
     case "edit_transaction":
-      return details.transaction ? `Done. Updated it.\n${formatTransactionBody(details.transaction)}` : undefined;
+      return details.transaction ? formatUpdatedTransaction(details.transaction) : undefined;
     case "edit_last_transaction":
-      return details.transaction ? `Done. Updated it.\n${formatTransactionBody(details.transaction)}` : undefined;
+      return details.transaction ? formatUpdatedTransaction(details.transaction) : undefined;
     case "edit_recent_transactions":
       return details.transactions?.length
-        ? `Done. Updated these ${details.transactions.length} transactions:\n${details.transactions.map(formatTransactionBullet).join("\n")}`
+        ? `Updated ${details.transactions.length} transactions:\n${details.transactions.map(formatUpdatedTransactionBullet).join("\n")}`
         : undefined;
     case "delete_transaction":
       return details.deletedId ? `Done. Deleted transaction ${details.deletedId}.` : undefined;
@@ -52,7 +52,7 @@ export function formatReplyFromTurn(details: ToolDetails[]): string | undefined 
   });
 
   if (savedTransactions.length > 1 && details.every((detail) => detail.action === "record_expense" || detail.action === "record_expense_batch")) {
-    return `Got it. Saved these ${savedTransactions.length} expenses:\n${savedTransactions.map(formatTransactionBullet).join("\n")}`;
+    return `Added ${savedTransactions.length} expenses:\n${savedTransactions.map(formatSavedTransactionBullet).join("\n")}`;
   }
 
   const formatted = details
@@ -63,41 +63,85 @@ export function formatReplyFromTurn(details: ToolDetails[]): string | undefined 
 }
 
 function formatSavedExpense(transaction: SimpleTransaction): string {
-  return `Got it. Saved ${formatAmount(transaction.amount)} ${transaction.currency} for ${transaction.payee}.\n${formatTransactionBody(transaction)}`;
+  return `Added ${formatAmount(transaction.amount)} ${transaction.currency} for ${transaction.payee}${formatOptionalNote(transaction)}.`;
 }
 
 function formatSavedIncome(transaction: SimpleTransaction): string {
-  return `Got it. Saved income of ${formatAmount(transaction.amount)} ${transaction.currency} from ${transaction.payee}.\n${formatTransactionBody(transaction)}`;
+  return `Added income of ${formatAmount(transaction.amount)} ${transaction.currency} from ${transaction.payee}${formatOptionalNote(transaction)}.`;
 }
 
-function formatTransactionBullet(transaction: SimpleTransaction): string {
-  return `- ${transaction.payee}, ${formatTransactionBody(transaction, false)}`;
+function formatUpdatedTransaction(transaction: SimpleTransaction): string {
+  return `Updated ${transaction.payee}: ${formatTransactionSummary(transaction, { includeMethod: true })}.`;
 }
 
-function formatTransactionBody(transaction: SimpleTransaction, multiline = true): string {
-  const details: string[] = [];
-
-  if (transaction.kind === "expense") {
-    details.push(withLabel("Category", transaction.expenseAccount ?? "Expenses:Other", multiline));
-    details.push(withLabel("Paid via", transaction.paymentAccount ?? "Unknown", multiline));
-  }
-
-  if (transaction.kind === "income") {
-    details.push(withLabel("Income head", transaction.incomeAccount ?? "Income:Other", multiline));
-    details.push(withLabel("Received in", transaction.depositAccount ?? "Unknown", multiline));
-  }
-
-  details.push(withLabel("Date", transaction.date, multiline));
-
-  if (transaction.note) {
-    details.push(withLabel("Note", transaction.note, multiline));
-  }
-
-  details.push(withLabel("Ref", transaction.id, multiline));
-
-  return multiline ? details.join("\n") : details.join(" · ");
+function formatSavedTransactionBullet(transaction: SimpleTransaction): string {
+  return `- ${transaction.payee}: ${formatTransactionSummary(transaction)}${formatBulletNote(transaction)}`;
 }
 
-function withLabel(label: string, value: string, multiline: boolean): string {
-  return multiline ? `${label}: ${value}` : `${label}: ${value}`;
+function formatUpdatedTransactionBullet(transaction: SimpleTransaction): string {
+  return `- ${transaction.payee}: ${formatTransactionSummary(transaction, { includeMethod: true })}${formatBulletNote(transaction)}`;
+}
+
+function formatTransactionSummary(
+  transaction: SimpleTransaction,
+  options: { includeMethod?: boolean } = {},
+): string {
+  const details = [`${formatAmount(transaction.amount)} ${transaction.currency}`];
+  const method = options.includeMethod ? humanizeSettlementAccount(transaction) : undefined;
+  if (method) {
+    details.push(`via ${method}`);
+  }
+
+  return details.join(" ");
+}
+
+function humanizeSettlementAccount(transaction: SimpleTransaction): string | undefined {
+  const account = transaction.kind === "expense"
+    ? transaction.paymentAccount
+    : transaction.depositAccount;
+  if (!account) {
+    return undefined;
+  }
+
+  const parts = account.split(":").filter(Boolean);
+  if (parts.length === 0) {
+    return undefined;
+  }
+
+  if (parts.some((part) => /^cash$/i.test(part))) {
+    return "cash";
+  }
+
+  const nonStructuralParts = parts.filter((part) => !/^(assets|liabilities|bank)$/i.test(part));
+  const last = nonStructuralParts.at(-1) ?? parts.at(-1)!;
+  const previous = nonStructuralParts.at(-2);
+
+  if (/^upi$/i.test(last)) {
+    return previous ? `${previous} UPI` : "UPI";
+  }
+
+  if (/creditcard|card/i.test(account)) {
+    return `${last} card`;
+  }
+
+  return last;
+}
+
+function formatOptionalNote(transaction: SimpleTransaction): string {
+  const note = summarizeNote(transaction.note);
+  return note ? ` (${note})` : "";
+}
+
+function formatBulletNote(transaction: SimpleTransaction): string {
+  const note = summarizeNote(transaction.note);
+  return note ? ` (${note})` : "";
+}
+
+function summarizeNote(note: string | undefined): string | undefined {
+  const trimmed = note?.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+
+  return trimmed.length <= 40 ? trimmed : undefined;
 }

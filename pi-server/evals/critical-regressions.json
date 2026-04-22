@@ -21,8 +21,8 @@
         "action": "record_expense",
         "needsClarification": false,
         "ledgerChanged": true,
-        "replyContains": ["302.00", "INR"],
-        "replyExcludes": ["I apologize", "which payee", "To which payee"],
+        "replyContains": ["Added", "302.00", "Groceries"],
+        "replyExcludes": ["I apologize", "which payee", "To which payee", "Category:", "Paid via:", "Ref:"],
         "ledgerContains": ["302.00 INR"]
       }
     },
@@ -37,8 +37,8 @@
       "expectations": {
         "needsClarification": false,
         "ledgerChanged": true,
-        "replyContains": ["Saved these 2 expenses"],
-        "replyExcludes": ["I apologize", "which payee", "To which payee"],
+        "replyContains": ["Added 2 expenses", "302.00 INR", "871.00 INR"],
+        "replyExcludes": ["I apologize", "which payee", "To which payee", "Category:", "Paid via:", "Ref:"],
         "ledgerContains": ["302.00 INR", "871.00 INR"]
       }
     },
@@ -60,14 +60,15 @@
       "request": {
         "threadId": "eval:quoted-text-fallback",
         "text": "paid via hdfc upi",
-        "quotedText": "Got it. Saved 1200.00 INR for Swiggy."
+        "quotedText": "Added 1200.00 INR for Swiggy."
       },
       "expectations": {
         "transactionId": "0a717873",
         "referencedTransactionIds": ["0a717873"],
         "needsClarification": false,
         "ledgerChanged": true,
-        "replyContains": ["Updated", "0a717873"],
+        "replyContains": ["Updated", "Swiggy", "HDFC UPI"],
+        "replyExcludes": ["Category:", "Paid via:", "Ref:"],
         "ledgerContains": ["Assets:Bank:HDFC:UPI  -1200.00 INR"]
       }
     },
@@ -95,7 +96,7 @@
       "request": {
         "threadId": "eval:quoted-edit",
         "text": "paid via hdfc upi",
-        "quotedText": "Got it. Saved 1200.00 INR for Swiggy.",
+        "quotedText": "Added 1200.00 INR for Swiggy.",
         "quotedMessageId": "wa-out-swiggy"
       },
       "expectations": {
@@ -104,7 +105,8 @@
         "referencedTransactionIds": ["0a717873"],
         "needsClarification": false,
         "ledgerChanged": true,
-        "replyContains": ["Updated", "0a717873"],
+        "replyContains": ["Updated", "Swiggy", "HDFC UPI"],
+        "replyExcludes": ["Category:", "Paid via:", "Ref:"],
         "ledgerContains": ["Assets:Bank:HDFC:UPI  -1200.00 INR"]
       }
     },
@@ -132,7 +134,8 @@
         "referencedTransactionIds": ["7cbc18e7"],
         "needsClarification": false,
         "ledgerChanged": true,
-        "replyContains": ["Updated", "7cbc18e7"],
+        "replyContains": ["Updated", "Printo", "HDFC UPI"],
+        "replyExcludes": ["Category:", "Paid via:", "Ref:"],
         "ledgerContains": ["Assets:Bank:HDFC:UPI  -323.00 INR"]
       }
     },
@@ -203,8 +206,8 @@
         "referencedTransactionIds": ["0a717873", "7cbc18e7"],
         "needsClarification": false,
         "ledgerChanged": true,
-        "replyContains": ["Updated"],
-        "replyExcludes": ["I apologize"],
+        "replyContains": ["Updated 2 transactions", "Swiggy", "Printo", "HDFC UPI"],
+        "replyExcludes": ["I apologize", "Category:", "Paid via:", "Ref:"],
         "ledgerContains": [
           "Assets:Bank:HDFC:UPI  -1200.00 INR",
           "Assets:Bank:HDFC:UPI  -323.00 INR"

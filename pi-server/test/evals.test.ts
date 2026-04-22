@@ -15,13 +15,13 @@ test("buildEvalRequest injects quoted text in the same format as WhatsApp servic
     threadId: "thread-1",
     text: "paid via hdfc upi",
     source: "api",
-    quotedText: "Got it. Saved 1200.00 INR for Swiggy.",
+    quotedText: "Added 1200.00 INR for Swiggy.",
     quotedMessageId: "wa-msg-1",
   });
 
   assert.equal(
     request.text,
-    "[Replying to: \"Got it. Saved 1200.00 INR for Swiggy.\"]\npaid via hdfc upi",
+    "[Replying to: \"Added 1200.00 INR for Swiggy.\"]\npaid via hdfc upi",
   );
   assert.equal(request.quotedMessageId, "wa-msg-1");
 });
@@ -45,7 +45,7 @@ test("evaluateExpectations checks action, reply content, and ledger writes", () 
       transactionId: "txn-1",
       referencedTransactionIds: ["txn-1"],
       needsClarification: false,
-      reply: "Done. Updated it.\nRef: txn-1",
+      reply: "Updated Swiggy: 1200.00 INR via HDFC.",
     },
     true,
     [

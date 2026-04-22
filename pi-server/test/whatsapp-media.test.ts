@@ -186,7 +186,7 @@ test("unsupported media without text falls back to a user-facing prompt", async 
 test("quoted message ids are passed to the agent and assistant replies are anchored in state", async () => {
   const bridge = new FakeBridgeClient();
   bridge.nextMessageId = "wa-out-quoted-1";
-  const agent = new FakeAgentService("Done. Updated it.");
+  const agent = new FakeAgentService("Updated Swiggy: 1200.00 INR via HDFC UPI.");
   const stateStore = await createStateStore();
   const receiptVision = new FakeReceiptVisionService(null);
   const service = new WhatsAppService(
@@ -204,14 +204,14 @@ test("quoted message ids are passed to the agent and assistant replies are ancho
 
   const result = await service.handleWebhook(makeEnvelope({
     body: "This.",
-    quotedText: "Got it. Saved 1200.00 INR for Swiggy.",
+    quotedText: "Added 1200.00 INR for Swiggy.",
     quotedMessageId: "wa-in-quoted-123",
   }));
 
   assert.equal(result.status, "processed");
   assert.equal(agent.requests.length, 1);
   assert.equal(agent.requests[0].quotedMessageId, "wa-in-quoted-123");
-  assert.match(agent.requests[0].text, /^\[Replying to: "Got it\. Saved 1200\.00 INR for Swiggy\."\]\nThis\.$/);
+  assert.match(agent.requests[0].text, /^\[Replying to: "Added 1200\.00 INR for Swiggy\."\]\nThis\.$/);
 
   const replyContext = await stateStore.getReplyContext("wa:dm:919650318721", "wa-out-quoted-1");
   assert.deepEqual(replyContext?.recentTransactionIds, ["txn-recent-1"]);
