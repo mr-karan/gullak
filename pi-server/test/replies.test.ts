@@ -141,3 +141,77 @@ test("omits long notes from single-save confirmations", () => {
     "Added 3400.00 INR for Amazon/Online Mart.",
   );
 });
+
+test("formats recent transactions in a plain chat-friendly list", () => {
+  const details: ToolDetails = {
+    action: "list_recent_transactions",
+    transactions: [
+      {
+        id: "txn-1",
+        date: "2026-04-22",
+        payee: "Licious",
+        amount: 714,
+        currency: "INR",
+        kind: "expense",
+        expenseAccount: "Expenses:Food:Groceries",
+        paymentAccount: "Liabilities:CreditCard:Axis",
+      },
+      {
+        id: "txn-2",
+        date: "2026-04-22",
+        payee: "Groceries",
+        amount: 315,
+        currency: "INR",
+        kind: "expense",
+        expenseAccount: "Expenses:Food:Groceries",
+        paymentAccount: "Liabilities:CreditCard:Axis",
+      },
+      {
+        id: "txn-3",
+        date: "2026-04-21",
+        payee: "Swiggy",
+        amount: 1200,
+        currency: "INR",
+        kind: "expense",
+        expenseAccount: "Expenses:Food:Delivery",
+        paymentAccount: "Assets:Bank:HDFC:UPI",
+      },
+    ],
+  };
+
+  const reply = formatReplyFromTool(details) ?? "";
+  assert.match(reply, /^Recent transactions:/);
+  assert.match(reply, /Apr 22: Licious \(714\.00 INR\), Groceries \(315\.00 INR\)/);
+  assert.match(reply, /Apr 21: Swiggy \(1200\.00 INR\)/);
+  assert.doesNotMatch(reply, /\*\*/);
+  assert.doesNotMatch(reply, /Ref:/);
+});
+
+test("formats summaries as short natural-language spend recaps", () => {
+  const details: ToolDetails = {
+    action: "get_summary",
+    summary: {
+      startDate: "2026-04-01",
+      endDate: "2026-04-30",
+      totalExpense: 4629,
+      totalIncome: 100000,
+      net: 95371,
+      transactionCount: 4,
+      topAccounts: [
+        { name: "Expenses:Food:Groceries", total: 1029 },
+      ],
+      topPayees: [
+        { name: "Amazon", total: 3400 },
+        { name: "Licious", total: 714 },
+        { name: "Groceries", total: 315 },
+      ],
+      transactions: [],
+    },
+  };
+
+  const reply = formatReplyFromTool(details) ?? "";
+  assert.match(reply, /^Apr 1 to Apr 30: spent 4629\.00 INR, income 100000\.00 INR, net 95371\.00 INR across 4 transactions\./);
+  assert.match(reply, /Biggest spends: Amazon \(3400\.00 INR\), Licious \(714\.00 INR\), Groceries \(315\.00 INR\)\./);
+  assert.doesNotMatch(reply, /Top accounts:/);
+  assert.doesNotMatch(reply, /\*\*/);
+});

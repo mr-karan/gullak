@@ -73,6 +73,38 @@
       }
     },
     {
+      "id": "recent-transactions-query-stays-chatty",
+      "title": "Recent transaction queries should reply in plain chat style, not markdown report style",
+      "tags": ["query", "recent-transactions", "tone", "regression"],
+      "request": {
+        "threadId": "eval:recent-transactions",
+        "text": "show recent transactions"
+      },
+      "expectations": {
+        "action": "list_recent_transactions",
+        "needsClarification": false,
+        "ledgerChanged": false,
+        "replyContains": ["Recent transactions", "Swiggy", "Printo"],
+        "replyExcludes": ["**", "Category:", "Ref:"]
+      }
+    },
+    {
+      "id": "monthly-summary-query-stays-chatty",
+      "title": "Summary queries should reply with a short natural-language recap",
+      "tags": ["query", "summary", "tone", "regression"],
+      "request": {
+        "threadId": "eval:monthly-summary",
+        "text": "how much did I spend this month?"
+      },
+      "expectations": {
+        "action": "get_summary",
+        "needsClarification": false,
+        "ledgerChanged": false,
+        "replyContains": ["spent 2288.00 INR", "Biggest spends", "Swiggy (1200.00 INR)"],
+        "replyExcludes": ["**", "Top accounts:"]
+      }
+    },
+    {
       "id": "quoted-payment-edit-targets-swiggy",
       "title": "Quoted payment correction should edit the quoted Swiggy transaction",
       "tags": ["quoted-reply", "edit", "targeting", "regression"],

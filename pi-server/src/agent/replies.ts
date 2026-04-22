@@ -1,4 +1,7 @@
+import { DateTime } from "luxon";
+
 import { formatAmount, type SimpleTransaction } from "../ledger/models.js";
+import type { LedgerSummary } from "../ledger/service.js";
 import type { ToolDetails } from "./tools.js";
 
 export function formatReplyFromTool(details: ToolDetails | undefined): string | undefined {
@@ -25,6 +28,10 @@ export function formatReplyFromTool(details: ToolDetails | undefined): string | 
         : undefined;
     case "delete_transaction":
       return details.deletedId ? `Done. Deleted transaction ${details.deletedId}.` : undefined;
+    case "list_recent_transactions":
+      return details.transactions ? formatRecentTransactions(details.transactions) : undefined;
+    case "get_summary":
+      return details.summary ? formatLedgerSummary(details.summary) : undefined;
     default:
       return undefined;
   }
@@ -144,4 +151,74 @@ function summarizeNote(note: string | undefined): string | undefined {
   }
 
   return trimmed.length <= 40 ? trimmed : undefined;
+}
+
+function formatRecentTransactions(transactions: SimpleTransaction[]): string {
+  if (transactions.length === 0) {
+    return "No matching transactions.";
+  }
+
+  const groups = new Map<string, SimpleTransaction[]>();
+  for (const transaction of transactions) {
+    const existing = groups.get(transaction.date) ?? [];
+    existing.push(transaction);
+    groups.set(transaction.date, existing);
+  }
+
+  return [
+    "Recent transactions:",
+    ...[...groups.entries()].map(
+      ([date, items]) => `- ${formatShortDate(date)}: ${items.map(formatCompactTransaction).join(", ")}`,
+    ),
+  ].join("\n");
+}
+
+function formatLedgerSummary(summary: LedgerSummary): string {
+  if (summary.transactionCount === 0) {
+    return summary.startDate && summary.endDate
+      ? `No transactions from ${formatShortDate(summary.startDate)} to ${formatShortDate(summary.endDate)}.`
+      : "No transactions in that range.";
+  }
+
+  const range = formatSummaryRange(summary);
+  const parts = [`spent ${formatAmount(summary.totalExpense)} INR`];
+
+  if (summary.totalIncome > 0) {
+    parts.push(`income ${formatAmount(summary.totalIncome)} INR`);
+  }
+
+  parts.push(`net ${formatAmount(summary.net)} INR`);
+
+  const lines = [
+    `${range}: ${parts.join(", ")} across ${summary.transactionCount} transaction${summary.transactionCount === 1 ? "" : "s"}.`,
+  ];
+
+  if (summary.topPayees.length > 0) {
+    lines.push(
+      `Biggest spends: ${summary.topPayees.slice(0, 3).map((entry) => `${entry.name} (${formatAmount(entry.total)} INR)`).join(", ")}.`,
+    );
+  }
+
+  return lines.join("\n");
+}
+
+function formatCompactTransaction(transaction: SimpleTransaction): string {
+  return `${transaction.payee} (${formatAmount(transaction.amount)} ${transaction.currency})`;
+}
+
+function formatSummaryRange(summary: LedgerSummary): string {
+  if (summary.startDate && summary.endDate) {
+    if (summary.startDate === summary.endDate) {
+      return formatShortDate(summary.startDate);
+    }
+
+    return `${formatShortDate(summary.startDate)} to ${formatShortDate(summary.endDate)}`;
+  }
+
+  return "This period";
+}
+
+function formatShortDate(date: string): string {
+  const parsed = DateTime.fromISO(date);
+  return parsed.isValid ? parsed.toFormat("MMM d") : date;
 }
