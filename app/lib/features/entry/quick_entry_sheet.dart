@@ -333,22 +333,22 @@ class _FormTabState extends ConsumerState<_FormTab> {
   DateTime _date = clock.today();
   final _notesCtrl = TextEditingController();
 
-  @override
-  void initState() {
-    super.initState();
-    _hydrateDefaults();
-  }
-
-  Future<void> _hydrateDefaults() async {
-    final accounts = await ref.read(accountsListProvider.future);
-    if (accounts.isEmpty) return;
+  /// Picks an account once we have a non-empty list. Called from build(),
+  /// so it survives async timing — the very first frame where accounts
+  /// arrive will set the default.
+  void _maybeHydrateAccount(List<AccountRow> accounts) {
+    if (_account != null || accounts.isEmpty) return;
     final memory = ref.read(entryMemoryProvider);
     final lastId = memory.lastAccountId ?? ref.read(prefsProvider).defaultAccountId;
     final pick = accounts.firstWhere(
       (a) => a.id == lastId,
       orElse: () => accounts.first,
     );
-    if (mounted) setState(() => _account = pick);
+    // Defer to after the current build to avoid setState-during-build.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      setState(() => _account = pick);
+    });
   }
 
   @override
@@ -437,6 +437,8 @@ class _FormTabState extends ConsumerState<_FormTab> {
   @override
   Widget build(BuildContext context) {
     final prefs = ref.watch(prefsProvider);
+    final accounts = ref.watch(accountsListProvider).value ?? const <AccountRow>[];
+    _maybeHydrateAccount(accounts);
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
       child: Column(
