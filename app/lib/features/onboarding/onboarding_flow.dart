@@ -183,11 +183,11 @@ class _Currency extends StatelessWidget {
             child: ListView(
               children: [
                 for (final o in _options)
-                  RadioListTile<String>(
-                    title: Text(o.$1),
-                    value: '${o.$2}|${o.$3}',
-                    groupValue: '$symbol|$minorDigits',
-                    onChanged: (_) => onChange(o.$2, o.$3),
+                  _CurrencyTile(
+                    label: o.$1,
+                    symbol: o.$2,
+                    selected: o.$2 == symbol && o.$3 == minorDigits,
+                    onTap: () => onChange(o.$2, o.$3),
                   ),
               ],
             ),
@@ -195,6 +195,47 @@ class _Currency extends StatelessWidget {
           FilledButton(onPressed: onNext, child: const Text('Continue')),
         ],
       ),
+    );
+  }
+}
+
+class _CurrencyTile extends StatelessWidget {
+  const _CurrencyTile({
+    required this.label,
+    required this.symbol,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final String symbol;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return ListTile(
+      onTap: onTap,
+      leading: Container(
+        width: 40,
+        height: 40,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: selected ? cs.primary : cs.surfaceContainerHighest,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Text(
+          symbol.trim().isEmpty ? '?' : symbol,
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.w700,
+            color: selected ? cs.onPrimary : cs.onSurface,
+          ),
+        ),
+      ),
+      title: Text(label),
+      trailing: selected ? Icon(Icons.check_circle, color: cs.primary) : null,
     );
   }
 }

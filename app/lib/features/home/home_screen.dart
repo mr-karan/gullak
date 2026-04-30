@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../state/providers.dart';
+import '../../ui/widgets/category_swatch.dart';
 import '../../ui/widgets/empty_state.dart';
 import '../../ui/widgets/money_text.dart';
 import '../../ui/widgets/section_header.dart';
@@ -40,8 +42,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         title: const Text('Gullak'),
         actions: [
           IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _refresh,
+            icon: const Icon(Icons.bar_chart_outlined),
+            tooltip: 'Reports',
+            onPressed: () => context.go('/reports'),
+          ),
+          IconButton(
+            icon: const Icon(Icons.settings_outlined),
+            tooltip: 'Settings',
+            onPressed: () => context.go('/settings'),
           ),
         ],
       ),
@@ -213,8 +221,27 @@ class _RecentRow extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final cs = Theme.of(context).colorScheme;
     final prefs = ref.watch(prefsProvider);
+    final amountColor = row.isTransfer
+        ? cs.onSurfaceVariant
+        : row.amountCents < 0
+            ? cs.onSurface
+            : cs.tertiary;
     return ListTile(
-      title: Text(row.payeeName ?? '—'),
+      leading: CategorySwatch(
+        label: row.categoryName ?? (row.isTransfer ? 'Transfer' : 'Other'),
+        icon: row.isTransfer
+            ? Icons.swap_horiz
+            : row.isSplit
+                ? Icons.call_split
+                : null,
+      ),
+      title: Text(
+        row.isTransfer
+            ? '${row.accountName ?? '—'} → ${row.transferAccountName ?? '—'}'
+            : (row.payeeName ?? row.categoryName ?? '—'),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
       subtitle: Text(
         [row.categoryName ?? 'Uncategorised', row.dateLabel]
             .where((e) => e.isNotEmpty)
@@ -226,7 +253,7 @@ class _RecentRow extends ConsumerWidget {
         amountCents: row.amountCents,
         minorDigits: prefs.currencyMinorDigits,
         symbol: prefs.currencySymbol,
-        color: row.amountCents < 0 ? cs.onSurface : cs.tertiary,
+        color: amountColor,
       ),
     );
   }
