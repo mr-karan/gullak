@@ -15,10 +15,15 @@ class OnboardingFlow extends ConsumerStatefulWidget {
   ConsumerState<OnboardingFlow> createState() => _OnboardingFlowState();
 }
 
+// A hint, not a default. The user typically still has to point this at
+// the actual-http-api shim (not the Actual server itself), so we leave
+// the protocol and host as a starting point and let them adjust.
+const _kServerUrlHint = 'https://budget.mrkaran.dev';
+
 class _OnboardingFlowState extends ConsumerState<OnboardingFlow> {
   final _ctrl = PageController();
 
-  String _serverUrl = '';
+  String _serverUrl = _kServerUrlHint;
   String _apiKey = '';
   List<BudgetDto> _budgets = const [];
   String? _pickedBudget;
