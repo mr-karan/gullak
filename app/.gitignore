@@ -1,3 +1,8 @@
+# Override the repo-level `data/` ignore — Flutter `data/` folders inside
+# `lib/` hold source code and must be tracked.
+!lib/**/data/
+!lib/**/data/**
+
 # Miscellaneous
 *.class
 *.log

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -107,8 +109,6 @@ class TransactionDetailScreen extends ConsumerWidget {
     invalidateTransactionLists(ref);
     if (!context.mounted) return;
     context.pop();
-    unawaited_(ref.read(syncControllerProvider.notifier).sync());
+    unawaited(ref.read(syncControllerProvider.notifier).sync());
   }
 }
-
-void unawaited_(Future<void> _) {}

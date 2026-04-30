@@ -32,22 +32,22 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
     routes: [
       GoRoute(
         path: '/loading',
-        builder: (_, __) => const _SplashScreen(),
+        builder: (_, _) => const _SplashScreen(),
       ),
       GoRoute(
         path: '/onboarding',
-        builder: (_, __) => const OnboardingFlow(),
+        builder: (_, _) => const OnboardingFlow(),
       ),
       ShellRoute(
         builder: (context, state, child) => HomeShell(child: child),
         routes: [
           GoRoute(
             path: '/',
-            pageBuilder: (_, __) => const NoTransitionPage<void>(child: HomeScreen()),
+            pageBuilder: (_, _) => const NoTransitionPage<void>(child: HomeScreen()),
           ),
           GoRoute(
             path: '/transactions',
-            pageBuilder: (_, __) => const NoTransitionPage<void>(child: TransactionsScreen()),
+            pageBuilder: (_, _) => const NoTransitionPage<void>(child: TransactionsScreen()),
             routes: [
               GoRoute(
                 path: ':id',
@@ -57,11 +57,11 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: '/inbox',
-            pageBuilder: (_, __) => const NoTransitionPage<void>(child: InboxScreen()),
+            pageBuilder: (_, _) => const NoTransitionPage<void>(child: InboxScreen()),
           ),
           GoRoute(
             path: '/accounts',
-            pageBuilder: (_, __) => const NoTransitionPage<void>(child: AccountsScreen()),
+            pageBuilder: (_, _) => const NoTransitionPage<void>(child: AccountsScreen()),
             routes: [
               GoRoute(
                 path: ':id',
@@ -71,7 +71,7 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: '/settings',
-            pageBuilder: (_, __) => const NoTransitionPage<void>(child: SettingsScreen()),
+            pageBuilder: (_, _) => const NoTransitionPage<void>(child: SettingsScreen()),
           ),
         ],
       ),

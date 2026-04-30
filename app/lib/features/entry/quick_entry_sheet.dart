@@ -168,7 +168,7 @@ class _TypeTabState extends ConsumerState<_TypeTab> {
           originRef: _ctrl.text,
         );
     if (!mounted) return;
-    invalidateTransactionLists(ref as WidgetRef);
+    invalidateTransactionLists(ref);
     Navigator.of(context).maybePop();
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Saved')),
@@ -362,7 +362,7 @@ class _FormTabState extends ConsumerState<_FormTab> {
           origin: 'manual',
         );
     if (!mounted) return;
-    invalidateTransactionLists(ref as WidgetRef);
+    invalidateTransactionLists(ref);
     Navigator.of(context).maybePop();
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Saved')),

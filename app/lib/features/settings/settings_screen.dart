@@ -1,9 +1,15 @@
+import 'dart:async';
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../data/sms/sms_pipeline.dart';
+import '../../data/sms/sms_reader.dart';
 import '../../data/sync/sync_service.dart';
 import '../../state/providers.dart';
+import '../inbox/data/sms_repository.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -115,13 +121,55 @@ class SettingsScreen extends ConsumerWidget {
           const _SectionHeader('SMS'),
           SwitchListTile(
             secondary: const Icon(Icons.sms_outlined),
-            title: const Text('Read transactional SMS (Android)'),
-            value: prefs.smsEnabled,
-            onChanged: (v) async {
-              await prefs.setSmsEnabled(v);
-              ref.invalidate(prefsProvider);
-            },
+            title: const Text('Read transactional SMS'),
+            subtitle: Text(Platform.isAndroid
+                ? 'Reads only bank/transactional SMS. Everything else is ignored.'
+                : 'Available on Android only.'),
+            value: prefs.smsEnabled && Platform.isAndroid,
+            onChanged: !Platform.isAndroid
+                ? null
+                : (v) async {
+                    if (v) {
+                      final reader = ref.read(smsReaderProvider);
+                      final granted = await reader.ensurePermission();
+                      if (!granted) {
+                        if (!context.mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('SMS permission denied.')),
+                        );
+                        return;
+                      }
+                      await prefs.setSmsEnabled(true);
+                      ref.invalidate(prefsProvider);
+                      final pipeline = ref.read(smsPipelineProvider);
+                      pipeline.startListening();
+                      final added = await pipeline.backfill();
+                      ref.invalidate(inboxItemsProvider);
+                      if (!context.mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Backfilled $added candidate(s).')),
+                      );
+                    } else {
+                      await prefs.setSmsEnabled(false);
+                      ref.invalidate(prefsProvider);
+                      await ref.read(smsPipelineProvider).stop();
+                    }
+                  },
           ),
+          if (prefs.smsEnabled && Platform.isAndroid)
+            ListTile(
+              leading: const Icon(Icons.refresh),
+              title: const Text('Re-scan SMS inbox'),
+              subtitle: const Text('Re-process the last 90 days.'),
+              onTap: () async {
+                final added = await ref.read(smsPipelineProvider).backfill();
+                ref.invalidate(inboxItemsProvider);
+                if (!context.mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Re-ingested $added.')),
+                );
+              },
+            ),
           const _SectionHeader('Appearance'),
           ListTile(
             leading: const Icon(Icons.brightness_6_outlined),
