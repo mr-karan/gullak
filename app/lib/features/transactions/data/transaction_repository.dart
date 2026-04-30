@@ -229,24 +229,56 @@ class TransactionRepository {
     );
   }
 
-  Future<void> delete(String id) async {
+  /// Hard-delete a transaction (and its split children / transfer pair).
+  /// Returns a snapshot suitable for [restore] to put it back.
+  Future<DeletedTransactionSnapshot> delete(String id) async {
     final row = await byRow(id);
-    if (row == null) return;
+    if (row == null) return DeletedTransactionSnapshot._empty();
+    final children = row.splitTotalCents != null
+        ? await (_db.select(_db.transactions)..where((t) => t.parentId.equals(id))).get()
+        : <TransactionRow>[];
+    final transferPair = row.transferGroupId != null
+        ? await (_db.select(_db.transactions)
+              ..where((t) =>
+                  t.transferGroupId.equals(row.transferGroupId!) &
+                  t.id.isNotValue(id)))
+            .getSingleOrNull()
+        : null;
     await _db.transaction(() async {
-      // Splits: drop children too.
       if (row.splitTotalCents != null) {
         await (_db.delete(_db.transactions)
               ..where((t) => t.parentId.equals(id)))
             .go();
       }
-      // Transfer: drop the paired leg.
       if (row.transferGroupId != null) {
         await (_db.delete(_db.transactions)
               ..where((t) => t.transferGroupId.equals(row.transferGroupId!)))
             .go();
-        return; // both legs gone
+        return;
       }
       await (_db.delete(_db.transactions)..where((t) => t.id.equals(id))).go();
+    });
+    return DeletedTransactionSnapshot._(
+      parent: row,
+      splitChildren: children,
+      transferPair: transferPair,
+    );
+  }
+
+  /// Re-insert a row that came out of [delete]. Used for the Undo
+  /// snackbar after a swipe-delete.
+  Future<void> restore(DeletedTransactionSnapshot snap) async {
+    final p = snap.parent;
+    if (p == null) return;
+    await _db.transaction(() async {
+      await _db.into(_db.transactions).insert(p);
+      for (final c in snap.splitChildren) {
+        await _db.into(_db.transactions).insert(c);
+      }
+      final pair = snap.transferPair;
+      if (pair != null) {
+        await _db.into(_db.transactions).insert(pair);
+      }
     });
   }
 
@@ -465,6 +497,26 @@ class TransactionRepository {
 }
 
 enum _Sentinel { value }
+
+/// Snapshot of a deleted transaction so [TransactionRepository.restore]
+/// can undo a swipe-delete. Carries the parent row plus any split
+/// children or the paired transfer leg.
+class DeletedTransactionSnapshot {
+  const DeletedTransactionSnapshot._({
+    required this.parent,
+    required this.splitChildren,
+    this.transferPair,
+  });
+
+  factory DeletedTransactionSnapshot._empty() =>
+      const DeletedTransactionSnapshot._(parent: null, splitChildren: <TransactionRow>[]);
+
+  final TransactionRow? parent;
+  final List<TransactionRow> splitChildren;
+  final TransactionRow? transferPair;
+
+  bool get isEmpty => parent == null;
+}
 
 final Provider<TransactionRepository> transactionRepoProvider =
     Provider<TransactionRepository>((ref) => TransactionRepository(ref.watch(dbProvider)));

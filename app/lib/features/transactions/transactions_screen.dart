@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
@@ -154,6 +155,29 @@ class _DateHeader extends StatelessWidget {
   }
 }
 
+Future<void> _deleteWithUndo(
+  BuildContext context,
+  WidgetRef ref,
+  String id,
+) async {
+  final repo = ref.read(transactionRepoProvider);
+  final snap = await repo.delete(id);
+  if (snap.isEmpty || !context.mounted) return;
+  final messenger = ScaffoldMessenger.of(context);
+  messenger
+    ..hideCurrentSnackBar()
+    ..showSnackBar(
+      SnackBar(
+        content: const Text('Transaction deleted'),
+        duration: const Duration(seconds: 4),
+        action: SnackBarAction(
+          label: 'Undo',
+          onPressed: () => repo.restore(snap),
+        ),
+      ),
+    );
+}
+
 class _TxRow extends ConsumerWidget {
   const _TxRow({required this.row, required this.prefs});
 
@@ -170,36 +194,28 @@ class _TxRow extends ConsumerWidget {
         : row.amountCents < 0
             ? cs.onSurface
             : cs.tertiary;
-    return Dismissible(
+    return Slidable(
       key: ValueKey(row.id),
-      direction: DismissDirection.endToStart,
-      background: Container(
-        alignment: Alignment.centerRight,
-        padding: const EdgeInsets.only(right: 24),
-        color: cs.errorContainer,
-        child: Icon(Icons.delete_outline, color: cs.onErrorContainer),
-      ),
-      confirmDismiss: (_) async {
-        final ok = await showDialog<bool>(
-          context: context,
-          builder: (_) => AlertDialog(
-            title: const Text('Delete this transaction?'),
-            content: const Text('This cannot be undone.'),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(false),
-                child: const Text('Cancel'),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.of(context).pop(true),
-                child: const Text('Delete'),
-              ),
-            ],
+      endActionPane: ActionPane(
+        motion: const BehindMotion(),
+        extentRatio: 0.55,
+        children: [
+          SlidableAction(
+            onPressed: (_) => context.go('/transactions/${row.id}'),
+            backgroundColor: cs.surfaceContainerHigh,
+            foregroundColor: cs.onSurface,
+            icon: Icons.edit_outlined,
+            label: 'Edit',
           ),
-        );
-        return ok ?? false;
-      },
-      onDismissed: (_) => ref.read(transactionRepoProvider).delete(row.id),
+          SlidableAction(
+            onPressed: (ctx) => _deleteWithUndo(ctx, ref, row.id),
+            backgroundColor: cs.errorContainer,
+            foregroundColor: cs.onErrorContainer,
+            icon: Icons.delete_outline,
+            label: 'Delete',
+          ),
+        ],
+      ),
       child: InkWell(
         onTap: () => context.go('/transactions/${row.id}'),
         child: Padding(

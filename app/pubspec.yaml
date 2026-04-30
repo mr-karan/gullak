@@ -47,6 +47,9 @@ dependencies:
   share_plus: ^10.1.2
   file_picker: ^8.1.4
 
+  # UX
+  flutter_slidable: ^4.0.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

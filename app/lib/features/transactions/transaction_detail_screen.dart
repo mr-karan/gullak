@@ -75,26 +75,23 @@ class TransactionDetailScreen extends ConsumerWidget {
       );
 
   Future<void> _confirmDelete(BuildContext context, WidgetRef ref) async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Delete this transaction?'),
-        content: const Text('This cannot be undone.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
-    );
-    if (ok != true) return;
-    await ref.read(transactionRepoProvider).delete(id);
+    final repo = ref.read(transactionRepoProvider);
+    final snap = await repo.delete(id);
+    if (snap.isEmpty) return;
     if (!context.mounted) return;
     context.pop();
+    final messenger = ScaffoldMessenger.of(context);
+    messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: const Text('Transaction deleted'),
+          duration: const Duration(seconds: 4),
+          action: SnackBarAction(
+            label: 'Undo',
+            onPressed: () => repo.restore(snap),
+          ),
+        ),
+      );
   }
 }

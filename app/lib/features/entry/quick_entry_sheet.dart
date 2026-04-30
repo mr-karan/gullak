@@ -514,7 +514,8 @@ class _FormTabState extends ConsumerState<_FormTab> {
   }
 
   Future<void> _pickAccount() async {
-    final accounts = await ref.read(accountsListProvider.future);
+    HapticFeedback.selectionClick();
+    final accounts = await ref.read(accountRepoProvider).list();
     if (!mounted) return;
     final picked = await showModalBottomSheet<AccountRow>(
       context: context,
@@ -558,7 +559,8 @@ class _FormTabState extends ConsumerState<_FormTab> {
   }
 
   Future<void> _pickPayee() async {
-    final payees = await ref.read(payeesListProvider.future);
+    HapticFeedback.selectionClick();
+    final payees = await ref.read(payeeRepoProvider).list();
     if (!mounted) return;
     final input = TextEditingController();
     try {
@@ -637,9 +639,19 @@ class _FormTabState extends ConsumerState<_FormTab> {
   }
 
   Future<void> _pickCategory() async {
-    final groups = await ref.read(categoryGroupsListProvider.future);
-    final cats = await ref.read(categoriesListProvider.future);
+    HapticFeedback.selectionClick();
+    final repo = ref.read(categoryRepoProvider);
+    final groups = await repo.listGroups();
+    final cats = await repo.list();
     if (!mounted) return;
+    if (groups.isEmpty || cats.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No categories yet. Add some in Settings → Categories.'),
+        ),
+      );
+      return;
+    }
     final byGroup = <String, List<CategoryRow>>{};
     for (final c in cats) {
       byGroup.putIfAbsent(c.groupId, () => []).add(c);
