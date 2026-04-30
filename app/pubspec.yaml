@@ -1,0 +1,61 @@
+name: gullak
+description: "Gullak — polished mobile expense tracker for self-hosted Actual Budget"
+publish_to: 'none'
+version: 0.1.0+1
+
+environment:
+  sdk: ^3.11.5
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  cupertino_icons: ^1.0.8
+
+  # State + routing
+  flutter_riverpod: ^2.6.1
+  go_router: ^14.6.2
+
+  # Models
+  freezed_annotation: ^2.4.4
+  json_annotation: ^4.9.0
+
+  # Local DB
+  drift: ^2.20.3
+  sqlite3_flutter_libs: ^0.5.24
+  path_provider: ^2.1.5
+  path: ^1.9.1
+
+  # HTTP
+  dio: ^5.7.0
+
+  # Storage
+  flutter_secure_storage: ^9.2.2
+  shared_preferences: ^2.3.3
+
+  # Permissions / SMS
+  permission_handler: ^11.3.1
+  another_telephony: ^0.4.1
+
+  # Background + notifications
+  workmanager: ^0.5.2
+  flutter_local_notifications: ^17.2.4
+
+  # Utilities
+  intl: ^0.19.0
+  logger: ^2.5.0
+  uuid: ^4.5.1
+  collection: ^1.18.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  build_runner: ^2.4.13
+  freezed: ^2.5.7
+  json_serializable: ^6.8.0
+  drift_dev: ^2.20.3
+  mocktail: ^1.0.4
+
+flutter:
+  uses-material-design: true
