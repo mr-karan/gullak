@@ -15,6 +15,7 @@ class AccountsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final asyncAccounts = ref.watch(accountsListProvider);
     final prefs = ref.watch(prefsProvider);
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Accounts'),
@@ -40,27 +41,33 @@ class AccountsScreen extends ConsumerWidget {
               ),
             );
           }
-          return ListView.builder(
-            itemCount: accounts.length,
-            itemBuilder: (_, i) {
-              final a = accounts[i];
-              return ListTile(
-                leading: Icon(_iconFor(AccountKind.fromId(a.kind))),
-                title: Text(a.name),
-                subtitle: Text(
-                  [
-                    AccountKind.fromId(a.kind).label,
-                    if (!a.onBudget) 'Off-budget',
-                  ].join(' · '),
-                ),
-                trailing: _Balance(
-                  accountId: a.id,
-                  symbol: prefs.currencySymbol,
-                  minorDigits: prefs.currencyMinorDigits,
-                ),
-                onTap: () => context.go('/accounts/${a.id}'),
-              );
-            },
+          // Group on-budget vs off-budget for clarity.
+          final onBudget = accounts.where((a) => a.onBudget).toList();
+          final offBudget = accounts.where((a) => !a.onBudget).toList();
+
+          return ListView(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
+            children: [
+              if (onBudget.isNotEmpty) ...[
+                const _GroupHeader('On budget'),
+                for (final a in onBudget)
+                  _AccountCard(
+                    account: a,
+                    symbol: prefs.currencySymbol,
+                    minorDigits: prefs.currencyMinorDigits,
+                  ),
+              ],
+              if (offBudget.isNotEmpty) ...[
+                const SizedBox(height: 16),
+                const _GroupHeader('Tracking'),
+                for (final a in offBudget)
+                  _AccountCard(
+                    account: a,
+                    symbol: prefs.currencySymbol,
+                    minorDigits: prefs.currencyMinorDigits,
+                  ),
+              ],
+            ],
           );
         },
         loading: () => const Center(child: CircularProgressIndicator()),
@@ -77,37 +84,117 @@ class AccountsScreen extends ConsumerWidget {
       builder: (_) => const AccountFormSheet(),
     );
   }
-
-  IconData _iconFor(AccountKind k) => switch (k) {
-        AccountKind.checking => Icons.account_balance_outlined,
-        AccountKind.savings => Icons.savings_outlined,
-        AccountKind.creditCard => Icons.credit_card_outlined,
-        AccountKind.cash => Icons.payments_outlined,
-        AccountKind.wallet => Icons.account_balance_wallet_outlined,
-        AccountKind.investment => Icons.show_chart_outlined,
-        AccountKind.loan => Icons.handshake_outlined,
-      };
 }
 
-class _Balance extends ConsumerWidget {
-  const _Balance({
-    required this.accountId,
+class _GroupHeader extends StatelessWidget {
+  const _GroupHeader(this.text);
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(4, 12, 4, 8),
+      child: Text(
+        text.toUpperCase(),
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: cs.onSurfaceVariant,
+              letterSpacing: 1.2,
+            ),
+      ),
+    );
+  }
+}
+
+class _AccountCard extends ConsumerWidget {
+  const _AccountCard({
+    required this.account,
     required this.symbol,
     required this.minorDigits,
   });
 
-  final String accountId;
+  final AccountRow account;
   final String symbol;
   final int minorDigits;
 
+  static const _kindAccent = <AccountKind, Color>{
+    AccountKind.checking: Color(0xFF0A6E58),
+    AccountKind.savings: Color(0xFF065F46),
+    AccountKind.creditCard: Color(0xFFB45309),
+    AccountKind.cash: Color(0xFF4D7C0F),
+    AccountKind.wallet: Color(0xFF7C3AED),
+    AccountKind.investment: Color(0xFF0E7490),
+    AccountKind.loan: Color(0xFFB91C1C),
+  };
+
+  static const _kindIcon = <AccountKind, IconData>{
+    AccountKind.checking: Icons.account_balance_outlined,
+    AccountKind.savings: Icons.savings_outlined,
+    AccountKind.creditCard: Icons.credit_card_outlined,
+    AccountKind.cash: Icons.payments_outlined,
+    AccountKind.wallet: Icons.account_balance_wallet_outlined,
+    AccountKind.investment: Icons.show_chart_outlined,
+    AccountKind.loan: Icons.handshake_outlined,
+  };
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final async = ref.watch(accountBalanceProvider(accountId));
-    final cents = async.value ?? 0;
-    return MoneyText(
-      amountCents: cents,
-      symbol: symbol,
-      minorDigits: minorDigits,
+    final cs = Theme.of(context).colorScheme;
+    final kind = AccountKind.fromId(account.kind);
+    final accent = _kindAccent[kind] ?? cs.primary;
+    final balanceAsync = ref.watch(accountBalanceProvider(account.id));
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Material(
+        color: cs.surfaceContainer,
+        borderRadius: BorderRadius.circular(20),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: () => context.go('/accounts/${account.id}'),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+            child: Row(
+              children: [
+                Container(
+                  width: 44,
+                  height: 44,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: accent.withValues(alpha: 0.16),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(_kindIcon[kind], color: accent),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        account.name,
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        kind.label,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: cs.onSurfaceVariant,
+                            ),
+                      ),
+                    ],
+                  ),
+                ),
+                MoneyText(
+                  amountCents: balanceAsync.value ?? account.openingBalanceCents,
+                  symbol: symbol,
+                  minorDigits: minorDigits,
+                  size: MoneySize.large,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
