@@ -5,10 +5,12 @@ import 'package:go_router/go_router.dart';
 import '../features/accounts/account_detail_screen.dart';
 import '../features/accounts/accounts_screen.dart';
 import '../features/budgets/budget_screen.dart';
+import '../features/categories/categories_screen.dart';
 import '../features/home/home_shell.dart';
 import '../features/home/home_screen.dart';
 import '../features/inbox/inbox_screen.dart';
 import '../features/onboarding/onboarding_flow.dart';
+import '../features/reports/reports_screen.dart';
 import '../features/settings/settings_screen.dart';
 import '../features/transactions/transaction_detail_screen.dart';
 import '../features/transactions/transactions_screen.dart';
@@ -79,6 +81,16 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/settings',
             pageBuilder: (_, _) => const NoTransitionPage<void>(child: SettingsScreen()),
+            routes: [
+              GoRoute(
+                path: 'categories',
+                builder: (_, _) => const CategoriesScreen(),
+              ),
+            ],
+          ),
+          GoRoute(
+            path: '/reports',
+            pageBuilder: (_, _) => const NoTransitionPage<void>(child: ReportsScreen()),
           ),
         ],
       ),

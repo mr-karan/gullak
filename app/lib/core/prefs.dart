@@ -19,6 +19,11 @@ class Prefs {
   static const _kQuickEntryTab = 'gullak.entry.tab';
   static const _kAiEnabled = 'gullak.ai.enabled';
   static const _kSmsEnabled = 'gullak.sms.enabled';
+  static const _kLastAccountId = 'gullak.entry.lastAccountId';
+  // Persisted as JSON: { "<payeeId>": "<accountId>" }
+  static const _kPayeeAccountHints = 'gullak.entry.payeeAccountHints';
+  // Persisted as JSON: { "<payeeId>": "<categoryId>" }
+  static const _kPayeeCategoryHints = 'gullak.entry.payeeCategoryHints';
 
   int get currencyMinorDigits => _inner.getInt(_kCurrencyMinorDigits) ?? 2;
   Future<void> setCurrencyMinorDigits(int v) => _inner.setInt(_kCurrencyMinorDigits, v);
@@ -49,4 +54,22 @@ class Prefs {
 
   bool get smsEnabled => _inner.getBool(_kSmsEnabled) ?? false;
   Future<void> setSmsEnabled(bool v) => _inner.setBool(_kSmsEnabled, v);
+
+  String? get lastAccountId => _inner.getString(_kLastAccountId);
+  Future<void> setLastAccountId(String? id) async {
+    if (id == null) {
+      await _inner.remove(_kLastAccountId);
+    } else {
+      await _inner.setString(_kLastAccountId, id);
+    }
+  }
+
+  String get payeeAccountHints => _inner.getString(_kPayeeAccountHints) ?? '{}';
+  Future<void> setPayeeAccountHints(String json) =>
+      _inner.setString(_kPayeeAccountHints, json);
+
+  String get payeeCategoryHints => _inner.getString(_kPayeeCategoryHints) ?? '{}';
+  Future<void> setPayeeCategoryHints(String json) =>
+      _inner.setString(_kPayeeCategoryHints, json);
 }
+

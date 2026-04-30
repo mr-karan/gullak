@@ -13,6 +13,7 @@ import '../categories/data/category_repository.dart';
 import '../payees/data/payee_repository.dart';
 import '../transactions/data/transaction_repository.dart';
 import 'ai_extractor.dart';
+import 'entry_memory.dart';
 
 class QuickEntrySheet extends ConsumerStatefulWidget {
   const QuickEntrySheet({super.key});
@@ -319,7 +320,10 @@ class _FormTab extends ConsumerStatefulWidget {
 }
 
 class _FormTabState extends ConsumerState<_FormTab> {
-  int _amountCents = 0;
+  /// Amount the user has typed, in **whole currency units** (rupees,
+  /// dollars, …). No decimals — typing 4 5 0 means ₹450. Stored as
+  /// minor units only at save time.
+  int _amountWhole = 0;
   bool _isIncome = false;
   AccountRow? _account;
   CategoryRow? _category;
@@ -337,9 +341,10 @@ class _FormTabState extends ConsumerState<_FormTab> {
   Future<void> _hydrateDefaults() async {
     final accounts = await ref.read(accountsListProvider.future);
     if (accounts.isEmpty) return;
-    final defaultId = ref.read(prefsProvider).defaultAccountId;
+    final memory = ref.read(entryMemoryProvider);
+    final lastId = memory.lastAccountId ?? ref.read(prefsProvider).defaultAccountId;
     final pick = accounts.firstWhere(
-      (a) => a.id == defaultId,
+      (a) => a.id == lastId,
       orElse: () => accounts.first,
     );
     if (mounted) setState(() => _account = pick);
@@ -351,25 +356,81 @@ class _FormTabState extends ConsumerState<_FormTab> {
     super.dispose();
   }
 
+  void _onPayeePicked({PayeeRow? payee, String? newName}) {
+    setState(() {
+      _payee = payee;
+      _newPayeeName = newName;
+    });
+    if (payee == null) return;
+    final memory = ref.read(entryMemoryProvider);
+    final hintedAccount = memory.accountForPayee(payee.id);
+    final hintedCategory = memory.categoryForPayee(payee.id);
+    if (hintedAccount != null && (_account == null || _account!.id != hintedAccount)) {
+      ref.read(accountsListProvider.future).then((list) {
+        if (!mounted) return;
+        final a = list.where((x) => x.id == hintedAccount).firstOrNull;
+        if (a != null) setState(() => _account = a);
+      });
+    }
+    if (hintedCategory != null && (_category == null || _category!.id != hintedCategory)) {
+      ref.read(categoriesListProvider.future).then((list) {
+        if (!mounted) return;
+        final c = list.where((x) => x.id == hintedCategory).firstOrNull;
+        if (c != null) setState(() => _category = c);
+      });
+    }
+  }
+
   Future<void> _save() async {
-    if (_account == null || _amountCents == 0) return;
+    if (_account == null || _amountWhole == 0) return;
     HapticFeedback.lightImpact();
-    final amount = _isIncome ? _amountCents.abs() : -_amountCents.abs();
+    final minorDigits = ref.read(prefsProvider).currencyMinorDigits;
+    final scale = _pow10(minorDigits);
+    final cents = _amountWhole * scale;
+    final amount = _isIncome ? cents : -cents;
+
+    // Resolve a payee id once: either the existing one, or create from
+    // the typed-but-unsaved name.
+    String? payeeId = _payee?.id;
+    if (payeeId == null && _newPayeeName != null && _newPayeeName!.isNotEmpty) {
+      payeeId = await ref.read(payeeRepoProvider).ensure(_newPayeeName!);
+    }
+
     await ref.read(transactionRepoProvider).create(
           accountId: _account!.id,
           categoryId: _category?.id,
-          payeeId: _payee?.id,
+          payeeId: payeeId,
           payeeName: _newPayeeName ?? _payee?.name,
           amountCents: amount,
           date: _date,
           notes: _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
           origin: 'manual',
         );
+
+    final memory = ref.read(entryMemoryProvider);
+    await memory.rememberAccount(_account!.id);
+    if (payeeId != null) {
+      await memory.rememberPayeeMapping(
+        payeeId: payeeId,
+        accountId: _account!.id,
+        categoryId: _category?.id,
+      );
+      await ref.read(payeeRepoProvider).bumpUseCount(payeeId);
+    }
+
     if (!mounted) return;
     Navigator.of(context).maybePop();
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Saved')),
     );
+  }
+
+  static int _pow10(int n) {
+    var r = 1;
+    for (var i = 0; i < n; i++) {
+      r *= 10;
+    }
+    return r;
   }
 
   @override
@@ -380,9 +441,8 @@ class _FormTabState extends ConsumerState<_FormTab> {
       child: Column(
         children: [
           _AmountDisplay(
-            cents: _amountCents,
+            whole: _amountWhole,
             symbol: prefs.currencySymbol,
-            minorDigits: prefs.currencyMinorDigits,
             isIncome: _isIncome,
             onSignToggle: () => setState(() => _isIncome = !_isIncome),
           ),
@@ -429,16 +489,17 @@ class _FormTabState extends ConsumerState<_FormTab> {
           ),
           _Keypad(
             onDigit: (d) => setState(() {
-              _amountCents = (_amountCents * 10) + d;
+              // Cap at 10 digits (max ~₹9.99B) to avoid integer overflow.
+              if (_amountWhole > 999999999) return;
+              _amountWhole = (_amountWhole * 10) + d;
             }),
             onBack: () => setState(() {
-              _amountCents = _amountCents ~/ 10;
+              _amountWhole = _amountWhole ~/ 10;
             }),
-            onDot: () {/* visual only — minor digits drive the layout */},
           ),
           const SizedBox(height: 8),
           FilledButton(
-            onPressed: _account == null || _amountCents == 0 ? null : _save,
+            onPressed: _account == null || _amountWhole == 0 ? null : _save,
             child: const Text('Save'),
           ),
         ],
@@ -532,10 +593,7 @@ class _FormTabState extends ConsumerState<_FormTab> {
       ),
     );
     if (result != null) {
-      setState(() {
-        _payee = result.payee;
-        _newPayeeName = result.newName;
-      });
+      _onPayeePicked(payee: result.payee, newName: result.newName);
     }
   }
 
@@ -602,16 +660,14 @@ class _FormTabState extends ConsumerState<_FormTab> {
 
 class _AmountDisplay extends StatelessWidget {
   const _AmountDisplay({
-    required this.cents,
+    required this.whole,
     required this.symbol,
-    required this.minorDigits,
     required this.isIncome,
     required this.onSignToggle,
   });
 
-  final int cents;
+  final int whole;
   final String symbol;
-  final int minorDigits;
   final bool isIncome;
   final VoidCallback onSignToggle;
 
@@ -635,8 +691,8 @@ class _AmountDisplay extends StatelessWidget {
           const SizedBox(width: 6),
           Expanded(
             child: Text(
-              Money.formatDigitsOnly(cents, minorDigits: minorDigits),
-              style: moneyStyle(context, size: 36, weight: FontWeight.w700),
+              _formatWhole(whole),
+              style: moneyStyle(context, size: 40, weight: FontWeight.w700),
               maxLines: 1,
               overflow: TextOverflow.fade,
               softWrap: false,
@@ -651,6 +707,24 @@ class _AmountDisplay extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  /// Renders the whole amount with Indian-style grouping (lakhs/crores).
+  /// Easier to scan large numbers at a glance.
+  String _formatWhole(int n) {
+    if (n == 0) return '0';
+    final s = n.toString();
+    if (s.length <= 3) return s;
+    final last3 = s.substring(s.length - 3);
+    var rest = s.substring(0, s.length - 3);
+    final buf = StringBuffer();
+    while (rest.length > 2) {
+      buf.write(rest.substring(0, rest.length - 2));
+      rest = rest.substring(rest.length - 2);
+      if (rest.isNotEmpty) buf.write(',');
+    }
+    buf.write(rest);
+    return '$buf,$last3';
   }
 }
 
@@ -695,18 +769,15 @@ class _Keypad extends StatelessWidget {
   const _Keypad({
     required this.onDigit,
     required this.onBack,
-    required this.onDot,
   });
 
   final void Function(int digit) onDigit;
   final VoidCallback onBack;
-  final VoidCallback onDot;
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    Widget key(String label, VoidCallback action, {bool wide = false}) => Expanded(
-          flex: wide ? 1 : 1,
+    Widget key(String label, VoidCallback action) => Expanded(
           child: Padding(
             padding: const EdgeInsets.all(4),
             child: InkWell(
@@ -714,17 +785,17 @@ class _Keypad extends StatelessWidget {
                 HapticFeedback.selectionClick();
                 action();
               },
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(16),
               child: Container(
-                height: 52,
+                height: 60,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
                   color: cs.surfaceContainerHighest,
-                  borderRadius: BorderRadius.circular(14),
+                  borderRadius: BorderRadius.circular(16),
                 ),
                 child: Text(
                   label,
-                  style: moneyStyle(context, size: 22, weight: FontWeight.w600),
+                  style: moneyStyle(context, size: 26, weight: FontWeight.w600),
                 ),
               ),
             ),

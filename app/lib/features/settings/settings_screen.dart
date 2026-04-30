@@ -2,10 +2,14 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../data/sms/sms_pipeline.dart';
 import '../../data/sms/sms_reader.dart';
 import '../../state/providers.dart';
+import '../backup/backup_service.dart';
+import '../backup/file_pick.dart';
 import '../inbox/data/sms_repository.dart';
 
 class SettingsScreen extends ConsumerWidget {
@@ -83,18 +87,25 @@ class SettingsScreen extends ConsumerWidget {
             subtitle: Text(prefs.themeMode),
             onTap: () => _editTheme(context, ref),
           ),
-          const _SectionHeader('Data'),
-          const ListTile(
-            leading: Icon(Icons.upload_file_outlined),
-            title: Text('Export to JSON'),
-            subtitle: Text('Coming soon — round-trippable backup.'),
-            enabled: false,
+          const _SectionHeader('Library'),
+          ListTile(
+            leading: const Icon(Icons.label_outline),
+            title: const Text('Categories'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => context.go('/settings/categories'),
           ),
-          const ListTile(
-            leading: Icon(Icons.download_outlined),
-            title: Text('Import from JSON'),
-            subtitle: Text('Coming soon.'),
-            enabled: false,
+          const _SectionHeader('Data'),
+          ListTile(
+            leading: const Icon(Icons.upload_file_outlined),
+            title: const Text('Export backup'),
+            subtitle: const Text('JSON dump of every account, category, and transaction.'),
+            onTap: () => _exportBackup(context, ref),
+          ),
+          ListTile(
+            leading: const Icon(Icons.download_outlined),
+            title: const Text('Import backup'),
+            subtitle: const Text('Wipes existing data and restores from a JSON file.'),
+            onTap: () => _importBackup(context, ref),
           ),
         ],
       ),
@@ -202,6 +213,65 @@ class SettingsScreen extends ConsumerWidget {
       ref.invalidate(themeModeProvider);
     }
   }
+
+  Future<void> _exportBackup(BuildContext context, WidgetRef ref) async {
+    try {
+      final file = await ref.read(backupServiceProvider).exportToFile();
+      if (!context.mounted) return;
+      await Share.shareXFiles(
+        [XFile(file.path, mimeType: 'application/json')],
+        subject: 'Gullak backup',
+        text: 'Gullak backup ${DateTime.now().toIso8601String().split('T').first}',
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Export failed: $e')),
+      );
+    }
+  }
+
+  Future<void> _importBackup(BuildContext context, WidgetRef ref) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Replace all data?'),
+        content: const Text(
+          'Importing will delete every account, category, and transaction '
+          'currently in the app and restore from the file you pick.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Continue'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+
+    // ignore: avoid_dynamic_calls
+    final picker = await _pickJsonFile();
+    if (picker == null || !context.mounted) return;
+    try {
+      final imported = await ref.read(backupServiceProvider).importFromJson(picker);
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Restored $imported rows.')),
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Import failed: $e')),
+      );
+    }
+  }
+
+  Future<String?> _pickJsonFile() => jsonPicker.pickJson();
 
   Future<void> _editLlm(BuildContext context, WidgetRef ref) async {
     final s = ref.read(secureStoreProvider);
