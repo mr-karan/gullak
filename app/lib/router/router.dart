@@ -14,9 +14,16 @@ import '../features/transactions/transactions_screen.dart';
 import '../state/providers.dart';
 
 final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
+  // Bump this whenever the configured-state changes so go_router re-runs
+  // the redirect. Without it the splash hangs after the future resolves.
+  final tick = ValueNotifier<int>(0);
+  ref
+    ..listen(configuredProvider, (_, _) => tick.value++)
+    ..onDispose(tick.dispose);
   return GoRouter(
     initialLocation: '/loading',
     debugLogDiagnostics: false,
+    refreshListenable: tick,
     redirect: (context, state) {
       final configured = ref.read(configuredProvider);
       if (configured.isLoading) {
