@@ -76,10 +76,10 @@ class TransactionRepository {
         );
   }
 
-  Future<void> markSynced(String localId, String actualId) async {
+  Future<void> markSynced(String localId, String? actualId) async {
     await (_db.update(_db.transactions)..where((t) => t.id.equals(localId))).write(
       TransactionsCompanion(
-        actualId: Value(actualId),
+        actualId: actualId == null ? const Value.absent() : Value(actualId),
         syncStatus: const Value('synced'),
         syncError: const Value(null),
       ),

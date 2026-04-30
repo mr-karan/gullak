@@ -16,6 +16,7 @@ class SmsReader {
 
   final _telephony = Platform.isAndroid ? Telephony.instance : null;
   StreamController<IncomingSms>? _controller;
+  bool _listening = false;
 
   bool get isSupported => Platform.isAndroid;
 
@@ -63,15 +64,16 @@ class SmsReader {
       onCancel: () {
         _controller?.close();
         _controller = null;
+        _listening = false;
       },
     );
     if (!isSupported) return ctrl.stream;
     final t = _telephony;
     if (t == null) return ctrl.stream;
+    if (_listening) return ctrl.stream;
+    _listening = true;
     t.listenIncomingSms(
-      onNewMessage: (m) {
-        ctrl.add(_mapMessage(m));
-      },
+      onNewMessage: (m) => ctrl.add(_mapMessage(m)),
       listenInBackground: false,
     );
     return ctrl.stream;

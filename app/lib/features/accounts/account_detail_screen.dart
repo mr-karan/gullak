@@ -19,31 +19,12 @@ class AccountDetailScreen extends ConsumerWidget {
     final txAsync = ref.watch(transactionsListProvider(
       TransactionListQuery(accountId: id),
     ));
+    final account = accountAsync.value
+        ?.cast<AccountRow?>()
+        .firstWhere((a) => a?.id == id, orElse: () => null);
     return Scaffold(
       appBar: AppBar(
-        title: accountAsync.maybeWhen(
-          data: (list) {
-            final a = list.firstWhere(
-              (x) => x.id == id,
-              orElse: () => list.isEmpty
-                  ? AccountRow(
-                      id: id,
-                      actualId: null,
-                      name: '—',
-                      offbudget: false,
-                      closed: false,
-                      sortOrder: 0,
-                      balanceCents: null,
-                      updatedAt: 0,
-                      syncStatus: 'synced',
-                      syncError: null,
-                    )
-                  : list.first,
-            );
-            return Text(a.name);
-          },
-          orElse: () => const Text('Account'),
-        ),
+        title: Text(account?.name ?? 'Account'),
       ),
       body: txAsync.when(
         data: (rows) {

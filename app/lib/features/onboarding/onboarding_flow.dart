@@ -24,6 +24,12 @@ class _OnboardingFlowState extends ConsumerState<OnboardingFlow> {
   String? _pickedBudget;
 
   @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: SafeArea(

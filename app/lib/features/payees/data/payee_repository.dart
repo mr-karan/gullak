@@ -17,6 +17,10 @@ class PayeeRepository {
         .get();
   }
 
+  Future<PayeeRow?> byId(String id) {
+    return (_db.select(_db.payees)..where((t) => t.id.equals(id))).getSingleOrNull();
+  }
+
   Future<PayeeRow?> byActualId(String actualId) {
     return (_db.select(_db.payees)..where((t) => t.actualId.equals(actualId))).getSingleOrNull();
   }

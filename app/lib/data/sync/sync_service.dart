@@ -1,7 +1,6 @@
 import 'package:drift/drift.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../core/logger.dart';
 import '../../features/accounts/data/account_repository.dart';
 import '../../features/categories/data/category_repository.dart';
 import '../../features/payees/data/payee_repository.dart';
@@ -111,21 +110,18 @@ class SyncService {
 
       for (final t in entry.value) {
         try {
+          final payee = t.payeeId == null ? null : await payeeRepo.byId(t.payeeId!);
+          final category = t.categoryId == null
+              ? null
+              : await categoryRepo.byId(t.categoryId!);
           final dto = ActualTransactionDto(
             id: '',
             account: actualAcctId,
             date: t.date,
             amount: t.amountCents,
-            payee: t.payeeId == null ? null : (await payeeRepo
-                    .byActualId(t.payeeId!)
-                    .then((r) => r?.actualId ?? r?.id)) ??
-                _payeeActualIdSync(t.payeeId),
-            payeeName: t.payeeName,
-            category: t.categoryId == null
-                ? null
-                : (await categoryRepo
-                        .byId(t.categoryId!)
-                        .then((c) => c?.actualId ?? c?.id)),
+            payee: payee?.actualId,
+            payeeName: payee == null ? t.payeeName : null,
+            category: category?.actualId,
             notes: t.notes,
             importedId: 'gullak:${t.id}',
             cleared: t.cleared,
@@ -135,7 +131,10 @@ class SyncService {
             accountId: actualAcctId,
             transactions: [dto],
           );
-          await txRepo.markSynced(t.id, 'gullak:${t.id}');
+          // The next pull will fill in `actualId` once the server returns
+          // the row. For now we just mark synced — `imported_id` makes
+          // re-pushes idempotent.
+          await txRepo.markSynced(t.id, null);
           pushed += 1;
         } catch (e) {
           await txRepo.markPushFailed(t.id, e.toString());
@@ -148,7 +147,14 @@ class SyncService {
           ..where((t) => t.syncStatus.equals('pending_delete')))
         .get();
     for (final t in pendingDeletes) {
-      final actualId = t.actualId ?? 'gullak:${t.id}';
+      // We can only delete on the server if we know its real id. If we
+      // never finished the original push (no actualId yet), drop the
+      // tombstone locally — the transaction was never visible to Actual.
+      final actualId = t.actualId;
+      if (actualId == null) {
+        await txRepo.hardDelete(t.id);
+        continue;
+      }
       try {
         await client.deleteTransaction(
           budgetSyncId: budgetSyncId,
@@ -164,8 +170,6 @@ class SyncService {
 
     return SyncResult(pushed: pushed, pulled: 0, errors: errors);
   }
-
-  String? _payeeActualIdSync(String? id) => null; // resolved async above
 
   Future<void> _ingestRemoteTransactions(
       String localAccountId, List<ActualTransactionDto> remote) async {
@@ -219,41 +223,35 @@ final FutureProvider<SyncService?> syncServiceProvider =
   );
 });
 
-class SyncController extends Notifier<AsyncValue<SyncResult?>> {
+class SyncController extends AsyncNotifier<SyncResult?> {
   @override
-  AsyncValue<SyncResult?> build() => const AsyncValue.data(null);
+  Future<SyncResult?> build() async => null;
 
   Future<void> sync({bool initial = false}) async {
-    state = const AsyncValue.loading();
-    try {
+    state = const AsyncLoading<SyncResult?>();
+    state = await AsyncValue.guard<SyncResult?>(() async {
       final svc = await ref.read(syncServiceProvider.future);
-      if (svc == null) {
-        state = AsyncValue.error(StateError('not configured'), StackTrace.current);
-        return;
-      }
+      if (svc == null) throw StateError('not configured');
       final pushed = await svc.pushPending();
       final pulled = initial ? await svc.initialPull() : await svc.pullDelta();
-      state = AsyncValue.data(SyncResult(
+      ref
+        ..invalidate(transactionRepoProvider)
+        ..invalidate(accountsListProvider)
+        ..invalidate(payeesListProvider)
+        ..invalidate(categoriesListProvider)
+        ..invalidate(categoryGroupsListProvider)
+        ..invalidate(monthSpendProvider)
+        ..invalidate(todaySpendProvider)
+        ..invalidate(recentTransactionsProvider);
+      return SyncResult(
         pushed: pushed.pushed,
         pulled: pulled.pulled,
         errors: [...pushed.errors, ...pulled.errors],
-      ));
-      ref.invalidate(transactionRepoProvider);
-      ref.invalidate(accountsListProvider);
-      ref.invalidate(payeesListProvider);
-      ref.invalidate(categoriesListProvider);
-      ref.invalidate(categoryGroupsListProvider);
-      ref.invalidate(monthSpendProvider);
-      ref.invalidate(todaySpendProvider);
-      ref.invalidate(recentTransactionsProvider);
-    } catch (e, st) {
-      log.e('sync failed', error: e, stackTrace: st);
-      state = AsyncValue.error(e, st);
-    }
+      );
+    });
   }
 }
 
-final NotifierProvider<SyncController, AsyncValue<SyncResult?>>
+final AsyncNotifierProvider<SyncController, SyncResult?>
     syncControllerProvider =
-    NotifierProvider<SyncController, AsyncValue<SyncResult?>>(
-        SyncController.new);
+    AsyncNotifierProvider<SyncController, SyncResult?>(SyncController.new);

@@ -97,8 +97,10 @@ class SmsPipeline {
 }
 
 final Provider<SmsPipeline> smsPipelineProvider = Provider<SmsPipeline>((ref) {
-  return SmsPipeline(
+  final pipeline = SmsPipeline(
     db: ref.watch(dbProvider),
     reader: ref.watch(smsReaderProvider),
   );
+  ref.onDispose(pipeline.stop);
+  return pipeline;
 });

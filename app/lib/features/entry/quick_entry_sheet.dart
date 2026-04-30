@@ -90,9 +90,9 @@ class _QuickEntrySheetState extends ConsumerState<QuickEntrySheet>
                 height: 540,
                 child: TabBarView(
                   controller: _tabs,
-                  children: const [
-                    _TypeTab(),
-                    _FormTab(),
+                  children: [
+                    _TypeTab(onTweakInForm: () => _tabs.animateTo(1)),
+                    const _FormTab(),
                   ],
                 ),
               ),
@@ -105,7 +105,10 @@ class _QuickEntrySheetState extends ConsumerState<QuickEntrySheet>
 }
 
 class _TypeTab extends ConsumerStatefulWidget {
-  const _TypeTab();
+  const _TypeTab({required this.onTweakInForm});
+
+  final VoidCallback onTweakInForm;
+
   @override
   ConsumerState<_TypeTab> createState() => _TypeTabState();
 }
@@ -113,6 +116,8 @@ class _TypeTab extends ConsumerStatefulWidget {
 class _TypeTabState extends ConsumerState<_TypeTab> {
   final _ctrl = TextEditingController();
   Timer? _debounce;
+  // Monotonic seq id; older parses ignore their own results when superseded.
+  int _parseSeq = 0;
   AsyncValue<ParsedExpense?> _parse = const AsyncValue<ParsedExpense?>.data(null);
 
   @override
@@ -132,19 +137,21 @@ class _TypeTabState extends ConsumerState<_TypeTab> {
   }
 
   Future<void> _runParse(String v) async {
+    final seq = ++_parseSeq;
     setState(() => _parse = const AsyncValue<ParsedExpense?>.loading());
     try {
       final extractor = await ref.read(aiExtractorProvider.future);
+      if (!mounted || seq != _parseSeq) return;
       if (extractor == null) {
         setState(() => _parse = AsyncValue<ParsedExpense?>.error(
             StateError('AI is off — switch to Form'), StackTrace.current));
         return;
       }
       final parsed = await extractor.parse(v);
-      if (!mounted) return;
+      if (!mounted || seq != _parseSeq || v != _ctrl.text) return;
       setState(() => _parse = AsyncValue<ParsedExpense?>.data(parsed));
     } catch (e, st) {
-      if (!mounted) return;
+      if (!mounted || seq != _parseSeq) return;
       setState(() => _parse = AsyncValue<ParsedExpense?>.error(e, st));
     }
   }
@@ -234,7 +241,7 @@ class _TypeTabState extends ConsumerState<_TypeTab> {
             children: [
               Expanded(
                 child: OutlinedButton(
-                  onPressed: () => DefaultTabController.of(context).index = 1,
+                  onPressed: widget.onTweakInForm,
                   child: const Text('Tweak in form'),
                 ),
               ),
