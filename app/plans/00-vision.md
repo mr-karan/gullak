@@ -2,67 +2,68 @@
 
 ## One sentence
 
-A polished, mobile-first expense logger that pushes to a self-hosted Actual
-Budget instance, captures spend the moment it happens, and never asks the
-user to think about the ledger.
+A polished, local-first expense tracker. Lives on your phone, syncs nowhere,
+makes recording an expense feel instant.
 
-## Why a new app
+## Why
 
-The existing pipeline (WhatsApp → bridge → ledger) is forgetful: messages get
-lost in chat noise, the agent sometimes mis-parses, edits are awkward, and
-there is no reconciliation against bank SMS. WhatsApp is a transport, not a
-UI. People who care about their money want a real surface.
+The earlier plan was to push to a self-hosted Actual Budget server. That
+turned out to be needlessly complicated — Actual's wire format is a custom
+CRDT sync, not HTTP, and the only working clients are the Node.js
+`@actual-app/api` package and the Python `actualpy` re-implementation.
+Running a Docker shim alongside the Actual server "just so the data lives
+elsewhere" added a service to babysit and didn't pay back for a
+single-user, single-device app.
 
-YNAB is the polish bar. Not the model — Actual Budget is the model — but the
-polish bar.
+Local SQLite is the right move:
+- Zero servers, zero accounts, zero auth flows.
+- Works offline, always.
+- Fast: the database is a few hundred KB and queries are sub-millisecond.
+- Backup is a JSON export the user owns. If they want to move to Actual or
+  YNAB later, the schema is documented.
 
 ## Hard goals
 
-1. **Friction-free capture.** Recording an expense should be one tap from the
-   home screen and finishable in under three seconds for the common case.
-2. **Self-hosted Actual is the source of truth.** The app is a thin
-   local-first cache that syncs up. If the phone burns, nothing is lost.
-3. **AI is a helper, not a gatekeeper.** Free-text input ("450 blinkit hdfc")
-   gets parsed into a structured transaction and shown for one-tap confirm.
-   AI failures degrade to a normal manual form, never block the entry.
-4. **SMS reconciliation (Android only).** With permission, the app reads
-   transactional SMS, ignores the rest, and offers them as a one-tap inbox.
-   Duplicates against manual entries are detected and merged.
-5. **Offline first.** Every action works without network. Sync is a separate
-   queue that catches up when reachable.
-6. **Polished.** Animations, haptics, typography, empty states, error states
-   — all considered. No half-finished screens.
+1. **Friction-free capture.** One tap from the home screen → typing the
+   amount → save. Three seconds for the common case. The Quick Entry
+   sheet remembers the last-used account, the per-payee category and
+   account, and surfaces frequent payees as one-tap chips.
+2. **No decimals in the keypad.** Typing `4 5 0` means ₹450. We multiply
+   by `10^minor_digits` at save time. Removes a class of mistakes.
+3. **Polish bar = Money Manager (realbyteapps) / YNAB.** Day-grouped
+   activity list with date headers and daily net. Coloured category
+   swatches. Real budget envelope view. Reports with sparklines. No
+   half-finished screens.
+4. **AI is a helper, not a gatekeeper.** Free-text input
+   ("450 blinkit hdfc") gets parsed into a structured draft and
+   confirmed in one tap. AI failures degrade to the manual form.
+5. **SMS reconciliation (Android).** Optional. Reads only transactional
+   bank SMS, drops the rest. Confirm/dismiss inbox.
+6. **Backup is the user's job, not ours.** JSON export via share sheet,
+   import via file picker. Round-trippable, schema-versioned.
 
 ## Non-goals (v1)
 
+- Multi-device sync. Out of scope until v2.
+- Multi-currency. One currency, one symbol, fixed minor digits.
 - iOS SMS reading. Apple does not allow it; we degrade gracefully.
-- Budget editing. Setting category targets is done in the Actual web UI; this
-  app records spend, surfaces totals, and handles reconciliation.
-- Multi-budget. One Actual budget per install. Multi can come later.
-- Bank scraping / open banking. SMS is the only ingestion channel.
-- End-to-end encryption support. The Actual server's E2EE password is
-  out of scope for v1; users who use E2EE wait for v2 or disable it.
-- Custom reports / charts beyond the home screen totals. Reports live in the
-  Actual web UI.
-- Web / desktop builds. Mobile only.
+- Cloud anything. No accounts, no auth, no servers.
+- Receipt photo OCR. Maybe later.
+- Charts beyond a sparkline. Numbers and small visual cues are enough.
 
 ## Success criteria
 
-- User installs, points it at their Actual server, picks a budget, lands on
-  the home screen — all in under 90 seconds.
-- Logging a typical expense ("groceries from Blinkit on HDFC, ₹450") is
-  measurably faster than typing the same thing into WhatsApp and waiting for
-  the agent reply.
-- Bank SMS arrive → user opens the inbox → they tap "confirm" → it is in
-  Actual. No typing.
-- The app survives a week of daily use without crashes, sync stalls, or
-  duplicate transactions.
+- Logging a typical expense takes ≤ 4 taps.
+- The keypad never shows decimals.
+- Picking a payee auto-fills the category and account from the previous
+  use 90% of the time.
+- The app runs on iPhone and modern Android (8+).
+- Cold-start to recording the first expense takes under 90 seconds.
 
 ## Anti-goals (things we will refuse to do)
 
-- Add a "review queue" that you must triage. The inbox is for SMS only.
-  Manual entries go straight in.
-- Add auth flows beyond "URL + server password + budget password".
-- Add charting libraries. Numbers and lists, that is it.
-- Add server-side state. The phone is the client; Actual is the source. We
-  do not run our own backend.
+- Add a sync layer behind a feature flag.
+- Add a sync layer "for v2" that bleeds into v1's schema.
+- Add charting libraries.
+- Add web/desktop targets.
+- Become an accounting app. Income, expense, transfer, split. That's it.
