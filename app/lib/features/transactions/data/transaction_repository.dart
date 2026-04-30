@@ -288,6 +288,19 @@ class TransactionRepository {
     return r.read(sumExpr) ?? 0;
   }
 
+  Future<int> sumIncomeInRange({DateTime? from, DateTime? to}) async {
+    final sumExpr = _db.transactions.amountCents.sum();
+    final q = _db.selectOnly(_db.transactions)
+      ..addColumns([sumExpr])
+      ..where(_db.transactions.amountCents.isBiggerThanValue(0) &
+          _db.transactions.parentId.isNull() &
+          _db.transactions.transferGroupId.isNull());
+    if (from != null) q.where(_db.transactions.date.isBiggerOrEqualValue(_ymd(from)));
+    if (to != null) q.where(_db.transactions.date.isSmallerOrEqualValue(_ymd(to)));
+    final r = await q.getSingle();
+    return r.read(sumExpr) ?? 0;
+  }
+
   Future<int> sumByCategoryInMonth(String categoryId, String yyyymm) async {
     final start = '$yyyymm-01';
     final end = _lastDayOfMonth(yyyymm);
@@ -493,6 +506,14 @@ final FutureProvider<int> monthSpendProvider = FutureProvider<int>((ref) async {
   final from = DateTime(now.year, now.month, 1);
   final to = DateTime(now.year, now.month + 1, 0);
   return ref.watch(transactionRepoProvider).sumSpendInRange(from: from, to: to);
+});
+
+final FutureProvider<int> monthIncomeProvider = FutureProvider<int>((ref) async {
+  ref.watch(recentTransactionsProvider);
+  final now = clock.now();
+  final from = DateTime(now.year, now.month, 1);
+  final to = DateTime(now.year, now.month + 1, 0);
+  return ref.watch(transactionRepoProvider).sumIncomeInRange(from: from, to: to);
 });
 
 final FutureProvider<int> todaySpendProvider = FutureProvider<int>((ref) async {

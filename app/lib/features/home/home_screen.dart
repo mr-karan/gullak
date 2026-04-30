@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../state/providers.dart';
+import '../../ui/theme.dart';
 import '../../ui/widgets/category_swatch.dart';
 import '../../ui/widgets/empty_state.dart';
 import '../../ui/widgets/money_text.dart';
@@ -20,6 +21,7 @@ class HomeScreen extends ConsumerStatefulWidget {
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   Future<void> _refresh() async {
     ref.invalidate(monthSpendProvider);
+    ref.invalidate(monthIncomeProvider);
     ref.invalidate(todaySpendProvider);
     ref.invalidate(recentTransactionsProvider);
     await Future<void>.delayed(const Duration(milliseconds: 200));
@@ -31,9 +33,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final symbol = prefs.currencySymbol;
     final minorDigits = prefs.currencyMinorDigits;
 
-    final monthAsync = ref.watch(monthSpendProvider);
-    final todayAsync = ref.watch(todaySpendProvider);
-    final recentAsync = ref.watch(recentTransactionsProvider);
+    final monthSpend = ref.watch(monthSpendProvider);
+    final monthIncome = ref.watch(monthIncomeProvider);
+    final todaySpend = ref.watch(todaySpendProvider);
+    final recent = ref.watch(recentTransactionsProvider);
 
     final monthLabel = DateFormat('MMMM yyyy').format(DateTime.now());
 
@@ -58,28 +61,26 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         child: ListView(
           padding: const EdgeInsets.only(bottom: 96),
           children: [
-            _SummaryCard(
+            _MonthHeroCard(
               monthLabel: monthLabel,
-              spent: monthAsync.value ?? 0,
-              loading: monthAsync.isLoading,
+              spent: monthSpend.value ?? 0,
+              income: monthIncome.value ?? 0,
               symbol: symbol,
               minorDigits: minorDigits,
             ),
-            _TodayCard(
-              spent: todayAsync.value ?? 0,
-              loading: todayAsync.isLoading,
+            _TodayChip(
+              spent: todaySpend.value ?? 0,
               symbol: symbol,
               minorDigits: minorDigits,
             ),
             const SectionHeader('Recent'),
-            recentAsync.when(
+            recent.when(
               data: (rows) {
-                if (rows.isEmpty) {
-                  return const _RecentEmpty();
-                }
+                if (rows.isEmpty) return const _RecentEmpty();
                 return Column(
                   children: [
-                    for (final r in rows.take(8)) _RecentRow(row: r),
+                    for (final r in rows.take(8))
+                      _RecentRow(row: r),
                   ],
                 );
               },
@@ -93,81 +94,155 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 }
 
-class _SummaryCard extends StatelessWidget {
-  const _SummaryCard({
+class _MonthHeroCard extends StatelessWidget {
+  const _MonthHeroCard({
     required this.monthLabel,
     required this.spent,
-    required this.loading,
+    required this.income,
     required this.symbol,
     required this.minorDigits,
   });
 
   final String monthLabel;
   final int spent;
-  final bool loading;
+  final int income;
   final String symbol;
   final int minorDigits;
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final net = income + spent; // spent is negative
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-      child: Card(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                monthLabel,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: cs.onSurfaceVariant,
-                    ),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                'Spent this month',
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
-              const SizedBox(height: 8),
-              if (loading)
-                const SizedBox(
-                  height: 36,
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    ),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
+        decoration: BoxDecoration(
+          color: cs.primaryContainer.withValues(alpha: 0.6),
+          borderRadius: BorderRadius.circular(24),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              monthLabel.toUpperCase(),
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: cs.onPrimaryContainer,
+                    letterSpacing: 1.2,
                   ),
-                )
-              else
-                MoneyText(
-                  amountCents: spent.abs(),
-                  minorDigits: minorDigits,
-                  symbol: symbol,
-                  size: MoneySize.hero,
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Net',
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    color: cs.onPrimaryContainer,
+                  ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              _formatNet(net, symbol: symbol, minorDigits: minorDigits),
+              style: moneyStyle(context, size: 36, weight: FontWeight.w700)
+                  .copyWith(color: cs.onPrimaryContainer),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: _StatTile(
+                    label: 'Income',
+                    value: income,
+                    color: cs.tertiary,
+                    symbol: symbol,
+                    minorDigits: minorDigits,
+                  ),
                 ),
-            ],
-          ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _StatTile(
+                    label: 'Spent',
+                    value: -spent, // display unsigned
+                    color: cs.onPrimaryContainer,
+                    symbol: symbol,
+                    minorDigits: minorDigits,
+                  ),
+                ),
+              ],
+            ),
+          ],
         ),
       ),
     );
   }
+
+  static String _formatNet(int net, {required String symbol, required int minorDigits}) {
+    final scale = _pow10(minorDigits);
+    final whole = (net.abs()) ~/ scale;
+    final formatted = NumberFormat('#,##,###').format(whole);
+    final frac = net.abs() % scale;
+    final fracStr = minorDigits == 0
+        ? ''
+        : '.${frac.toString().padLeft(minorDigits, '0')}';
+    final sign = net < 0 ? '-' : '';
+    return '$sign$symbol$formatted$fracStr';
+  }
+
+  static int _pow10(int n) {
+    var r = 1;
+    for (var i = 0; i < n; i++) {
+      r *= 10;
+    }
+    return r;
+  }
 }
 
-class _TodayCard extends StatelessWidget {
-  const _TodayCard({
+class _StatTile extends StatelessWidget {
+  const _StatTile({
+    required this.label,
+    required this.value,
+    required this.color,
+    required this.symbol,
+    required this.minorDigits,
+  });
+
+  final String label;
+  final int value;
+  final Color color;
+  final String symbol;
+  final int minorDigits;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label.toUpperCase(),
+          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: color.withValues(alpha: 0.85),
+                letterSpacing: 1.2,
+              ),
+        ),
+        const SizedBox(height: 4),
+        MoneyText(
+          amountCents: value,
+          symbol: symbol,
+          minorDigits: minorDigits,
+          color: color,
+          size: MoneySize.large,
+        ),
+      ],
+    );
+  }
+}
+
+class _TodayChip extends StatelessWidget {
+  const _TodayChip({
     required this.spent,
-    required this.loading,
     required this.symbol,
     required this.minorDigits,
   });
 
   final int spent;
-  final bool loading;
   final String symbol;
   final int minorDigits;
 
@@ -192,19 +267,12 @@ class _TodayCard extends StatelessWidget {
                     ),
               ),
             ),
-            if (loading)
-              const SizedBox(
-                width: 16,
-                height: 16,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              )
-            else
-              MoneyText(
-                amountCents: spent.abs(),
-                minorDigits: minorDigits,
-                symbol: symbol,
-                size: MoneySize.large,
-              ),
+            MoneyText(
+              amountCents: spent.abs(),
+              minorDigits: minorDigits,
+              symbol: symbol,
+              size: MoneySize.large,
+            ),
           ],
         ),
       ),
@@ -255,6 +323,7 @@ class _RecentRow extends ConsumerWidget {
         symbol: prefs.currencySymbol,
         color: amountColor,
       ),
+      onTap: () => context.go('/transactions/${row.id}'),
     );
   }
 }
