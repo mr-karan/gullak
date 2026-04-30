@@ -1,18 +1,23 @@
 import 'package:drift/drift.dart';
 
+/// Asset / liability accounts.
+///
+/// Types map to UX (icons, default categorisation hints) and to the
+/// budgeting model: `kind = 'tracking'` means off-budget (investments,
+/// loans). All other kinds are on-budget.
 @DataClassName('AccountRow')
 class Accounts extends Table {
   TextColumn get id => text()();
-  TextColumn get actualId => text().nullable()();
   TextColumn get name => text()();
-  BoolColumn get offbudget => boolean().withDefault(const Constant(false))();
-  BoolColumn get closed => boolean().withDefault(const Constant(false))();
+  TextColumn get kind => text().withDefault(const Constant('checking'))();
+  // Opening balance lets us seed an account without inventing a
+  // synthetic transaction. Stored in minor units, signed.
+  IntColumn get openingBalanceCents => integer().withDefault(const Constant(0))();
+  BoolColumn get onBudget => boolean().withDefault(const Constant(true))();
+  BoolColumn get archived => boolean().withDefault(const Constant(false))();
   IntColumn get sortOrder => integer().withDefault(const Constant(0))();
-  IntColumn get balanceCents => integer().nullable()();
+  IntColumn get createdAt => integer()();
   IntColumn get updatedAt => integer()();
-  TextColumn get syncStatus =>
-      text().withDefault(const Constant('synced'))();
-  TextColumn get syncError => text().nullable()();
 
   @override
   Set<Column> get primaryKey => {id};
@@ -21,7 +26,6 @@ class Accounts extends Table {
 @DataClassName('CategoryGroupRow')
 class CategoryGroups extends Table {
   TextColumn get id => text()();
-  TextColumn get actualId => text().nullable()();
   TextColumn get name => text()();
   BoolColumn get isIncome => boolean().withDefault(const Constant(false))();
   IntColumn get sortOrder => integer().withDefault(const Constant(0))();
@@ -33,14 +37,14 @@ class CategoryGroups extends Table {
 @DataClassName('CategoryRow')
 class Categories extends Table {
   TextColumn get id => text()();
-  TextColumn get actualId => text().nullable()();
   TextColumn get name => text()();
   TextColumn get groupId => text()();
-  BoolColumn get isIncome => boolean().withDefault(const Constant(false))();
+  // Color is an ARGB int; nullable so the UI can derive one.
+  IntColumn get color => integer().nullable()();
+  TextColumn get icon => text().nullable()();
   BoolColumn get hidden => boolean().withDefault(const Constant(false))();
   IntColumn get sortOrder => integer().withDefault(const Constant(0))();
   IntColumn get updatedAt => integer()();
-  TextColumn get syncStatus => text().withDefault(const Constant('synced'))();
 
   @override
   Set<Column> get primaryKey => {id};
@@ -49,38 +53,83 @@ class Categories extends Table {
 @DataClassName('PayeeRow')
 class Payees extends Table {
   TextColumn get id => text()();
-  TextColumn get actualId => text().nullable()();
   TextColumn get name => text()();
-  TextColumn get transferAcct => text().nullable()();
   IntColumn get useCount => integer().withDefault(const Constant(0))();
   IntColumn get updatedAt => integer()();
-  TextColumn get syncStatus => text().withDefault(const Constant('synced'))();
 
   @override
   Set<Column> get primaryKey => {id};
 }
 
+/// Transactions, including transfers and split children.
+///
+/// - A normal expense/income has [transferAccountId] = null and
+///   [parentId] = null.
+/// - A transfer is two rows: one in each account, with the same
+///   [transferGroupId] and `transferAccountId` pointing at the other
+///   account. The amount on the source side is negative; on the
+///   destination side, positive.
+/// - A split parent has [splitTotalCents] = sum of children's
+///   amounts; the parent itself has `categoryId = null` and is the
+///   "header" row that lists shows. Children have [parentId] set.
 @DataClassName('TransactionRow')
 class Transactions extends Table {
   TextColumn get id => text()();
-  TextColumn get actualId => text().nullable()();
   TextColumn get accountId => text()();
   TextColumn get categoryId => text().nullable()();
   TextColumn get payeeId => text().nullable()();
   TextColumn get payeeName => text().nullable()();
   IntColumn get amountCents => integer()();
-  TextColumn get date => text()();
+  TextColumn get date => text()(); // YYYY-MM-DD
   TextColumn get notes => text().nullable()();
   BoolColumn get cleared => boolean().withDefault(const Constant(false))();
-  TextColumn get origin =>
-      text().withDefault(const Constant('manual'))();
+  TextColumn get origin => text().withDefault(const Constant('manual'))();
   TextColumn get originRef => text().nullable()();
+
+  // Transfer linkage.
+  TextColumn get transferAccountId => text().nullable()();
+  TextColumn get transferGroupId => text().nullable()();
+
+  // Split linkage.
+  TextColumn get parentId => text().nullable()();
+  IntColumn get splitTotalCents => integer().nullable()();
+
   IntColumn get createdAt => integer()();
   IntColumn get updatedAt => integer()();
-  IntColumn get deletedAt => integer().nullable()();
-  TextColumn get syncStatus =>
-      text().withDefault(const Constant('pending_push'))();
-  TextColumn get syncError => text().nullable()();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
+/// Envelope budget. One row per (category, month).
+@DataClassName('BudgetRow')
+class Budgets extends Table {
+  TextColumn get id => text()();
+  TextColumn get categoryId => text()();
+  TextColumn get month => text()(); // YYYY-MM
+  IntColumn get targetCents => integer()();
+  IntColumn get rolloverCents => integer().withDefault(const Constant(0))();
+  IntColumn get updatedAt => integer()();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
+/// Recurring transaction templates.
+@DataClassName('RecurrenceRow')
+class Recurrences extends Table {
+  TextColumn get id => text()();
+  TextColumn get accountId => text()();
+  TextColumn get categoryId => text().nullable()();
+  TextColumn get payeeId => text().nullable()();
+  TextColumn get payeeName => text().nullable()();
+  IntColumn get amountCents => integer()();
+  TextColumn get notes => text().nullable()();
+  // ISO 8601 duration-ish: 'monthly', 'weekly', 'daily', 'yearly'.
+  TextColumn get cadence => text()();
+  TextColumn get nextDate => text()(); // YYYY-MM-DD
+  IntColumn get createdAt => integer()();
+  IntColumn get updatedAt => integer()();
 
   @override
   Set<Column> get primaryKey => {id};

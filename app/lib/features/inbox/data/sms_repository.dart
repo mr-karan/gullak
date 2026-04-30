@@ -1,11 +1,9 @@
-import 'dart:async';
 import 'dart:convert';
 
 import 'package:drift/drift.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../data/db/database.dart';
-import '../../../data/sync/sync_service.dart';
 import '../../../state/providers.dart';
 import '../../accounts/data/account_repository.dart';
 import '../../transactions/data/transaction_repository.dart';
@@ -31,6 +29,7 @@ class InboxItem {
 class SmsRepository {
   SmsRepository(this.ref);
   final Ref ref;
+
   AppDatabase get _db => ref.read(dbProvider);
 
   Future<List<InboxItem>> listInbox() async {
@@ -63,22 +62,16 @@ class SmsRepository {
 
   Future<void> dismiss(int id) async {
     await (_db.update(_db.smsMessages)..where((t) => t.id.equals(id))).write(
-      const SmsMessagesCompanion(
-        candidateStatus: Value('dismissed'),
-      ),
+      const SmsMessagesCompanion(candidateStatus: Value('dismissed')),
     );
     ref.invalidate(inboxItemsProvider);
   }
 
   /// Confirm: turn the candidate into a real transaction.
-  ///
-  /// Account selection is best-effort: we match the candidate's account
-  /// hint against local accounts; on no match we fall back to the user's
-  /// default account.
   Future<void> confirm(int id) async {
-    final row = await (_db.select(_db.smsMessages)..where((t) => t.id.equals(id))).getSingleOrNull();
-    if (row == null) return;
-    if (row.candidateJson == null) return;
+    final row = await (_db.select(_db.smsMessages)..where((t) => t.id.equals(id)))
+        .getSingleOrNull();
+    if (row == null || row.candidateJson == null) return;
     Map<String, dynamic> j;
     try {
       j = jsonDecode(row.candidateJson!) as Map<String, dynamic>;
@@ -91,23 +84,26 @@ class SmsRepository {
     final payee = j['payee'] as String?;
     final accountHint = (j['account_hint'] as String?)?.toLowerCase();
     final dateStr = j['date'] as String?;
-    final date = (dateStr != null) ? DateTime.tryParse(dateStr) ?? DateTime.fromMillisecondsSinceEpoch(row.receivedAt) : DateTime.fromMillisecondsSinceEpoch(row.receivedAt);
+    final date = (dateStr != null)
+        ? DateTime.tryParse(dateStr) ?? DateTime.fromMillisecondsSinceEpoch(row.receivedAt)
+        : DateTime.fromMillisecondsSinceEpoch(row.receivedAt);
 
-    final accounts = await ref.read(accountRepoProvider).list(includeClosed: true);
+    final accounts = await ref.read(accountRepoProvider).list(includeArchived: false);
     String? acctId;
     if (accountHint != null) {
       for (final a in accounts) {
-        if (accountHint.contains(a.name.toLowerCase()) || a.name.toLowerCase().contains(accountHint)) {
+        if (accountHint.contains(a.name.toLowerCase()) ||
+            a.name.toLowerCase().contains(accountHint)) {
           acctId = a.id;
           break;
         }
       }
     }
-    acctId ??= accounts.where((a) => !a.offbudget && !a.closed).firstOrNull?.id ?? accounts.firstOrNull?.id;
+    acctId ??= accounts.firstOrNull?.id;
     if (acctId == null) return;
 
     final signed = isIncome ? amount.abs() : -amount.abs();
-    await ref.read(transactionRepoProvider).insertDraft(
+    await ref.read(transactionRepoProvider).create(
           accountId: acctId,
           payeeName: payee,
           amountCents: signed,
@@ -118,23 +114,9 @@ class SmsRepository {
         );
 
     await (_db.update(_db.smsMessages)..where((t) => t.id.equals(id))).write(
-      const SmsMessagesCompanion(
-        candidateStatus: Value('accepted'),
-      ),
+      const SmsMessagesCompanion(candidateStatus: Value('accepted')),
     );
     ref.invalidate(inboxItemsProvider);
-    ref.invalidate(monthSpendProvider);
-    ref.invalidate(todaySpendProvider);
-    ref.invalidate(recentTransactionsProvider);
-    ref.invalidate(transactionsListProvider);
-    unawaited(ref.read(syncControllerProvider.notifier).sync());
-  }
-}
-
-extension _FirstOrNull<T> on Iterable<T> {
-  T? get firstOrNull {
-    final it = iterator;
-    return it.moveNext() ? it.current : null;
   }
 }
 
@@ -145,3 +127,10 @@ final FutureProvider<List<InboxItem>> inboxItemsProvider =
     FutureProvider<List<InboxItem>>((ref) {
   return ref.watch(smsRepositoryProvider).listInbox();
 });
+
+extension _FirstOrNull<T> on Iterable<T> {
+  T? get firstOrNull {
+    final it = iterator;
+    return it.moveNext() ? it.current : null;
+  }
+}

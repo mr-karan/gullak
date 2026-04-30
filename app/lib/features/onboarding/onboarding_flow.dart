@@ -2,12 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../core/logger.dart';
-import '../../data/actual/actual_client.dart';
-import '../../data/actual/actual_dto.dart';
-import '../../data/sync/sync_service.dart';
+import '../../core/money.dart';
 import '../../state/providers.dart';
+import '../accounts/data/account_repository.dart';
+import '../categories/data/category_repository.dart';
 
+/// First-run wizard. Three quick steps:
+///   1. Welcome
+///   2. Currency
+///   3. First account
+/// On completion we seed default category groups and mark onboarded.
 class OnboardingFlow extends ConsumerStatefulWidget {
   const OnboardingFlow({super.key});
 
@@ -15,23 +19,42 @@ class OnboardingFlow extends ConsumerStatefulWidget {
   ConsumerState<OnboardingFlow> createState() => _OnboardingFlowState();
 }
 
-// A hint, not a default. The user typically still has to point this at
-// the actual-http-api shim (not the Actual server itself), so we leave
-// the protocol and host as a starting point and let them adjust.
-const _kServerUrlHint = 'https://budget.mrkaran.dev';
-
 class _OnboardingFlowState extends ConsumerState<OnboardingFlow> {
   final _ctrl = PageController();
 
-  String _serverUrl = _kServerUrlHint;
-  String _apiKey = '';
-  List<BudgetDto> _budgets = const [];
-  String? _pickedBudget;
+  String _symbol = '₹';
+  int _minorDigits = 2;
+
+  String _accountName = '';
+  AccountKind _kind = AccountKind.checking;
+  int _openingBalanceCents = 0;
 
   @override
   void dispose() {
     _ctrl.dispose();
     super.dispose();
+  }
+
+  void _next() => _ctrl.nextPage(
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOut,
+      );
+
+  Future<void> _finish() async {
+    await ref.read(accountRepoProvider).create(
+          name: _accountName.trim(),
+          kind: _kind,
+          openingBalanceCents: _openingBalanceCents,
+        );
+    await _seedDefaults(ref);
+    final db = ref.read(dbProvider);
+    await db.kvSet('onboarded', 'true');
+    final prefs = ref.read(prefsProvider);
+    await prefs.setCurrencySymbol(_symbol);
+    await prefs.setCurrencyMinorDigits(_minorDigits);
+    ref.invalidate(onboardedProvider);
+    if (!mounted) return;
+    context.go('/');
   }
 
   @override
@@ -43,59 +66,31 @@ class _OnboardingFlowState extends ConsumerState<OnboardingFlow> {
           physics: const NeverScrollableScrollPhysics(),
           children: [
             _Welcome(onNext: _next),
-            _Connect(
-              initialUrl: _serverUrl,
-              initialKey: _apiKey,
-              onTested: (u, k, b) {
+            _Currency(
+              symbol: _symbol,
+              minorDigits: _minorDigits,
+              onChange: (s, d) => setState(() {
+                _symbol = s;
+                _minorDigits = d;
+              }),
+              onNext: _next,
+            ),
+            _FirstAccount(
+              symbol: _symbol,
+              minorDigits: _minorDigits,
+              onSubmit: ({required name, required kind, required openingCents}) {
                 setState(() {
-                  _serverUrl = u;
-                  _apiKey = k;
-                  _budgets = b;
+                  _accountName = name;
+                  _kind = kind;
+                  _openingBalanceCents = openingCents;
                 });
-                _next();
+                _finish();
               },
             ),
-            _PickBudget(
-              budgets: _budgets,
-              onPicked: (id) {
-                setState(() => _pickedBudget = id);
-                _persistAndSync();
-              },
-            ),
-            const _SyncDone(),
           ],
         ),
       ),
     );
-  }
-
-  void _next() {
-    _ctrl.nextPage(
-      duration: const Duration(milliseconds: 220),
-      curve: Curves.easeOut,
-    );
-  }
-
-  Future<void> _persistAndSync() async {
-    final s = ref.read(secureStoreProvider);
-    await s.writeServerCreds(
-      serverUrl: _serverUrl,
-      apiKey: _apiKey,
-      budgetSyncId: _pickedBudget,
-    );
-    ref.invalidate(actualClientProvider);
-    ref.invalidate(syncServiceProvider);
-    ref.invalidate(configuredProvider);
-    _next();
-    try {
-      await ref.read(syncControllerProvider.notifier).sync(initial: true);
-    } catch (e, st) {
-      log.e('initial sync failed', error: e, stackTrace: st);
-    }
-    if (!mounted) return;
-    await Future<void>.delayed(const Duration(milliseconds: 600));
-    if (!mounted) return;
-    context.go('/');
   }
 }
 
@@ -121,234 +116,176 @@ class _Welcome extends StatelessWidget {
             child: Icon(Icons.savings_outlined, color: cs.onPrimaryContainer),
           ),
           const SizedBox(height: 24),
-          Text(
-            'Gullak',
-            style: Theme.of(context).textTheme.displayMedium,
-          ),
+          Text('Gullak', style: Theme.of(context).textTheme.displayMedium),
           const SizedBox(height: 12),
           Text(
-            'A polished mobile expense tracker for your self-hosted Actual Budget server.',
+            'A polished, local-first expense tracker. Lives on your phone, '
+            'syncs nowhere.',
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
                   color: cs.onSurfaceVariant,
                 ),
           ),
           const SizedBox(height: 32),
           Text(
-            'You will need:\n'
-            '  · An Actual Budget server you control.\n'
-            '  · An actual-http-api Docker pointed at it.\n'
-            '  · The API key you generated for it.',
+            'You will set up:\n'
+            '  · Your currency.\n'
+            '  · Your first account.\n'
+            '  · A starter set of categories.',
             style: Theme.of(context).textTheme.bodyLarge,
           ),
           const Spacer(),
-          FilledButton(
-            onPressed: onNext,
-            child: const Text('Continue'),
-          ),
-          const SizedBox(height: 12),
-          OutlinedButton(
-            onPressed: () => _showHelp(context),
-            child: const Text('How do I set those up?'),
-          ),
+          FilledButton(onPressed: onNext, child: const Text('Continue')),
         ],
       ),
     );
   }
-
-  void _showHelp(BuildContext context) {
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      builder: (_) => const _HelpSheet(),
-    );
-  }
 }
 
-class _HelpSheet extends StatelessWidget {
-  const _HelpSheet();
-  @override
-  Widget build(BuildContext context) {
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Setup', style: Theme.of(context).textTheme.titleLarge),
-              const SizedBox(height: 12),
-              const SelectableText(
-'''Run both alongside each other (docker-compose):
-
-services:
-  actual-server:
-    image: actualbudget/actual-server:latest
-    ports: ["5006:5006"]
-    volumes: ["./actual-data:/data"]
-  actual-http-api:
-    image: jhonderson/actual-http-api:latest
-    ports: ["5007:5007"]
-    environment:
-      ACTUAL_SERVER_URL: "http://actual-server:5006"
-      ACTUAL_SERVER_PASSWORD: "<your password>"
-      API_KEY: "<random key>"
-    depends_on: [actual-server]
-
-The phone connects to actual-http-api on :5007. Put it behind a reverse proxy with TLS.''',
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _Connect extends ConsumerStatefulWidget {
-  const _Connect({
-    required this.initialUrl,
-    required this.initialKey,
-    required this.onTested,
+class _Currency extends StatelessWidget {
+  const _Currency({
+    required this.symbol,
+    required this.minorDigits,
+    required this.onChange,
+    required this.onNext,
   });
 
-  final String initialUrl;
-  final String initialKey;
-  final void Function(String, String, List<BudgetDto>) onTested;
+  final String symbol;
+  final int minorDigits;
+  final void Function(String symbol, int minorDigits) onChange;
+  final VoidCallback onNext;
 
-  @override
-  ConsumerState<_Connect> createState() => _ConnectState();
-}
-
-class _ConnectState extends ConsumerState<_Connect> {
-  late final TextEditingController _url = TextEditingController(text: widget.initialUrl);
-  late final TextEditingController _key = TextEditingController(text: widget.initialKey);
-  bool _testing = false;
-  String? _error;
-
-  @override
-  void dispose() {
-    _url.dispose();
-    _key.dispose();
-    super.dispose();
-  }
-
-  Future<void> _test() async {
-    setState(() {
-      _testing = true;
-      _error = null;
-    });
-    final url = _url.text.trim();
-    final key = _key.text.trim();
-    if (url.isEmpty || key.isEmpty) {
-      setState(() {
-        _testing = false;
-        _error = 'Both fields are required.';
-      });
-      return;
-    }
-    try {
-      final client = ActualClient(baseUrl: url, apiKey: key);
-      final budgets = await client.getBudgets();
-      if (!mounted) return;
-      widget.onTested(url, key, budgets);
-    } on ActualClientException catch (e) {
-      setState(() {
-        _testing = false;
-        _error = e.message;
-      });
-    } catch (e) {
-      setState(() {
-        _testing = false;
-        _error = 'Connection failed: $e';
-      });
-    }
-  }
+  static const _options = <(String label, String symbol, int digits)>[
+    ('Indian Rupee', '₹', 2),
+    ('US Dollar', r'$', 2),
+    ('Euro', '€', 2),
+    ('British Pound', '£', 2),
+    ('Japanese Yen', '¥', 0),
+    ('Custom', ' ', 2),
+  ];
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
     return Padding(
       padding: const EdgeInsets.fromLTRB(24, 48, 24, 24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Connect', style: Theme.of(context).textTheme.headlineMedium),
+          Text('Currency', style: Theme.of(context).textTheme.headlineMedium),
           const SizedBox(height: 8),
           Text(
-            'Point the app at your actual-http-api instance.',
+            'You can change this any time in settings.',
             style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                  color: cs.onSurfaceVariant,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
           ),
-          const SizedBox(height: 24),
-          TextField(
-            controller: _url,
-            keyboardType: TextInputType.url,
-            autofillHints: const [AutofillHints.url],
-            decoration: const InputDecoration(
-              labelText: 'Server URL',
-              hintText: 'https://actualapi.example.com',
-            ),
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _key,
-            obscureText: true,
-            decoration: const InputDecoration(
-              labelText: 'API key',
-              hintText: 'paste from your actual-http-api .env',
-            ),
-          ),
-          if (_error != null) ...[
-            const SizedBox(height: 16),
-            Text(_error!, style: TextStyle(color: cs.error)),
-          ],
-          const Spacer(),
-          FilledButton(
-            onPressed: _testing ? null : _test,
-            child: _testing
-                ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Text('Test connection'),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _PickBudget extends StatelessWidget {
-  const _PickBudget({required this.budgets, required this.onPicked});
-
-  final List<BudgetDto> budgets;
-  final void Function(String syncId) onPicked;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 48, 24, 24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Pick a budget', style: Theme.of(context).textTheme.headlineMedium),
           const SizedBox(height: 24),
           Expanded(
             child: ListView(
               children: [
-                for (final b in budgets)
-                  Card(
-                    child: ListTile(
-                      title: Text(b.name),
-                      subtitle: Text(b.syncId, style: const TextStyle(fontSize: 11)),
-                      trailing: const Icon(Icons.chevron_right),
-                      onTap: () => onPicked(b.syncId),
-                    ),
+                for (final o in _options)
+                  RadioListTile<String>(
+                    title: Text(o.$1),
+                    value: '${o.$2}|${o.$3}',
+                    groupValue: '$symbol|$minorDigits',
+                    onChanged: (_) => onChange(o.$2, o.$3),
                   ),
               ],
             ),
+          ),
+          FilledButton(onPressed: onNext, child: const Text('Continue')),
+        ],
+      ),
+    );
+  }
+}
+
+class _FirstAccount extends StatefulWidget {
+  const _FirstAccount({
+    required this.symbol,
+    required this.minorDigits,
+    required this.onSubmit,
+  });
+
+  final String symbol;
+  final int minorDigits;
+  final void Function({
+    required String name,
+    required AccountKind kind,
+    required int openingCents,
+  }) onSubmit;
+
+  @override
+  State<_FirstAccount> createState() => _FirstAccountState();
+}
+
+class _FirstAccountState extends State<_FirstAccount> {
+  final _name = TextEditingController(text: 'Main');
+  final _balance = TextEditingController();
+  AccountKind _kind = AccountKind.checking;
+
+  @override
+  void dispose() {
+    _name.dispose();
+    _balance.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 48, 24, 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('First account', style: Theme.of(context).textTheme.headlineMedium),
+          const SizedBox(height: 8),
+          Text(
+            'Add the bank, card or wallet you spend from most.',
+            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+          ),
+          const SizedBox(height: 24),
+          TextField(
+            controller: _name,
+            decoration: const InputDecoration(labelText: 'Account name'),
+          ),
+          const SizedBox(height: 12),
+          DropdownButtonFormField<AccountKind>(
+            initialValue: _kind,
+            decoration: const InputDecoration(labelText: 'Type'),
+            items: [
+              for (final k in AccountKind.values)
+                DropdownMenuItem(value: k, child: Text(k.label)),
+            ],
+            onChanged: (v) => setState(() => _kind = v ?? AccountKind.checking),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _balance,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            decoration: InputDecoration(
+              labelText: 'Opening balance',
+              prefixText: '${widget.symbol} ',
+              hintText: '0',
+            ),
+          ),
+          const Spacer(),
+          FilledButton(
+            onPressed: () {
+              final name = _name.text.trim();
+              if (name.isEmpty) return;
+              final cents = Money.parseToMinor(
+                _balance.text,
+                minorDigits: widget.minorDigits,
+              );
+              widget.onSubmit(
+                name: name,
+                kind: _kind,
+                openingCents: cents,
+              );
+            },
+            child: const Text('Done'),
           ),
         ],
       ),
@@ -356,28 +293,41 @@ class _PickBudget extends StatelessWidget {
   }
 }
 
-class _SyncDone extends StatelessWidget {
-  const _SyncDone();
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return Padding(
-      padding: const EdgeInsets.all(48),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const SizedBox(
-            width: 28,
-            height: 28,
-            child: CircularProgressIndicator(strokeWidth: 2.5),
-          ),
-          const SizedBox(height: 24),
-          Text('Setting up your data…',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: cs.onSurfaceVariant,
-                  )),
-        ],
-      ),
-    );
+/// Default category groups + categories. Idempotent — only inserts
+/// if there are zero categories already.
+Future<void> _seedDefaults(WidgetRef ref) async {
+  final repo = ref.read(categoryRepoProvider);
+  final existing = await repo.list(includeHidden: true);
+  if (existing.isNotEmpty) return;
+
+  final now = ref.read(dbProvider);
+  final daily = await repo.createGroup(name: 'Daily Living');
+  final lifestyle = await repo.createGroup(name: 'Lifestyle');
+  final fixed = await repo.createGroup(name: 'Fixed Costs');
+  final savings = await repo.createGroup(name: 'Savings & Goals');
+  final income = await repo.createGroup(name: 'Income', isIncome: true);
+
+  Future<void> add(String group, String name) async {
+    await repo.create(name: name, groupId: group);
   }
+
+  await add(daily, 'Groceries');
+  await add(daily, 'Transport');
+  await add(daily, 'Phone & Internet');
+  await add(daily, 'Health');
+  await add(lifestyle, 'Eating Out');
+  await add(lifestyle, 'Entertainment');
+  await add(lifestyle, 'Shopping');
+  await add(lifestyle, 'Travel');
+  await add(fixed, 'Rent');
+  await add(fixed, 'Utilities');
+  await add(fixed, 'Insurance');
+  await add(fixed, 'Subscriptions');
+  await add(savings, 'Emergency Fund');
+  await add(savings, 'Investments');
+  await add(income, 'Salary');
+  await add(income, 'Other Income');
+
+  // Touch the kv table so the watch streams refresh.
+  await now.kvSet('seeded', 'true');
 }

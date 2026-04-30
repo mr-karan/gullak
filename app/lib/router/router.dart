@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../features/accounts/account_detail_screen.dart';
 import '../features/accounts/accounts_screen.dart';
+import '../features/budgets/budget_screen.dart';
 import '../features/home/home_shell.dart';
 import '../features/home/home_screen.dart';
 import '../features/inbox/inbox_screen.dart';
@@ -14,22 +15,23 @@ import '../features/transactions/transactions_screen.dart';
 import '../state/providers.dart';
 
 final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
-  // Bump this whenever the configured-state changes so go_router re-runs
-  // the redirect. Without it the splash hangs after the future resolves.
+  // Bump this whenever onboarded state changes so go_router re-runs the
+  // redirect. Without it the splash hangs after the future resolves.
   final tick = ValueNotifier<int>(0);
   ref
-    ..listen(configuredProvider, (_, _) => tick.value++)
+    ..listen(onboardedProvider, (_, _) => tick.value++)
     ..onDispose(tick.dispose);
+
   return GoRouter(
     initialLocation: '/loading',
     debugLogDiagnostics: false,
     refreshListenable: tick,
     redirect: (context, state) {
-      final configured = ref.read(configuredProvider);
-      if (configured.isLoading) {
+      final onboarded = ref.read(onboardedProvider);
+      if (onboarded.isLoading) {
         return state.matchedLocation == '/loading' ? null : '/loading';
       }
-      final ok = configured.value ?? false;
+      final ok = onboarded.value ?? false;
       final atOnboarding = state.matchedLocation.startsWith('/onboarding');
       final atLoading = state.matchedLocation == '/loading';
       if (!ok && !atOnboarding) return '/onboarding';
@@ -37,14 +39,8 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       return null;
     },
     routes: [
-      GoRoute(
-        path: '/loading',
-        builder: (_, _) => const _SplashScreen(),
-      ),
-      GoRoute(
-        path: '/onboarding',
-        builder: (_, _) => const OnboardingFlow(),
-      ),
+      GoRoute(path: '/loading', builder: (_, _) => const _Splash()),
+      GoRoute(path: '/onboarding', builder: (_, _) => const OnboardingFlow()),
       ShellRoute(
         builder: (context, state, child) => HomeShell(child: child),
         routes: [
@@ -61,6 +57,10 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
                 builder: (_, s) => TransactionDetailScreen(id: s.pathParameters['id']!),
               ),
             ],
+          ),
+          GoRoute(
+            path: '/budgets',
+            pageBuilder: (_, _) => const NoTransitionPage<void>(child: BudgetScreen()),
           ),
           GoRoute(
             path: '/inbox',
@@ -86,19 +86,16 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
   );
 });
 
-class _SplashScreen extends StatelessWidget {
-  const _SplashScreen();
-
+class _Splash extends StatelessWidget {
+  const _Splash();
   @override
-  Widget build(BuildContext context) {
-    return const Scaffold(
-      body: Center(
-        child: SizedBox(
-          width: 28,
-          height: 28,
-          child: CircularProgressIndicator(strokeWidth: 2.5),
+  Widget build(BuildContext context) => const Scaffold(
+        body: Center(
+          child: SizedBox(
+            width: 28,
+            height: 28,
+            child: CircularProgressIndicator(strokeWidth: 2.5),
+          ),
         ),
-      ),
-    );
-  }
+      );
 }

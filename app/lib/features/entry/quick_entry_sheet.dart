@@ -6,7 +6,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/clock.dart';
 import '../../core/money.dart';
-import '../../data/sync/sync_service.dart';
 import '../../state/providers.dart';
 import '../../ui/theme.dart';
 import '../accounts/data/account_repository.dart';
@@ -163,7 +162,7 @@ class _TypeTabState extends ConsumerState<_TypeTab> {
     final accounts = await ref.read(accountsListProvider.future);
     if (accounts.isEmpty) return;
     final acctId = value.accountId ?? ref.read(prefsProvider).defaultAccountId ?? accounts.first.id;
-    await ref.read(transactionRepoProvider).insertDraft(
+    await ref.read(transactionRepoProvider).create(
           accountId: acctId,
           categoryId: value.categoryId,
           payeeId: value.payeeId,
@@ -175,12 +174,10 @@ class _TypeTabState extends ConsumerState<_TypeTab> {
           originRef: _ctrl.text,
         );
     if (!mounted) return;
-    invalidateTransactionLists(ref);
     Navigator.of(context).maybePop();
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Saved')),
     );
-    unawaited(ref.read(syncControllerProvider.notifier).sync());
   }
 
   @override
@@ -358,7 +355,7 @@ class _FormTabState extends ConsumerState<_FormTab> {
     if (_account == null || _amountCents == 0) return;
     HapticFeedback.lightImpact();
     final amount = _isIncome ? _amountCents.abs() : -_amountCents.abs();
-    await ref.read(transactionRepoProvider).insertDraft(
+    await ref.read(transactionRepoProvider).create(
           accountId: _account!.id,
           categoryId: _category?.id,
           payeeId: _payee?.id,
@@ -369,12 +366,10 @@ class _FormTabState extends ConsumerState<_FormTab> {
           origin: 'manual',
         );
     if (!mounted) return;
-    invalidateTransactionLists(ref);
     Navigator.of(context).maybePop();
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Saved')),
     );
-    unawaited(ref.read(syncControllerProvider.notifier).sync());
   }
 
   @override

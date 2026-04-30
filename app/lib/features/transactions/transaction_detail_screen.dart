@@ -1,10 +1,7 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../data/sync/sync_service.dart';
 import '../../state/providers.dart';
 import '../../ui/widgets/money_text.dart';
 import 'data/transaction_repository.dart';
@@ -30,9 +27,7 @@ class TransactionDetailScreen extends ConsumerWidget {
       ),
       body: asyncTx.when(
         data: (tx) {
-          if (tx == null) {
-            return const Center(child: Text('Not found'));
-          }
+          if (tx == null) return const Center(child: Text('Not found'));
           return ListView(
             padding: const EdgeInsets.all(20),
             children: [
@@ -45,12 +40,16 @@ class TransactionDetailScreen extends ConsumerWidget {
                 ),
               ),
               const SizedBox(height: 24),
-              _row('Payee', tx.payeeName ?? '—'),
-              _row('Category', tx.categoryName ?? 'Uncategorised'),
+              if (tx.isTransfer)
+                _row('Transfer', '${tx.accountName ?? '—'} → ${tx.transferAccountName ?? '—'}')
+              else ...[
+                _row('Payee', tx.payeeName ?? '—'),
+                _row('Category', tx.categoryName ?? 'Uncategorised'),
+              ],
               _row('Account', tx.accountName ?? '—'),
               _row('Date', tx.dateLabel),
               _row('Cleared', tx.cleared ? 'Yes' : 'No'),
-              _row('Sync', _statusLabel(tx.syncStatus)),
+              if (tx.isSplit) _row('Split', 'Yes'),
               if (tx.notes != null && tx.notes!.isNotEmpty) _row('Notes', tx.notes!),
             ],
           );
@@ -68,30 +67,19 @@ class TransactionDetailScreen extends ConsumerWidget {
           children: [
             SizedBox(
               width: 100,
-              child: Text(
-                label,
-                style: const TextStyle(fontWeight: FontWeight.w500),
-              ),
+              child: Text(label, style: const TextStyle(fontWeight: FontWeight.w500)),
             ),
             Expanded(child: Text(value)),
           ],
         ),
       );
 
-  String _statusLabel(String s) => switch (s) {
-        'synced' => 'Synced',
-        'pending_push' => 'Waiting to sync',
-        'pending_delete' => 'Pending delete',
-        'failed' => 'Sync failed',
-        _ => s,
-      };
-
   Future<void> _confirmDelete(BuildContext context, WidgetRef ref) async {
     final ok = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
         title: const Text('Delete this transaction?'),
-        content: const Text('It will be removed from Actual on the next sync.'),
+        content: const Text('This cannot be undone.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
@@ -105,10 +93,8 @@ class TransactionDetailScreen extends ConsumerWidget {
       ),
     );
     if (ok != true) return;
-    await ref.read(transactionRepoProvider).markDeletePending(id);
-    invalidateTransactionLists(ref);
+    await ref.read(transactionRepoProvider).delete(id);
     if (!context.mounted) return;
     context.pop();
-    unawaited(ref.read(syncControllerProvider.notifier).sync());
   }
 }

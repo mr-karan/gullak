@@ -12,10 +12,10 @@ class HomeShell extends ConsumerWidget {
 
   static const _tabs = [
     _Tab(icon: Icons.home_outlined, selected: Icons.home, label: 'Home', path: '/'),
-    _Tab(icon: Icons.receipt_long_outlined, selected: Icons.receipt_long, label: 'Transactions', path: '/transactions'),
+    _Tab(icon: Icons.receipt_long_outlined, selected: Icons.receipt_long, label: 'Activity', path: '/transactions'),
+    _Tab(icon: Icons.pie_chart_outline, selected: Icons.pie_chart, label: 'Budget', path: '/budgets'),
     _Tab(icon: Icons.inbox_outlined, selected: Icons.inbox, label: 'Inbox', path: '/inbox'),
     _Tab(icon: Icons.account_balance_outlined, selected: Icons.account_balance, label: 'Accounts', path: '/accounts'),
-    _Tab(icon: Icons.settings_outlined, selected: Icons.settings, label: 'Settings', path: '/settings'),
   ];
 
   @override
@@ -25,10 +25,10 @@ class HomeShell extends ConsumerWidget {
     final tabs = smsEnabled
         ? _tabs
         : _tabs.where((t) => t.path != '/inbox').toList(growable: false);
-
     final index = _indexOf(tabs, loc);
 
-    final showFab = loc == '/' || loc == '/transactions';
+    final showFab =
+        loc == '/' || loc == '/transactions' || loc == '/budgets' || loc == '/accounts';
 
     return Scaffold(
       body: child,

@@ -2,22 +2,17 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import 'logger.dart';
 
-/// Wraps FlutterSecureStorage with a small, typed surface.
+/// Secrets-only storage. Public preferences live in [Prefs].
 ///
-/// Every read is guarded: keychain failures (e.g. simulator without code
-/// signing, where entitlements aren't applied) return `null` instead of
-/// throwing. Without this, a Riverpod FutureProvider built on top would
-/// retry forever with exponential backoff and the splash never advances.
+/// Today this is just the LLM endpoint config; we keep it because LLM
+/// keys are sensitive. Reads/writes are guarded so an unentitled
+/// keychain (e.g. an unsigned simulator build) returns null instead
+/// of throwing.
 class SecureStore {
   SecureStore({FlutterSecureStorage? storage})
       : _storage = storage ?? const FlutterSecureStorage();
 
   final FlutterSecureStorage _storage;
-
-  static const _kServerUrl = 'gullak.actual.serverUrl';
-  static const _kApiKey = 'gullak.actual.apiKey';
-  static const _kBudgetSyncId = 'gullak.actual.budgetSyncId';
-  static const _kBudgetEncryptionPassword = 'gullak.actual.budgetEncryptionPassword';
 
   static const _kLlmBaseUrl = 'gullak.llm.baseUrl';
   static const _kLlmApiKey = 'gullak.llm.apiKey';
@@ -43,26 +38,6 @@ class SecureStore {
       log.w('secure write failed for $key: $e');
     }
   }
-
-  Future<void> writeServerCreds({
-    required String serverUrl,
-    required String apiKey,
-    String? budgetSyncId,
-  }) async {
-    await _write(_kServerUrl, serverUrl);
-    await _write(_kApiKey, apiKey);
-    if (budgetSyncId != null) await _write(_kBudgetSyncId, budgetSyncId);
-  }
-
-  Future<String?> readServerUrl() => _read(_kServerUrl);
-  Future<String?> readApiKey() => _read(_kApiKey);
-  Future<String?> readBudgetSyncId() => _read(_kBudgetSyncId);
-
-  Future<void> setBudgetSyncId(String id) => _write(_kBudgetSyncId, id);
-
-  Future<String?> readBudgetEncryptionPassword() => _read(_kBudgetEncryptionPassword);
-  Future<void> writeBudgetEncryptionPassword(String? p) =>
-      _write(_kBudgetEncryptionPassword, (p == null || p.isEmpty) ? null : p);
 
   Future<void> writeLlm({String? baseUrl, String? apiKey, String? model}) async {
     await _write(_kLlmBaseUrl, baseUrl);

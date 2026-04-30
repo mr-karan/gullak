@@ -1,13 +1,10 @@
-import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../data/sms/sms_pipeline.dart';
 import '../../data/sms/sms_reader.dart';
-import '../../data/sync/sync_service.dart';
 import '../../state/providers.dart';
 import '../inbox/data/sms_repository.dart';
 
@@ -17,87 +14,22 @@ class SettingsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final prefs = ref.watch(prefsProvider);
-    final syncState = ref.watch(syncControllerProvider);
     return Scaffold(
       appBar: AppBar(title: const Text('Settings')),
       body: ListView(
         children: [
-          const _SectionHeader('Connection'),
-          ListTile(
-            leading: const Icon(Icons.cloud_outlined),
-            title: const Text('Actual server'),
-            subtitle: FutureBuilder<String?>(
-              future: ref.read(secureStoreProvider).readServerUrl(),
-              builder: (_, s) => Text(s.data ?? 'Not configured'),
-            ),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () => context.go('/onboarding'),
-          ),
-          ListTile(
-            leading: const Icon(Icons.sync),
-            title: const Text('Sync now'),
-            subtitle: syncState.when(
-              data: (r) => Text(r == null
-                  ? 'Idle'
-                  : 'Pushed ${r.pushed}, pulled ${r.pulled}, errors ${r.errors.length}'),
-              loading: () => const Text('Syncing…'),
-              error: (e, _) => Text('Error: $e'),
-            ),
-            onTap: () => ref.read(syncControllerProvider.notifier).sync(),
-          ),
           const _SectionHeader('Currency'),
           ListTile(
-            leading: const Icon(Icons.currency_rupee),
+            leading: const Icon(Icons.currency_exchange),
             title: const Text('Symbol'),
             trailing: Text(prefs.currencySymbol),
-            onTap: () async {
-              final ctrl = TextEditingController(text: prefs.currencySymbol);
-              final v = await showDialog<String>(
-                context: context,
-                builder: (_) => AlertDialog(
-                  title: const Text('Currency symbol'),
-                  content: TextField(controller: ctrl),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.of(context).pop(),
-                      child: const Text('Cancel'),
-                    ),
-                    FilledButton(
-                      onPressed: () => Navigator.of(context).pop(ctrl.text),
-                      child: const Text('Save'),
-                    ),
-                  ],
-                ),
-              );
-              if (v != null && v.isNotEmpty) {
-                await prefs.setCurrencySymbol(v);
-                ref.invalidate(prefsProvider);
-              }
-            },
+            onTap: () => _editSymbol(context, ref),
           ),
           ListTile(
             leading: const Icon(Icons.numbers),
             title: const Text('Minor digits'),
             subtitle: Text('${prefs.currencyMinorDigits}'),
-            onTap: () async {
-              final v = await showDialog<int>(
-                context: context,
-                builder: (_) => SimpleDialog(
-                  title: const Text('Minor digits'),
-                  children: [
-                    for (final n in [0, 2, 3, 4])
-                      SimpleDialogOption(
-                        onPressed: () => Navigator.of(context).pop(n),
-                        child: Text('$n'),
-                      ),
-                  ],
-                ),
-              );
-              if (v != null) {
-                await prefs.setCurrencyMinorDigits(v);
-                ref.invalidate(prefsProvider);
-              }
-            },
+            onTap: () => _editMinorDigits(context, ref),
           ),
           const _SectionHeader('AI assist'),
           SwitchListTile(
@@ -128,33 +60,7 @@ class SettingsScreen extends ConsumerWidget {
             value: prefs.smsEnabled && Platform.isAndroid,
             onChanged: !Platform.isAndroid
                 ? null
-                : (v) async {
-                    if (v) {
-                      final reader = ref.read(smsReaderProvider);
-                      final granted = await reader.ensurePermission();
-                      if (!granted) {
-                        if (!context.mounted) return;
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('SMS permission denied.')),
-                        );
-                        return;
-                      }
-                      await prefs.setSmsEnabled(true);
-                      ref.invalidate(prefsProvider);
-                      final pipeline = ref.read(smsPipelineProvider);
-                      pipeline.startListening();
-                      final added = await pipeline.backfill();
-                      ref.invalidate(inboxItemsProvider);
-                      if (!context.mounted) return;
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('Backfilled $added candidate(s).')),
-                      );
-                    } else {
-                      await prefs.setSmsEnabled(false);
-                      ref.invalidate(prefsProvider);
-                      await ref.read(smsPipelineProvider).stop();
-                    }
-                  },
+                : (v) => _toggleSms(context, ref, v),
           ),
           if (prefs.smsEnabled && Platform.isAndroid)
             ListTile(
@@ -175,37 +81,126 @@ class SettingsScreen extends ConsumerWidget {
             leading: const Icon(Icons.brightness_6_outlined),
             title: const Text('Theme'),
             subtitle: Text(prefs.themeMode),
-            onTap: () async {
-              final v = await showDialog<String>(
-                context: context,
-                builder: (_) => SimpleDialog(
-                  title: const Text('Theme'),
-                  children: [
-                    for (final mode in ['system', 'light', 'dark'])
-                      SimpleDialogOption(
-                        onPressed: () => Navigator.of(context).pop(mode),
-                        child: Text(mode),
-                      ),
-                  ],
-                ),
-              );
-              if (v != null) {
-                await prefs.setThemeMode(v);
-                ref.invalidate(prefsProvider);
-                ref.invalidate(themeModeProvider);
-              }
-            },
+            onTap: () => _editTheme(context, ref),
           ),
           const _SectionHeader('Data'),
-          ListTile(
-            leading: const Icon(Icons.delete_outline),
-            title: const Text('Wipe local data'),
-            subtitle: const Text('Drops the local cache. Actual server is untouched.'),
-            onTap: () => _wipeLocal(context, ref),
+          const ListTile(
+            leading: Icon(Icons.upload_file_outlined),
+            title: Text('Export to JSON'),
+            subtitle: Text('Coming soon — round-trippable backup.'),
+            enabled: false,
+          ),
+          const ListTile(
+            leading: Icon(Icons.download_outlined),
+            title: Text('Import from JSON'),
+            subtitle: Text('Coming soon.'),
+            enabled: false,
           ),
         ],
       ),
     );
+  }
+
+  Future<void> _toggleSms(BuildContext context, WidgetRef ref, bool v) async {
+    final prefs = ref.read(prefsProvider);
+    if (v) {
+      final reader = ref.read(smsReaderProvider);
+      final granted = await reader.ensurePermission();
+      if (!granted) {
+        if (!context.mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('SMS permission denied.')),
+        );
+        return;
+      }
+      await prefs.setSmsEnabled(true);
+      ref.invalidate(prefsProvider);
+      final pipeline = ref.read(smsPipelineProvider);
+      pipeline.startListening();
+      final added = await pipeline.backfill();
+      ref.invalidate(inboxItemsProvider);
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Backfilled $added candidate(s).')),
+      );
+    } else {
+      await prefs.setSmsEnabled(false);
+      ref.invalidate(prefsProvider);
+      await ref.read(smsPipelineProvider).stop();
+    }
+  }
+
+  Future<void> _editSymbol(BuildContext context, WidgetRef ref) async {
+    final prefs = ref.read(prefsProvider);
+    final ctrl = TextEditingController(text: prefs.currencySymbol);
+    try {
+      final v = await showDialog<String>(
+        context: context,
+        builder: (_) => AlertDialog(
+          title: const Text('Currency symbol'),
+          content: TextField(controller: ctrl),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(ctrl.text),
+              child: const Text('Save'),
+            ),
+          ],
+        ),
+      );
+      if (v != null && v.isNotEmpty) {
+        await prefs.setCurrencySymbol(v);
+        ref.invalidate(prefsProvider);
+      }
+    } finally {
+      ctrl.dispose();
+    }
+  }
+
+  Future<void> _editMinorDigits(BuildContext context, WidgetRef ref) async {
+    final prefs = ref.read(prefsProvider);
+    final v = await showDialog<int>(
+      context: context,
+      builder: (_) => SimpleDialog(
+        title: const Text('Minor digits'),
+        children: [
+          for (final n in [0, 2, 3, 4])
+            SimpleDialogOption(
+              onPressed: () => Navigator.of(context).pop(n),
+              child: Text('$n'),
+            ),
+        ],
+      ),
+    );
+    if (v != null) {
+      await prefs.setCurrencyMinorDigits(v);
+      ref.invalidate(prefsProvider);
+    }
+  }
+
+  Future<void> _editTheme(BuildContext context, WidgetRef ref) async {
+    final prefs = ref.read(prefsProvider);
+    final v = await showDialog<String>(
+      context: context,
+      builder: (_) => SimpleDialog(
+        title: const Text('Theme'),
+        children: [
+          for (final mode in ['system', 'light', 'dark'])
+            SimpleDialogOption(
+              onPressed: () => Navigator.of(context).pop(mode),
+              child: Text(mode),
+            ),
+        ],
+      ),
+    );
+    if (v != null) {
+      await prefs.setThemeMode(v);
+      ref.invalidate(prefsProvider);
+      ref.invalidate(themeModeProvider);
+    }
   }
 
   Future<void> _editLlm(BuildContext context, WidgetRef ref) async {
@@ -214,63 +209,49 @@ class SettingsScreen extends ConsumerWidget {
     final key = TextEditingController(text: await s.readLlmApiKey() ?? '');
     final model = TextEditingController(text: await s.readLlmModel() ?? '');
     if (!context.mounted) return;
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('AI endpoint'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(controller: base, decoration: const InputDecoration(labelText: 'Base URL')),
-            const SizedBox(height: 8),
-            TextField(controller: key, decoration: const InputDecoration(labelText: 'API key'), obscureText: true),
-            const SizedBox(height: 8),
-            TextField(controller: model, decoration: const InputDecoration(labelText: 'Model')),
+    try {
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (_) => AlertDialog(
+          title: const Text('AI endpoint'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(controller: base, decoration: const InputDecoration(labelText: 'Base URL')),
+              const SizedBox(height: 8),
+              TextField(
+                controller: key,
+                decoration: const InputDecoration(labelText: 'API key'),
+                obscureText: true,
+              ),
+              const SizedBox(height: 8),
+              TextField(controller: model, decoration: const InputDecoration(labelText: 'Model')),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Save'),
+            ),
           ],
         ),
-        actions: [
-          TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.of(context).pop(true), child: const Text('Save')),
-        ],
-      ),
-    );
-    if (ok == true) {
-      await s.writeLlm(
-        baseUrl: base.text.trim().isEmpty ? null : base.text.trim(),
-        apiKey: key.text.trim().isEmpty ? null : key.text.trim(),
-        model: model.text.trim().isEmpty ? null : model.text.trim(),
       );
-      ref.invalidate(llmClientProvider);
-    }
-  }
-
-  Future<void> _wipeLocal(BuildContext context, WidgetRef ref) async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Wipe local data?'),
-        content: const Text('This will reset the local cache. Your Actual server is not touched.'),
-        actions: [
-          TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.of(context).pop(true), child: const Text('Wipe')),
-        ],
-      ),
-    );
-    if (ok == true) {
-      await ref.read(secureStoreProvider).wipe();
-      // Drop the database the simple way: by deleting all rows.
-      // Real wipe of the file requires app restart; for v1 this is fine.
-      final db = ref.read(dbProvider);
-      await db.delete(db.transactions).go();
-      await db.delete(db.payees).go();
-      await db.delete(db.categories).go();
-      await db.delete(db.categoryGroups).go();
-      await db.delete(db.accounts).go();
-      await db.delete(db.smsMessages).go();
-      await db.delete(db.appKv).go();
-      ref.invalidate(configuredProvider);
-      if (!context.mounted) return;
-      context.go('/onboarding');
+      if (ok == true) {
+        await s.writeLlm(
+          baseUrl: base.text.trim().isEmpty ? null : base.text.trim(),
+          apiKey: key.text.trim().isEmpty ? null : key.text.trim(),
+          model: model.text.trim().isEmpty ? null : model.text.trim(),
+        );
+        ref.invalidate(llmClientProvider);
+      }
+    } finally {
+      base.dispose();
+      key.dispose();
+      model.dispose();
     }
   }
 }

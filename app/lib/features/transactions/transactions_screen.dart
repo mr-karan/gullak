@@ -32,7 +32,7 @@ class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
     ));
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Transactions'),
+        title: const Text('Activity'),
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(56),
           child: Padding(
@@ -48,84 +48,59 @@ class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
           ),
         ),
       ),
-      body: RefreshIndicator(
-        onRefresh: () async => ref.invalidate(transactionsListProvider),
-        child: listAsync.when(
-          data: (rows) {
-            if (rows.isEmpty) {
-              return ListView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                children: const [
-                  SizedBox(height: 80),
-                  EmptyState(
-                    icon: Icons.receipt_long_outlined,
-                    title: 'No transactions',
-                    body: 'Add an expense — it will show up here.',
-                  ),
-                ],
-              );
-            }
-            return ListView.builder(
+      body: listAsync.when(
+        data: (rows) {
+          if (rows.isEmpty) {
+            return ListView(
               physics: const AlwaysScrollableScrollPhysics(),
-              itemCount: rows.length,
-              itemBuilder: (_, i) {
-                final r = rows[i];
-                return ListTile(
-                  title: Text(r.payeeName ?? '—'),
-                  subtitle: Text(
-                    [r.categoryName ?? 'Uncategorised', r.dateLabel]
-                        .where((e) => e.isNotEmpty)
-                        .join(' · '),
-                    maxLines: 1,
-                  ),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      _SyncDot(status: r.syncStatus),
-                      const SizedBox(width: 8),
-                      MoneyText(
-                        amountCents: r.amountCents,
-                        minorDigits: prefs.currencyMinorDigits,
-                        symbol: prefs.currencySymbol,
-                      ),
-                    ],
-                  ),
-                  onTap: () => context.go('/transactions/${r.id}'),
-                );
-              },
+              children: const [
+                SizedBox(height: 80),
+                EmptyState(
+                  icon: Icons.receipt_long_outlined,
+                  title: 'No transactions',
+                  body: 'Tap + to add your first.',
+                ),
+              ],
             );
-          },
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (e, _) => Center(child: Text('Error: $e')),
-        ),
+          }
+          return ListView.builder(
+            physics: const AlwaysScrollableScrollPhysics(),
+            itemCount: rows.length,
+            itemBuilder: (_, i) {
+              final r = rows[i];
+              return ListTile(
+                leading: r.isTransfer
+                    ? const Icon(Icons.swap_horiz)
+                    : r.isSplit
+                        ? const Icon(Icons.call_split)
+                        : null,
+                title: Text(
+                  r.isTransfer
+                      ? '→ ${r.transferAccountName ?? '—'}'
+                      : (r.payeeName ?? '—'),
+                ),
+                subtitle: Text(
+                  [
+                    r.accountName ?? '',
+                    r.categoryName ??
+                        (r.isTransfer ? 'Transfer' : 'Uncategorised'),
+                    r.dateLabel,
+                  ].where((e) => e.isNotEmpty).join(' · '),
+                  maxLines: 1,
+                ),
+                trailing: MoneyText(
+                  amountCents: r.amountCents,
+                  minorDigits: prefs.currencyMinorDigits,
+                  symbol: prefs.currencySymbol,
+                ),
+                onTap: () => context.go('/transactions/${r.id}'),
+              );
+            },
+          );
+        },
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (e, _) => Center(child: Text('Error: $e')),
       ),
-    );
-  }
-}
-
-class _SyncDot extends StatelessWidget {
-  const _SyncDot({required this.status});
-  final String status;
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    Color? color;
-    switch (status) {
-      case 'pending_push':
-      case 'pending_delete':
-        color = cs.tertiary;
-        break;
-      case 'failed':
-        color = cs.error;
-        break;
-      default:
-        return const SizedBox(width: 8);
-    }
-    return Container(
-      width: 8,
-      height: 8,
-      decoration: BoxDecoration(color: color, shape: BoxShape.circle),
     );
   }
 }
