@@ -170,56 +170,87 @@ class _TxRow extends ConsumerWidget {
         : row.amountCents < 0
             ? cs.onSurface
             : cs.tertiary;
-    return InkWell(
-      onTap: () => context.go('/transactions/${row.id}'),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-        child: Row(
-          children: [
-            CategorySwatch(
-              label: swatchLabel,
-              icon: row.isTransfer
-                  ? Icons.swap_horiz
-                  : row.isSplit
-                      ? Icons.call_split
-                      : null,
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    row.isTransfer
-                        ? '${row.accountName ?? '—'} → ${row.transferAccountName ?? '—'}'
-                        : (row.payeeName ?? row.categoryName ?? '—'),
-                    style: Theme.of(context).textTheme.titleMedium,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    [
-                      row.categoryName ?? (row.isTransfer ? 'Transfer' : 'Uncategorised'),
-                      row.accountName ?? '',
-                    ].where((e) => e.isNotEmpty).join(' · '),
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: cs.onSurfaceVariant,
-                        ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
+    return Dismissible(
+      key: ValueKey(row.id),
+      direction: DismissDirection.endToStart,
+      background: Container(
+        alignment: Alignment.centerRight,
+        padding: const EdgeInsets.only(right: 24),
+        color: cs.errorContainer,
+        child: Icon(Icons.delete_outline, color: cs.onErrorContainer),
+      ),
+      confirmDismiss: (_) async {
+        final ok = await showDialog<bool>(
+          context: context,
+          builder: (_) => AlertDialog(
+            title: const Text('Delete this transaction?'),
+            content: const Text('This cannot be undone.'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text('Cancel'),
               ),
-            ),
-            const SizedBox(width: 12),
-            MoneyText(
-              amountCents: row.amountCents,
-              minorDigits: prefs.currencyMinorDigits,
-              symbol: prefs.currencySymbol,
-              color: amountColor,
-            ),
-          ],
+              FilledButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                child: const Text('Delete'),
+              ),
+            ],
+          ),
+        );
+        return ok ?? false;
+      },
+      onDismissed: (_) => ref.read(transactionRepoProvider).delete(row.id),
+      child: InkWell(
+        onTap: () => context.go('/transactions/${row.id}'),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+          child: Row(
+            children: [
+              CategorySwatch(
+                label: swatchLabel,
+                icon: row.isTransfer
+                    ? Icons.swap_horiz
+                    : row.isSplit
+                        ? Icons.call_split
+                        : null,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      row.isTransfer
+                          ? '${row.accountName ?? '—'} → ${row.transferAccountName ?? '—'}'
+                          : (row.payeeName ?? row.categoryName ?? '—'),
+                      style: Theme.of(context).textTheme.titleMedium,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      [
+                        row.categoryName ?? (row.isTransfer ? 'Transfer' : 'Uncategorised'),
+                        row.accountName ?? '',
+                      ].where((e) => e.isNotEmpty).join(' · '),
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: cs.onSurfaceVariant,
+                          ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              MoneyText(
+                amountCents: row.amountCents,
+                minorDigits: prefs.currencyMinorDigits,
+                symbol: prefs.currencySymbol,
+                color: amountColor,
+              ),
+            ],
+          ),
         ),
       ),
     );
