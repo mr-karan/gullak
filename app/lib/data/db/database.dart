@@ -2,9 +2,12 @@ import 'dart:io';
 
 import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
+// sqlite3_flutter_libs is required at link time so Drift can find sqlite3.so
+// on Android; we don't import any symbols from it directly.
+// ignore: unused_import
+import 'package:sqlite3_flutter_libs/sqlite3_flutter_libs.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
-import 'package:sqlite3_flutter_libs/sqlite3_flutter_libs.dart';
 
 import 'tables.dart';
 
@@ -67,10 +70,6 @@ LazyDatabase _openConnection() {
   return LazyDatabase(() async {
     final dir = await getApplicationDocumentsDirectory();
     final file = File(p.join(dir.path, 'gullak.db'));
-
-    if (Platform.isAndroid) {
-      await applyWorkaroundToOpenSqlite3OnOldAndroidVersions();
-    }
 
     return NativeDatabase.createInBackground(
       file,

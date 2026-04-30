@@ -61,7 +61,7 @@ final FutureProvider<LlmClient?> llmClientProvider = FutureProvider<LlmClient?>(
   return LlmClient(baseUrl: base, model: model, apiKey: key);
 });
 
-final StateProvider<ThemeMode> themeModeProvider = StateProvider<ThemeMode>((ref) {
+final Provider<ThemeMode> themeModeProvider = Provider<ThemeMode>((ref) {
   final p = ref.watch(prefsProvider);
   return switch (p.themeMode) {
     'light' => ThemeMode.light,

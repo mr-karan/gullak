@@ -219,10 +219,9 @@ final FutureProvider<SyncService?> syncServiceProvider =
   );
 });
 
-class SyncController extends StateNotifier<AsyncValue<SyncResult?>> {
-  SyncController(this.ref) : super(const AsyncValue.data(null));
-
-  final Ref ref;
+class SyncController extends Notifier<AsyncValue<SyncResult?>> {
+  @override
+  AsyncValue<SyncResult?> build() => const AsyncValue.data(null);
 
   Future<void> sync({bool initial = false}) async {
     state = const AsyncValue.loading();
@@ -254,8 +253,7 @@ class SyncController extends StateNotifier<AsyncValue<SyncResult?>> {
   }
 }
 
-final StateNotifierProvider<SyncController, AsyncValue<SyncResult?>>
+final NotifierProvider<SyncController, AsyncValue<SyncResult?>>
     syncControllerProvider =
-    StateNotifierProvider<SyncController, AsyncValue<SyncResult?>>((ref) {
-  return SyncController(ref);
-});
+    NotifierProvider<SyncController, AsyncValue<SyncResult?>>(
+        SyncController.new);
