@@ -43,14 +43,17 @@ class _QuickEntrySheetState extends ConsumerState<QuickEntrySheet>
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final mq = MediaQuery.of(context);
     return SafeArea(
       child: Padding(
-        padding: EdgeInsets.only(
-          bottom: MediaQuery.of(context).viewInsets.bottom,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
+        padding: EdgeInsets.only(bottom: mq.viewInsets.bottom),
+        child: SizedBox(
+          // Take ~92% of the available height so the form has room
+          // for the keypad without clipping the picker rows above.
+          height: mq.size.height * 0.92 - mq.padding.top,
+          child: Column(
+            mainAxisSize: MainAxisSize.max,
+            children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 8, 8, 0),
               child: Row(
@@ -82,22 +85,20 @@ class _QuickEntrySheetState extends ConsumerState<QuickEntrySheet>
                 ref.read(prefsProvider).setQuickEntryTab(i == 0 ? 'type' : 'form');
               },
             ),
-            ConstrainedBox(
-              constraints: BoxConstraints(
-                maxHeight: MediaQuery.of(context).size.height * 0.85,
-              ),
-              child: SizedBox(
-                height: 540,
-                child: TabBarView(
-                  controller: _tabs,
-                  children: [
-                    _TypeTab(onTweakInForm: () => _tabs.animateTo(1)),
-                    const _FormTab(),
-                  ],
-                ),
+            // Take all remaining height inside the bottom sheet so the
+            // form lays out without clipping. The bottom-sheet container
+            // already enforces a screen-height bound.
+            Expanded(
+              child: TabBarView(
+                controller: _tabs,
+                children: [
+                  _TypeTab(onTweakInForm: () => _tabs.animateTo(1)),
+                  const _FormTab(),
+                ],
               ),
             ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -468,11 +469,10 @@ class _FormTabState extends ConsumerState<_FormTab> {
                   value: _category?.name ?? 'Optional',
                   onTap: _pickCategory,
                 ),
-                _PickerRow(
-                  icon: Icons.calendar_today_outlined,
-                  label: 'Date',
-                  value: _dateLabel(_date),
-                  onTap: _pickDate,
+                _DateRow(
+                  date: _date,
+                  onPick: _pickDate,
+                  onChange: (d) => setState(() => _date = d),
                 ),
                 Padding(
                   padding: const EdgeInsets.only(top: 8, bottom: 4),
@@ -486,6 +486,10 @@ class _FormTabState extends ConsumerState<_FormTab> {
                 ),
               ],
             ),
+          ),
+          _RecentPayeesStrip(
+            selectedId: _payee?.id,
+            onPicked: (p) => _onPayeePicked(payee: p),
           ),
           _Keypad(
             onDigit: (d) => setState(() {
@@ -512,16 +516,39 @@ class _FormTabState extends ConsumerState<_FormTab> {
     if (!mounted) return;
     final picked = await showModalBottomSheet<AccountRow>(
       context: context,
-      builder: (_) => SafeArea(
-        child: ListView(
-          shrinkWrap: true,
-          children: [
-            for (final a in accounts)
-              ListTile(
-                title: Text(a.name),
-                onTap: () => Navigator.of(context).pop(a),
+      useRootNavigator: true,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (ctx) => SafeArea(
+        child: SizedBox(
+          height: MediaQuery.of(ctx).size.height * 0.6,
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    'Account',
+                    style: Theme.of(ctx).textTheme.titleLarge,
+                  ),
+                ),
               ),
-          ],
+              Expanded(
+                child: ListView.builder(
+                  itemCount: accounts.length,
+                  itemBuilder: (_, i) {
+                    final a = accounts[i];
+                    return ListTile(
+                      leading: const Icon(Icons.account_balance_outlined),
+                      title: Text(a.name),
+                      onTap: () => Navigator.of(ctx).pop(a),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -532,68 +559,78 @@ class _FormTabState extends ConsumerState<_FormTab> {
     final payees = await ref.read(payeesListProvider.future);
     if (!mounted) return;
     final input = TextEditingController();
-    final result = await showModalBottomSheet<({PayeeRow? payee, String? newName})>(
-      context: context,
-      isScrollControlled: true,
-      builder: (ctx) => Padding(
-        padding: EdgeInsets.only(
-          bottom: MediaQuery.of(ctx).viewInsets.bottom,
-        ),
-        child: StatefulBuilder(
-          builder: (ctx, setSt) {
-            final q = input.text.trim().toLowerCase();
-            final filtered = q.isEmpty
-                ? payees
-                : payees
-                    .where((p) => p.name.toLowerCase().contains(q))
-                    .toList(growable: false);
-            return SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    TextField(
-                      controller: input,
-                      autofocus: true,
-                      onChanged: (_) => setSt(() {}),
-                      decoration: const InputDecoration(
-                        hintText: 'Search payee or add new',
+    try {
+      final result = await showModalBottomSheet<({PayeeRow? payee, String? newName})>(
+        context: context,
+        useRootNavigator: true,
+        isScrollControlled: true,
+        showDragHandle: true,
+        builder: (ctx) => SafeArea(
+          child: Padding(
+            padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+            child: StatefulBuilder(
+              builder: (ctx, setSt) {
+                final q = input.text.trim().toLowerCase();
+                final filtered = q.isEmpty
+                    ? payees
+                    : payees
+                        .where((p) => p.name.toLowerCase().contains(q))
+                        .toList(growable: false);
+                final addNew = q.isNotEmpty &&
+                    !filtered.any((p) => p.name.toLowerCase() == q);
+                return SizedBox(
+                  height: MediaQuery.of(ctx).size.height * 0.7,
+                  child: Column(
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
+                        child: TextField(
+                          controller: input,
+                          autofocus: true,
+                          onChanged: (_) => setSt(() {}),
+                          decoration: const InputDecoration(
+                            hintText: 'Search or add new',
+                            prefixIcon: Icon(Icons.search),
+                          ),
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 12),
-                    SizedBox(
-                      height: 320,
-                      child: ListView(
-                        children: [
-                          for (final p in filtered.take(60))
-                            ListTile(
+                      Expanded(
+                        child: ListView.builder(
+                          itemCount: filtered.length + (addNew ? 1 : 0),
+                          itemBuilder: (_, i) {
+                            if (addNew && i == 0) {
+                              return ListTile(
+                                leading: const Icon(Icons.add),
+                                title: Text('Add "${input.text.trim()}"'),
+                                onTap: () => Navigator.of(ctx).pop(
+                                  (payee: null, newName: input.text.trim()),
+                                ),
+                              );
+                            }
+                            final idx = addNew ? i - 1 : i;
+                            final p = filtered[idx];
+                            return ListTile(
+                              leading: const Icon(Icons.store_outlined),
                               title: Text(p.name),
                               onTap: () => Navigator.of(ctx)
                                   .pop((payee: p, newName: null)),
-                            ),
-                          if (q.isNotEmpty &&
-                              !filtered
-                                  .any((p) => p.name.toLowerCase() == q))
-                            ListTile(
-                              leading: const Icon(Icons.add),
-                              title: Text('Add "${input.text.trim()}"'),
-                              onTap: () => Navigator.of(ctx).pop(
-                                  (payee: null, newName: input.text.trim())),
-                            ),
-                        ],
+                            );
+                          },
+                        ),
                       ),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
         ),
-      ),
-    );
-    if (result != null) {
-      _onPayeePicked(payee: result.payee, newName: result.newName);
+      );
+      if (result != null) {
+        _onPayeePicked(payee: result.payee, newName: result.newName);
+      }
+    } finally {
+      input.dispose();
     }
   }
 
@@ -607,29 +644,41 @@ class _FormTabState extends ConsumerState<_FormTab> {
     }
     final picked = await showModalBottomSheet<CategoryRow>(
       context: context,
+      useRootNavigator: true,
       isScrollControlled: true,
-      builder: (_) => SafeArea(
-        child: ConstrainedBox(
-          constraints: BoxConstraints(
-            maxHeight: MediaQuery.of(context).size.height * 0.7,
-          ),
+      showDragHandle: true,
+      builder: (ctx) => SafeArea(
+        child: SizedBox(
+          height: MediaQuery.of(ctx).size.height * 0.7,
           child: ListView(
             children: [
+              const Padding(
+                padding: EdgeInsets.fromLTRB(20, 8, 20, 8),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text('Category',
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
+                ),
+              ),
               for (final g in groups)
-                if (byGroup[g.id] != null && byGroup[g.id]!.isNotEmpty) ...[
+                if ((byGroup[g.id] ?? const <CategoryRow>[]).isNotEmpty) ...[
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                    padding: const EdgeInsets.fromLTRB(20, 16, 20, 4),
                     child: Text(
-                      g.name,
-                      style: Theme.of(context).textTheme.labelSmall,
+                      g.name.toUpperCase(),
+                      style: Theme.of(ctx).textTheme.labelSmall?.copyWith(
+                            color: Theme.of(ctx).colorScheme.onSurfaceVariant,
+                            letterSpacing: 1.2,
+                          ),
                     ),
                   ),
                   for (final c in byGroup[g.id]!)
                     ListTile(
                       title: Text(c.name),
-                      onTap: () => Navigator.of(context).pop(c),
+                      onTap: () => Navigator.of(ctx).pop(c),
                     ),
                 ],
+              const SizedBox(height: 24),
             ],
           ),
         ),
@@ -641,20 +690,136 @@ class _FormTabState extends ConsumerState<_FormTab> {
   Future<void> _pickDate() async {
     final picked = await showDatePicker(
       context: context,
+      useRootNavigator: true,
       firstDate: DateTime.now().subtract(const Duration(days: 365)),
       lastDate: DateTime.now().add(const Duration(days: 7)),
       initialDate: _date,
     );
     if (picked != null) setState(() => _date = picked);
   }
+}
 
-  String _dateLabel(DateTime d) {
+/// Strip of the user's most-used payees as one-tap chips. Saves a
+/// trip through the picker for the 5–6 places they actually go to.
+class _RecentPayeesStrip extends ConsumerWidget {
+  const _RecentPayeesStrip({required this.selectedId, required this.onPicked});
+
+  final String? selectedId;
+  final void Function(PayeeRow) onPicked;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final async = ref.watch(payeesListProvider);
+    final cs = Theme.of(context).colorScheme;
+    final payees = async.value ?? const <PayeeRow>[];
+    if (payees.isEmpty) return const SizedBox(height: 8);
+    final top = payees.take(8).toList();
+    return SizedBox(
+      height: 38,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        itemCount: top.length,
+        separatorBuilder: (_, _) => const SizedBox(width: 8),
+        itemBuilder: (_, i) {
+          final p = top[i];
+          final selected = p.id == selectedId;
+          return InkWell(
+            borderRadius: BorderRadius.circular(99),
+            onTap: () {
+              HapticFeedback.selectionClick();
+              onPicked(p);
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              decoration: BoxDecoration(
+                color: selected ? cs.primary : cs.surfaceContainer,
+                borderRadius: BorderRadius.circular(99),
+              ),
+              child: Text(
+                p.name,
+                style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                      color: selected ? cs.onPrimary : cs.onSurface,
+                    ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+/// Date row with three quick chips (Today / Yesterday / 2d ago) and a
+/// fallback to a full picker.
+class _DateRow extends StatelessWidget {
+  const _DateRow({
+    required this.date,
+    required this.onPick,
+    required this.onChange,
+  });
+
+  final DateTime date;
+  final VoidCallback onPick;
+  final void Function(DateTime) onChange;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final today = clock.today();
-    final diff = today.difference(DateTime(d.year, d.month, d.day)).inDays;
-    if (diff == 0) return 'Today';
-    if (diff == 1) return 'Yesterday';
-    if (diff > 1 && diff < 7) return '$diff days ago';
-    return '${d.day.toString().padLeft(2, "0")}/${d.month.toString().padLeft(2, "0")}/${d.year}';
+    final yesterday = today.subtract(const Duration(days: 1));
+    final twoDaysAgo = today.subtract(const Duration(days: 2));
+
+    bool sameDay(DateTime a, DateTime b) =>
+        a.year == b.year && a.month == b.month && a.day == b.day;
+
+    Widget chip(String label, DateTime when) {
+      final selected = sameDay(date, when);
+      return Padding(
+        padding: const EdgeInsets.only(right: 8),
+        child: ChoiceChip(
+          label: Text(label),
+          selected: selected,
+          onSelected: (_) {
+            HapticFeedback.selectionClick();
+            onChange(when);
+          },
+          showCheckmark: false,
+        ),
+      );
+    }
+
+    final isOlder = !sameDay(date, today) &&
+        !sameDay(date, yesterday) &&
+        !sameDay(date, twoDaysAgo);
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 4, bottom: 4),
+      child: Row(
+        children: [
+          Icon(Icons.calendar_today_outlined, size: 18, color: cs.onSurfaceVariant),
+          const SizedBox(width: 12),
+          chip('Today', today),
+          chip('Yesterday', yesterday),
+          chip('2d ago', twoDaysAgo),
+          const Spacer(),
+          if (isOlder)
+            ActionChip(
+              label: Text(
+                '${date.day.toString().padLeft(2, '0')}/'
+                '${date.month.toString().padLeft(2, '0')}',
+              ),
+              onPressed: onPick,
+            )
+          else
+            IconButton(
+              tooltip: 'Pick date',
+              icon: const Icon(Icons.event),
+              onPressed: onPick,
+            ),
+        ],
+      ),
+    );
   }
 }
 
