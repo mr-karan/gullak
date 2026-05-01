@@ -390,6 +390,9 @@ class _FormTabState extends ConsumerState<_FormTab> {
   String? _newPayeeName;
   DateTime _date = clock.today();
   final _notesCtrl = TextEditingController();
+  // Notes is hidden behind a + chip until the user wants it. Most
+  // entries don't carry a note; keeping the form short saves a row.
+  bool _notesExpanded = false;
 
   bool get _isEditing => widget.editingTransactionId != null;
 
@@ -429,6 +432,7 @@ class _FormTabState extends ConsumerState<_FormTab> {
       _newPayeeName = payee == null ? row.payeeName : null;
       _date = DateTime.tryParse(row.date) ?? clock.today();
       _notesCtrl.text = row.notes ?? '';
+      _notesExpanded = (row.notes ?? '').isNotEmpty;
     });
   }
 
@@ -608,16 +612,37 @@ class _FormTabState extends ConsumerState<_FormTab> {
                   onPick: _pickDate,
                   onChange: (d) => setState(() => _date = d),
                 ),
-                Padding(
-                  padding: const EdgeInsets.only(top: 8, bottom: 4),
-                  child: TextField(
-                    controller: _notesCtrl,
-                    decoration: const InputDecoration(
-                      labelText: 'Notes',
-                      hintText: 'optional',
+                if (_notesExpanded)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8, bottom: 4),
+                    child: TextField(
+                      controller: _notesCtrl,
+                      autofocus: true,
+                      decoration: InputDecoration(
+                        labelText: 'Note',
+                        suffixIcon: IconButton(
+                          icon: const Icon(Icons.close),
+                          onPressed: () => setState(() {
+                            _notesExpanded = false;
+                            _notesCtrl.clear();
+                          }),
+                        ),
+                      ),
+                    ),
+                  )
+                else
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 6),
+                    child: TextButton.icon(
+                      onPressed: () => setState(() => _notesExpanded = true),
+                      icon: const Icon(Icons.note_add_outlined, size: 18),
+                      label: const Text('Add note'),
+                      style: TextButton.styleFrom(
+                        alignment: Alignment.centerLeft,
+                        padding: EdgeInsets.zero,
+                      ),
                     ),
                   ),
-                ),
               ],
             ),
           ),
