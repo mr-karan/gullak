@@ -29,29 +29,33 @@ class QuickEntrySheet extends ConsumerStatefulWidget {
 
 class _QuickEntrySheetState extends ConsumerState<QuickEntrySheet>
     with SingleTickerProviderStateMixin {
+  late final bool _showType;
   TabController? _tabs;
 
   bool get _isEditing => widget.editingTransactionId != null;
 
-  bool _showTypeTab(bool aiEnabled) => !_isEditing && aiEnabled;
+  @override
+  void initState() {
+    super.initState();
+    // Decide once at open-time: editing always goes straight to Form;
+    // creating uses the user's last tab. Toggling AI preferences while
+    // the sheet is open shouldn't recreate or dispose the controller.
+    final prefs = ref.read(prefsProvider);
+    _showType = !_isEditing && prefs.aiEnabled;
+    if (_showType) {
+      _tabs = TabController(
+        length: 2,
+        vsync: this,
+        initialIndex: prefs.quickEntryTab == 'type' ? 0 : 1,
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final mq = MediaQuery.of(context);
-    final prefs = ref.watch(prefsProvider);
-    final showType = _showTypeTab(prefs.aiEnabled);
-
-    if (showType) {
-      _tabs ??= TabController(
-        length: 2,
-        vsync: this,
-        initialIndex: prefs.quickEntryTab == 'type' ? 0 : 1,
-      );
-    } else {
-      _tabs?.dispose();
-      _tabs = null;
-    }
+    final showType = _showType;
 
     return SafeArea(
       child: Padding(
@@ -135,11 +139,16 @@ class _Header extends ConsumerWidget {
               tooltip: 'Delete',
               icon: const Icon(Icons.delete_outline),
               onPressed: () async {
+                // Snapshot the InheritedWidget lookups *before* popping —
+                // after pop our context is deactivated and using it for
+                // ScaffoldMessenger.of trips _dependents.isEmpty asserts.
+                final messenger = ScaffoldMessenger.of(context);
+                final navigator = Navigator.of(context);
                 final repo = ref.read(transactionRepoProvider);
                 final snap = await repo.delete(editingTransactionId!);
-                if (snap.isEmpty || !context.mounted) return;
-                Navigator.of(context).maybePop();
-                ScaffoldMessenger.of(context)
+                if (snap.isEmpty) return;
+                navigator.maybePop();
+                messenger
                   ..hideCurrentSnackBar()
                   ..showSnackBar(
                     SnackBar(
@@ -175,6 +184,7 @@ class _TypeTabState extends ConsumerState<_TypeTab> {
   // Monotonic seq id; older parses ignore their own results when superseded.
   int _parseSeq = 0;
   AsyncValue<ParsedExpense?> _parse = const AsyncValue<ParsedExpense?>.data(null);
+  bool _saving = false;
 
   @override
   void dispose() {
@@ -213,28 +223,33 @@ class _TypeTabState extends ConsumerState<_TypeTab> {
   }
 
   Future<void> _save() async {
+    if (_saving) return;
     final value = _parse.value;
     if (value == null) return;
     if (value.amountCents == 0) return;
-    final accounts = await ref.read(accountsListProvider.future);
-    if (accounts.isEmpty) return;
-    final acctId = value.accountId ?? ref.read(prefsProvider).defaultAccountId ?? accounts.first.id;
-    await ref.read(transactionRepoProvider).create(
-          accountId: acctId,
-          categoryId: value.categoryId,
-          payeeId: value.payeeId,
-          payeeName: value.payeeName,
-          amountCents: value.isIncome ? value.amountCents.abs() : -value.amountCents.abs(),
-          date: value.date,
-          notes: value.notes,
-          origin: 'ai',
-          originRef: _ctrl.text,
-        );
-    if (!mounted) return;
-    Navigator.of(context).maybePop();
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Saved')),
-    );
+    _saving = true;
+    final messenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
+    try {
+      final accounts = await ref.read(accountsListProvider.future);
+      if (accounts.isEmpty) return;
+      final acctId = value.accountId ?? ref.read(prefsProvider).defaultAccountId ?? accounts.first.id;
+      await ref.read(transactionRepoProvider).create(
+            accountId: acctId,
+            categoryId: value.categoryId,
+            payeeId: value.payeeId,
+            payeeName: value.payeeName,
+            amountCents: value.isIncome ? value.amountCents.abs() : -value.amountCents.abs(),
+            date: value.date,
+            notes: value.notes,
+            origin: 'ai',
+            originRef: _ctrl.text,
+          );
+      navigator.maybePop();
+      messenger.showSnackBar(_savedSnackBar('Saved'));
+    } finally {
+      if (mounted) _saving = false;
+    }
   }
 
   @override
@@ -393,6 +408,7 @@ class _FormTabState extends ConsumerState<_FormTab> {
   // Notes is hidden behind a + chip until the user wants it. Most
   // entries don't carry a note; keeping the form short saves a row.
   bool _notesExpanded = false;
+  bool _saving = false;
 
   bool get _isEditing => widget.editingTransactionId != null;
 
@@ -408,10 +424,15 @@ class _FormTabState extends ConsumerState<_FormTab> {
     final row = await repo.byRow(id);
     if (row == null || !mounted) return;
     final accounts = await ref.read(accountRepoProvider).list();
-    final account = accounts.firstWhere(
-      (a) => a.id == row.accountId,
-      orElse: () => accounts.first,
-    );
+    if (accounts.isEmpty) return;
+    AccountRow? account;
+    for (final a in accounts) {
+      if (a.id == row.accountId) {
+        account = a;
+        break;
+      }
+    }
+    account ??= accounts.first;
     CategoryRow? category;
     if (row.categoryId != null) {
       category = await ref.read(categoryRepoProvider).byId(row.categoryId!);
@@ -488,52 +509,42 @@ class _FormTabState extends ConsumerState<_FormTab> {
   }
 
   Future<void> _save() async {
+    if (_saving) return;
     if (_account == null || _amountWhole == 0) return;
+    _saving = true;
     HapticFeedback.lightImpact();
-    final minorDigits = ref.read(prefsProvider).currencyMinorDigits;
-    final scale = _pow10(minorDigits);
-    final cents = _amountWhole * scale;
-    final amount = _isIncome ? cents : -cents;
+    // Snapshot the navigator + messenger up front. After we pop, our
+    // own context is deactivated — looking up an InheritedWidget on a
+    // dead context is what trips the _dependents.isEmpty assertion.
+    final messenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
+    try {
+      final minorDigits = ref.read(prefsProvider).currencyMinorDigits;
+      final scale = _pow10(minorDigits);
+      final cents = _amountWhole * scale;
+      final amount = _isIncome ? cents : -cents;
 
-    // Resolve a payee id once: either the existing one, or create from
-    // the typed-but-unsaved name.
-    String? payeeId = _payee?.id;
-    if (payeeId == null && _newPayeeName != null && _newPayeeName!.isNotEmpty) {
-      payeeId = await ref.read(payeeRepoProvider).ensure(_newPayeeName!);
-    }
-
-    final repo = ref.read(transactionRepoProvider);
-    if (_isEditing) {
-      await repo.update(
-        widget.editingTransactionId!,
-        accountId: _account!.id,
-        categoryId: _category?.id,
-        payeeId: payeeId,
-        payeeName: _newPayeeName ?? _payee?.name,
-        amountCents: amount,
-        date: _date,
-        notes: _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
-      );
-
-      final memory = ref.read(entryMemoryProvider);
-      await memory.rememberAccount(_account!.id);
-      if (payeeId != null) {
-        await memory.rememberPayeeMapping(
-          payeeId: payeeId,
-          accountId: _account!.id,
-          categoryId: _category?.id,
-        );
+      // Resolve a payee id once: either the existing one, or create from
+      // the typed-but-unsaved name.
+      String? payeeId = _payee?.id;
+      if (payeeId == null && _newPayeeName != null && _newPayeeName!.isNotEmpty) {
+        payeeId = await ref.read(payeeRepoProvider).ensure(_newPayeeName!);
       }
 
-      if (!mounted) return;
-      Navigator.of(context).maybePop();
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(_savedSnackBar('Updated'));
-      return;
-    }
-
-    await repo.create(
+      final repo = ref.read(transactionRepoProvider);
+      if (_isEditing) {
+        await repo.update(
+          widget.editingTransactionId!,
+          accountId: _account!.id,
+          categoryId: _category?.id,
+          payeeId: payeeId,
+          payeeName: _newPayeeName ?? _payee?.name,
+          amountCents: amount,
+          date: _date,
+          notes: _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
+        );
+      } else {
+        await repo.create(
           accountId: _account!.id,
           categoryId: _category?.id,
           payeeId: payeeId,
@@ -543,23 +554,28 @@ class _FormTabState extends ConsumerState<_FormTab> {
           notes: _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
           origin: 'manual',
         );
+      }
 
-    final memory = ref.read(entryMemoryProvider);
-    await memory.rememberAccount(_account!.id);
-    if (payeeId != null) {
-      await memory.rememberPayeeMapping(
-        payeeId: payeeId,
-        accountId: _account!.id,
-        categoryId: _category?.id,
-      );
-      await ref.read(payeeRepoProvider).bumpUseCount(payeeId);
+      final memory = ref.read(entryMemoryProvider);
+      await memory.rememberAccount(_account!.id);
+      if (payeeId != null) {
+        await memory.rememberPayeeMapping(
+          payeeId: payeeId,
+          accountId: _account!.id,
+          categoryId: _category?.id,
+        );
+        if (!_isEditing) {
+          await ref.read(payeeRepoProvider).bumpUseCount(payeeId);
+        }
+      }
+
+      navigator.maybePop();
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(_savedSnackBar(_isEditing ? 'Updated' : 'Saved'));
+    } finally {
+      if (mounted) _saving = false;
     }
-
-    if (!mounted) return;
-    Navigator.of(context).maybePop();
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(_savedSnackBar('Saved'));
   }
 
   static int _pow10(int n) {
@@ -648,10 +664,6 @@ class _FormTabState extends ConsumerState<_FormTab> {
                   ),
               ],
             ),
-          ),
-          _RecentPayeesStrip(
-            selectedId: _payee?.id,
-            onPicked: (p) => _onPayeePicked(payee: p),
           ),
           _Keypad(
             onDigit: (d) => setState(() {
@@ -870,57 +882,6 @@ class _FormTabState extends ConsumerState<_FormTab> {
       initialDate: _date,
     );
     if (picked != null) setState(() => _date = picked);
-  }
-}
-
-/// Strip of the user's most-used payees as one-tap chips. Saves a
-/// trip through the picker for the 5–6 places they actually go to.
-class _RecentPayeesStrip extends ConsumerWidget {
-  const _RecentPayeesStrip({required this.selectedId, required this.onPicked});
-
-  final String? selectedId;
-  final void Function(PayeeRow) onPicked;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final async = ref.watch(payeesListProvider);
-    final cs = Theme.of(context).colorScheme;
-    final payees = async.value ?? const <PayeeRow>[];
-    if (payees.isEmpty) return const SizedBox(height: 8);
-    final top = payees.take(8).toList();
-    return SizedBox(
-      height: 38,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(vertical: 4),
-        itemCount: top.length,
-        separatorBuilder: (_, _) => const SizedBox(width: 8),
-        itemBuilder: (_, i) {
-          final p = top[i];
-          final selected = p.id == selectedId;
-          return InkWell(
-            borderRadius: BorderRadius.circular(99),
-            onTap: () {
-              HapticFeedback.selectionClick();
-              onPicked(p);
-            },
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-              decoration: BoxDecoration(
-                color: selected ? cs.primary : cs.surfaceContainer,
-                borderRadius: BorderRadius.circular(99),
-              ),
-              child: Text(
-                p.name,
-                style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                      color: selected ? cs.onPrimary : cs.onSurface,
-                    ),
-              ),
-            ),
-          );
-        },
-      ),
-    );
   }
 }
 

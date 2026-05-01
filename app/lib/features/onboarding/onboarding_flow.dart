@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../core/money.dart';
 import '../../state/providers.dart';
@@ -47,14 +46,16 @@ class _OnboardingFlowState extends ConsumerState<OnboardingFlow> {
           openingBalanceCents: _openingBalanceCents,
         );
     await _seedDefaults(ref);
-    final db = ref.read(dbProvider);
-    await db.kvSet('onboarded', 'true');
     final prefs = ref.read(prefsProvider);
     await prefs.setCurrencySymbol(_symbol);
     await prefs.setCurrencyMinorDigits(_minorDigits);
+    // Set onboarded *last* and invalidate — the router listens to
+    // onboardedProvider via a refreshListenable and redirects to '/'
+    // automatically. Calling context.go on top of that double-navigates
+    // and races the widget being unmounted by the redirect.
+    final db = ref.read(dbProvider);
+    await db.kvSet('onboarded', 'true');
     ref.invalidate(onboardedProvider);
-    if (!mounted) return;
-    context.go('/');
   }
 
   @override
@@ -65,8 +66,7 @@ class _OnboardingFlowState extends ConsumerState<OnboardingFlow> {
           controller: _ctrl,
           physics: const NeverScrollableScrollPhysics(),
           children: [
-            _Welcome(onNext: _next),
-            _Currency(
+            _WelcomeAndCurrency(
               symbol: _symbol,
               minorDigits: _minorDigits,
               onChange: (s, d) => setState(() {
@@ -94,55 +94,12 @@ class _OnboardingFlowState extends ConsumerState<OnboardingFlow> {
   }
 }
 
-class _Welcome extends StatelessWidget {
-  const _Welcome({required this.onNext});
-  final VoidCallback onNext;
 
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 48, 24, 24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 56,
-            height: 56,
-            decoration: BoxDecoration(
-              color: cs.primaryContainer,
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Icon(Icons.savings_outlined, color: cs.onPrimaryContainer),
-          ),
-          const SizedBox(height: 24),
-          Text('Gullak', style: Theme.of(context).textTheme.displayMedium),
-          const SizedBox(height: 12),
-          Text(
-            'A polished, local-first expense tracker. Lives on your phone, '
-            'syncs nowhere.',
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  color: cs.onSurfaceVariant,
-                ),
-          ),
-          const SizedBox(height: 32),
-          Text(
-            'You will set up:\n'
-            '  · Your currency.\n'
-            '  · Your first account.\n'
-            '  · A starter set of categories.',
-            style: Theme.of(context).textTheme.bodyLarge,
-          ),
-          const Spacer(),
-          FilledButton(onPressed: onNext, child: const Text('Continue')),
-        ],
-      ),
-    );
-  }
-}
-
-class _Currency extends StatelessWidget {
-  const _Currency({
+/// Combined welcome + currency picker — saves a screen by merging
+/// branding and the currency choice. Branding sits at the top, a
+/// chip strip lets the user pick currency, Continue advances.
+class _WelcomeAndCurrency extends StatelessWidget {
+  const _WelcomeAndCurrency({
     required this.symbol,
     required this.minorDigits,
     required this.onChange,
@@ -155,87 +112,65 @@ class _Currency extends StatelessWidget {
   final VoidCallback onNext;
 
   static const _options = <(String label, String symbol, int digits)>[
-    ('Indian Rupee', '₹', 2),
-    ('US Dollar', r'$', 2),
-    ('Euro', '€', 2),
-    ('British Pound', '£', 2),
-    ('Japanese Yen', '¥', 0),
-    ('Custom', ' ', 2),
+    ('₹ INR', '₹', 2),
+    (r'$ USD', r'$', 2),
+    ('€ EUR', '€', 2),
+    ('£ GBP', '£', 2),
+    ('¥ JPY', '¥', 0),
   ];
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return Padding(
       padding: const EdgeInsets.fromLTRB(24, 48, 24, 24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Currency', style: Theme.of(context).textTheme.headlineMedium),
-          const SizedBox(height: 8),
-          Text(
-            'You can change this any time in settings.',
-            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
+          Container(
+            width: 56,
+            height: 56,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: cs.primaryContainer,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Icon(Icons.savings_outlined, color: cs.onPrimaryContainer),
           ),
           const SizedBox(height: 24),
-          Expanded(
-            child: ListView(
-              children: [
-                for (final o in _options)
-                  _CurrencyTile(
-                    label: o.$1,
-                    symbol: o.$2,
-                    selected: o.$2 == symbol && o.$3 == minorDigits,
-                    onTap: () => onChange(o.$2, o.$3),
-                  ),
-              ],
-            ),
+          Text('Gullak', style: Theme.of(context).textTheme.displayMedium),
+          const SizedBox(height: 8),
+          Text(
+            'A local-first expense tracker. Lives on your phone, syncs nowhere.',
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  color: cs.onSurfaceVariant,
+                ),
           ),
+          const SizedBox(height: 32),
+          Text(
+            'CURRENCY',
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: cs.onSurfaceVariant,
+                  letterSpacing: 1.2,
+                ),
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final o in _options)
+                ChoiceChip(
+                  label: Text(o.$1),
+                  selected: o.$2 == symbol && o.$3 == minorDigits,
+                  onSelected: (_) => onChange(o.$2, o.$3),
+                ),
+            ],
+          ),
+          const Spacer(),
           FilledButton(onPressed: onNext, child: const Text('Continue')),
         ],
       ),
-    );
-  }
-}
-
-class _CurrencyTile extends StatelessWidget {
-  const _CurrencyTile({
-    required this.label,
-    required this.symbol,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final String label;
-  final String symbol;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return ListTile(
-      onTap: onTap,
-      leading: Container(
-        width: 40,
-        height: 40,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: selected ? cs.primary : cs.surfaceContainerHighest,
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Text(
-          symbol.trim().isEmpty ? '?' : symbol,
-          style: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.w700,
-            color: selected ? cs.onPrimary : cs.onSurface,
-          ),
-        ),
-      ),
-      title: Text(label),
-      trailing: selected ? Icon(Icons.check_circle, color: cs.primary) : null,
     );
   }
 }

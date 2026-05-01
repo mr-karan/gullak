@@ -14,7 +14,9 @@ Future<void> openQuickEntry(
     isScrollControlled: true,
     useSafeArea: true,
     useRootNavigator: true,
-    backgroundColor: Theme.of(context).colorScheme.surfaceContainerHigh,
-    builder: (_) => QuickEntrySheet(editingTransactionId: editingTransactionId),
+    builder: (ctx) => Material(
+      color: Theme.of(ctx).colorScheme.surfaceContainerHigh,
+      child: QuickEntrySheet(editingTransactionId: editingTransactionId),
+    ),
   );
 }

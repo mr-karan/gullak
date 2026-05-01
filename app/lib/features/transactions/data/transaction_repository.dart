@@ -266,18 +266,19 @@ class TransactionRepository {
   }
 
   /// Re-insert a row that came out of [delete]. Used for the Undo
-  /// snackbar after a swipe-delete.
+  /// snackbar after a swipe-delete. Uses upsert so a stale Undo tap
+  /// after the row has already come back doesn't throw on the PK.
   Future<void> restore(DeletedTransactionSnapshot snap) async {
     final p = snap.parent;
     if (p == null) return;
     await _db.transaction(() async {
-      await _db.into(_db.transactions).insert(p);
+      await _db.into(_db.transactions).insertOnConflictUpdate(p);
       for (final c in snap.splitChildren) {
-        await _db.into(_db.transactions).insert(c);
+        await _db.into(_db.transactions).insertOnConflictUpdate(c);
       }
       final pair = snap.transferPair;
       if (pair != null) {
-        await _db.into(_db.transactions).insert(pair);
+        await _db.into(_db.transactions).insertOnConflictUpdate(pair);
       }
     });
   }
