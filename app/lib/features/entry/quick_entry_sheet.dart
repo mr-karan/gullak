@@ -593,18 +593,21 @@ class _FormTabState extends ConsumerState<_FormTab> {
                   icon: Icons.account_balance_outlined,
                   label: 'Account',
                   value: _account?.name ?? 'Select',
+                  unset: _account == null,
                   onTap: _pickAccount,
                 ),
                 _PickerRow(
                   icon: Icons.store_outlined,
                   label: 'Payee',
                   value: _newPayeeName ?? _payee?.name ?? 'Optional',
+                  unset: _payee == null && _newPayeeName == null,
                   onTap: _pickPayee,
                 ),
                 _PickerRow(
                   icon: Icons.label_outline,
                   label: 'Category',
                   value: _category?.name ?? 'Optional',
+                  unset: _category == null,
                   onTap: _pickCategory,
                 ),
                 _DateRow(
@@ -1070,33 +1073,55 @@ class _PickerRow extends StatelessWidget {
     required this.label,
     required this.value,
     required this.onTap,
+    this.unset = false,
   });
 
   final IconData icon;
   final String label;
   final String value;
   final VoidCallback onTap;
+  final bool unset;
 
   @override
   Widget build(BuildContext context) {
-    return ListTile(
-      contentPadding: EdgeInsets.zero,
-      leading: Icon(icon),
-      title: Text(label),
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Flexible(
-            child: Text(
-              value,
-              style: Theme.of(context).textTheme.bodyMedium,
-              overflow: TextOverflow.ellipsis,
+    final cs = Theme.of(context).colorScheme;
+    return InkWell(
+      onTap: () {
+        HapticFeedback.selectionClick();
+        onTap();
+      },
+      borderRadius: BorderRadius.circular(12),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        child: Row(
+          children: [
+            Icon(icon, size: 20, color: cs.onSurfaceVariant),
+            const SizedBox(width: 16),
+            SizedBox(
+              width: 80,
+              child: Text(
+                label,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: cs.onSurfaceVariant,
+                    ),
+              ),
             ),
-          ),
-          const Icon(Icons.chevron_right),
-        ],
+            Expanded(
+              child: Text(
+                value,
+                style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      color: unset ? cs.onSurfaceVariant : cs.onSurface,
+                      fontWeight: unset ? FontWeight.w400 : FontWeight.w500,
+                    ),
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.right,
+              ),
+            ),
+            const SizedBox(width: 4),
+            Icon(Icons.chevron_right, size: 18, color: cs.onSurfaceVariant),
+          ],
+        ),
       ),
-      onTap: onTap,
     );
   }
 }
