@@ -22,3 +22,6 @@ data/
 
 # Direnv
 .direnv/
+
+# Claude Code transient state
+.claude/
