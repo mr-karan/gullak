@@ -60,8 +60,11 @@ class _QuickEntrySheetState extends ConsumerState<QuickEntrySheet>
     return SafeArea(
       child: Padding(
         padding: EdgeInsets.only(bottom: mq.viewInsets.bottom),
+        // SafeArea already accounts for the status bar — don't subtract
+        // padding.top again or we lose ~60px and the keypad overflows
+        // on smaller screens.
         child: SizedBox(
-          height: mq.size.height * 0.92 - mq.padding.top,
+          height: mq.size.height * 0.92,
           child: Column(
             mainAxisSize: MainAxisSize.max,
             children: [
@@ -591,8 +594,12 @@ class _FormTabState extends ConsumerState<_FormTab> {
     final prefs = ref.watch(prefsProvider);
     final accounts = ref.watch(accountsListProvider).value ?? const <AccountRow>[];
     _maybeHydrateAccount(accounts);
+    // When the system keyboard is up (e.g. note field focused) the
+    // digit keypad is both redundant and too tall to fit. Hide it and
+    // give the rest of the form the space.
+    final keyboardOpen = MediaQuery.of(context).viewInsets.bottom > 0;
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
       child: Column(
         children: [
           _AmountDisplay(
@@ -665,17 +672,19 @@ class _FormTabState extends ConsumerState<_FormTab> {
               ],
             ),
           ),
-          _Keypad(
-            onDigit: (d) => setState(() {
-              // Cap at 10 digits (max ~₹9.99B) to avoid integer overflow.
-              if (_amountWhole > 999999999) return;
-              _amountWhole = (_amountWhole * 10) + d;
-            }),
-            onBack: () => setState(() {
-              _amountWhole = _amountWhole ~/ 10;
-            }),
-          ),
-          const SizedBox(height: 8),
+          if (!keyboardOpen) ...[
+            _Keypad(
+              onDigit: (d) => setState(() {
+                // Cap at 10 digits (max ~₹9.99B) to avoid integer overflow.
+                if (_amountWhole > 999999999) return;
+                _amountWhole = (_amountWhole * 10) + d;
+              }),
+              onBack: () => setState(() {
+                _amountWhole = _amountWhole ~/ 10;
+              }),
+            ),
+            const SizedBox(height: 8),
+          ],
           FilledButton(
             onPressed: _account == null || _amountWhole == 0 ? null : _save,
             child: const Text('Save'),
@@ -1101,23 +1110,23 @@ class _Keypad extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     Widget key(String label, VoidCallback action) => Expanded(
           child: Padding(
-            padding: const EdgeInsets.all(4),
+            padding: const EdgeInsets.all(3),
             child: InkWell(
               onTap: () {
                 HapticFeedback.selectionClick();
                 action();
               },
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(14),
               child: Container(
-                height: 60,
+                height: 52,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
                   color: cs.surfaceContainerHighest,
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: BorderRadius.circular(14),
                 ),
                 child: Text(
                   label,
-                  style: moneyStyle(context, size: 26, weight: FontWeight.w600),
+                  style: moneyStyle(context, size: 24, weight: FontWeight.w600),
                 ),
               ),
             ),
