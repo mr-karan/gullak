@@ -527,9 +527,9 @@ class _FormTabState extends ConsumerState<_FormTab> {
 
       if (!mounted) return;
       Navigator.of(context).maybePop();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Updated')),
-      );
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(_savedSnackBar('Updated'));
       return;
     }
 
@@ -557,9 +557,9 @@ class _FormTabState extends ConsumerState<_FormTab> {
 
     if (!mounted) return;
     Navigator.of(context).maybePop();
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Saved')),
-    );
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(_savedSnackBar('Saved'));
   }
 
   static int _pow10(int n) {
@@ -1175,4 +1175,17 @@ class _Keypad extends StatelessWidget {
       ],
     );
   }
+}
+
+SnackBar _savedSnackBar(String label) {
+  return SnackBar(
+    content: Row(
+      children: [
+        const Icon(Icons.check_circle_outline, size: 20),
+        const SizedBox(width: 12),
+        Text(label),
+      ],
+    ),
+    duration: const Duration(seconds: 2),
+  );
 }
