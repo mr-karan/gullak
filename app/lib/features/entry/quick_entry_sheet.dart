@@ -16,7 +16,12 @@ import 'ai_extractor.dart';
 import 'entry_memory.dart';
 
 class QuickEntrySheet extends ConsumerStatefulWidget {
-  const QuickEntrySheet({super.key});
+  const QuickEntrySheet({this.editingTransactionId, super.key});
+
+  /// When non-null, the sheet hydrates from this transaction and Save
+  /// updates instead of inserting. Header copy and the trailing icon
+  /// flip accordingly.
+  final String? editingTransactionId;
 
   @override
   ConsumerState<QuickEntrySheet> createState() => _QuickEntrySheetState();
@@ -24,82 +29,132 @@ class QuickEntrySheet extends ConsumerStatefulWidget {
 
 class _QuickEntrySheetState extends ConsumerState<QuickEntrySheet>
     with SingleTickerProviderStateMixin {
-  late final TabController _tabs;
+  TabController? _tabs;
 
-  @override
-  void initState() {
-    super.initState();
-    final prefs = ref.read(prefsProvider);
-    final initial = prefs.aiEnabled && prefs.quickEntryTab == 'type' ? 0 : 1;
-    _tabs = TabController(length: 2, vsync: this, initialIndex: initial);
-  }
+  bool get _isEditing => widget.editingTransactionId != null;
 
-  @override
-  void dispose() {
-    _tabs.dispose();
-    super.dispose();
-  }
+  bool _showTypeTab(bool aiEnabled) => !_isEditing && aiEnabled;
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final mq = MediaQuery.of(context);
+    final prefs = ref.watch(prefsProvider);
+    final showType = _showTypeTab(prefs.aiEnabled);
+
+    if (showType) {
+      _tabs ??= TabController(
+        length: 2,
+        vsync: this,
+        initialIndex: prefs.quickEntryTab == 'type' ? 0 : 1,
+      );
+    } else {
+      _tabs?.dispose();
+      _tabs = null;
+    }
+
     return SafeArea(
       child: Padding(
         padding: EdgeInsets.only(bottom: mq.viewInsets.bottom),
         child: SizedBox(
-          // Take ~92% of the available height so the form has room
-          // for the keypad without clipping the picker rows above.
           height: mq.size.height * 0.92 - mq.padding.top,
           child: Column(
             mainAxisSize: MainAxisSize.max,
             children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 8, 0),
-              child: Row(
-                children: [
-                  TextButton(
-                    onPressed: () => Navigator.of(context).maybePop(),
-                    child: const Text('Cancel'),
-                  ),
-                  const Spacer(),
-                  Text(
-                    'New expense',
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                  const Spacer(),
-                  const SizedBox(width: 64),
-                ],
+              _Header(
+                title: _isEditing ? 'Edit expense' : 'New expense',
+                onCancel: () => Navigator.of(context).maybePop(),
+                editingTransactionId: widget.editingTransactionId,
               ),
-            ),
-            TabBar(
-              controller: _tabs,
-              indicatorSize: TabBarIndicatorSize.label,
-              labelColor: cs.primary,
-              indicatorColor: cs.primary,
-              tabs: const [
-                Tab(text: 'Type'),
-                Tab(text: 'Form'),
-              ],
-              onTap: (i) {
-                ref.read(prefsProvider).setQuickEntryTab(i == 0 ? 'type' : 'form');
-              },
-            ),
-            // Take all remaining height inside the bottom sheet so the
-            // form lays out without clipping. The bottom-sheet container
-            // already enforces a screen-height bound.
-            Expanded(
-              child: TabBarView(
-                controller: _tabs,
-                children: [
-                  _TypeTab(onTweakInForm: () => _tabs.animateTo(1)),
-                  const _FormTab(),
-                ],
+              if (showType)
+                TabBar(
+                  controller: _tabs,
+                  indicatorSize: TabBarIndicatorSize.label,
+                  labelColor: cs.primary,
+                  indicatorColor: cs.primary,
+                  tabs: const [
+                    Tab(text: 'Type'),
+                    Tab(text: 'Form'),
+                  ],
+                  onTap: (i) {
+                    ref.read(prefsProvider).setQuickEntryTab(i == 0 ? 'type' : 'form');
+                  },
+                ),
+              Expanded(
+                child: showType
+                    ? TabBarView(
+                        controller: _tabs,
+                        children: [
+                          _TypeTab(onTweakInForm: () => _tabs?.animateTo(1)),
+                          _FormTab(editingTransactionId: widget.editingTransactionId),
+                        ],
+                      )
+                    : _FormTab(editingTransactionId: widget.editingTransactionId),
               ),
-            ),
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _tabs?.dispose();
+    super.dispose();
+  }
+}
+
+class _Header extends ConsumerWidget {
+  const _Header({
+    required this.title,
+    required this.onCancel,
+    required this.editingTransactionId,
+  });
+
+  final String title;
+  final VoidCallback onCancel;
+  final String? editingTransactionId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isEditing = editingTransactionId != null;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
+      child: Row(
+        children: [
+          TextButton(
+            onPressed: onCancel,
+            child: const Text('Cancel'),
+          ),
+          const Spacer(),
+          Text(title, style: Theme.of(context).textTheme.titleMedium),
+          const Spacer(),
+          if (isEditing)
+            IconButton(
+              tooltip: 'Delete',
+              icon: const Icon(Icons.delete_outline),
+              onPressed: () async {
+                final repo = ref.read(transactionRepoProvider);
+                final snap = await repo.delete(editingTransactionId!);
+                if (snap.isEmpty || !context.mounted) return;
+                Navigator.of(context).maybePop();
+                ScaffoldMessenger.of(context)
+                  ..hideCurrentSnackBar()
+                  ..showSnackBar(
+                    SnackBar(
+                      content: const Text('Deleted'),
+                      action: SnackBarAction(
+                        label: 'Undo',
+                        onPressed: () => repo.restore(snap),
+                      ),
+                    ),
+                  );
+              },
+            )
+          else
+            const SizedBox(width: 56),
+        ],
       ),
     );
   }
@@ -315,7 +370,10 @@ class _Preview extends StatelessWidget {
 }
 
 class _FormTab extends ConsumerStatefulWidget {
-  const _FormTab();
+  const _FormTab({this.editingTransactionId});
+
+  final String? editingTransactionId;
+
   @override
   ConsumerState<_FormTab> createState() => _FormTabState();
 }
@@ -333,10 +391,53 @@ class _FormTabState extends ConsumerState<_FormTab> {
   DateTime _date = clock.today();
   final _notesCtrl = TextEditingController();
 
+  bool get _isEditing => widget.editingTransactionId != null;
+
+  @override
+  void initState() {
+    super.initState();
+    if (_isEditing) _hydrateFromExisting();
+  }
+
+  Future<void> _hydrateFromExisting() async {
+    final id = widget.editingTransactionId!;
+    final repo = ref.read(transactionRepoProvider);
+    final row = await repo.byRow(id);
+    if (row == null || !mounted) return;
+    final accounts = await ref.read(accountRepoProvider).list();
+    final account = accounts.firstWhere(
+      (a) => a.id == row.accountId,
+      orElse: () => accounts.first,
+    );
+    CategoryRow? category;
+    if (row.categoryId != null) {
+      category = await ref.read(categoryRepoProvider).byId(row.categoryId!);
+    }
+    PayeeRow? payee;
+    if (row.payeeId != null) {
+      payee = await ref.read(payeeRepoProvider).byId(row.payeeId!);
+    }
+    if (!mounted) return;
+    final minorDigits = ref.read(prefsProvider).currencyMinorDigits;
+    final scale = _pow10(minorDigits);
+    setState(() {
+      _amountWhole = row.amountCents.abs() ~/ scale;
+      _isIncome = row.amountCents > 0;
+      _account = account;
+      _category = category;
+      _payee = payee;
+      _newPayeeName = payee == null ? row.payeeName : null;
+      _date = DateTime.tryParse(row.date) ?? clock.today();
+      _notesCtrl.text = row.notes ?? '';
+    });
+  }
+
   /// Picks an account once we have a non-empty list. Called from build(),
   /// so it survives async timing — the very first frame where accounts
-  /// arrive will set the default.
+  /// arrive will set the default. Skipped when editing — that path
+  /// hydrates the account from the existing transaction.
   void _maybeHydrateAccount(List<AccountRow> accounts) {
+    if (_isEditing) return;
     if (_account != null || accounts.isEmpty) return;
     final memory = ref.read(entryMemoryProvider);
     final lastId = memory.lastAccountId ?? ref.read(prefsProvider).defaultAccountId;
@@ -397,7 +498,38 @@ class _FormTabState extends ConsumerState<_FormTab> {
       payeeId = await ref.read(payeeRepoProvider).ensure(_newPayeeName!);
     }
 
-    await ref.read(transactionRepoProvider).create(
+    final repo = ref.read(transactionRepoProvider);
+    if (_isEditing) {
+      await repo.update(
+        widget.editingTransactionId!,
+        accountId: _account!.id,
+        categoryId: _category?.id,
+        payeeId: payeeId,
+        payeeName: _newPayeeName ?? _payee?.name,
+        amountCents: amount,
+        date: _date,
+        notes: _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
+      );
+
+      final memory = ref.read(entryMemoryProvider);
+      await memory.rememberAccount(_account!.id);
+      if (payeeId != null) {
+        await memory.rememberPayeeMapping(
+          payeeId: payeeId,
+          accountId: _account!.id,
+          categoryId: _category?.id,
+        );
+      }
+
+      if (!mounted) return;
+      Navigator.of(context).maybePop();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Updated')),
+      );
+      return;
+    }
+
+    await repo.create(
           accountId: _account!.id,
           categoryId: _category?.id,
           payeeId: payeeId,

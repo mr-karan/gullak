@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../state/providers.dart';
 import '../../ui/widgets/empty_state.dart';
 import '../../ui/widgets/money_text.dart';
+import '../entry/quick_entry.dart';
 import '../transactions/data/transaction_repository.dart';
 import 'account_form_sheet.dart';
 import 'data/account_repository.dart';
@@ -98,7 +98,7 @@ class AccountDetailScreen extends ConsumerWidget {
                         minorDigits: prefs.currencyMinorDigits,
                         symbol: prefs.currencySymbol,
                       ),
-                      onTap: () => context.go('/transactions/${r.id}'),
+                      onTap: () => openQuickEntry(context, editingTransactionId: r.id),
                     );
                   },
                 );

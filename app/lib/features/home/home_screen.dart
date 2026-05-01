@@ -9,6 +9,7 @@ import '../../ui/widgets/category_swatch.dart';
 import '../../ui/widgets/empty_state.dart';
 import '../../ui/widgets/money_text.dart';
 import '../../ui/widgets/section_header.dart';
+import '../entry/quick_entry.dart';
 import '../transactions/data/transaction_repository.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
@@ -323,7 +324,7 @@ class _RecentRow extends ConsumerWidget {
         symbol: prefs.currencySymbol,
         color: amountColor,
       ),
-      onTap: () => context.go('/transactions/${row.id}'),
+      onTap: () => openQuickEntry(context, editingTransactionId: row.id),
     );
   }
 }

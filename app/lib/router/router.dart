@@ -12,7 +12,6 @@ import '../features/inbox/inbox_screen.dart';
 import '../features/onboarding/onboarding_flow.dart';
 import '../features/reports/reports_screen.dart';
 import '../features/settings/settings_screen.dart';
-import '../features/transactions/transaction_detail_screen.dart';
 import '../features/transactions/transactions_screen.dart';
 import '../state/providers.dart';
 
@@ -53,12 +52,6 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/transactions',
             pageBuilder: (_, _) => const NoTransitionPage<void>(child: TransactionsScreen()),
-            routes: [
-              GoRoute(
-                path: ':id',
-                builder: (_, s) => TransactionDetailScreen(id: s.pathParameters['id']!),
-              ),
-            ],
           ),
           GoRoute(
             path: '/budgets',

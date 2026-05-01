@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
-import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../core/clock.dart';
@@ -10,6 +9,7 @@ import '../../state/providers.dart';
 import '../../ui/widgets/category_swatch.dart';
 import '../../ui/widgets/empty_state.dart';
 import '../../ui/widgets/money_text.dart';
+import '../entry/quick_entry.dart';
 import 'data/transaction_repository.dart';
 
 class TransactionsScreen extends ConsumerStatefulWidget {
@@ -201,7 +201,7 @@ class _TxRow extends ConsumerWidget {
         extentRatio: 0.55,
         children: [
           SlidableAction(
-            onPressed: (_) => context.go('/transactions/${row.id}'),
+            onPressed: (ctx) => openQuickEntry(ctx, editingTransactionId: row.id),
             backgroundColor: cs.surfaceContainerHigh,
             foregroundColor: cs.onSurface,
             icon: Icons.edit_outlined,
@@ -217,7 +217,7 @@ class _TxRow extends ConsumerWidget {
         ],
       ),
       child: InkWell(
-        onTap: () => context.go('/transactions/${row.id}'),
+        onTap: () => openQuickEntry(context, editingTransactionId: row.id),
         child: Padding(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
           child: Row(

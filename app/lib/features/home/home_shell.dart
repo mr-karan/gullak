@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../state/providers.dart';
-import '../entry/quick_entry_sheet.dart';
+import '../entry/quick_entry.dart';
 
 class HomeShell extends ConsumerWidget {
   const HomeShell({required this.child, super.key});
@@ -54,15 +54,8 @@ class HomeShell extends ConsumerWidget {
     );
   }
 
-  Future<void> _openQuickEntry(BuildContext context) async {
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      backgroundColor: Theme.of(context).colorScheme.surfaceContainerHigh,
-      builder: (_) => const QuickEntrySheet(),
-    );
-  }
+  Future<void> _openQuickEntry(BuildContext context) =>
+      openQuickEntry(context);
 
   int _indexOf(List<_Tab> tabs, String loc) {
     for (var i = 0; i < tabs.length; i++) {
