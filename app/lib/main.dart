@@ -5,6 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/notification_service.dart';
 import 'core/prefs.dart';
 import 'data/db/database.dart';
+import 'features/entry/quick_entry.dart';
+import 'features/entry/share_intake.dart';
 import 'router/router.dart';
 import 'state/providers.dart';
 import 'ui/theme.dart';
@@ -37,6 +39,18 @@ class GullakApp extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final router = ref.watch(routerProvider);
     final mode = ref.watch(themeModeProvider);
+
+    // Pop the Quick Entry sheet whenever an image lands via the
+    // Android share sheet. The sheet's _TypeTab consumes the pending
+    // share on init, kicking off the AI parse automatically.
+    ref.listen<PendingShare?>(pendingShareProvider, (prev, next) {
+      if (next == null || prev != null) return;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        final ctx = rootNavigatorKey.currentContext;
+        if (ctx != null) openQuickEntry(ctx);
+      });
+    });
+
     return MaterialApp.router(
       title: 'Gullak',
       debugShowCheckedModeBanner: false,

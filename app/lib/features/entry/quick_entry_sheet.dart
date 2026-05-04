@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../core/clock.dart';
 import '../../core/money.dart';
@@ -14,6 +15,7 @@ import '../payees/data/payee_repository.dart';
 import '../transactions/data/transaction_repository.dart';
 import 'ai_extractor.dart';
 import 'entry_memory.dart';
+import 'share_intake.dart';
 
 class QuickEntrySheet extends ConsumerStatefulWidget {
   const QuickEntrySheet({this.editingTransactionId, super.key});
@@ -196,6 +198,24 @@ class _TypeTabState extends ConsumerState<_TypeTab> {
     null,
   );
   bool _saving = false;
+  Uint8List? _imageBytes;
+
+  @override
+  void initState() {
+    super.initState();
+    // If the user got here by sharing an image into Gullak, the bytes
+    // are already sitting in the provider — consume them and fire the
+    // vision parse without making them tap anything.
+    final share = ref.read(pendingShareProvider);
+    if (share != null) {
+      _imageBytes = share.bytes;
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        if (!mounted) return;
+        await _runImageParse(share.bytes, share.mimeType);
+        ref.read(pendingShareProvider.notifier).consume();
+      });
+    }
+  }
 
   @override
   void dispose() {
@@ -235,6 +255,95 @@ class _TypeTabState extends ConsumerState<_TypeTab> {
       if (!mounted || seq != _parseSeq) return;
       setState(() => _parse = AsyncValue<ParsedExpense?>.error(e, st));
     }
+  }
+
+  Future<void> _pickImage(ImageSource source) async {
+    try {
+      final picker = ImagePicker();
+      final picked = await picker.pickImage(
+        source: source,
+        imageQuality: 80,
+        maxWidth: 1600,
+        maxHeight: 1600,
+      );
+      if (picked == null || !mounted) return;
+      final bytes = await picked.readAsBytes();
+      final mime =
+          picked.mimeType ??
+          (picked.path.toLowerCase().endsWith('.png')
+              ? 'image/png'
+              : 'image/jpeg');
+      setState(() => _imageBytes = bytes);
+      await _runImageParse(bytes, mime);
+    } catch (e, st) {
+      if (!mounted) return;
+      setState(() => _parse = AsyncValue<ParsedExpense?>.error(e, st));
+    }
+  }
+
+  Future<void> _runImageParse(Uint8List bytes, String mime) async {
+    final seq = ++_parseSeq;
+    setState(() => _parse = const AsyncValue<ParsedExpense?>.loading());
+    try {
+      final extractor = await ref.read(aiExtractorProvider.future);
+      if (!mounted || seq != _parseSeq) return;
+      if (extractor == null) {
+        setState(
+          () => _parse = AsyncValue<ParsedExpense?>.error(
+            StateError('AI is off — enable in Settings → AI assist'),
+            StackTrace.current,
+          ),
+        );
+        return;
+      }
+      final hint = _ctrl.text.trim();
+      final parsed = await extractor.parseImage(
+        bytes,
+        mimeType: mime,
+        hint: hint.isEmpty ? null : hint,
+      );
+      if (!mounted || seq != _parseSeq) return;
+      setState(() => _parse = AsyncValue<ParsedExpense?>.data(parsed));
+    } catch (e, st) {
+      if (!mounted || seq != _parseSeq) return;
+      setState(() => _parse = AsyncValue<ParsedExpense?>.error(e, st));
+    }
+  }
+
+  Future<void> _showImageMenu() async {
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.photo_camera_outlined),
+              title: const Text('Take photo'),
+              onTap: () => Navigator.of(ctx).pop(ImageSource.camera),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined),
+              title: const Text('Pick from gallery'),
+              onTap: () => Navigator.of(ctx).pop(ImageSource.gallery),
+            ),
+            if (_imageBytes != null)
+              ListTile(
+                leading: const Icon(Icons.close),
+                title: const Text('Remove image'),
+                onTap: () {
+                  Navigator.of(ctx).pop();
+                  setState(() {
+                    _imageBytes = null;
+                    _parse = const AsyncValue<ParsedExpense?>.data(null);
+                  });
+                },
+              ),
+          ],
+        ),
+      ),
+    );
+    if (source != null) await _pickImage(source);
   }
 
   Future<void> _save() async {
@@ -288,10 +397,27 @@ class _TypeTabState extends ConsumerState<_TypeTab> {
             textInputAction: TextInputAction.done,
             onChanged: _onChanged,
             onSubmitted: (_) => _save(),
-            decoration: const InputDecoration(
+            decoration: InputDecoration(
               hintText: 'e.g. blinkit 450 hdfc',
+              suffixIcon: IconButton(
+                icon: Icon(
+                  _imageBytes == null
+                      ? Icons.photo_camera_outlined
+                      : Icons.image,
+                  color: _imageBytes == null ? null : cs.primary,
+                ),
+                tooltip: 'Receipt photo',
+                onPressed: _showImageMenu,
+              ),
             ),
           ),
+          if (_imageBytes != null) ...[
+            const SizedBox(height: 12),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: Image.memory(_imageBytes!, height: 120, fit: BoxFit.cover),
+            ),
+          ],
           const SizedBox(height: 16),
           Expanded(
             child: SingleChildScrollView(

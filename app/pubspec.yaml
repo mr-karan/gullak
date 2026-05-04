@@ -47,6 +47,10 @@ dependencies:
   share_plus: ^10.1.2
   file_picker: ^8.1.4
 
+  # Photo capture / pick for receipt → expense
+  image_picker: ^1.1.2
+  receive_sharing_intent: ^1.8.1
+
   # UX
   flutter_slidable: ^4.0.0
   flutter_local_notifications: ^21.0.0

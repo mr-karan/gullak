@@ -59,6 +59,10 @@ Rules:
 - Do NOT invent payees or accounts. If the user did not say one, return null.
 - Do NOT pick a category if you are guessing from a single ambiguous word.
 - For "yesterday" / "last friday" — resolve relative to the supplied date.
+- If an image (receipt) is attached: read the merchant name from the
+  printed header for the payee, the grand-total line for amount_minor
+  (in the local currency on the receipt), and the receipt date for
+  date. Treat handwritten amounts as low-confidence.
 - Output JSON only.
 
 Examples:
@@ -87,7 +91,26 @@ class AiExtractor {
   final PayeeRepository payeeRepo;
   final int minorDigits;
 
-  Future<ParsedExpense> parse(String text) async {
+  Future<ParsedExpense> parse(String text) =>
+      _parse(noteText: text, imageBytes: null);
+
+  /// Parse a receipt photo: vision-capable model reads the image and
+  /// returns the same shaped JSON as the text path.
+  Future<ParsedExpense> parseImage(
+    List<int> imageBytes, {
+    String mimeType = 'image/jpeg',
+    String? hint,
+  }) => _parse(
+    noteText: hint ?? 'Receipt photo. Extract the expense.',
+    imageBytes: imageBytes,
+    imageMimeType: mimeType,
+  );
+
+  Future<ParsedExpense> _parse({
+    required String noteText,
+    List<int>? imageBytes,
+    String imageMimeType = 'image/jpeg',
+  }) async {
     final accounts = await accountRepo.list();
     final categories = await categoryRepo.list();
     final payees = await payeeRepo.list();
@@ -100,10 +123,15 @@ class AiExtractor {
 <known_categories>: ${categories.take(50).map((c) => c.name).toList()}
 <known_payees>: ${payees.take(50).map((p) => p.name).toList()}
 
-Note: $text
+Note: $noteText
 ''';
 
-    final response = await llm.chatJson(system: _system, user: user);
+    final response = await llm.chatJson(
+      system: _system,
+      user: user,
+      imageBytes: imageBytes,
+      imageMimeType: imageMimeType,
+    );
 
     final amount = (response['amount_minor'] as num?)?.toInt() ?? 0;
     final isIncome = response['is_income'] == true;

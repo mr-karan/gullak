@@ -41,22 +41,49 @@ class LlmClient {
   }
 
   /// Returns a JSON-decoded map. Caller is responsible for shape validation.
+  ///
+  /// When [imageBytes] is provided, the user message is sent as a
+  /// multimodal content array (text + base64 data URL), letting any
+  /// vision-capable OpenAI-compatible model parse a receipt photo.
   Future<Map<String, dynamic>> chatJson({
     required String system,
     required String user,
     bool jsonMode = true,
+    List<int>? imageBytes,
+    String imageMimeType = 'image/jpeg',
   }) async {
     try {
+      final userContent = imageBytes == null || imageBytes.isEmpty
+          ? user
+          : [
+              {'type': 'text', 'text': user},
+              {
+                'type': 'image_url',
+                'image_url': {
+                  'url':
+                      'data:$imageMimeType;base64,${base64Encode(imageBytes)}',
+                },
+              },
+            ];
       final body = <String, dynamic>{
         'model': model,
         'temperature': 0.1,
         'messages': [
           {'role': 'system', 'content': system},
-          {'role': 'user', 'content': user},
+          {'role': 'user', 'content': userContent},
         ],
         if (jsonMode) 'response_format': {'type': 'json_object'},
       };
-      final r = await _dio.post<dynamic>('/chat/completions', data: body);
+      final r = await _dio.post<dynamic>(
+        '/chat/completions',
+        data: body,
+        options: Options(
+          // Vision calls are slower; bump receive timeout for them.
+          receiveTimeout: imageBytes == null
+              ? null
+              : const Duration(seconds: 60),
+        ),
+      );
       final data = r.data;
       if (data is! Map<String, dynamic>) {
         throw LlmException('non-json response');
