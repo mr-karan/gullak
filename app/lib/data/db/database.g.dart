@@ -4943,6 +4943,17 @@ class $ChangeLogTable extends ChangeLog
     type: DriftSqlType.int,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _clientChangeIdMeta = const VerificationMeta(
+    'clientChangeId',
+  );
+  @override
+  late final GeneratedColumn<String> clientChangeId = GeneratedColumn<String>(
+    'client_change_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
   static const VerificationMeta _resourceMeta = const VerificationMeta(
     'resource',
   );
@@ -5002,6 +5013,7 @@ class $ChangeLogTable extends ChangeLog
   List<GeneratedColumn> get $columns => [
     id,
     at,
+    clientChangeId,
     resource,
     resourceId,
     op,
@@ -5027,6 +5039,17 @@ class $ChangeLogTable extends ChangeLog
       context.handle(_atMeta, at.isAcceptableOrUnknown(data['at']!, _atMeta));
     } else if (isInserting) {
       context.missing(_atMeta);
+    }
+    if (data.containsKey('client_change_id')) {
+      context.handle(
+        _clientChangeIdMeta,
+        clientChangeId.isAcceptableOrUnknown(
+          data['client_change_id']!,
+          _clientChangeIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_clientChangeIdMeta);
     }
     if (data.containsKey('resource')) {
       context.handle(
@@ -5078,6 +5101,10 @@ class $ChangeLogTable extends ChangeLog
         DriftSqlType.int,
         data['${effectivePrefix}at'],
       )!,
+      clientChangeId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}client_change_id'],
+      )!,
       resource: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}resource'],
@@ -5110,6 +5137,7 @@ class $ChangeLogTable extends ChangeLog
 class ChangeLogRow extends DataClass implements Insertable<ChangeLogRow> {
   final int id;
   final int at;
+  final String clientChangeId;
   final String resource;
   final String resourceId;
   final String op;
@@ -5118,6 +5146,7 @@ class ChangeLogRow extends DataClass implements Insertable<ChangeLogRow> {
   const ChangeLogRow({
     required this.id,
     required this.at,
+    required this.clientChangeId,
     required this.resource,
     required this.resourceId,
     required this.op,
@@ -5129,6 +5158,7 @@ class ChangeLogRow extends DataClass implements Insertable<ChangeLogRow> {
     final map = <String, Expression>{};
     map['id'] = Variable<int>(id);
     map['at'] = Variable<int>(at);
+    map['client_change_id'] = Variable<String>(clientChangeId);
     map['resource'] = Variable<String>(resource);
     map['resource_id'] = Variable<String>(resourceId);
     map['op'] = Variable<String>(op);
@@ -5143,6 +5173,7 @@ class ChangeLogRow extends DataClass implements Insertable<ChangeLogRow> {
     return ChangeLogCompanion(
       id: Value(id),
       at: Value(at),
+      clientChangeId: Value(clientChangeId),
       resource: Value(resource),
       resourceId: Value(resourceId),
       op: Value(op),
@@ -5161,6 +5192,7 @@ class ChangeLogRow extends DataClass implements Insertable<ChangeLogRow> {
     return ChangeLogRow(
       id: serializer.fromJson<int>(json['id']),
       at: serializer.fromJson<int>(json['at']),
+      clientChangeId: serializer.fromJson<String>(json['clientChangeId']),
       resource: serializer.fromJson<String>(json['resource']),
       resourceId: serializer.fromJson<String>(json['resourceId']),
       op: serializer.fromJson<String>(json['op']),
@@ -5174,6 +5206,7 @@ class ChangeLogRow extends DataClass implements Insertable<ChangeLogRow> {
     return <String, dynamic>{
       'id': serializer.toJson<int>(id),
       'at': serializer.toJson<int>(at),
+      'clientChangeId': serializer.toJson<String>(clientChangeId),
       'resource': serializer.toJson<String>(resource),
       'resourceId': serializer.toJson<String>(resourceId),
       'op': serializer.toJson<String>(op),
@@ -5185,6 +5218,7 @@ class ChangeLogRow extends DataClass implements Insertable<ChangeLogRow> {
   ChangeLogRow copyWith({
     int? id,
     int? at,
+    String? clientChangeId,
     String? resource,
     String? resourceId,
     String? op,
@@ -5193,6 +5227,7 @@ class ChangeLogRow extends DataClass implements Insertable<ChangeLogRow> {
   }) => ChangeLogRow(
     id: id ?? this.id,
     at: at ?? this.at,
+    clientChangeId: clientChangeId ?? this.clientChangeId,
     resource: resource ?? this.resource,
     resourceId: resourceId ?? this.resourceId,
     op: op ?? this.op,
@@ -5203,6 +5238,9 @@ class ChangeLogRow extends DataClass implements Insertable<ChangeLogRow> {
     return ChangeLogRow(
       id: data.id.present ? data.id.value : this.id,
       at: data.at.present ? data.at.value : this.at,
+      clientChangeId: data.clientChangeId.present
+          ? data.clientChangeId.value
+          : this.clientChangeId,
       resource: data.resource.present ? data.resource.value : this.resource,
       resourceId: data.resourceId.present
           ? data.resourceId.value
@@ -5218,6 +5256,7 @@ class ChangeLogRow extends DataClass implements Insertable<ChangeLogRow> {
     return (StringBuffer('ChangeLogRow(')
           ..write('id: $id, ')
           ..write('at: $at, ')
+          ..write('clientChangeId: $clientChangeId, ')
           ..write('resource: $resource, ')
           ..write('resourceId: $resourceId, ')
           ..write('op: $op, ')
@@ -5228,14 +5267,23 @@ class ChangeLogRow extends DataClass implements Insertable<ChangeLogRow> {
   }
 
   @override
-  int get hashCode =>
-      Object.hash(id, at, resource, resourceId, op, payload, synced);
+  int get hashCode => Object.hash(
+    id,
+    at,
+    clientChangeId,
+    resource,
+    resourceId,
+    op,
+    payload,
+    synced,
+  );
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       (other is ChangeLogRow &&
           other.id == this.id &&
           other.at == this.at &&
+          other.clientChangeId == this.clientChangeId &&
           other.resource == this.resource &&
           other.resourceId == this.resourceId &&
           other.op == this.op &&
@@ -5246,6 +5294,7 @@ class ChangeLogRow extends DataClass implements Insertable<ChangeLogRow> {
 class ChangeLogCompanion extends UpdateCompanion<ChangeLogRow> {
   final Value<int> id;
   final Value<int> at;
+  final Value<String> clientChangeId;
   final Value<String> resource;
   final Value<String> resourceId;
   final Value<String> op;
@@ -5254,6 +5303,7 @@ class ChangeLogCompanion extends UpdateCompanion<ChangeLogRow> {
   const ChangeLogCompanion({
     this.id = const Value.absent(),
     this.at = const Value.absent(),
+    this.clientChangeId = const Value.absent(),
     this.resource = const Value.absent(),
     this.resourceId = const Value.absent(),
     this.op = const Value.absent(),
@@ -5263,18 +5313,21 @@ class ChangeLogCompanion extends UpdateCompanion<ChangeLogRow> {
   ChangeLogCompanion.insert({
     this.id = const Value.absent(),
     required int at,
+    required String clientChangeId,
     required String resource,
     required String resourceId,
     required String op,
     this.payload = const Value.absent(),
     this.synced = const Value.absent(),
   }) : at = Value(at),
+       clientChangeId = Value(clientChangeId),
        resource = Value(resource),
        resourceId = Value(resourceId),
        op = Value(op);
   static Insertable<ChangeLogRow> custom({
     Expression<int>? id,
     Expression<int>? at,
+    Expression<String>? clientChangeId,
     Expression<String>? resource,
     Expression<String>? resourceId,
     Expression<String>? op,
@@ -5284,6 +5337,7 @@ class ChangeLogCompanion extends UpdateCompanion<ChangeLogRow> {
     return RawValuesInsertable({
       if (id != null) 'id': id,
       if (at != null) 'at': at,
+      if (clientChangeId != null) 'client_change_id': clientChangeId,
       if (resource != null) 'resource': resource,
       if (resourceId != null) 'resource_id': resourceId,
       if (op != null) 'op': op,
@@ -5295,6 +5349,7 @@ class ChangeLogCompanion extends UpdateCompanion<ChangeLogRow> {
   ChangeLogCompanion copyWith({
     Value<int>? id,
     Value<int>? at,
+    Value<String>? clientChangeId,
     Value<String>? resource,
     Value<String>? resourceId,
     Value<String>? op,
@@ -5304,6 +5359,7 @@ class ChangeLogCompanion extends UpdateCompanion<ChangeLogRow> {
     return ChangeLogCompanion(
       id: id ?? this.id,
       at: at ?? this.at,
+      clientChangeId: clientChangeId ?? this.clientChangeId,
       resource: resource ?? this.resource,
       resourceId: resourceId ?? this.resourceId,
       op: op ?? this.op,
@@ -5320,6 +5376,9 @@ class ChangeLogCompanion extends UpdateCompanion<ChangeLogRow> {
     }
     if (at.present) {
       map['at'] = Variable<int>(at.value);
+    }
+    if (clientChangeId.present) {
+      map['client_change_id'] = Variable<String>(clientChangeId.value);
     }
     if (resource.present) {
       map['resource'] = Variable<String>(resource.value);
@@ -5344,6 +5403,7 @@ class ChangeLogCompanion extends UpdateCompanion<ChangeLogRow> {
     return (StringBuffer('ChangeLogCompanion(')
           ..write('id: $id, ')
           ..write('at: $at, ')
+          ..write('clientChangeId: $clientChangeId, ')
           ..write('resource: $resource, ')
           ..write('resourceId: $resourceId, ')
           ..write('op: $op, ')
@@ -7874,6 +7934,7 @@ typedef $$ChangeLogTableCreateCompanionBuilder =
     ChangeLogCompanion Function({
       Value<int> id,
       required int at,
+      required String clientChangeId,
       required String resource,
       required String resourceId,
       required String op,
@@ -7884,6 +7945,7 @@ typedef $$ChangeLogTableUpdateCompanionBuilder =
     ChangeLogCompanion Function({
       Value<int> id,
       Value<int> at,
+      Value<String> clientChangeId,
       Value<String> resource,
       Value<String> resourceId,
       Value<String> op,
@@ -7907,6 +7969,11 @@ class $$ChangeLogTableFilterComposer
 
   ColumnFilters<int> get at => $composableBuilder(
     column: $table.at,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get clientChangeId => $composableBuilder(
+    column: $table.clientChangeId,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -7955,6 +8022,11 @@ class $$ChangeLogTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get clientChangeId => $composableBuilder(
+    column: $table.clientChangeId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get resource => $composableBuilder(
     column: $table.resource,
     builder: (column) => ColumnOrderings(column),
@@ -7995,6 +8067,11 @@ class $$ChangeLogTableAnnotationComposer
 
   GeneratedColumn<int> get at =>
       $composableBuilder(column: $table.at, builder: (column) => column);
+
+  GeneratedColumn<String> get clientChangeId => $composableBuilder(
+    column: $table.clientChangeId,
+    builder: (column) => column,
+  );
 
   GeneratedColumn<String> get resource =>
       $composableBuilder(column: $table.resource, builder: (column) => column);
@@ -8047,6 +8124,7 @@ class $$ChangeLogTableTableManager
               ({
                 Value<int> id = const Value.absent(),
                 Value<int> at = const Value.absent(),
+                Value<String> clientChangeId = const Value.absent(),
                 Value<String> resource = const Value.absent(),
                 Value<String> resourceId = const Value.absent(),
                 Value<String> op = const Value.absent(),
@@ -8055,6 +8133,7 @@ class $$ChangeLogTableTableManager
               }) => ChangeLogCompanion(
                 id: id,
                 at: at,
+                clientChangeId: clientChangeId,
                 resource: resource,
                 resourceId: resourceId,
                 op: op,
@@ -8065,6 +8144,7 @@ class $$ChangeLogTableTableManager
               ({
                 Value<int> id = const Value.absent(),
                 required int at,
+                required String clientChangeId,
                 required String resource,
                 required String resourceId,
                 required String op,
@@ -8073,6 +8153,7 @@ class $$ChangeLogTableTableManager
               }) => ChangeLogCompanion.insert(
                 id: id,
                 at: at,
+                clientChangeId: clientChangeId,
                 resource: resource,
                 resourceId: resourceId,
                 op: op,

@@ -385,6 +385,15 @@ class SettingsScreen extends ConsumerWidget {
             ),
             actions: [
               TextButton(
+                onPressed: () => _testSync(
+                  context,
+                  ref,
+                  baseUrl: base.text,
+                  apiKey: key.text,
+                ),
+                child: const Text('Test'),
+              ),
+              TextButton(
                 onPressed: () => Navigator.of(dialogCtx).pop(false),
                 child: const Text('Cancel'),
               ),
@@ -406,6 +415,42 @@ class SettingsScreen extends ConsumerWidget {
       base.dispose();
       key.dispose();
     }
+  }
+
+  Future<void> _testSync(
+    BuildContext context,
+    WidgetRef ref, {
+    required String baseUrl,
+    required String apiKey,
+  }) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final url = baseUrl.trim();
+    if (url.isEmpty) {
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          const SnackBar(content: Text('Enter a Base URL first.')),
+        );
+      return;
+    }
+    final result = await ref
+        .read(syncServiceProvider)
+        .testConnection(
+          baseUrl: url,
+          apiKey: apiKey.trim().isEmpty ? null : apiKey.trim(),
+        );
+    if (!context.mounted) return;
+    messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(
+            result.ok
+                ? 'Reachable: ${result.message}'
+                : 'Failed: ${result.message}',
+          ),
+        ),
+      );
   }
 
   Future<void> _syncNow(BuildContext context, WidgetRef ref) async {

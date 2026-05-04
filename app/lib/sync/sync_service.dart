@@ -13,11 +13,15 @@ import '../state/providers.dart';
 
 /// Talks to the homelab pi-server's /v1/sync endpoints. Local mutations
 /// land in the [ChangeLog] Drift table via repositories; this service
-/// batches the unsynced rows up to /v1/sync/push and (when wired) pulls
-/// `/v1/sync/changes?since=<cursor>` to merge remote changes locally.
+/// batches the unsynced rows and POSTs them up to /v1/sync/push.
 ///
-/// LWW per row by `updatedAt` is the conflict policy. Fine for personal
-/// use; revisit if anything important ever clobbers.
+/// Pull is intentionally a thin shell — when wired we'll GET
+/// `/v1/sync/changes?since=<cursor>&clientId=<self>` and apply LWW
+/// per row by `updatedAt`. Server already filters out our own
+/// changes so we don't echo-loop.
+///
+/// LWW per row by `updatedAt` is the conflict policy. Fine for
+/// personal use; revisit if anything important ever clobbers.
 class SyncService {
   SyncService(this._db, this._secure, this._prefs, {Dio? dio})
     : _dio = dio ?? Dio();
@@ -29,6 +33,9 @@ class SyncService {
   final Uuid _uuid = const Uuid();
   String? _clientId;
 
+  static const _kClientIdKey = 'sync.clientId';
+  static const _pruneRetainDays = 14;
+
   Future<bool> isConfigured() async {
     final url = (await _secure.readSyncBaseUrl())?.trim();
     return url != null && url.isNotEmpty;
@@ -36,15 +43,51 @@ class SyncService {
 
   Future<String> _getClientId() async {
     if (_clientId != null) return _clientId!;
-    final stored = await _db.kvGet('sync.clientId');
+    final stored = await _db.kvGet(_kClientIdKey);
     if (stored != null && stored.isNotEmpty) {
       _clientId = stored;
       return stored;
     }
     final fresh = _uuid.v4();
-    await _db.kvSet('sync.clientId', fresh);
+    await _db.kvSet(_kClientIdKey, fresh);
     _clientId = fresh;
     return fresh;
+  }
+
+  /// Probes the server's /v1/health to confirm the URL + (optional)
+  /// API key are reachable before the user commits to syncing.
+  Future<({bool ok, String message})> testConnection({
+    required String baseUrl,
+    String? apiKey,
+  }) async {
+    final url = _join(baseUrl, '/v1/health');
+    try {
+      final r = await _dio.get<dynamic>(
+        url,
+        options: Options(
+          headers: {
+            if (apiKey != null && apiKey.isNotEmpty) 'x-api-key': apiKey,
+            'accept': 'application/json',
+          },
+          receiveTimeout: const Duration(seconds: 8),
+        ),
+      );
+      final data = r.data;
+      if (data is Map && data['status'] == 'ok') {
+        final version = data['version'] ?? 'unknown';
+        return (ok: true, message: 'OK · server v$version');
+      }
+      return (ok: false, message: 'Unexpected response: $data');
+    } on DioException catch (e) {
+      return (
+        ok: false,
+        message: e.response?.statusCode == 401
+            ? 'Unauthorized — check the API key'
+            : (e.message ?? 'Network error'),
+      );
+    } catch (e) {
+      return (ok: false, message: '$e');
+    }
   }
 
   Future<({int pushed, int pulled, String? error})> syncOnce() async {
@@ -53,9 +96,11 @@ class SyncService {
     }
     try {
       final pushed = await pushPending();
-      // Pull is wired in a follow-up — the server already accepts pushes.
+      // Pull is wired in a follow-up — the server already filters out
+      // our own clientId so we won't echo loop.
       const pulled = 0;
       await _prefs.setSyncLastAt(DateTime.now().millisecondsSinceEpoch);
+      await pruneSynced();
       return (pushed: pushed, pulled: pulled, error: null);
     } catch (e) {
       log.w('sync failed: $e');
@@ -84,6 +129,7 @@ class SyncService {
         'changes': [
           for (final row in batch)
             {
+              'clientChangeId': row.clientChangeId,
               'resource': row.resource,
               'resourceId': row.resourceId,
               'op': row.op,
@@ -112,6 +158,19 @@ class SyncService {
       pushed += batch.length;
     }
     return pushed;
+  }
+
+  /// Drop synced change-log rows older than [_pruneRetainDays]. Keeps
+  /// the local table from growing forever while leaving a short
+  /// recovery window if a recent sync turns out to be wrong.
+  Future<int> pruneSynced() async {
+    final cutoff = DateTime.now()
+        .subtract(const Duration(days: _pruneRetainDays))
+        .millisecondsSinceEpoch;
+    return (_db.delete(_db.changeLog)..where(
+          (t) => t.synced.equals(true) & t.at.isSmallerThanValue(cutoff),
+        ))
+        .go();
   }
 
   static String _join(String baseUrl, String path) {

@@ -33,7 +33,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -71,6 +71,13 @@ class AppDatabase extends _$AppDatabase {
           'CREATE INDEX IF NOT EXISTS idx_change_log_synced '
           'ON change_log(synced, id)',
         );
+      }
+      if (from < 3) {
+        // Schema v3 adds clientChangeId so server-side dedupe works.
+        // Existing rows (none, in practice — sync isn't wired into repos
+        // yet) get an empty string; SyncService treats empty as "drop"
+        // since the server requires non-empty.
+        await m.addColumn(changeLog, changeLog.clientChangeId);
       }
     },
   );

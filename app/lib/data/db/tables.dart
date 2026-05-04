@@ -173,10 +173,16 @@ class AuditLog extends Table {
 /// Local mutation log used by the sync layer. Every repository write
 /// inserts a row here; SyncService batch-pushes unsynced entries to
 /// the server's /v1/sync/push and marks them synced.
+///
+/// `clientChangeId` is a UUID generated when the row is logged. The
+/// server uses (clientId, clientChangeId) as a per-row idempotency
+/// key so a retried batch after a transient network failure doesn't
+/// produce duplicate change-log entries on the server.
 @DataClassName('ChangeLogRow')
 class ChangeLog extends Table {
   IntColumn get id => integer().autoIncrement()();
   IntColumn get at => integer()();
+  TextColumn get clientChangeId => text()();
   TextColumn get resource => text()();
   TextColumn get resourceId => text()();
   TextColumn get op => text()(); // 'upsert' | 'delete'
