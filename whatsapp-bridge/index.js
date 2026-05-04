@@ -1,5 +1,4 @@
 import makeWASocket, {
-  useMultiFileAuthState,
   DisconnectReason,
   fetchLatestBaileysVersion,
   makeCacheableSignalKeyStore,
@@ -10,11 +9,19 @@ import express from "express";
 import QRCode from "qrcode";
 import pino from "pino";
 import { Boom } from "@hapi/boom";
-import { mkdirSync, existsSync, copyFileSync, readFileSync } from "fs";
+
+import {
+  createGroupMetadataCache,
+  createLidCache,
+  openBridgeDb,
+  useSqliteAuthState,
+} from "./store.js";
 
 const PORT = process.env.PORT || 3000;
 const WEBHOOK_URL = process.env.WEBHOOK_URL || "http://localhost:8787/v1/whatsapp/webhook";
-const AUTH_DIR = process.env.AUTH_DIR || "./auth_state";
+// Single SQLite file owns auth state + the small caches the bridge
+// used to keep in memory. Survives restarts; no JSON files on disk.
+const STORE_DB_PATH = process.env.STORE_DB_PATH || "./data/whatsapp.db";
 const API_KEY = process.env.GULLAK_WHATSAPP_API_KEY || "";
 const LOG_LEVEL = process.env.LOG_LEVEL || "warn";
 const VERSION = "1.0.0";
@@ -42,28 +49,20 @@ const ALLOWED_PHONE_NUMBERS = getListEnv(
   "GULLAK_WHATSAPP_ALLOWED_NUMBERS",
 );
 
-// Cache for group metadata to avoid repeated lookups
-const groupMetadataCache = new Map();
-
-// Cache LID -> phone number mappings (TTL-based)
-const lidToPhoneCache = new Map(); // lid -> { phone, expires }
 const LID_CACHE_TTL_MS = 2 * 60 * 60 * 1000; // 2 hours
+const bridgeDb = openBridgeDb(STORE_DB_PATH);
+const lidPhoneCache = createLidCache(bridgeDb, LID_CACHE_TTL_MS);
+const groupMetadataCache = createGroupMetadataCache(bridgeDb);
 
 function cacheLidMapping(lid, phone) {
   if (!lid || !phone) return;
   const lidKey = lid.split("@")[0].split(":")[0]; // strip @lid and :device
-  lidToPhoneCache.set(lidKey, { phone, expires: Date.now() + LID_CACHE_TTL_MS });
+  lidPhoneCache.set(lidKey, phone);
 }
 
 function resolvePhoneFromLidCache(lid) {
   const lidKey = lid.split("@")[0].split(":")[0];
-  const entry = lidToPhoneCache.get(lidKey);
-  if (!entry) return null;
-  if (Date.now() > entry.expires) {
-    lidToPhoneCache.delete(lidKey);
-    return null;
-  }
-  return entry.phone;
+  return lidPhoneCache.get(lidKey);
 }
 
 async function resolveGroupLidMappings(chatId) {
@@ -79,7 +78,7 @@ async function resolveGroupLidMappings(chatId) {
         cacheLidMapping(p.id, p.phoneNumber.split("@")[0].split(":")[0]);
       }
     }
-    logger.info({ groupId: chatId, mappings: lidToPhoneCache.size }, "Resolved LID mappings from group metadata");
+    logger.info({ groupId: chatId, mappings: lidPhoneCache.size() }, "Resolved LID mappings from group metadata");
   } catch (err) {
     logger.warn({ groupId: chatId, err: err.message }, "Failed to resolve LID mappings");
   }
@@ -94,9 +93,6 @@ let qrCode = null;
 let connectionStatus = "STOPPED";
 let me = null;
 
-if (!existsSync(AUTH_DIR)) {
-  mkdirSync(AUTH_DIR, { recursive: true });
-}
 
 function authMiddleware(req, res, next) {
   if (!API_KEY) return next();
@@ -109,49 +105,8 @@ function authMiddleware(req, res, next) {
 
 app.use(authMiddleware);
 
-function getCredsPath() {
-  return `${AUTH_DIR}/creds.json`;
-}
-
-function getBackupPath() {
-  return `${AUTH_DIR}/creds.json.bak`;
-}
-
-function maybeRestoreCredsFromBackup() {
-  try {
-    const credsPath = getCredsPath();
-    const backupPath = getBackupPath();
-    
-    if (existsSync(credsPath)) {
-      const raw = readFileSync(credsPath, "utf-8");
-      JSON.parse(raw);
-      return;
-    }
-    
-    if (!existsSync(backupPath)) return;
-    
-    const backupRaw = readFileSync(backupPath, "utf-8");
-    JSON.parse(backupRaw);
-    copyFileSync(backupPath, credsPath);
-    logger.warn("Restored corrupted creds.json from backup");
-  } catch {
-    // ignore
-  }
-}
-
-function backupCreds() {
-  try {
-    const credsPath = getCredsPath();
-    const backupPath = getBackupPath();
-    if (existsSync(credsPath)) {
-      const raw = readFileSync(credsPath, "utf-8");
-      JSON.parse(raw);
-      copyFileSync(credsPath, backupPath);
-    }
-  } catch {
-    // ignore
-  }
-}
+// SQLite + WAL journaling gives us atomic creds writes for free, so
+// the old fs-based backup-and-restore dance is gone.
 
 async function sendWebhook(event, payload) {
   if (!WEBHOOK_URL) return;
@@ -170,8 +125,7 @@ async function sendWebhook(event, payload) {
 }
 
 async function connectWhatsApp() {
-  maybeRestoreCredsFromBackup();
-  const { state, saveCreds } = await useMultiFileAuthState(AUTH_DIR);
+  const { state, saveCreds } = useSqliteAuthState(bridgeDb);
   const { version } = await fetchLatestBaileysVersion();
 
   sock = makeWASocket({
@@ -188,7 +142,6 @@ async function connectWhatsApp() {
   });
 
   sock.ev.on("creds.update", () => {
-    backupCreds();
     saveCreds();
   });
 
@@ -267,7 +220,7 @@ async function connectWhatsApp() {
         if (ALLOWED_GROUPS.length > 0) {
           // Get group name from cache or fetch it
           let groupName = groupMetadataCache.get(chatId);
-          if (!groupName) {
+          if (groupName == null) {
             try {
               const metadata = await sock.groupMetadata(chatId);
               groupName = metadata.subject?.toLowerCase() || "";

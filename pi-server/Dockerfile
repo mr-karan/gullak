@@ -1,31 +1,31 @@
-FROM node:20-bookworm-slim AS build
+FROM oven/bun:1.1-debian AS install
 
 WORKDIR /app
 
-COPY package.json pnpm-lock.yaml .npmrc ./
-RUN corepack enable && pnpm install --frozen-lockfile
+COPY package.json bun.lock ./
+RUN bun install --frozen-lockfile --production
 
-COPY tsconfig.json ./
-COPY src ./src
-RUN pnpm build && pnpm prune --prod
-
-FROM node:20-bookworm-slim
+FROM oven/bun:1.1-debian
 
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends ca-certificates curl ledger \
+  && apt-get install -y --no-install-recommends ca-certificates curl \
   && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-ENV NODE_ENV=production \
-  GULLAK_HOST=0.0.0.0 \
-  GULLAK_PORT=8787
+ENV GULLAK_HOST=0.0.0.0 \
+  GULLAK_PORT=8787 \
+  GULLAK_DB_PATH=/data/gullak.db
 
-COPY --from=build /app/package.json ./package.json
-COPY --from=build /app/node_modules ./node_modules
-COPY --from=build /app/dist ./dist
+COPY --from=install /app/node_modules ./node_modules
+COPY package.json drizzle.config.ts tsconfig.json ./
+COPY src ./src
+COPY drizzle ./drizzle
 
 VOLUME ["/data"]
 EXPOSE 8787
 
-CMD ["node", "dist/index.js"]
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD curl -fsS http://localhost:8787/v1/health || exit 1
+
+CMD ["bun", "run", "src/index.ts"]

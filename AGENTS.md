@@ -4,7 +4,7 @@ Local-first mobile expense tracker with an optional self-hosted sync server. Thr
 
 - **`app/`** — Flutter app (Android + iOS). Drift/SQLite on-device is the source of truth. Sub-3-second logging is the point.
 - **`pi-server/`** — Bun + Hono + Drizzle + bun:sqlite HTTP API. Cross-device merge point for the app + the WhatsApp bridge.
-- **`whatsapp-bridge/`** — Baileys WhatsApp socket on Bun. Posts inbound messages to `pi-server`'s `/v1/whatsapp/webhook`. (SQLite-backed auth state — pending.)
+- **`whatsapp-bridge/`** — Baileys WhatsApp socket on Bun. Posts inbound messages to `pi-server`'s `/v1/whatsapp/webhook`. Auth state and per-process caches (LID→phone, group metadata) live in a single SQLite file (`store.js`).
 
 ## Layout
 
@@ -86,12 +86,22 @@ bun test                                     # bun's built-in test runner
 GULLAK_DB_PATH=/path/gullak.db bun run start
 ```
 
-## Outstanding work (not yet wired in this checkpoint)
+## Sync model
 
-- **Agent rewrite**: `/v1/messages` and `/v1/whatsapp/webhook` are stubs returning 501. The pi-sdk `Agent` loop + Zod-typed tools + SQL writes need to be reimplemented (the old TS version was too coupled to ledger-cli to port directly).
-- **whatsapp-bridge SQLite**: still uses `useMultiFileAuthState` on disk. Should move to a SQLite-backed `AuthenticationState` for consistency.
-- **Flutter sync layer**: `Settings → Sync` (Base URL + API key) + a `SyncService` that maintains a Drift `change_log` table, pushes to `/v1/sync/push` after every mutation, and pulls `/v1/sync/changes?since=<cursor>` on foreground.
-- **Dockerfiles + docker-compose**: pi-server Dockerfile is still the old `node:20`/`pnpm` shape; switch to `oven/bun`. Bridge Dockerfile already on Bun, just verify.
+Local-first. The Flutter app's Drift DB is the source of truth on-device; the homelab pi-server's SQLite is the cross-device merge point. Both schemas are 1:1 mirrors.
+
+- Every Drift mutation (account, category, payee, transaction, budget, recurrence) writes a row into a local `change_log` table via `ChangeLogWriter`. Each row has a UUID `clientChangeId`.
+- `SyncService.pushPending` batches unsynced rows and POSTs them to `/v1/sync/push`. Server applies upserts/deletes to its data tables AND appends to its own change log inside one transaction. The unique index on `(client_id, client_change_id)` makes retries idempotent.
+- `SyncService.pullChanges` pages through `GET /v1/sync/changes?since=&clientId=` and feeds each change into `RemoteApplier`, which does LWW per row by `updatedAt` directly against Drift (bypassing repos so it doesn't recurse into the local change log).
+- `SyncService.syncOnce`: push → pull → prune (drops synced log rows older than 14 days).
+- The server filters out rows originated by the requesting `clientId` so clients don't echo their own mutations back.
+- Conflict policy: last-write-wins. Fine for single-user-with-spouse personal use.
+
+## Outstanding work
+
+- **Agent rewrite**: `/v1/messages` and `/v1/whatsapp/webhook` are stubs returning 501. The pi-sdk `Agent` loop + Zod-typed tools + SQL writes need to be reimplemented; the old TS version was too coupled to ledger-cli to port directly.
+- **Auto-sync triggers**: today sync runs only when the user taps Settings → Sync now. Foreground + post-mutation triggers are a follow-up.
+- **Photo → expense flow**: vision-capable LLM call from QuickEntry; Android share-target wiring so Gullak appears in the Share menu for images.
 
 ## Removed surfaces (don't go looking)
 

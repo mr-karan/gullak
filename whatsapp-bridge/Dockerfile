@@ -1,14 +1,25 @@
-FROM node:20-bookworm-slim
+FROM oven/bun:1.1-debian AS install
 
-WORKDIR /usr/src/app
+WORKDIR /app
 
-COPY package.json pnpm-lock.yaml ./
-RUN corepack enable && pnpm install --prod --frozen-lockfile
+COPY package.json bun.lock ./
+RUN bun install --frozen-lockfile --production
 
-COPY index.js ./
+FROM oven/bun:1.1-debian
 
-RUN mkdir -p /data/whatsapp-session
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends ca-certificates \
+  && rm -rf /var/lib/apt/lists/*
 
+WORKDIR /app
+
+ENV PORT=3000 \
+  STORE_DB_PATH=/data/whatsapp.db
+
+COPY --from=install /app/node_modules ./node_modules
+COPY package.json index.js store.js ./
+
+VOLUME ["/data"]
 EXPOSE 3000/tcp
 
-CMD ["node", "index.js"]
+CMD ["bun", "run", "index.js"]

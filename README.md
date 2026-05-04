@@ -22,7 +22,7 @@ Local-first mobile expense tracker with an optional self-hosted sync server. SQL
 | Lang | Dart | TypeScript | JS/TS |
 | Runtime | Flutter | Bun ≥1.1 | Bun ≥1.1 |
 | HTTP | Dio | Hono | Express (light) |
-| DB | Drift / sqlite3_flutter_libs | Drizzle / bun:sqlite | (SQLite migration pending) |
+| DB | Drift / sqlite3_flutter_libs | Drizzle / bun:sqlite | bun:sqlite (Baileys auth + caches) |
 | Validation | (Drift typed rows) | Zod + drizzle-zod | — |
 | AI | OpenAI-compatible client (default OpenRouter + Gemini 3 Flash) | pi-sdk (rewired pending) | — |
 
