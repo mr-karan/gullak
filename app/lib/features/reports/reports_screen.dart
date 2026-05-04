@@ -47,7 +47,10 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
-            child: Text(monthLabel, style: Theme.of(context).textTheme.headlineMedium),
+            child: Text(
+              monthLabel,
+              style: Theme.of(context).textTheme.headlineMedium,
+            ),
           ),
           async.when(
             loading: () => const Padding(
@@ -87,9 +90,9 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
             child: Text(
               'Daily',
               style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    letterSpacing: 1.2,
-                  ),
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                letterSpacing: 1.2,
+              ),
             ),
           ),
           daily.when(
@@ -108,19 +111,18 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
             child: Text(
               'By category',
               style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    letterSpacing: 1.2,
-                  ),
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                letterSpacing: 1.2,
+              ),
             ),
           ),
           async.when(
             loading: () => const SizedBox(height: 0),
             error: (_, _) => const SizedBox(height: 0),
             data: (overview) {
-              final entries = overview.entries
-                  .where((e) => e.spentCents != 0)
-                  .toList()
-                ..sort((a, b) => a.spentCents.compareTo(b.spentCents));
+              final entries =
+                  overview.entries.where((e) => e.spentCents != 0).toList()
+                    ..sort((a, b) => a.spentCents.compareTo(b.spentCents));
               if (entries.isEmpty) {
                 return const Padding(
                   padding: EdgeInsets.fromLTRB(20, 0, 20, 24),
@@ -183,9 +185,9 @@ class _Stat extends StatelessWidget {
           Text(
             label.toUpperCase(),
             style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: cs.onSurfaceVariant,
-                  letterSpacing: 1.2,
-                ),
+              color: cs.onSurfaceVariant,
+              letterSpacing: 1.2,
+            ),
           ),
           const SizedBox(height: 6),
           Text(
@@ -205,7 +207,10 @@ class _Sparkline extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     if (values.isEmpty) return const SizedBox.shrink();
-    final maxV = values.reduce((a, b) => a > b ? a : b).clamp(1, double.infinity).toInt();
+    final maxV = values
+        .reduce((a, b) => a > b ? a : b)
+        .clamp(1, double.infinity)
+        .toInt();
     return SizedBox(
       height: 60,
       child: Row(
@@ -233,7 +238,10 @@ class _Sparkline extends StatelessWidget {
 }
 
 /// Daily *spend* per day-of-month, length = days in that month.
-final _dailySpendProvider = FutureProvider.family<List<int>, String>((ref, month) async {
+final _dailySpendProvider = FutureProvider.family<List<int>, String>((
+  ref,
+  month,
+) async {
   ref.watch(recentTransactionsProvider);
   final db = ref.watch(dbProvider);
   final parts = month.split('-');
@@ -243,13 +251,15 @@ final _dailySpendProvider = FutureProvider.family<List<int>, String>((ref, month
   final out = List<int>.filled(daysInMonth, 0);
   final start = '$month-01';
   final end = '$month-${daysInMonth.toString().padLeft(2, '0')}';
-  final rows = await db.customSelect(
-    'SELECT date, SUM(amount_cents) AS s '
-    'FROM transactions '
-    'WHERE amount_cents < 0 AND parent_id IS NULL AND transfer_group_id IS NULL '
-    'AND date BETWEEN ? AND ? GROUP BY date',
-    variables: [Variable.withString(start), Variable.withString(end)],
-  ).get();
+  final rows = await db
+      .customSelect(
+        'SELECT date, SUM(amount_cents) AS s '
+        'FROM transactions '
+        'WHERE amount_cents < 0 AND parent_id IS NULL AND transfer_group_id IS NULL '
+        'AND date BETWEEN ? AND ? GROUP BY date',
+        variables: [Variable.withString(start), Variable.withString(end)],
+      )
+      .get();
   for (final r in rows) {
     final date = r.read<String>('date');
     final s = r.read<int>('s');

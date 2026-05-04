@@ -13,20 +13,18 @@ class PayeeRepository {
   static const _uuid = Uuid();
 
   Stream<List<PayeeRow>> watch() {
-    return (_db.select(_db.payees)
-          ..orderBy([
-            (t) => OrderingTerm.desc(t.useCount),
-            (t) => OrderingTerm.asc(t.name),
-          ]))
+    return (_db.select(_db.payees)..orderBy([
+          (t) => OrderingTerm.desc(t.useCount),
+          (t) => OrderingTerm.asc(t.name),
+        ]))
         .watch();
   }
 
   Future<List<PayeeRow>> list() {
-    return (_db.select(_db.payees)
-          ..orderBy([
-            (t) => OrderingTerm.desc(t.useCount),
-            (t) => OrderingTerm.asc(t.name),
-          ]))
+    return (_db.select(_db.payees)..orderBy([
+          (t) => OrderingTerm.desc(t.useCount),
+          (t) => OrderingTerm.asc(t.name),
+        ]))
         .get();
   }
 
@@ -53,7 +51,9 @@ class PayeeRepository {
   Future<String> create(String name) async {
     final id = _uuid.v4();
     final now = DateTime.now().millisecondsSinceEpoch;
-    await _db.into(_db.payees).insert(
+    await _db
+        .into(_db.payees)
+        .insert(
           PayeesCompanion.insert(id: id, name: name.trim(), updatedAt: now),
         );
     return id;
@@ -82,8 +82,11 @@ class PayeeRepository {
   }
 }
 
-final Provider<PayeeRepository> payeeRepoProvider =
-    Provider<PayeeRepository>((ref) => PayeeRepository(ref.watch(dbProvider)));
+final Provider<PayeeRepository> payeeRepoProvider = Provider<PayeeRepository>(
+  (ref) => PayeeRepository(ref.watch(dbProvider)),
+);
 
 final StreamProvider<List<PayeeRow>> payeesListProvider =
-    StreamProvider<List<PayeeRow>>((ref) => ref.watch(payeeRepoProvider).watch());
+    StreamProvider<List<PayeeRow>>(
+      (ref) => ref.watch(payeeRepoProvider).watch(),
+    );

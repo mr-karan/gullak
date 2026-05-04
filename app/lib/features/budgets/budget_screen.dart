@@ -51,7 +51,8 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
             return const EmptyState(
               icon: Icons.pie_chart_outline,
               title: 'No categories yet',
-              body: 'Add categories from Settings → Categories before assigning a budget.',
+              body:
+                  'Add categories from Settings → Categories before assigning a budget.',
             );
           }
           return ListView(
@@ -70,17 +71,12 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            'Assigned ${Money.format(
-                              overview.totalAssigned,
-                              symbol: prefs.currencySymbol,
-                              minorDigits: prefs.currencyMinorDigits,
-                            )} · spent ${Money.format(
-                              -overview.totalSpent,
-                              symbol: prefs.currencySymbol,
-                              minorDigits: prefs.currencyMinorDigits,
-                            )}',
-                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                            'Assigned ${Money.format(overview.totalAssigned, symbol: prefs.currencySymbol, minorDigits: prefs.currencyMinorDigits)} · spent ${Money.format(-overview.totalSpent, symbol: prefs.currencySymbol, minorDigits: prefs.currencyMinorDigits)}',
+                            style: Theme.of(context).textTheme.bodyMedium
+                                ?.copyWith(
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.onSurfaceVariant,
                                 ),
                           ),
                         ],
@@ -95,9 +91,9 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
                   child: Text(
                     group.key.toUpperCase(),
                     style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                          letterSpacing: 1.2,
-                        ),
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      letterSpacing: 1.2,
+                    ),
                   ),
                 ),
                 for (final e in group.value)
@@ -142,8 +138,8 @@ class _BudgetRow extends ConsumerWidget {
     final color = entry.isOverspent
         ? cs.error
         : entry.targetCents == 0
-            ? cs.onSurfaceVariant
-            : cs.primary;
+        ? cs.onSurfaceVariant
+        : cs.primary;
     return InkWell(
       onTap: () => _editTarget(context, ref),
       child: Padding(
@@ -179,9 +175,9 @@ class _BudgetRow extends ConsumerWidget {
             ),
             const SizedBox(height: 4),
             DefaultTextStyle.merge(
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: cs.onSurfaceVariant,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant),
               child: Row(
                 children: [
                   Text(
@@ -223,9 +219,9 @@ class _BudgetRow extends ConsumerWidget {
               child: const Text('Clear'),
             ),
             FilledButton(
-              onPressed: () => Navigator.of(context).pop(
-                Money.parseToMinor(ctrl.text, minorDigits: minorDigits),
-              ),
+              onPressed: () => Navigator.of(
+                context,
+              ).pop(Money.parseToMinor(ctrl.text, minorDigits: minorDigits)),
               child: const Text('Save'),
             ),
           ],

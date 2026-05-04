@@ -56,6 +56,7 @@ class _QuickEntrySheetState extends ConsumerState<QuickEntrySheet>
     final cs = Theme.of(context).colorScheme;
     final mq = MediaQuery.of(context);
     final showType = _showType;
+    final keyboardOpen = mq.viewInsets.bottom > 0;
 
     return SafeArea(
       child: Padding(
@@ -84,7 +85,9 @@ class _QuickEntrySheetState extends ConsumerState<QuickEntrySheet>
                     Tab(text: 'Form'),
                   ],
                   onTap: (i) {
-                    ref.read(prefsProvider).setQuickEntryTab(i == 0 ? 'type' : 'form');
+                    ref
+                        .read(prefsProvider)
+                        .setQuickEntryTab(i == 0 ? 'type' : 'form');
                   },
                 ),
               Expanded(
@@ -93,10 +96,16 @@ class _QuickEntrySheetState extends ConsumerState<QuickEntrySheet>
                         controller: _tabs,
                         children: [
                           _TypeTab(onTweakInForm: () => _tabs?.animateTo(1)),
-                          _FormTab(editingTransactionId: widget.editingTransactionId),
+                          _FormTab(
+                            editingTransactionId: widget.editingTransactionId,
+                            keyboardOpen: keyboardOpen,
+                          ),
                         ],
                       )
-                    : _FormTab(editingTransactionId: widget.editingTransactionId),
+                    : _FormTab(
+                        editingTransactionId: widget.editingTransactionId,
+                        keyboardOpen: keyboardOpen,
+                      ),
               ),
             ],
           ),
@@ -130,10 +139,7 @@ class _Header extends ConsumerWidget {
       padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
       child: Row(
         children: [
-          TextButton(
-            onPressed: onCancel,
-            child: const Text('Cancel'),
-          ),
+          TextButton(onPressed: onCancel, child: const Text('Cancel')),
           const Spacer(),
           Text(title, style: Theme.of(context).textTheme.titleMedium),
           const Spacer(),
@@ -186,7 +192,9 @@ class _TypeTabState extends ConsumerState<_TypeTab> {
   Timer? _debounce;
   // Monotonic seq id; older parses ignore their own results when superseded.
   int _parseSeq = 0;
-  AsyncValue<ParsedExpense?> _parse = const AsyncValue<ParsedExpense?>.data(null);
+  AsyncValue<ParsedExpense?> _parse = const AsyncValue<ParsedExpense?>.data(
+    null,
+  );
   bool _saving = false;
 
   @override
@@ -212,8 +220,12 @@ class _TypeTabState extends ConsumerState<_TypeTab> {
       final extractor = await ref.read(aiExtractorProvider.future);
       if (!mounted || seq != _parseSeq) return;
       if (extractor == null) {
-        setState(() => _parse = AsyncValue<ParsedExpense?>.error(
-            StateError('AI is off — switch to Form'), StackTrace.current));
+        setState(
+          () => _parse = AsyncValue<ParsedExpense?>.error(
+            StateError('AI is off — switch to Form'),
+            StackTrace.current,
+          ),
+        );
         return;
       }
       final parsed = await extractor.parse(v);
@@ -230,19 +242,26 @@ class _TypeTabState extends ConsumerState<_TypeTab> {
     final value = _parse.value;
     if (value == null) return;
     if (value.amountCents == 0) return;
-    _saving = true;
+    setState(() => _saving = true);
     final messenger = ScaffoldMessenger.of(context);
     final navigator = Navigator.of(context);
     try {
       final accounts = await ref.read(accountsListProvider.future);
       if (accounts.isEmpty) return;
-      final acctId = value.accountId ?? ref.read(prefsProvider).defaultAccountId ?? accounts.first.id;
-      await ref.read(transactionRepoProvider).create(
+      final acctId =
+          value.accountId ??
+          ref.read(prefsProvider).defaultAccountId ??
+          accounts.first.id;
+      await ref
+          .read(transactionRepoProvider)
+          .create(
             accountId: acctId,
             categoryId: value.categoryId,
             payeeId: value.payeeId,
             payeeName: value.payeeName,
-            amountCents: value.isIncome ? value.amountCents.abs() : -value.amountCents.abs(),
+            amountCents: value.isIncome
+                ? value.amountCents.abs()
+                : -value.amountCents.abs(),
             date: value.date,
             notes: value.notes,
             origin: 'ai',
@@ -250,8 +269,9 @@ class _TypeTabState extends ConsumerState<_TypeTab> {
           );
       navigator.maybePop();
       messenger.showSnackBar(_savedSnackBar('Saved'));
-    } finally {
-      if (mounted) _saving = false;
+    } catch (_) {
+      if (mounted) setState(() => _saving = false);
+      rethrow;
     }
   }
 
@@ -301,10 +321,7 @@ class _TypeTabState extends ConsumerState<_TypeTab> {
                 ),
                 error: (e, _) => Padding(
                   padding: const EdgeInsets.all(8),
-                  child: Text(
-                    e.toString(),
-                    style: TextStyle(color: cs.error),
-                  ),
+                  child: Text(e.toString(), style: TextStyle(color: cs.error)),
                 ),
               ),
             ),
@@ -320,8 +337,8 @@ class _TypeTabState extends ConsumerState<_TypeTab> {
               const SizedBox(width: 12),
               Expanded(
                 child: FilledButton(
-                  onPressed: _parse.value == null ? null : _save,
-                  child: const Text('Save'),
+                  onPressed: _saving || _parse.value == null ? null : _save,
+                  child: Text(_saving ? 'Saving…' : 'Save'),
                 ),
               ),
             ],
@@ -339,34 +356,39 @@ class _Preview extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     Widget chip(String label, IconData icon, {Color? color}) => Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          margin: const EdgeInsets.only(bottom: 8, right: 8),
-          decoration: BoxDecoration(
-            color: cs.surfaceContainer,
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, size: 16, color: color ?? cs.onSurfaceVariant),
-              const SizedBox(width: 6),
-              Text(label),
-            ],
-          ),
-        );
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      margin: const EdgeInsets.only(bottom: 8, right: 8),
+      decoration: BoxDecoration(
+        color: cs.surfaceContainer,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16, color: color ?? cs.onSurfaceVariant),
+          const SizedBox(width: 6),
+          Text(label),
+        ],
+      ),
+    );
     return Wrap(
       children: [
         chip(
           Money.format(
-            parsed.isIncome ? parsed.amountCents.abs() : -parsed.amountCents.abs(),
+            parsed.isIncome
+                ? parsed.amountCents.abs()
+                : -parsed.amountCents.abs(),
             symbol: '₹',
           ),
           Icons.attach_money,
           color: cs.primary,
         ),
-        if (parsed.payeeName != null) chip(parsed.payeeName!, Icons.store_outlined),
-        if (parsed.accountHint != null) chip(parsed.accountHint!, Icons.account_balance_outlined),
-        if (parsed.categoryHint != null) chip(parsed.categoryHint!, Icons.label_outline),
+        if (parsed.payeeName != null)
+          chip(parsed.payeeName!, Icons.store_outlined),
+        if (parsed.accountHint != null)
+          chip(parsed.accountHint!, Icons.account_balance_outlined),
+        if (parsed.categoryHint != null)
+          chip(parsed.categoryHint!, Icons.label_outline),
         chip(_dateLabel(parsed.date), Icons.calendar_today_outlined),
         if (parsed.confidence < 0.5)
           chip(
@@ -387,10 +409,60 @@ class _Preview extends StatelessWidget {
   }
 }
 
+class _QuickEntrySkeleton extends StatelessWidget {
+  const _QuickEntrySkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    Widget bar({required double width, required double height}) => Container(
+      width: width,
+      height: height,
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(8),
+      ),
+    );
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Container(
+            height: 96,
+            decoration: BoxDecoration(
+              color: cs.surfaceContainer,
+              borderRadius: BorderRadius.circular(20),
+            ),
+            padding: const EdgeInsets.all(20),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: bar(width: 160, height: 36),
+            ),
+          ),
+          const SizedBox(height: 20),
+          for (final width in [220.0, 180.0, 200.0, 140.0]) ...[
+            Row(
+              children: [
+                bar(width: 22, height: 22),
+                const SizedBox(width: 16),
+                bar(width: width, height: 20),
+              ],
+            ),
+            const SizedBox(height: 24),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
 class _FormTab extends ConsumerStatefulWidget {
-  const _FormTab({this.editingTransactionId});
+  const _FormTab({this.editingTransactionId, required this.keyboardOpen});
 
   final String? editingTransactionId;
+  final bool keyboardOpen;
 
   @override
   ConsumerState<_FormTab> createState() => _FormTabState();
@@ -412,22 +484,32 @@ class _FormTabState extends ConsumerState<_FormTab> {
   // entries don't carry a note; keeping the form short saves a row.
   bool _notesExpanded = false;
   bool _saving = false;
+  bool _hydrating = false;
 
   bool get _isEditing => widget.editingTransactionId != null;
 
   @override
   void initState() {
     super.initState();
-    if (_isEditing) _hydrateFromExisting();
+    if (_isEditing) {
+      _hydrating = true;
+      _hydrateFromExisting();
+    }
   }
 
   Future<void> _hydrateFromExisting() async {
     final id = widget.editingTransactionId!;
     final repo = ref.read(transactionRepoProvider);
     final row = await repo.byRow(id);
-    if (row == null || !mounted) return;
+    if (row == null || !mounted) {
+      if (mounted) setState(() => _hydrating = false);
+      return;
+    }
     final accounts = await ref.read(accountRepoProvider).list();
-    if (accounts.isEmpty) return;
+    if (accounts.isEmpty) {
+      if (mounted) setState(() => _hydrating = false);
+      return;
+    }
     AccountRow? account;
     for (final a in accounts) {
       if (a.id == row.accountId) {
@@ -457,6 +539,7 @@ class _FormTabState extends ConsumerState<_FormTab> {
       _date = DateTime.tryParse(row.date) ?? clock.today();
       _notesCtrl.text = row.notes ?? '';
       _notesExpanded = (row.notes ?? '').isNotEmpty;
+      _hydrating = false;
     });
   }
 
@@ -468,7 +551,8 @@ class _FormTabState extends ConsumerState<_FormTab> {
     if (_isEditing) return;
     if (_account != null || accounts.isEmpty) return;
     final memory = ref.read(entryMemoryProvider);
-    final lastId = memory.lastAccountId ?? ref.read(prefsProvider).defaultAccountId;
+    final lastId =
+        memory.lastAccountId ?? ref.read(prefsProvider).defaultAccountId;
     final pick = accounts.firstWhere(
       (a) => a.id == lastId,
       orElse: () => accounts.first,
@@ -495,14 +579,16 @@ class _FormTabState extends ConsumerState<_FormTab> {
     final memory = ref.read(entryMemoryProvider);
     final hintedAccount = memory.accountForPayee(payee.id);
     final hintedCategory = memory.categoryForPayee(payee.id);
-    if (hintedAccount != null && (_account == null || _account!.id != hintedAccount)) {
+    if (hintedAccount != null &&
+        (_account == null || _account!.id != hintedAccount)) {
       ref.read(accountsListProvider.future).then((list) {
         if (!mounted) return;
         final a = list.where((x) => x.id == hintedAccount).firstOrNull;
         if (a != null) setState(() => _account = a);
       });
     }
-    if (hintedCategory != null && (_category == null || _category!.id != hintedCategory)) {
+    if (hintedCategory != null &&
+        (_category == null || _category!.id != hintedCategory)) {
       ref.read(categoriesListProvider.future).then((list) {
         if (!mounted) return;
         final c = list.where((x) => x.id == hintedCategory).firstOrNull;
@@ -514,7 +600,7 @@ class _FormTabState extends ConsumerState<_FormTab> {
   Future<void> _save() async {
     if (_saving) return;
     if (_account == null || _amountWhole == 0) return;
-    _saving = true;
+    setState(() => _saving = true);
     HapticFeedback.lightImpact();
     // Snapshot the navigator + messenger up front. After we pop, our
     // own context is deactivated — looking up an InheritedWidget on a
@@ -530,7 +616,9 @@ class _FormTabState extends ConsumerState<_FormTab> {
       // Resolve a payee id once: either the existing one, or create from
       // the typed-but-unsaved name.
       String? payeeId = _payee?.id;
-      if (payeeId == null && _newPayeeName != null && _newPayeeName!.isNotEmpty) {
+      if (payeeId == null &&
+          _newPayeeName != null &&
+          _newPayeeName!.isNotEmpty) {
         payeeId = await ref.read(payeeRepoProvider).ensure(_newPayeeName!);
       }
 
@@ -576,8 +664,9 @@ class _FormTabState extends ConsumerState<_FormTab> {
       messenger
         ..hideCurrentSnackBar()
         ..showSnackBar(_savedSnackBar(_isEditing ? 'Updated' : 'Saved'));
-    } finally {
-      if (mounted) _saving = false;
+    } catch (_) {
+      if (mounted) setState(() => _saving = false);
+      rethrow;
     }
   }
 
@@ -592,104 +681,113 @@ class _FormTabState extends ConsumerState<_FormTab> {
   @override
   Widget build(BuildContext context) {
     final prefs = ref.watch(prefsProvider);
-    final accounts = ref.watch(accountsListProvider).value ?? const <AccountRow>[];
+    final accounts =
+        ref.watch(accountsListProvider).value ?? const <AccountRow>[];
     _maybeHydrateAccount(accounts);
-    // When the system keyboard is up (e.g. note field focused) the
-    // digit keypad is both redundant and too tall to fit. Hide it and
-    // give the rest of the form the space.
-    final keyboardOpen = MediaQuery.of(context).viewInsets.bottom > 0;
+    if (_hydrating) {
+      return const _QuickEntrySkeleton();
+    }
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-      child: Column(
-        children: [
-          _AmountDisplay(
-            whole: _amountWhole,
-            symbol: prefs.currencySymbol,
-            isIncome: _isIncome,
-            onSignToggle: () => setState(() => _isIncome = !_isIncome),
-          ),
-          const SizedBox(height: 12),
-          Expanded(
-            child: ListView(
-              children: [
-                _PickerRow(
-                  icon: Icons.account_balance_outlined,
-                  label: 'Account',
-                  value: _account?.name ?? 'Select',
-                  unset: _account == null,
-                  onTap: _pickAccount,
-                ),
-                _PickerRow(
-                  icon: Icons.store_outlined,
-                  label: 'Payee',
-                  value: _newPayeeName ?? _payee?.name ?? 'Optional',
-                  unset: _payee == null && _newPayeeName == null,
-                  onTap: _pickPayee,
-                ),
-                _PickerRow(
-                  icon: Icons.label_outline,
-                  label: 'Category',
-                  value: _category?.name ?? 'Optional',
-                  unset: _category == null,
-                  onTap: _pickCategory,
-                ),
-                _DateRow(
-                  date: _date,
-                  onPick: _pickDate,
-                  onChange: (d) => setState(() => _date = d),
-                ),
-                if (_notesExpanded)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 8, bottom: 4),
-                    child: TextField(
-                      controller: _notesCtrl,
-                      autofocus: true,
-                      decoration: InputDecoration(
-                        labelText: 'Note',
-                        suffixIcon: IconButton(
-                          icon: const Icon(Icons.close),
-                          onPressed: () => setState(() {
-                            _notesExpanded = false;
-                            _notesCtrl.clear();
-                          }),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final hideKeypad = widget.keyboardOpen || constraints.maxHeight < 420;
+          return Column(
+            children: [
+              _AmountDisplay(
+                whole: _amountWhole,
+                symbol: prefs.currencySymbol,
+                isIncome: _isIncome,
+                onSignToggle: () => setState(() => _isIncome = !_isIncome),
+              ),
+              const SizedBox(height: 12),
+              Expanded(
+                child: ListView(
+                  children: [
+                    _PickerRow(
+                      icon: Icons.account_balance_outlined,
+                      label: 'Account',
+                      value: _account?.name ?? 'Select',
+                      unset: _account == null,
+                      onTap: _pickAccount,
+                    ),
+                    _PickerRow(
+                      icon: Icons.store_outlined,
+                      label: 'Payee',
+                      value: _newPayeeName ?? _payee?.name ?? 'Optional',
+                      unset: _payee == null && _newPayeeName == null,
+                      onTap: _pickPayee,
+                    ),
+                    _PickerRow(
+                      icon: Icons.label_outline,
+                      label: 'Category',
+                      value: _category?.name ?? 'Optional',
+                      unset: _category == null,
+                      onTap: _pickCategory,
+                    ),
+                    _DateRow(
+                      date: _date,
+                      onPick: _pickDate,
+                      onChange: (d) => setState(() => _date = d),
+                    ),
+                    if (_notesExpanded)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8, bottom: 4),
+                        child: TextField(
+                          controller: _notesCtrl,
+                          autofocus: true,
+                          decoration: InputDecoration(
+                            labelText: 'Note',
+                            suffixIcon: IconButton(
+                              icon: const Icon(Icons.close),
+                              onPressed: () => setState(() {
+                                _notesExpanded = false;
+                                _notesCtrl.clear();
+                              }),
+                            ),
+                          ),
+                        ),
+                      )
+                    else
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 6),
+                        child: TextButton.icon(
+                          onPressed: () =>
+                              setState(() => _notesExpanded = true),
+                          icon: const Icon(Icons.note_add_outlined, size: 18),
+                          label: const Text('Add note'),
+                          style: TextButton.styleFrom(
+                            alignment: Alignment.centerLeft,
+                            minimumSize: const Size.fromHeight(48),
+                            padding: const EdgeInsets.symmetric(horizontal: 4),
+                          ),
                         ),
                       ),
-                    ),
-                  )
-                else
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 6),
-                    child: TextButton.icon(
-                      onPressed: () => setState(() => _notesExpanded = true),
-                      icon: const Icon(Icons.note_add_outlined, size: 18),
-                      label: const Text('Add note'),
-                      style: TextButton.styleFrom(
-                        alignment: Alignment.centerLeft,
-                        padding: EdgeInsets.zero,
-                      ),
-                    ),
-                  ),
+                  ],
+                ),
+              ),
+              if (!hideKeypad) ...[
+                _Keypad(
+                  onDigit: (d) => setState(() {
+                    // Cap at 10 digits (max ~₹9.99B) to avoid integer overflow.
+                    if (_amountWhole > 999999999) return;
+                    _amountWhole = (_amountWhole * 10) + d;
+                  }),
+                  onBack: () => setState(() {
+                    _amountWhole = _amountWhole ~/ 10;
+                  }),
+                ),
+                const SizedBox(height: 8),
               ],
-            ),
-          ),
-          if (!keyboardOpen) ...[
-            _Keypad(
-              onDigit: (d) => setState(() {
-                // Cap at 10 digits (max ~₹9.99B) to avoid integer overflow.
-                if (_amountWhole > 999999999) return;
-                _amountWhole = (_amountWhole * 10) + d;
-              }),
-              onBack: () => setState(() {
-                _amountWhole = _amountWhole ~/ 10;
-              }),
-            ),
-            const SizedBox(height: 8),
-          ],
-          FilledButton(
-            onPressed: _account == null || _amountWhole == 0 ? null : _save,
-            child: const Text('Save'),
-          ),
-        ],
+              FilledButton(
+                onPressed: _saving || _account == null || _amountWhole == 0
+                    ? null
+                    : _save,
+                child: Text(_saving ? 'Saving…' : 'Save'),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -745,72 +843,78 @@ class _FormTabState extends ConsumerState<_FormTab> {
     if (!mounted) return;
     final input = TextEditingController();
     try {
-      final result = await showModalBottomSheet<({PayeeRow? payee, String? newName})>(
-        context: context,
-        useRootNavigator: true,
-        isScrollControlled: true,
-        showDragHandle: true,
-        builder: (ctx) => SafeArea(
-          child: Padding(
-            padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
-            child: StatefulBuilder(
-              builder: (ctx, setSt) {
-                final q = input.text.trim().toLowerCase();
-                final filtered = q.isEmpty
-                    ? payees
-                    : payees
-                        .where((p) => p.name.toLowerCase().contains(q))
-                        .toList(growable: false);
-                final addNew = q.isNotEmpty &&
-                    !filtered.any((p) => p.name.toLowerCase() == q);
-                return SizedBox(
-                  height: MediaQuery.of(ctx).size.height * 0.7,
-                  child: Column(
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
-                        child: TextField(
-                          controller: input,
-                          autofocus: true,
-                          onChanged: (_) => setSt(() {}),
-                          decoration: const InputDecoration(
-                            hintText: 'Search or add new',
-                            prefixIcon: Icon(Icons.search),
+      final result =
+          await showModalBottomSheet<({PayeeRow? payee, String? newName})>(
+            context: context,
+            useRootNavigator: true,
+            isScrollControlled: true,
+            showDragHandle: true,
+            builder: (ctx) => SafeArea(
+              child: Padding(
+                padding: EdgeInsets.only(
+                  bottom: MediaQuery.of(ctx).viewInsets.bottom,
+                ),
+                child: StatefulBuilder(
+                  builder: (ctx, setSt) {
+                    final q = input.text.trim().toLowerCase();
+                    final filtered = q.isEmpty
+                        ? payees
+                        : payees
+                              .where((p) => p.name.toLowerCase().contains(q))
+                              .toList(growable: false);
+                    final addNew =
+                        q.isNotEmpty &&
+                        !filtered.any((p) => p.name.toLowerCase() == q);
+                    return SizedBox(
+                      height: MediaQuery.of(ctx).size.height * 0.7,
+                      child: Column(
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
+                            child: TextField(
+                              controller: input,
+                              autofocus: true,
+                              onChanged: (_) => setSt(() {}),
+                              decoration: const InputDecoration(
+                                hintText: 'Search or add new',
+                                prefixIcon: Icon(Icons.search),
+                              ),
+                            ),
                           ),
-                        ),
+                          Expanded(
+                            child: ListView.builder(
+                              itemCount: filtered.length + (addNew ? 1 : 0),
+                              itemBuilder: (_, i) {
+                                if (addNew && i == 0) {
+                                  return ListTile(
+                                    leading: const Icon(Icons.add),
+                                    title: Text('Add "${input.text.trim()}"'),
+                                    onTap: () => Navigator.of(ctx).pop((
+                                      payee: null,
+                                      newName: input.text.trim(),
+                                    )),
+                                  );
+                                }
+                                final idx = addNew ? i - 1 : i;
+                                final p = filtered[idx];
+                                return ListTile(
+                                  leading: const Icon(Icons.store_outlined),
+                                  title: Text(p.name),
+                                  onTap: () => Navigator.of(
+                                    ctx,
+                                  ).pop((payee: p, newName: null)),
+                                );
+                              },
+                            ),
+                          ),
+                        ],
                       ),
-                      Expanded(
-                        child: ListView.builder(
-                          itemCount: filtered.length + (addNew ? 1 : 0),
-                          itemBuilder: (_, i) {
-                            if (addNew && i == 0) {
-                              return ListTile(
-                                leading: const Icon(Icons.add),
-                                title: Text('Add "${input.text.trim()}"'),
-                                onTap: () => Navigator.of(ctx).pop(
-                                  (payee: null, newName: input.text.trim()),
-                                ),
-                              );
-                            }
-                            final idx = addNew ? i - 1 : i;
-                            final p = filtered[idx];
-                            return ListTile(
-                              leading: const Icon(Icons.store_outlined),
-                              title: Text(p.name),
-                              onTap: () => Navigator.of(ctx)
-                                  .pop((payee: p, newName: null)),
-                            );
-                          },
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              },
+                    );
+                  },
+                ),
+              ),
             ),
-          ),
-        ),
-      );
+          );
       if (result != null) {
         _onPayeePicked(payee: result.payee, newName: result.newName);
       }
@@ -828,7 +932,9 @@ class _FormTabState extends ConsumerState<_FormTab> {
     if (groups.isEmpty || cats.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('No categories yet. Add some in Settings → Categories.'),
+          content: Text(
+            'No categories yet. Add some in Settings → Categories.',
+          ),
         ),
       );
       return;
@@ -837,48 +943,93 @@ class _FormTabState extends ConsumerState<_FormTab> {
     for (final c in cats) {
       byGroup.putIfAbsent(c.groupId, () => []).add(c);
     }
-    final picked = await showModalBottomSheet<CategoryRow>(
-      context: context,
-      useRootNavigator: true,
-      isScrollControlled: true,
-      showDragHandle: true,
-      builder: (ctx) => SafeArea(
-        child: SizedBox(
-          height: MediaQuery.of(ctx).size.height * 0.7,
-          child: ListView(
-            children: [
-              const Padding(
-                padding: EdgeInsets.fromLTRB(20, 8, 20, 8),
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text('Category',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
-                ),
-              ),
-              for (final g in groups)
-                if ((byGroup[g.id] ?? const <CategoryRow>[]).isNotEmpty) ...[
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 16, 20, 4),
-                    child: Text(
-                      g.name.toUpperCase(),
-                      style: Theme.of(ctx).textTheme.labelSmall?.copyWith(
-                            color: Theme.of(ctx).colorScheme.onSurfaceVariant,
-                            letterSpacing: 1.2,
+    final input = TextEditingController();
+    CategoryRow? picked;
+    try {
+      picked = await showModalBottomSheet<CategoryRow>(
+        context: context,
+        useRootNavigator: true,
+        isScrollControlled: true,
+        showDragHandle: true,
+        builder: (ctx) => SafeArea(
+          child: Padding(
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.of(ctx).viewInsets.bottom,
+            ),
+            child: StatefulBuilder(
+              builder: (ctx, setSt) {
+                final q = input.text.trim().toLowerCase();
+                final visibleByGroup = <String, List<CategoryRow>>{};
+                for (final entry in byGroup.entries) {
+                  final visible = q.isEmpty
+                      ? entry.value
+                      : entry.value
+                            .where((c) => c.name.toLowerCase().contains(q))
+                            .toList(growable: false);
+                  if (visible.isNotEmpty) visibleByGroup[entry.key] = visible;
+                }
+                return SizedBox(
+                  height: MediaQuery.of(ctx).size.height * 0.7,
+                  child: Column(
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
+                        child: TextField(
+                          controller: input,
+                          autofocus: true,
+                          onChanged: (_) => setSt(() {}),
+                          decoration: const InputDecoration(
+                            hintText: 'Search categories',
+                            prefixIcon: Icon(Icons.search),
                           ),
-                    ),
+                        ),
+                      ),
+                      Expanded(
+                        child: ListView(
+                          children: [
+                            for (final g in groups)
+                              if ((visibleByGroup[g.id] ??
+                                      const <CategoryRow>[])
+                                  .isNotEmpty) ...[
+                                Padding(
+                                  padding: const EdgeInsets.fromLTRB(
+                                    20,
+                                    16,
+                                    20,
+                                    4,
+                                  ),
+                                  child: Text(
+                                    g.name.toUpperCase(),
+                                    style: Theme.of(ctx).textTheme.labelSmall
+                                        ?.copyWith(
+                                          color: Theme.of(
+                                            ctx,
+                                          ).colorScheme.onSurfaceVariant,
+                                          letterSpacing: 1.2,
+                                        ),
+                                  ),
+                                ),
+                                for (final c in visibleByGroup[g.id]!)
+                                  ListTile(
+                                    title: Text(c.name),
+                                    onTap: () => Navigator.of(ctx).pop(c),
+                                  ),
+                              ],
+                            const SizedBox(height: 24),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
-                  for (final c in byGroup[g.id]!)
-                    ListTile(
-                      title: Text(c.name),
-                      onTap: () => Navigator.of(ctx).pop(c),
-                    ),
-                ],
-              const SizedBox(height: 24),
-            ],
+                );
+              },
+            ),
           ),
         ),
-      ),
-    );
+      );
+    } finally {
+      input.dispose();
+    }
     if (picked != null) setState(() => _category = picked);
   }
 
@@ -894,8 +1045,7 @@ class _FormTabState extends ConsumerState<_FormTab> {
   }
 }
 
-/// Date row with three quick chips (Today / Yesterday / 2d ago) and a
-/// fallback to a full picker.
+/// Date row with quick chips (Today / Yesterday) and a fallback picker.
 class _DateRow extends StatelessWidget {
   const _DateRow({
     required this.date,
@@ -912,7 +1062,6 @@ class _DateRow extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final today = clock.today();
     final yesterday = today.subtract(const Duration(days: 1));
-    final twoDaysAgo = today.subtract(const Duration(days: 2));
 
     bool sameDay(DateTime a, DateTime b) =>
         a.year == b.year && a.month == b.month && a.day == b.day;
@@ -933,20 +1082,27 @@ class _DateRow extends StatelessWidget {
       );
     }
 
-    final isOlder = !sameDay(date, today) &&
-        !sameDay(date, yesterday) &&
-        !sameDay(date, twoDaysAgo);
+    final isOlder = !sameDay(date, today) && !sameDay(date, yesterday);
 
     return Padding(
       padding: const EdgeInsets.only(top: 4, bottom: 4),
       child: Row(
         children: [
-          Icon(Icons.calendar_today_outlined, size: 18, color: cs.onSurfaceVariant),
+          Icon(
+            Icons.calendar_today_outlined,
+            size: 18,
+            color: cs.onSurfaceVariant,
+          ),
           const SizedBox(width: 12),
-          chip('Today', today),
-          chip('Yesterday', yesterday),
-          chip('2d ago', twoDaysAgo),
-          const Spacer(),
+          Expanded(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [chip('Today', today), chip('Yesterday', yesterday)],
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
           if (isOlder)
             ActionChip(
               label: Text(
@@ -993,9 +1149,11 @@ class _AmountDisplay extends StatelessWidget {
         children: [
           Text(
             symbol,
-            style: moneyStyle(context, size: 28, weight: FontWeight.w600).copyWith(
-              color: cs.onSurfaceVariant,
-            ),
+            style: moneyStyle(
+              context,
+              size: 28,
+              weight: FontWeight.w600,
+            ).copyWith(color: cs.onSurfaceVariant),
           ),
           const SizedBox(width: 6),
           Expanded(
@@ -1071,18 +1229,18 @@ class _PickerRow extends StatelessWidget {
               width: 80,
               child: Text(
                 label,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: cs.onSurfaceVariant,
-                    ),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
               ),
             ),
             Expanded(
               child: Text(
                 value,
                 style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                      color: unset ? cs.onSurfaceVariant : cs.onSurface,
-                      fontWeight: unset ? FontWeight.w400 : FontWeight.w500,
-                    ),
+                  color: unset ? cs.onSurfaceVariant : cs.onSurface,
+                  fontWeight: unset ? FontWeight.w400 : FontWeight.w500,
+                ),
                 overflow: TextOverflow.ellipsis,
                 textAlign: TextAlign.right,
               ),
@@ -1097,10 +1255,7 @@ class _PickerRow extends StatelessWidget {
 }
 
 class _Keypad extends StatelessWidget {
-  const _Keypad({
-    required this.onDigit,
-    required this.onBack,
-  });
+  const _Keypad({required this.onDigit, required this.onBack});
 
   final void Function(int digit) onDigit;
   final VoidCallback onBack;
@@ -1109,39 +1264,62 @@ class _Keypad extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     Widget key(String label, VoidCallback action) => Expanded(
-          child: Padding(
-            padding: const EdgeInsets.all(3),
-            child: InkWell(
-              onTap: () {
-                HapticFeedback.selectionClick();
-                action();
-              },
+      child: Padding(
+        padding: const EdgeInsets.all(3),
+        child: InkWell(
+          onTap: () {
+            HapticFeedback.selectionClick();
+            action();
+          },
+          borderRadius: BorderRadius.circular(14),
+          child: Container(
+            height: 52,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: cs.surfaceContainerHighest,
               borderRadius: BorderRadius.circular(14),
-              child: Container(
-                height: 52,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: cs.surfaceContainerHighest,
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Text(
-                  label,
-                  style: moneyStyle(context, size: 24, weight: FontWeight.w600),
-                ),
-              ),
+            ),
+            child: Text(
+              label,
+              style: moneyStyle(context, size: 24, weight: FontWeight.w600),
             ),
           ),
-        );
+        ),
+      ),
+    );
     return Column(
       children: [
-        Row(children: [key('1', () => onDigit(1)), key('2', () => onDigit(2)), key('3', () => onDigit(3))]),
-        Row(children: [key('4', () => onDigit(4)), key('5', () => onDigit(5)), key('6', () => onDigit(6))]),
-        Row(children: [key('7', () => onDigit(7)), key('8', () => onDigit(8)), key('9', () => onDigit(9))]),
-        Row(children: [
-          key('00', () { onDigit(0); onDigit(0); }),
-          key('0', () => onDigit(0)),
-          key('⌫', onBack),
-        ]),
+        Row(
+          children: [
+            key('1', () => onDigit(1)),
+            key('2', () => onDigit(2)),
+            key('3', () => onDigit(3)),
+          ],
+        ),
+        Row(
+          children: [
+            key('4', () => onDigit(4)),
+            key('5', () => onDigit(5)),
+            key('6', () => onDigit(6)),
+          ],
+        ),
+        Row(
+          children: [
+            key('7', () => onDigit(7)),
+            key('8', () => onDigit(8)),
+            key('9', () => onDigit(9)),
+          ],
+        ),
+        Row(
+          children: [
+            key('00', () {
+              onDigit(0);
+              onDigit(0);
+            }),
+            key('0', () => onDigit(0)),
+            key('⌫', onBack),
+          ],
+        ),
       ],
     );
   }

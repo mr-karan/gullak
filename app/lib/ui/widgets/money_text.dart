@@ -39,7 +39,11 @@ class MoneyText extends StatelessWidget {
         symbol: symbol,
         showSign: showSign,
       ),
-      style: moneyStyle(context, size: dp, weight: weight).copyWith(color: color),
+      style: moneyStyle(
+        context,
+        size: dp,
+        weight: weight,
+      ).copyWith(color: color),
     );
   }
 }

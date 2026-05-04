@@ -6,21 +6,32 @@ import 'sms_models.dart';
 /// Tier 2: keyword + currency + numeric pattern.
 class SmsClassifier {
   static const _knownSenderSubstrings = <String>[
-    'HDFC', 'HDFCBK',
-    'ICICI', 'ICICIB',
-    'AXIS', 'AXISBK',
-    'SBI', 'SBIINB', 'SBIBANK',
+    'HDFC',
+    'HDFCBK',
+    'ICICI',
+    'ICICIB',
+    'AXIS',
+    'AXISBK',
+    'SBI',
+    'SBIINB',
+    'SBIBANK',
     'KOTAK',
-    'YES', 'YESBNK',
-    'INDUS', 'IIB', 'INDUSB',
-    'RBL', 'RBLBNK',
+    'YES',
+    'YESBNK',
+    'INDUS',
+    'IIB',
+    'INDUSB',
+    'RBL',
+    'RBLBNK',
     'CITI',
     'AMEX',
     'BAJAJ',
     'BOB',
     'PNB',
-    'CANARA', 'CANBK',
-    'IDFC', 'IDFCFB',
+    'CANARA',
+    'CANBK',
+    'IDFC',
+    'IDFCFB',
     'IDBI',
     'PAYTM',
     'AMAZON',
@@ -68,8 +79,4 @@ class SmsClassifier {
   }
 }
 
-enum SmsClassification {
-  transactionalHigh,
-  transactionalLow,
-  nonTransactional,
-}
+enum SmsClassification { transactionalHigh, transactionalLow, nonTransactional }

@@ -60,6 +60,16 @@ Rules:
 - Do NOT pick a category if you are guessing from a single ambiguous word.
 - For "yesterday" / "last friday" — resolve relative to the supplied date.
 - Output JSON only.
+
+Examples:
+- "blinkit 450 hdfc groceries" → {"amount_minor":45000,"is_income":false,"payee":"blinkit","account_hint":"hdfc","category_hint":"groceries","notes":null,"date":null,"confidence":0.9}
+- "300 zomato yesterday" → {"amount_minor":30000,"is_income":false,"payee":"zomato","account_hint":null,"category_hint":null,"notes":null,"date":"<yesterday>","confidence":0.8}
+- "got 5k from mom" → {"amount_minor":500000,"is_income":true,"payee":"mom","account_hint":null,"category_hint":null,"notes":null,"date":null,"confidence":0.85}
+- "12.50 coffee" → {"amount_minor":1250,"is_income":false,"payee":"coffee","account_hint":null,"category_hint":null,"notes":null,"date":null,"confidence":0.75}
+- "1.5L emi axis" → {"amount_minor":15000000,"is_income":false,"payee":"emi","account_hint":"axis","category_hint":null,"notes":null,"date":null,"confidence":0.75}
+- "salary 1.2L" → {"amount_minor":12000000,"is_income":true,"payee":"salary","account_hint":null,"category_hint":"salary","notes":null,"date":null,"confidence":0.85}
+- "uber 250 split with karan" → {"amount_minor":25000,"is_income":false,"payee":"uber","account_hint":null,"category_hint":"transport","notes":"split with karan","date":null,"confidence":0.8}
+- "\$45 uber" → {"amount_minor":4500,"is_income":false,"payee":"uber","account_hint":null,"category_hint":"transport","notes":null,"date":null,"confidence":0.8}
 ''';
 
 class AiExtractor {
@@ -82,7 +92,8 @@ class AiExtractor {
     final categories = await categoryRepo.list();
     final payees = await payeeRepo.list();
 
-    final user = '''
+    final user =
+        '''
 <today>: ${_ymd(clock.today())}
 <minor_digits>: $minorDigits
 <known_accounts>: ${accounts.take(50).map((a) => a.name).toList()}
@@ -119,7 +130,9 @@ Note: $text
     final payeeId = await _matchPayee(payeeName, payees);
     final categoryId = await _matchCategory(categoryHint, categories);
 
-    log.d('parsed: amount=$amount payee=$payeeName account=$accountHint cat=$categoryHint');
+    log.d(
+      'parsed: amount=$amount payee=$payeeName account=$accountHint cat=$categoryHint',
+    );
 
     return ParsedExpense(
       amountCents: amount,
@@ -137,36 +150,74 @@ Note: $text
   }
 
   Future<String?> _matchAccount(String? hint, List<AccountRow> accounts) async {
-    if (hint == null || accounts.isEmpty) return null;
-    final h = hint.toLowerCase();
-    for (final a in accounts) {
-      if (a.name.toLowerCase() == h) return a.id;
-    }
-    for (final a in accounts) {
-      if (a.name.toLowerCase().contains(h)) return a.id;
-    }
-    return null;
+    return _matchByName(hint, accounts, (a) => a.name, (a) => a.id);
   }
 
   Future<String?> _matchPayee(String? hint, List<PayeeRow> payees) async {
-    if (hint == null) return null;
-    final h = hint.toLowerCase();
-    for (final p in payees) {
-      if (p.name.toLowerCase() == h) return p.id;
-    }
-    return null;
+    return _matchByName(hint, payees, (p) => p.name, (p) => p.id);
   }
 
-  Future<String?> _matchCategory(String? hint, List<CategoryRow> categories) async {
-    if (hint == null) return null;
-    final h = hint.toLowerCase();
-    for (final c in categories) {
-      if (c.name.toLowerCase() == h) return c.id;
+  Future<String?> _matchCategory(
+    String? hint,
+    List<CategoryRow> categories,
+  ) async {
+    return _matchByName(hint, categories, (c) => c.name, (c) => c.id);
+  }
+
+  String? _matchByName<T>(
+    String? hint,
+    List<T> rows,
+    String Function(T row) nameOf,
+    String Function(T row) idOf,
+  ) {
+    final h = _normaliseHint(hint);
+    if (h == null || rows.isEmpty) return null;
+
+    for (final row in rows) {
+      if (nameOf(row).toLowerCase() == h) return idOf(row);
     }
-    for (final c in categories) {
-      if (c.name.toLowerCase().contains(h)) return c.id;
+    for (final row in rows) {
+      final name = nameOf(row).toLowerCase();
+      if (name.contains(h) || h.contains(name)) return idOf(row);
     }
-    return null;
+
+    T? best;
+    var bestDistance = 3;
+    for (final row in rows) {
+      final distance = _levenshtein(h, nameOf(row).toLowerCase());
+      if (distance < bestDistance) {
+        best = row;
+        bestDistance = distance;
+      }
+    }
+    return best == null ? null : idOf(best);
+  }
+
+  String? _normaliseHint(String? hint) {
+    final h = hint?.trim().toLowerCase();
+    return h == null || h.isEmpty ? null : h;
+  }
+
+  int _levenshtein(String a, String b) {
+    if (a == b) return 0;
+    if (a.isEmpty) return b.length;
+    if (b.isEmpty) return a.length;
+
+    var previous = List<int>.generate(b.length + 1, (i) => i);
+    for (var i = 0; i < a.length; i++) {
+      final current = List<int>.filled(b.length + 1, 0);
+      current[0] = i + 1;
+      for (var j = 0; j < b.length; j++) {
+        final cost = a.codeUnitAt(i) == b.codeUnitAt(j) ? 0 : 1;
+        current[j + 1] = [
+          current[j] + 1,
+          previous[j + 1] + 1,
+          previous[j] + cost,
+        ].reduce((value, element) => value < element ? value : element);
+      }
+      previous = current;
+    }
+    return previous[b.length];
   }
 
   static String _ymd(DateTime d) =>
@@ -175,14 +226,13 @@ Note: $text
 
 final FutureProvider<AiExtractor?> aiExtractorProvider =
     FutureProvider<AiExtractor?>((ref) async {
-  final llm = await ref.watch(llmClientProvider.future);
-  if (llm == null) return null;
-  return AiExtractor(
-    llm: llm,
-    accountRepo: ref.watch(accountRepoProvider),
-    categoryRepo: ref.watch(categoryRepoProvider),
-    payeeRepo: ref.watch(payeeRepoProvider),
-    minorDigits: 2,
-  );
-});
-
+      final llm = await ref.watch(llmClientProvider.future);
+      if (llm == null) return null;
+      return AiExtractor(
+        llm: llm,
+        accountRepo: ref.watch(accountRepoProvider),
+        categoryRepo: ref.watch(categoryRepoProvider),
+        payeeRepo: ref.watch(payeeRepoProvider),
+        minorDigits: 2,
+      );
+    });

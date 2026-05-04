@@ -11,7 +11,9 @@ class HdfcCardParser implements SmsParser {
     if (!s.contains('HDFC')) return false;
     final b = sms.body.toLowerCase();
     return b.contains('hdfc bank') &&
-        (b.contains('credit card') || b.contains('debit card') || b.contains('card'));
+        (b.contains('credit card') ||
+            b.contains('debit card') ||
+            b.contains('card'));
   }
 
   @override
@@ -20,8 +22,10 @@ class HdfcCardParser implements SmsParser {
     if (amount == null) return null;
     final merchant = ParserUtil.extractMerchant(sms.body);
     final last4 = ParserUtil.extractCardLast4(sms.body);
-    final date = ParserUtil.extractDate(sms.body, sms.receivedAt) ?? sms.receivedAt;
-    final isIncome = sms.body.toLowerCase().contains('refund') ||
+    final date =
+        ParserUtil.extractDate(sms.body, sms.receivedAt) ?? sms.receivedAt;
+    final isIncome =
+        sms.body.toLowerCase().contains('refund') ||
         sms.body.toLowerCase().contains('credited') ||
         sms.body.toLowerCase().contains('received');
     return SmsCandidate(
@@ -55,19 +59,22 @@ class HdfcUpiParser implements SmsParser {
     final amount = ParserUtil.extractRupees(sms.body);
     if (amount == null) return null;
     final last4 = ParserUtil.extractCardLast4(sms.body);
-    final isCredit = sms.body.toLowerCase().contains('credited') ||
+    final isCredit =
+        sms.body.toLowerCase().contains('credited') ||
         sms.body.toLowerCase().contains('received');
     String? merchant;
-    final upi = RegExp(r'(?:to|from)\s+([A-Z0-9.\-_@]+@[a-z]+)',
-            caseSensitive: false)
-        .firstMatch(sms.body);
+    final upi = RegExp(
+      r'(?:to|from)\s+([A-Z0-9.\-_@]+@[a-z]+)',
+      caseSensitive: false,
+    ).firstMatch(sms.body);
     if (upi != null) {
       final vpa = upi.group(1)!;
       merchant = vpa.split('@').first.replaceAll('.', ' ').trim();
     } else {
       merchant = ParserUtil.extractMerchant(sms.body);
     }
-    final date = ParserUtil.extractDate(sms.body, sms.receivedAt) ?? sms.receivedAt;
+    final date =
+        ParserUtil.extractDate(sms.body, sms.receivedAt) ?? sms.receivedAt;
     return SmsCandidate(
       amountCents: amount,
       isIncome: isCredit,

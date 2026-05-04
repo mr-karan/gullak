@@ -17,9 +17,9 @@ class SectionHeader extends StatelessWidget {
             child: Text(
               text.toUpperCase(),
               style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: cs.onSurfaceVariant,
-                    letterSpacing: 1.2,
-                  ),
+                color: cs.onSurfaceVariant,
+                letterSpacing: 1.2,
+              ),
             ),
           ),
           ?trailing,

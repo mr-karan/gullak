@@ -6,15 +6,19 @@ class Money {
   const Money._();
 
   static int parseToMinor(String input, {int minorDigits = 2}) {
-    final cleaned = input.replaceAll(RegExp(r'[^0-9.\-]'), '');
-    if (cleaned.isEmpty) return 0;
-    final isNeg = cleaned.startsWith('-');
-    final s = isNeg ? cleaned.substring(1) : cleaned;
+    final normalized = input.replaceAll(',', '');
+    final match = RegExp(r'\d+(?:\.\d+)?').firstMatch(normalized);
+    if (match == null) return 0;
+    final cleaned = match.group(0)!;
+    final isNeg = normalized.substring(0, match.start).contains('-');
+    final s = cleaned;
     final parts = s.split('.');
     final whole = int.tryParse(parts[0]) ?? 0;
     var minor = 0;
     if (parts.length > 1) {
-      final frac = parts[1].padRight(minorDigits, '0').substring(0, minorDigits);
+      final frac = parts[1]
+          .padRight(minorDigits, '0')
+          .substring(0, minorDigits);
       minor = int.tryParse(frac) ?? 0;
     }
     final scale = _pow10(minorDigits);
@@ -22,13 +26,20 @@ class Money {
     return isNeg ? -total : total;
   }
 
-  static String format(int minor, {int minorDigits = 2, String symbol = '₹', bool showSign = false}) {
+  static String format(
+    int minor, {
+    int minorDigits = 2,
+    String symbol = '₹',
+    bool showSign = false,
+  }) {
     final scale = _pow10(minorDigits);
     final abs = minor.abs();
     final whole = abs ~/ scale;
     final frac = abs % scale;
     final formattedWhole = NumberFormat('#,##,###').format(whole);
-    final fracStr = minorDigits == 0 ? '' : '.${frac.toString().padLeft(minorDigits, '0')}';
+    final fracStr = minorDigits == 0
+        ? ''
+        : '.${frac.toString().padLeft(minorDigits, '0')}';
     final sign = minor < 0 ? '-' : (showSign ? '+' : '');
     return '$sign$symbol$formattedWhole$fracStr';
   }
@@ -38,7 +49,9 @@ class Money {
     final scale = _pow10(minorDigits);
     final whole = minor.abs() ~/ scale;
     final frac = minor.abs() % scale;
-    final fracStr = minorDigits == 0 ? '' : '.${frac.toString().padLeft(minorDigits, '0')}';
+    final fracStr = minorDigits == 0
+        ? ''
+        : '.${frac.toString().padLeft(minorDigits, '0')}';
     return '$whole$fracStr';
   }
 

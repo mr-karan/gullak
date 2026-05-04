@@ -61,7 +61,9 @@ class TransactionRepository {
   }) async {
     final id = _uuid.v4();
     final now = DateTime.now().millisecondsSinceEpoch;
-    await _db.into(_db.transactions).insert(
+    await _db
+        .into(_db.transactions)
+        .insert(
           TransactionsCompanion.insert(
             id: id,
             accountId: accountId,
@@ -149,7 +151,8 @@ class TransactionRepository {
     required DateTime date,
     String? notes,
     bool cleared = false,
-    required List<({int amountCents, String? categoryId, String? notes})> splits,
+    required List<({int amountCents, String? categoryId, String? notes})>
+    splits,
   }) async {
     if (splits.isEmpty) {
       throw ArgumentError('splits cannot be empty');
@@ -220,7 +223,9 @@ class TransactionRepository {
         categoryId: _v<String?>(categoryId),
         payeeId: _v<String?>(payeeId),
         payeeName: _v<String?>(payeeName),
-        amountCents: amountCents == null ? const Value.absent() : Value(amountCents),
+        amountCents: amountCents == null
+            ? const Value.absent()
+            : Value(amountCents),
         date: date == null ? const Value.absent() : Value(_ymd(date)),
         notes: _v<String?>(notes),
         cleared: cleared == null ? const Value.absent() : Value(cleared),
@@ -235,25 +240,28 @@ class TransactionRepository {
     final row = await byRow(id);
     if (row == null) return DeletedTransactionSnapshot._empty();
     final children = row.splitTotalCents != null
-        ? await (_db.select(_db.transactions)..where((t) => t.parentId.equals(id))).get()
+        ? await (_db.select(
+            _db.transactions,
+          )..where((t) => t.parentId.equals(id))).get()
         : <TransactionRow>[];
     final transferPair = row.transferGroupId != null
-        ? await (_db.select(_db.transactions)
-              ..where((t) =>
-                  t.transferGroupId.equals(row.transferGroupId!) &
-                  t.id.isNotValue(id)))
-            .getSingleOrNull()
+        ? await (_db.select(_db.transactions)..where(
+                (t) =>
+                    t.transferGroupId.equals(row.transferGroupId!) &
+                    t.id.isNotValue(id),
+              ))
+              .getSingleOrNull()
         : null;
     await _db.transaction(() async {
       if (row.splitTotalCents != null) {
-        await (_db.delete(_db.transactions)
-              ..where((t) => t.parentId.equals(id)))
-            .go();
+        await (_db.delete(
+          _db.transactions,
+        )..where((t) => t.parentId.equals(id))).go();
       }
       if (row.transferGroupId != null) {
-        await (_db.delete(_db.transactions)
-              ..where((t) => t.transferGroupId.equals(row.transferGroupId!)))
-            .go();
+        await (_db.delete(
+          _db.transactions,
+        )..where((t) => t.transferGroupId.equals(row.transferGroupId!))).go();
         return;
       }
       await (_db.delete(_db.transactions)..where((t) => t.id.equals(id))).go();
@@ -285,8 +293,9 @@ class TransactionRepository {
 
   // ── reads ────────────────────────────────────────────────────────────
 
-  Future<TransactionRow?> byRow(String id) =>
-      (_db.select(_db.transactions)..where((t) => t.id.equals(id))).getSingleOrNull();
+  Future<TransactionRow?> byRow(String id) => (_db.select(
+    _db.transactions,
+  )..where((t) => t.id.equals(id))).getSingleOrNull();
 
   Future<TransactionListItem?> byId(String id) async {
     final rows = await _select(idEquals: id).get();
@@ -295,12 +304,16 @@ class TransactionRepository {
   }
 
   Stream<List<TransactionListItem>> watchRecent({int limit = 25}) {
-    return _select(visibleOnly: true, limit: limit).watch().map(
-          (rows) => rows.map(_mapRow).toList(),
-        );
+    return _select(
+      visibleOnly: true,
+      limit: limit,
+    ).watch().map((rows) => rows.map(_mapRow).toList());
   }
 
-  Stream<List<TransactionListItem>> watchAll({String? accountId, String? search}) {
+  Stream<List<TransactionListItem>> watchAll({
+    String? accountId,
+    String? search,
+  }) {
     return _select(
       visibleOnly: true,
       accountId: accountId,
@@ -312,11 +325,17 @@ class TransactionRepository {
     final sumExpr = _db.transactions.amountCents.sum();
     final q = _db.selectOnly(_db.transactions)
       ..addColumns([sumExpr])
-      ..where(_db.transactions.amountCents.isSmallerThanValue(0) &
-          _db.transactions.parentId.isNull() &
-          _db.transactions.transferGroupId.isNull());
-    if (from != null) q.where(_db.transactions.date.isBiggerOrEqualValue(_ymd(from)));
-    if (to != null) q.where(_db.transactions.date.isSmallerOrEqualValue(_ymd(to)));
+      ..where(
+        _db.transactions.amountCents.isSmallerThanValue(0) &
+            _db.transactions.parentId.isNull() &
+            _db.transactions.transferGroupId.isNull(),
+      );
+    if (from != null) {
+      q.where(_db.transactions.date.isBiggerOrEqualValue(_ymd(from)));
+    }
+    if (to != null) {
+      q.where(_db.transactions.date.isSmallerOrEqualValue(_ymd(to)));
+    }
     final r = await q.getSingle();
     return r.read(sumExpr) ?? 0;
   }
@@ -325,11 +344,17 @@ class TransactionRepository {
     final sumExpr = _db.transactions.amountCents.sum();
     final q = _db.selectOnly(_db.transactions)
       ..addColumns([sumExpr])
-      ..where(_db.transactions.amountCents.isBiggerThanValue(0) &
-          _db.transactions.parentId.isNull() &
-          _db.transactions.transferGroupId.isNull());
-    if (from != null) q.where(_db.transactions.date.isBiggerOrEqualValue(_ymd(from)));
-    if (to != null) q.where(_db.transactions.date.isSmallerOrEqualValue(_ymd(to)));
+      ..where(
+        _db.transactions.amountCents.isBiggerThanValue(0) &
+            _db.transactions.parentId.isNull() &
+            _db.transactions.transferGroupId.isNull(),
+      );
+    if (from != null) {
+      q.where(_db.transactions.date.isBiggerOrEqualValue(_ymd(from)));
+    }
+    if (to != null) {
+      q.where(_db.transactions.date.isSmallerOrEqualValue(_ymd(to)));
+    }
     final r = await q.getSingle();
     return r.read(sumExpr) ?? 0;
   }
@@ -338,12 +363,15 @@ class TransactionRepository {
     final start = '$yyyymm-01';
     final end = _lastDayOfMonth(yyyymm);
     final sumExpr = _db.transactions.amountCents.sum();
-    final r = await (_db.selectOnly(_db.transactions)
-          ..addColumns([sumExpr])
-          ..where(_db.transactions.categoryId.equals(categoryId) &
-              _db.transactions.date.isBiggerOrEqualValue(start) &
-              _db.transactions.date.isSmallerOrEqualValue(end)))
-        .getSingle();
+    final r =
+        await (_db.selectOnly(_db.transactions)
+              ..addColumns([sumExpr])
+              ..where(
+                _db.transactions.categoryId.equals(categoryId) &
+                    _db.transactions.date.isBiggerOrEqualValue(start) &
+                    _db.transactions.date.isSmallerOrEqualValue(end),
+              ))
+            .getSingle();
     return r.read(sumExpr) ?? 0;
   }
 
@@ -366,14 +394,16 @@ class TransactionRepository {
     if (payeeName == null) return _mapRow(rows.first);
     final wanted = payeeName.toLowerCase();
     rows.sort((a, b) {
-      final pa = (a.readTableOrNull(_db.payees)?.name ??
-              a.readTable(_db.transactions).payeeName ??
-              '')
-          .toLowerCase();
-      final pb = (b.readTableOrNull(_db.payees)?.name ??
-              b.readTable(_db.transactions).payeeName ??
-              '')
-          .toLowerCase();
+      final pa =
+          (a.readTableOrNull(_db.payees)?.name ??
+                  a.readTable(_db.transactions).payeeName ??
+                  '')
+              .toLowerCase();
+      final pb =
+          (b.readTableOrNull(_db.payees)?.name ??
+                  b.readTable(_db.transactions).payeeName ??
+                  '')
+              .toLowerCase();
       return _editDistance(pa, wanted).compareTo(_editDistance(pb, wanted));
     });
     return _mapRow(rows.first);
@@ -391,34 +421,52 @@ class TransactionRepository {
     int? limit,
   }) {
     final transferAccount = _db.alias(_db.accounts, 'transferAccount');
-    final q = _db.select(_db.transactions).join([
-      leftOuterJoin(_db.payees, _db.payees.id.equalsExp(_db.transactions.payeeId)),
-      leftOuterJoin(_db.categories, _db.categories.id.equalsExp(_db.transactions.categoryId)),
-      leftOuterJoin(_db.accounts, _db.accounts.id.equalsExp(_db.transactions.accountId)),
-      leftOuterJoin(transferAccount, transferAccount.id.equalsExp(_db.transactions.transferAccountId)),
-    ])
-      ..orderBy([
-        OrderingTerm.desc(_db.transactions.date),
-        OrderingTerm.desc(_db.transactions.createdAt),
-      ]);
+    final q =
+        _db.select(_db.transactions).join([
+          leftOuterJoin(
+            _db.payees,
+            _db.payees.id.equalsExp(_db.transactions.payeeId),
+          ),
+          leftOuterJoin(
+            _db.categories,
+            _db.categories.id.equalsExp(_db.transactions.categoryId),
+          ),
+          leftOuterJoin(
+            _db.accounts,
+            _db.accounts.id.equalsExp(_db.transactions.accountId),
+          ),
+          leftOuterJoin(
+            transferAccount,
+            transferAccount.id.equalsExp(_db.transactions.transferAccountId),
+          ),
+        ])..orderBy([
+          OrderingTerm.desc(_db.transactions.date),
+          OrderingTerm.desc(_db.transactions.createdAt),
+        ]);
     if (visibleOnly) {
       // Hide split *children* — the parent header represents the row in lists.
       q.where(_db.transactions.parentId.isNull());
     }
     if (idEquals != null) q.where(_db.transactions.id.equals(idEquals));
-    if (accountId != null) q.where(_db.transactions.accountId.equals(accountId));
+    if (accountId != null) {
+      q.where(_db.transactions.accountId.equals(accountId));
+    }
     if (amountEquals != null) {
       q.where(_db.transactions.amountCents.equals(amountEquals));
     }
     if (dateBetween != null) {
-      q.where(_db.transactions.date.isBetweenValues(dateBetween.$1, dateBetween.$2));
+      q.where(
+        _db.transactions.date.isBetweenValues(dateBetween.$1, dateBetween.$2),
+      );
     }
     if (search != null && search.isNotEmpty) {
       final s = '%$search%';
-      q.where(_db.transactions.notes.like(s) |
-          _db.transactions.payeeName.like(s) |
-          _db.payees.name.like(s) |
-          _db.categories.name.like(s));
+      q.where(
+        _db.transactions.notes.like(s) |
+            _db.transactions.payeeName.like(s) |
+            _db.payees.name.like(s) |
+            _db.categories.name.like(s),
+      );
     }
     if (limit != null) q.limit(limit);
     return q;
@@ -483,8 +531,11 @@ class TransactionRepository {
       v1[0] = i + 1;
       for (var j = 0; j < b.length; j++) {
         final cost = a[i] == b[j] ? 0 : 1;
-        v1[j + 1] = [v1[j] + 1, v0[j + 1] + 1, v0[j] + cost]
-            .reduce((a, b) => a < b ? a : b);
+        v1[j + 1] = [
+          v1[j] + 1,
+          v0[j + 1] + 1,
+          v0[j] + cost,
+        ].reduce((a, b) => a < b ? a : b);
       }
       for (var j = 0; j <= b.length; j++) {
         v0[j] = v1[j];
@@ -510,7 +561,10 @@ class DeletedTransactionSnapshot {
   });
 
   factory DeletedTransactionSnapshot._empty() =>
-      const DeletedTransactionSnapshot._(parent: null, splitChildren: <TransactionRow>[]);
+      const DeletedTransactionSnapshot._(
+        parent: null,
+        splitChildren: <TransactionRow>[],
+      );
 
   final TransactionRow? parent;
   final List<TransactionRow> splitChildren;
@@ -520,12 +574,14 @@ class DeletedTransactionSnapshot {
 }
 
 final Provider<TransactionRepository> transactionRepoProvider =
-    Provider<TransactionRepository>((ref) => TransactionRepository(ref.watch(dbProvider)));
+    Provider<TransactionRepository>(
+      (ref) => TransactionRepository(ref.watch(dbProvider)),
+    );
 
 final StreamProvider<List<TransactionListItem>> recentTransactionsProvider =
     StreamProvider<List<TransactionListItem>>(
-  (ref) => ref.watch(transactionRepoProvider).watchRecent(),
-);
+      (ref) => ref.watch(transactionRepoProvider).watchRecent(),
+    );
 
 class TransactionListQuery {
   const TransactionListQuery({this.accountId, this.search});
@@ -542,16 +598,17 @@ class TransactionListQuery {
   int get hashCode => Object.hash(accountId, search);
 }
 
-final transactionsListProvider = StreamProvider.family<List<TransactionListItem>, TransactionListQuery>(
-  (ref, q) => ref.watch(transactionRepoProvider).watchAll(
-        accountId: q.accountId,
-        search: q.search,
-      ),
-);
+final transactionsListProvider =
+    StreamProvider.family<List<TransactionListItem>, TransactionListQuery>(
+      (ref, q) => ref
+          .watch(transactionRepoProvider)
+          .watchAll(accountId: q.accountId, search: q.search),
+    );
 
-final transactionByIdProvider = FutureProvider.family<TransactionListItem?, String>(
-  (ref, id) => ref.watch(transactionRepoProvider).byId(id),
-);
+final transactionByIdProvider =
+    FutureProvider.family<TransactionListItem?, String>(
+      (ref, id) => ref.watch(transactionRepoProvider).byId(id),
+    );
 
 final FutureProvider<int> monthSpendProvider = FutureProvider<int>((ref) async {
   ref.watch(recentTransactionsProvider);
@@ -561,16 +618,22 @@ final FutureProvider<int> monthSpendProvider = FutureProvider<int>((ref) async {
   return ref.watch(transactionRepoProvider).sumSpendInRange(from: from, to: to);
 });
 
-final FutureProvider<int> monthIncomeProvider = FutureProvider<int>((ref) async {
+final FutureProvider<int> monthIncomeProvider = FutureProvider<int>((
+  ref,
+) async {
   ref.watch(recentTransactionsProvider);
   final now = clock.now();
   final from = DateTime(now.year, now.month, 1);
   final to = DateTime(now.year, now.month + 1, 0);
-  return ref.watch(transactionRepoProvider).sumIncomeInRange(from: from, to: to);
+  return ref
+      .watch(transactionRepoProvider)
+      .sumIncomeInRange(from: from, to: to);
 });
 
 final FutureProvider<int> todaySpendProvider = FutureProvider<int>((ref) async {
   ref.watch(recentTransactionsProvider);
   final today = clock.today();
-  return ref.watch(transactionRepoProvider).sumSpendInRange(from: today, to: today);
+  return ref
+      .watch(transactionRepoProvider)
+      .sumSpendInRange(from: today, to: today);
 });

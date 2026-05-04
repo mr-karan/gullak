@@ -60,7 +60,8 @@ class CategoriesScreen extends ConsumerWidget {
                       Expanded(
                         child: Text(
                           g.name.toUpperCase(),
-                          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          style: Theme.of(context).textTheme.labelSmall
+                              ?.copyWith(
                                 color: cs.onSurfaceVariant,
                                 letterSpacing: 1.2,
                               ),
@@ -109,7 +110,11 @@ class CategoriesScreen extends ConsumerWidget {
             content: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                TextField(controller: ctrl, autofocus: true, decoration: const InputDecoration(labelText: 'Name')),
+                TextField(
+                  controller: ctrl,
+                  autofocus: true,
+                  decoration: const InputDecoration(labelText: 'Name'),
+                ),
                 CheckboxListTile(
                   value: isIncome,
                   title: const Text('Income group'),
@@ -118,24 +123,33 @@ class CategoriesScreen extends ConsumerWidget {
               ],
             ),
             actions: [
-              TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Cancel')),
-              FilledButton(onPressed: () => Navigator.of(ctx).pop(true), child: const Text('Add')),
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(ctx).pop(true),
+                child: const Text('Add'),
+              ),
             ],
           ),
         ),
       );
       if (ok == true && ctrl.text.trim().isNotEmpty) {
-        await ref.read(categoryRepoProvider).createGroup(
-              name: ctrl.text.trim(),
-              isIncome: isIncome,
-            );
+        await ref
+            .read(categoryRepoProvider)
+            .createGroup(name: ctrl.text.trim(), isIncome: isIncome);
       }
     } finally {
       ctrl.dispose();
     }
   }
 
-  Future<void> _renameGroup(BuildContext context, WidgetRef ref, CategoryGroupRow g) async {
+  Future<void> _renameGroup(
+    BuildContext context,
+    WidgetRef ref,
+    CategoryGroupRow g,
+  ) async {
     // Drift doesn't expose direct group rename in the repo; keep simple.
     final ctrl = TextEditingController(text: g.name);
     try {
@@ -145,29 +159,48 @@ class CategoriesScreen extends ConsumerWidget {
           title: const Text('Rename group'),
           content: TextField(controller: ctrl, autofocus: true),
           actions: [
-            TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancel')),
-            FilledButton(onPressed: () => Navigator.of(context).pop(ctrl.text), child: const Text('Save')),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(ctrl.text),
+              child: const Text('Save'),
+            ),
           ],
         ),
       );
       if (v == null || v.trim().isEmpty) return;
       final db = ref.read(dbProvider);
-      await db.customStatement('UPDATE category_groups SET name = ? WHERE id = ?', [v.trim(), g.id]);
+      await db.customStatement(
+        'UPDATE category_groups SET name = ? WHERE id = ?',
+        [v.trim(), g.id],
+      );
       ref.invalidate(categoryGroupsListProvider);
     } finally {
       ctrl.dispose();
     }
   }
 
-  Future<void> _deleteGroup(BuildContext context, WidgetRef ref, CategoryGroupRow g) async {
+  Future<void> _deleteGroup(
+    BuildContext context,
+    WidgetRef ref,
+    CategoryGroupRow g,
+  ) async {
     final ok = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
         title: Text('Delete "${g.name}"?'),
         content: const Text('Categories in it will move to "Other".'),
         actions: [
-          TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.of(context).pop(true), child: const Text('Delete')),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Delete'),
+          ),
         ],
       ),
     );
@@ -178,9 +211,9 @@ class CategoriesScreen extends ConsumerWidget {
     final groups = await ref.read(categoryRepoProvider).listGroups();
     if (groups.isEmpty) {
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Add a group first.')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Add a group first.')));
       return;
     }
     final ctrl = TextEditingController();
@@ -195,37 +228,51 @@ class CategoriesScreen extends ConsumerWidget {
             content: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                TextField(controller: ctrl, autofocus: true, decoration: const InputDecoration(labelText: 'Name')),
+                TextField(
+                  controller: ctrl,
+                  autofocus: true,
+                  decoration: const InputDecoration(labelText: 'Name'),
+                ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
                   initialValue: groupId,
                   decoration: const InputDecoration(labelText: 'Group'),
                   items: [
-                    for (final g in groups) DropdownMenuItem(value: g.id, child: Text(g.name)),
+                    for (final g in groups)
+                      DropdownMenuItem(value: g.id, child: Text(g.name)),
                   ],
                   onChanged: (v) => setSt(() => groupId = v ?? groupId),
                 ),
               ],
             ),
             actions: [
-              TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Cancel')),
-              FilledButton(onPressed: () => Navigator.of(ctx).pop(true), child: const Text('Add')),
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(ctx).pop(true),
+                child: const Text('Add'),
+              ),
             ],
           ),
         ),
       );
       if (ok == true && ctrl.text.trim().isNotEmpty) {
-        await ref.read(categoryRepoProvider).create(
-              name: ctrl.text.trim(),
-              groupId: groupId,
-            );
+        await ref
+            .read(categoryRepoProvider)
+            .create(name: ctrl.text.trim(), groupId: groupId);
       }
     } finally {
       ctrl.dispose();
     }
   }
 
-  Future<void> _editCategory(BuildContext context, WidgetRef ref, CategoryRow c) async {
+  Future<void> _editCategory(
+    BuildContext context,
+    WidgetRef ref,
+    CategoryRow c,
+  ) async {
     final ctrl = TextEditingController(text: c.name);
     try {
       final v = await showDialog<String>(
@@ -234,8 +281,14 @@ class CategoriesScreen extends ConsumerWidget {
           title: const Text('Rename category'),
           content: TextField(controller: ctrl, autofocus: true),
           actions: [
-            TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancel')),
-            FilledButton(onPressed: () => Navigator.of(context).pop(ctrl.text), child: const Text('Save')),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(ctrl.text),
+              child: const Text('Save'),
+            ),
           ],
         ),
       );
@@ -247,15 +300,27 @@ class CategoriesScreen extends ConsumerWidget {
     }
   }
 
-  Future<void> _deleteCategory(BuildContext context, WidgetRef ref, CategoryRow c) async {
+  Future<void> _deleteCategory(
+    BuildContext context,
+    WidgetRef ref,
+    CategoryRow c,
+  ) async {
     final ok = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
         title: Text('Delete "${c.name}"?'),
-        content: const Text('Transactions tagged with this category will become uncategorised.'),
+        content: const Text(
+          'Transactions tagged with this category will become uncategorised.',
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.of(context).pop(true), child: const Text('Delete')),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Delete'),
+          ),
         ],
       ),
     );

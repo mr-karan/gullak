@@ -17,9 +17,11 @@ class IciciParser implements SmsParser {
     if (amount == null) return null;
     final last4 = ParserUtil.extractCardLast4(sms.body);
     final merchant = ParserUtil.extractMerchant(sms.body);
-    final isCredit = sms.body.toLowerCase().contains('credited') ||
+    final isCredit =
+        sms.body.toLowerCase().contains('credited') ||
         sms.body.toLowerCase().contains('received');
-    final date = ParserUtil.extractDate(sms.body, sms.receivedAt) ?? sms.receivedAt;
+    final date =
+        ParserUtil.extractDate(sms.body, sms.receivedAt) ?? sms.receivedAt;
     return SmsCandidate(
       amountCents: amount,
       isIncome: isCredit,

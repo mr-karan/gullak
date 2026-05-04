@@ -16,8 +16,10 @@ class EntryMemory {
   Future<void> rememberAccount(String accountId) =>
       _prefs.setLastAccountId(accountId);
 
-  String? accountForPayee(String payeeId) => _hint(_prefs.payeeAccountHints, payeeId);
-  String? categoryForPayee(String payeeId) => _hint(_prefs.payeeCategoryHints, payeeId);
+  String? accountForPayee(String payeeId) =>
+      _hint(_prefs.payeeAccountHints, payeeId);
+  String? categoryForPayee(String payeeId) =>
+      _hint(_prefs.payeeCategoryHints, payeeId);
 
   Future<void> rememberPayeeMapping({
     required String payeeId,
@@ -25,7 +27,9 @@ class EntryMemory {
     String? categoryId,
   }) async {
     if (accountId != null) {
-      await _prefs.setPayeeAccountHints(_setHint(_prefs.payeeAccountHints, payeeId, accountId));
+      await _prefs.setPayeeAccountHints(
+        _setHint(_prefs.payeeAccountHints, payeeId, accountId),
+      );
     }
     if (categoryId != null) {
       await _prefs.setPayeeCategoryHints(
@@ -56,5 +60,6 @@ class EntryMemory {
   }
 }
 
-final Provider<EntryMemory> entryMemoryProvider =
-    Provider<EntryMemory>((ref) => EntryMemory(ref.watch(prefsProvider)));
+final Provider<EntryMemory> entryMemoryProvider = Provider<EntryMemory>(
+  (ref) => EntryMemory(ref.watch(prefsProvider)),
+);

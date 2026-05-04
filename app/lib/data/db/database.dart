@@ -13,18 +13,20 @@ import 'tables.dart';
 
 part 'database.g.dart';
 
-@DriftDatabase(tables: [
-  Accounts,
-  CategoryGroups,
-  Categories,
-  Payees,
-  Transactions,
-  Budgets,
-  Recurrences,
-  SmsMessages,
-  AppKv,
-  AuditLog,
-])
+@DriftDatabase(
+  tables: [
+    Accounts,
+    CategoryGroups,
+    Categories,
+    Payees,
+    Transactions,
+    Budgets,
+    Recurrences,
+    SmsMessages,
+    AppKv,
+    AuditLog,
+  ],
+)
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
   AppDatabase.forTesting(super.executor);
@@ -34,33 +36,35 @@ class AppDatabase extends _$AppDatabase {
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
-        onCreate: (m) async {
-          await m.createAll();
-          await customStatement(
-            'CREATE INDEX IF NOT EXISTS idx_tx_account_date '
-            'ON transactions(account_id, date)',
-          );
-          await customStatement(
-            'CREATE INDEX IF NOT EXISTS idx_tx_parent '
-            'ON transactions(parent_id)',
-          );
-          await customStatement(
-            'CREATE INDEX IF NOT EXISTS idx_tx_transfer_group '
-            'ON transactions(transfer_group_id)',
-          );
-          await customStatement(
-            'CREATE UNIQUE INDEX IF NOT EXISTS idx_budget_cat_month '
-            'ON budgets(category_id, month)',
-          );
-          await customStatement(
-            'CREATE INDEX IF NOT EXISTS idx_sms_status '
-            'ON sms_messages(candidate_status)',
-          );
-        },
+    onCreate: (m) async {
+      await m.createAll();
+      await customStatement(
+        'CREATE INDEX IF NOT EXISTS idx_tx_account_date '
+        'ON transactions(account_id, date)',
       );
+      await customStatement(
+        'CREATE INDEX IF NOT EXISTS idx_tx_parent '
+        'ON transactions(parent_id)',
+      );
+      await customStatement(
+        'CREATE INDEX IF NOT EXISTS idx_tx_transfer_group '
+        'ON transactions(transfer_group_id)',
+      );
+      await customStatement(
+        'CREATE UNIQUE INDEX IF NOT EXISTS idx_budget_cat_month '
+        'ON budgets(category_id, month)',
+      );
+      await customStatement(
+        'CREATE INDEX IF NOT EXISTS idx_sms_status '
+        'ON sms_messages(candidate_status)',
+      );
+    },
+  );
 
   Future<String?> kvGet(String key) async {
-    final r = await (select(appKv)..where((t) => t.key.equals(key))).getSingleOrNull();
+    final r = await (select(
+      appKv,
+    )..where((t) => t.key.equals(key))).getSingleOrNull();
     return r?.value;
   }
 

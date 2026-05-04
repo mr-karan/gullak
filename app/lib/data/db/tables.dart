@@ -12,7 +12,8 @@ class Accounts extends Table {
   TextColumn get kind => text().withDefault(const Constant('checking'))();
   // Opening balance lets us seed an account without inventing a
   // synthetic transaction. Stored in minor units, signed.
-  IntColumn get openingBalanceCents => integer().withDefault(const Constant(0))();
+  IntColumn get openingBalanceCents =>
+      integer().withDefault(const Constant(0))();
   BoolColumn get onBudget => boolean().withDefault(const Constant(true))();
   BoolColumn get archived => boolean().withDefault(const Constant(false))();
   IntColumn get sortOrder => integer().withDefault(const Constant(0))();

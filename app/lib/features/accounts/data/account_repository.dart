@@ -23,19 +23,17 @@ enum AccountKind {
   final String label;
 
   String get id => switch (this) {
-        AccountKind.checking => 'checking',
-        AccountKind.savings => 'savings',
-        AccountKind.creditCard => 'credit_card',
-        AccountKind.cash => 'cash',
-        AccountKind.wallet => 'wallet',
-        AccountKind.investment => 'investment',
-        AccountKind.loan => 'loan',
-      };
+    AccountKind.checking => 'checking',
+    AccountKind.savings => 'savings',
+    AccountKind.creditCard => 'credit_card',
+    AccountKind.cash => 'cash',
+    AccountKind.wallet => 'wallet',
+    AccountKind.investment => 'investment',
+    AccountKind.loan => 'loan',
+  };
 
-  static AccountKind fromId(String id) => values.firstWhere(
-        (k) => k.id == id,
-        orElse: () => AccountKind.checking,
-      );
+  static AccountKind fromId(String id) =>
+      values.firstWhere((k) => k.id == id, orElse: () => AccountKind.checking);
 
   bool get defaultsOffBudget =>
       this == AccountKind.investment || this == AccountKind.loan;
@@ -66,8 +64,9 @@ class AccountRepository {
     return q.watch();
   }
 
-  Future<AccountRow?> byId(String id) =>
-      (_db.select(_db.accounts)..where((t) => t.id.equals(id))).getSingleOrNull();
+  Future<AccountRow?> byId(String id) => (_db.select(
+    _db.accounts,
+  )..where((t) => t.id.equals(id))).getSingleOrNull();
 
   Future<String> create({
     required String name,
@@ -77,7 +76,9 @@ class AccountRepository {
   }) async {
     final id = _uuid.v4();
     final now = DateTime.now().millisecondsSinceEpoch;
-    await _db.into(_db.accounts).insert(
+    await _db
+        .into(_db.accounts)
+        .insert(
           AccountsCompanion.insert(
             id: id,
             name: name,
@@ -113,18 +114,22 @@ class AccountRepository {
   }
 
   Future<void> archive(String id) =>
-      (_db.update(_db.accounts)..where((t) => t.id.equals(id)))
-          .write(const AccountsCompanion(archived: Value(true)));
+      (_db.update(_db.accounts)..where((t) => t.id.equals(id))).write(
+        const AccountsCompanion(archived: Value(true)),
+      );
 
   Future<void> unarchive(String id) =>
-      (_db.update(_db.accounts)..where((t) => t.id.equals(id)))
-          .write(const AccountsCompanion(archived: Value(false)));
+      (_db.update(_db.accounts)..where((t) => t.id.equals(id))).write(
+        const AccountsCompanion(archived: Value(false)),
+      );
 
   /// Hard delete: drops the account and *also* its transactions. Use
   /// [archive] if you want to preserve history.
   Future<void> delete(String id) async {
     await _db.transaction(() async {
-      await (_db.delete(_db.transactions)..where((t) => t.accountId.equals(id))).go();
+      await (_db.delete(
+        _db.transactions,
+      )..where((t) => t.accountId.equals(id))).go();
       await (_db.delete(_db.accounts)..where((t) => t.id.equals(id))).go();
     });
   }
@@ -135,26 +140,30 @@ class AccountRepository {
     final acct = await byId(id);
     if (acct == null) return 0;
     final sumExpr = _db.transactions.amountCents.sum();
-    final r = await (_db.selectOnly(_db.transactions)
-          ..addColumns([sumExpr])
-          ..where(_db.transactions.accountId.equals(id) &
-              _db.transactions.parentId.isNull()))
-        .getSingle();
+    final r =
+        await (_db.selectOnly(_db.transactions)
+              ..addColumns([sumExpr])
+              ..where(
+                _db.transactions.accountId.equals(id) &
+                    _db.transactions.parentId.isNull(),
+              ))
+            .getSingle();
     final txSum = r.read(sumExpr) ?? 0;
     return acct.openingBalanceCents + txSum;
   }
 }
 
 final Provider<AccountRepository> accountRepoProvider =
-    Provider<AccountRepository>((ref) => AccountRepository(ref.watch(dbProvider)));
+    Provider<AccountRepository>(
+      (ref) => AccountRepository(ref.watch(dbProvider)),
+    );
 
 final StreamProvider<List<AccountRow>> accountsListProvider =
     StreamProvider<List<AccountRow>>((ref) {
-  return ref.watch(accountRepoProvider).watch();
-});
+      return ref.watch(accountRepoProvider).watch();
+    });
 
-final accountBalanceProvider =
-    FutureProvider.family<int, String>((ref, id) {
+final accountBalanceProvider = FutureProvider.family<int, String>((ref, id) {
   // Re-read whenever transactions change, by depending on the stream.
   ref.watch(accountsListProvider);
   return ref.watch(accountRepoProvider).balanceCents(id);

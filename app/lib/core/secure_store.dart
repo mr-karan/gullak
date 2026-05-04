@@ -10,7 +10,7 @@ import 'logger.dart';
 /// of throwing.
 class SecureStore {
   SecureStore({FlutterSecureStorage? storage})
-      : _storage = storage ?? const FlutterSecureStorage();
+    : _storage = storage ?? const FlutterSecureStorage();
 
   final FlutterSecureStorage _storage;
 
@@ -39,7 +39,11 @@ class SecureStore {
     }
   }
 
-  Future<void> writeLlm({String? baseUrl, String? apiKey, String? model}) async {
+  Future<void> writeLlm({
+    String? baseUrl,
+    String? apiKey,
+    String? model,
+  }) async {
     await _write(_kLlmBaseUrl, baseUrl);
     await _write(_kLlmApiKey, apiKey);
     await _write(_kLlmModel, model);

@@ -103,7 +103,9 @@ class _AccountFormSheetState extends ConsumerState<AccountFormSheet> {
                   const SizedBox(height: 12),
                   TextField(
                     controller: _balance,
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
                     decoration: InputDecoration(
                       labelText: widget.accountId == null
                           ? 'Opening balance'

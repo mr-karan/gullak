@@ -79,10 +79,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               data: (rows) {
                 if (rows.isEmpty) return const _RecentEmpty();
                 return Column(
-                  children: [
-                    for (final r in rows.take(8))
-                      _RecentRow(row: r),
-                  ],
+                  children: [for (final r in rows.take(8)) _RecentRow(row: r)],
                 );
               },
               loading: () => const _RecentSkeleton(),
@@ -128,22 +125,25 @@ class _MonthHeroCard extends StatelessWidget {
             Text(
               monthLabel.toUpperCase(),
               style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: cs.onPrimaryContainer,
-                    letterSpacing: 1.2,
-                  ),
+                color: cs.onPrimaryContainer,
+                letterSpacing: 1.2,
+              ),
             ),
             const SizedBox(height: 6),
             Text(
               'Net',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: cs.onPrimaryContainer,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(color: cs.onPrimaryContainer),
             ),
             const SizedBox(height: 4),
             Text(
               _formatNet(net, symbol: symbol, minorDigits: minorDigits),
-              style: moneyStyle(context, size: 36, weight: FontWeight.w700)
-                  .copyWith(color: cs.onPrimaryContainer),
+              style: moneyStyle(
+                context,
+                size: 36,
+                weight: FontWeight.w700,
+              ).copyWith(color: cs.onPrimaryContainer),
             ),
             const SizedBox(height: 16),
             Row(
@@ -175,7 +175,11 @@ class _MonthHeroCard extends StatelessWidget {
     );
   }
 
-  static String _formatNet(int net, {required String symbol, required int minorDigits}) {
+  static String _formatNet(
+    int net, {
+    required String symbol,
+    required int minorDigits,
+  }) {
     final scale = _pow10(minorDigits);
     final whole = (net.abs()) ~/ scale;
     final formatted = NumberFormat('#,##,###').format(whole);
@@ -219,9 +223,9 @@ class _StatTile extends StatelessWidget {
         Text(
           label.toUpperCase(),
           style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                color: color.withValues(alpha: 0.85),
-                letterSpacing: 1.2,
-              ),
+            color: color.withValues(alpha: 0.85),
+            letterSpacing: 1.2,
+          ),
         ),
         const SizedBox(height: 4),
         MoneyText(
@@ -263,9 +267,9 @@ class _TodayChip extends StatelessWidget {
             Expanded(
               child: Text(
                 'Today',
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      color: cs.onSurfaceVariant,
-                    ),
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(color: cs.onSurfaceVariant),
               ),
             ),
             MoneyText(
@@ -293,16 +297,16 @@ class _RecentRow extends ConsumerWidget {
     final amountColor = row.isTransfer
         ? cs.onSurfaceVariant
         : row.amountCents < 0
-            ? cs.onSurface
-            : cs.tertiary;
+        ? cs.onSurface
+        : cs.tertiary;
     return ListTile(
       leading: CategorySwatch(
         label: row.categoryName ?? (row.isTransfer ? 'Transfer' : 'Other'),
         icon: row.isTransfer
             ? Icons.swap_horiz
             : row.isSplit
-                ? Icons.call_split
-                : null,
+            ? Icons.call_split
+            : null,
       ),
       title: Text(
         row.isTransfer
@@ -312,9 +316,10 @@ class _RecentRow extends ConsumerWidget {
         overflow: TextOverflow.ellipsis,
       ),
       subtitle: Text(
-        [row.categoryName ?? 'Uncategorised', row.dateLabel]
-            .where((e) => e.isNotEmpty)
-            .join(' · '),
+        [
+          row.categoryName ?? 'Uncategorised',
+          row.dateLabel,
+        ].where((e) => e.isNotEmpty).join(' · '),
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
       ),

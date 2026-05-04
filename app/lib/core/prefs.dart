@@ -26,10 +26,12 @@ class Prefs {
   static const _kPayeeCategoryHints = 'gullak.entry.payeeCategoryHints';
 
   int get currencyMinorDigits => _inner.getInt(_kCurrencyMinorDigits) ?? 2;
-  Future<void> setCurrencyMinorDigits(int v) => _inner.setInt(_kCurrencyMinorDigits, v);
+  Future<void> setCurrencyMinorDigits(int v) =>
+      _inner.setInt(_kCurrencyMinorDigits, v);
 
   String get currencySymbol => _inner.getString(_kCurrencySymbol) ?? '₹';
-  Future<void> setCurrencySymbol(String s) => _inner.setString(_kCurrencySymbol, s);
+  Future<void> setCurrencySymbol(String s) =>
+      _inner.setString(_kCurrencySymbol, s);
 
   String get themeMode => _inner.getString(_kThemeMode) ?? 'system';
   Future<void> setThemeMode(String mode) => _inner.setString(_kThemeMode, mode);
@@ -47,7 +49,8 @@ class Prefs {
   Future<void> setLastPullDate(String d) => _inner.setString(_kLastPullDate, d);
 
   String get quickEntryTab => _inner.getString(_kQuickEntryTab) ?? 'form';
-  Future<void> setQuickEntryTab(String tab) => _inner.setString(_kQuickEntryTab, tab);
+  Future<void> setQuickEntryTab(String tab) =>
+      _inner.setString(_kQuickEntryTab, tab);
 
   bool get aiEnabled => _inner.getBool(_kAiEnabled) ?? false;
   Future<void> setAiEnabled(bool v) => _inner.setBool(_kAiEnabled, v);
@@ -68,8 +71,8 @@ class Prefs {
   Future<void> setPayeeAccountHints(String json) =>
       _inner.setString(_kPayeeAccountHints, json);
 
-  String get payeeCategoryHints => _inner.getString(_kPayeeCategoryHints) ?? '{}';
+  String get payeeCategoryHints =>
+      _inner.getString(_kPayeeCategoryHints) ?? '{}';
   Future<void> setPayeeCategoryHints(String json) =>
       _inner.setString(_kPayeeCategoryHints, json);
 }
-

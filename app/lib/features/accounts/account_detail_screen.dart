@@ -18,13 +18,14 @@ class AccountDetailScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final prefs = ref.watch(prefsProvider);
     final accountAsync = ref.watch(accountsListProvider);
-    final txAsync = ref.watch(transactionsListProvider(
-      TransactionListQuery(accountId: id),
-    ));
+    final txAsync = ref.watch(
+      transactionsListProvider(TransactionListQuery(accountId: id)),
+    );
     final balanceAsync = ref.watch(accountBalanceProvider(id));
-    final account = accountAsync.value
-        ?.cast<AccountRow?>()
-        .firstWhere((a) => a?.id == id, orElse: () => null);
+    final account = accountAsync.value?.cast<AccountRow?>().firstWhere(
+      (a) => a?.id == id,
+      orElse: () => null,
+    );
 
     return Scaffold(
       appBar: AppBar(
@@ -35,11 +36,11 @@ class AccountDetailScreen extends ConsumerWidget {
             onPressed: account == null
                 ? null
                 : () => showModalBottomSheet<void>(
-                      context: context,
-                      isScrollControlled: true,
-                      useSafeArea: true,
-                      builder: (_) => AccountFormSheet(accountId: id),
-                    ),
+                    context: context,
+                    isScrollControlled: true,
+                    useSafeArea: true,
+                    builder: (_) => AccountFormSheet(accountId: id),
+                  ),
           ),
         ],
       ),
@@ -55,8 +56,8 @@ class AccountDetailScreen extends ConsumerWidget {
                   Text(
                     'Balance',
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
                   ),
                   const SizedBox(height: 4),
                   MoneyText(
@@ -89,16 +90,19 @@ class AccountDetailScreen extends ConsumerWidget {
                             : (r.payeeName ?? '—'),
                       ),
                       subtitle: Text(
-                        [r.categoryName ?? (r.isTransfer ? 'Transfer' : 'Uncategorised'), r.dateLabel]
-                            .where((e) => e.isNotEmpty)
-                            .join(' · '),
+                        [
+                          r.categoryName ??
+                              (r.isTransfer ? 'Transfer' : 'Uncategorised'),
+                          r.dateLabel,
+                        ].where((e) => e.isNotEmpty).join(' · '),
                       ),
                       trailing: MoneyText(
                         amountCents: r.amountCents,
                         minorDigits: prefs.currencyMinorDigits,
                         symbol: prefs.currencySymbol,
                       ),
-                      onTap: () => openQuickEntry(context, editingTransactionId: r.id),
+                      onTap: () =>
+                          openQuickEntry(context, editingTransactionId: r.id),
                     );
                   },
                 );

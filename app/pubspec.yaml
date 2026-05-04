@@ -1,5 +1,5 @@
 name: gullak
-description: "Gullak — polished mobile expense tracker for self-hosted Actual Budget"
+description: "Gullak — local-first mobile expense tracker."
 publish_to: 'none'
 version: 0.1.0+1
 
@@ -49,9 +49,12 @@ dependencies:
 
   # UX
   flutter_slidable: ^4.0.0
+  flutter_local_notifications: ^21.0.0
 
 dev_dependencies:
   flutter_test:
+    sdk: flutter
+  integration_test:
     sdk: flutter
   flutter_lints: ^6.0.0
   build_runner: ^2.4.13
@@ -59,6 +62,22 @@ dev_dependencies:
   json_serializable: ^6.8.0
   drift_dev: ^2.20.3
   mocktail: ^1.0.4
+  flutter_launcher_icons: ^0.14.4
 
 flutter:
   uses-material-design: true
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/icon/icon.png"
+  min_sdk_android: 21
+  remove_alpha_ios: true
+  adaptive_icon_background: "#0A6E58"
+  adaptive_icon_foreground: "assets/icon/icon-foreground.png"
+  web:
+    generate: false
+  windows:
+    generate: false
+  macos:
+    generate: false

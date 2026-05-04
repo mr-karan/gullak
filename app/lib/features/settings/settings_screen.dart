@@ -5,19 +5,27 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../../core/ai_defaults.dart';
+import '../../core/money.dart';
+import '../../core/notification_service.dart';
+import '../../data/ai/llm_client.dart';
 import '../../data/sms/sms_pipeline.dart';
 import '../../data/sms/sms_reader.dart';
 import '../../state/providers.dart';
 import '../backup/backup_service.dart';
 import '../backup/file_pick.dart';
+import '../accounts/data/account_repository.dart';
+import '../categories/data/category_repository.dart';
+import '../entry/ai_extractor.dart';
 import '../inbox/data/sms_repository.dart';
+import '../payees/data/payee_repository.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final prefs = ref.watch(prefsProvider);
+    final prefs = watchPrefs(ref);
     return Scaffold(
       appBar: AppBar(title: const Text('Settings')),
       body: ListView(
@@ -42,7 +50,7 @@ class SettingsScreen extends ConsumerWidget {
             value: prefs.aiEnabled,
             onChanged: (v) async {
               await prefs.setAiEnabled(v);
-              ref.invalidate(prefsProvider);
+              bumpPrefs(ref);
             },
           ),
           ListTile(
@@ -58,9 +66,11 @@ class SettingsScreen extends ConsumerWidget {
           SwitchListTile(
             secondary: const Icon(Icons.sms_outlined),
             title: const Text('Read transactional SMS'),
-            subtitle: Text(Platform.isAndroid
-                ? 'Reads only bank/transactional SMS. Everything else is ignored.'
-                : 'Available on Android only.'),
+            subtitle: Text(
+              Platform.isAndroid
+                  ? 'Reads only bank/transactional SMS. Everything else is ignored.'
+                  : 'Available on Android only.',
+            ),
             value: prefs.smsEnabled && Platform.isAndroid,
             onChanged: !Platform.isAndroid
                 ? null
@@ -75,9 +85,9 @@ class SettingsScreen extends ConsumerWidget {
                 final added = await ref.read(smsPipelineProvider).backfill();
                 ref.invalidate(inboxItemsProvider);
                 if (!context.mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Re-ingested $added.')),
-                );
+                ScaffoldMessenger.of(
+                  context,
+                ).showSnackBar(SnackBar(content: Text('Re-ingested $added.')));
               },
             ),
           const _SectionHeader('Appearance'),
@@ -94,17 +104,27 @@ class SettingsScreen extends ConsumerWidget {
             trailing: const Icon(Icons.chevron_right),
             onTap: () => context.go('/settings/categories'),
           ),
+          ListTile(
+            leading: const Icon(Icons.event_repeat_outlined),
+            title: const Text('Recurring transactions'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => context.go('/settings/recurrences'),
+          ),
           const _SectionHeader('Data'),
           ListTile(
             leading: const Icon(Icons.upload_file_outlined),
             title: const Text('Export backup'),
-            subtitle: const Text('JSON dump of every account, category, and transaction.'),
+            subtitle: const Text(
+              'JSON dump of every account, category, and transaction.',
+            ),
             onTap: () => _exportBackup(context, ref),
           ),
           ListTile(
             leading: const Icon(Icons.download_outlined),
             title: const Text('Import backup'),
-            subtitle: const Text('Wipes existing data and restores from a JSON file.'),
+            subtitle: const Text(
+              'Wipes existing data and restores from a JSON file.',
+            ),
             onTap: () => _importBackup(context, ref),
           ),
         ],
@@ -119,13 +139,14 @@ class SettingsScreen extends ConsumerWidget {
       final granted = await reader.ensurePermission();
       if (!granted) {
         if (!context.mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('SMS permission denied.')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('SMS permission denied.')));
         return;
       }
       await prefs.setSmsEnabled(true);
-      ref.invalidate(prefsProvider);
+      bumpPrefs(ref);
+      await ref.read(notificationServiceProvider).requestPermission();
       final pipeline = ref.read(smsPipelineProvider);
       pipeline.startListening();
       final added = await pipeline.backfill();
@@ -136,7 +157,7 @@ class SettingsScreen extends ConsumerWidget {
       );
     } else {
       await prefs.setSmsEnabled(false);
-      ref.invalidate(prefsProvider);
+      bumpPrefs(ref);
       await ref.read(smsPipelineProvider).stop();
     }
   }
@@ -164,7 +185,7 @@ class SettingsScreen extends ConsumerWidget {
       );
       if (v != null && v.isNotEmpty) {
         await prefs.setCurrencySymbol(v);
-        ref.invalidate(prefsProvider);
+        bumpPrefs(ref);
       }
     } finally {
       ctrl.dispose();
@@ -188,7 +209,7 @@ class SettingsScreen extends ConsumerWidget {
     );
     if (v != null) {
       await prefs.setCurrencyMinorDigits(v);
-      ref.invalidate(prefsProvider);
+      bumpPrefs(ref);
     }
   }
 
@@ -209,7 +230,7 @@ class SettingsScreen extends ConsumerWidget {
     );
     if (v != null) {
       await prefs.setThemeMode(v);
-      ref.invalidate(prefsProvider);
+      bumpPrefs(ref);
       ref.invalidate(themeModeProvider);
     }
   }
@@ -221,13 +242,14 @@ class SettingsScreen extends ConsumerWidget {
       await Share.shareXFiles(
         [XFile(file.path, mimeType: 'application/json')],
         subject: 'Gullak backup',
-        text: 'Gullak backup ${DateTime.now().toIso8601String().split('T').first}',
+        text:
+            'Gullak backup ${DateTime.now().toIso8601String().split('T').first}',
       );
     } catch (e) {
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Export failed: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Export failed: $e')));
     }
   }
 
@@ -258,16 +280,18 @@ class SettingsScreen extends ConsumerWidget {
     final picker = await _pickJsonFile();
     if (picker == null || !context.mounted) return;
     try {
-      final imported = await ref.read(backupServiceProvider).importFromJson(picker);
+      final imported = await ref
+          .read(backupServiceProvider)
+          .importFromJson(picker);
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Restored $imported rows.')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Restored $imported rows.')));
     } catch (e) {
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Import failed: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Import failed: $e')));
     }
   }
 
@@ -282,33 +306,101 @@ class SettingsScreen extends ConsumerWidget {
     try {
       final ok = await showDialog<bool>(
         context: context,
-        builder: (_) => AlertDialog(
-          title: const Text('AI endpoint'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(controller: base, decoration: const InputDecoration(labelText: 'Base URL')),
-              const SizedBox(height: 8),
-              TextField(
-                controller: key,
-                decoration: const InputDecoration(labelText: 'API key'),
-                obscureText: true,
+        builder: (dialogCtx) {
+          final width =
+              MediaQuery.of(dialogCtx).size.width -
+              48; // wider than the AlertDialog default
+          return AlertDialog(
+            title: const Text('AI endpoint'),
+            contentPadding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+            content: SizedBox(
+              width: width,
+              child: StatefulBuilder(
+                builder: (ctx, setLocal) => SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'PRESETS',
+                        style: Theme.of(ctx).textTheme.labelSmall?.copyWith(
+                          color: Theme.of(ctx).colorScheme.onSurfaceVariant,
+                          letterSpacing: 1.2,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          ActionChip(
+                            avatar: const Icon(Icons.auto_awesome, size: 16),
+                            label: const Text('OpenRouter • Gemini 3 Flash'),
+                            onPressed: () => setLocal(() {
+                              base.text = kDefaultAiBaseUrl;
+                              model.text = kDefaultAiModel;
+                            }),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      TextField(
+                        controller: base,
+                        decoration: const InputDecoration(
+                          labelText: 'Base URL',
+                          hintText: 'https://openrouter.ai/api/v1',
+                        ),
+                        autocorrect: false,
+                        enableSuggestions: false,
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: model,
+                        decoration: const InputDecoration(
+                          labelText: 'Model',
+                          hintText: 'google/gemini-3-flash-preview',
+                        ),
+                        autocorrect: false,
+                        enableSuggestions: false,
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: key,
+                        decoration: const InputDecoration(
+                          labelText: 'API key',
+                          hintText: 'sk-or-v1-…',
+                        ),
+                        obscureText: true,
+                        autocorrect: false,
+                        enableSuggestions: false,
+                      ),
+                    ],
+                  ),
+                ),
               ),
-              const SizedBox(height: 8),
-              TextField(controller: model, decoration: const InputDecoration(labelText: 'Model')),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => _testLlm(
+                  context,
+                  ref,
+                  baseUrl: base.text,
+                  apiKey: key.text,
+                  model: model.text,
+                ),
+                child: const Text('Test'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.of(dialogCtx).pop(false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(dialogCtx).pop(true),
+                child: const Text('Save'),
+              ),
             ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              child: const Text('Save'),
-            ),
-          ],
-        ),
+          );
+        },
       );
       if (ok == true) {
         await s.writeLlm(
@@ -322,6 +414,57 @@ class SettingsScreen extends ConsumerWidget {
       base.dispose();
       key.dispose();
       model.dispose();
+    }
+  }
+
+  Future<void> _testLlm(
+    BuildContext context,
+    WidgetRef ref, {
+    required String baseUrl,
+    required String apiKey,
+    required String model,
+  }) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final trimmedBaseUrl = baseUrl.trim();
+    final trimmedModel = model.trim();
+    if (trimmedBaseUrl.isEmpty || trimmedModel.isEmpty) {
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          const SnackBar(content: Text('Enter endpoint and model first.')),
+        );
+      return;
+    }
+    try {
+      final extractor = AiExtractor(
+        llm: LlmClient(
+          baseUrl: trimmedBaseUrl,
+          model: trimmedModel,
+          apiKey: apiKey.trim().isEmpty ? null : apiKey.trim(),
+        ),
+        accountRepo: ref.read(accountRepoProvider),
+        categoryRepo: ref.read(categoryRepoProvider),
+        payeeRepo: ref.read(payeeRepoProvider),
+        minorDigits: ref.read(prefsProvider).currencyMinorDigits,
+      );
+      final parsed = await extractor.parse('blinkit 450 hdfc groceries');
+      if (!context.mounted) return;
+      final prefs = ref.read(prefsProvider);
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: Text(
+              'Parsed ${Money.format(parsed.amountCents, symbol: prefs.currencySymbol, minorDigits: prefs.currencyMinorDigits)}'
+              '${parsed.payeeName == null ? '' : ' at ${parsed.payeeName}'}',
+            ),
+          ),
+        );
+    } catch (e) {
+      if (!context.mounted) return;
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text('AI test failed: $e')));
     }
   }
 }
@@ -338,9 +481,9 @@ class _SectionHeader extends StatelessWidget {
       child: Text(
         text.toUpperCase(),
         style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: cs.onSurfaceVariant,
-              letterSpacing: 1.2,
-            ),
+          color: cs.onSurfaceVariant,
+          letterSpacing: 1.2,
+        ),
       ),
     );
   }

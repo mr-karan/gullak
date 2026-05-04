@@ -36,9 +36,7 @@ ThemeData _build(Brightness brightness) {
       surfaceTintColor: Colors.transparent,
       elevation: 0,
       margin: EdgeInsets.zero,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(20),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
     ),
     listTileTheme: ListTileThemeData(
       iconColor: scheme.onSurfaceVariant,
@@ -68,9 +66,7 @@ ThemeData _build(Brightness brightness) {
     filledButtonTheme: FilledButtonThemeData(
       style: FilledButton.styleFrom(
         minimumSize: const Size.fromHeight(52),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(14),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
         textStyle: base.textTheme.titleMedium?.copyWith(
           fontWeight: FontWeight.w600,
         ),
@@ -80,9 +76,7 @@ ThemeData _build(Brightness brightness) {
       style: OutlinedButton.styleFrom(
         minimumSize: const Size.fromHeight(52),
         side: BorderSide(color: scheme.outlineVariant),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(14),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       ),
     ),
     textButtonTheme: TextButtonThemeData(
@@ -97,9 +91,7 @@ ThemeData _build(Brightness brightness) {
       foregroundColor: scheme.onPrimary,
       elevation: 1,
       highlightElevation: 2,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(20),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
     ),
     snackBarTheme: SnackBarThemeData(
       behavior: SnackBarBehavior.floating,
@@ -107,9 +99,7 @@ ThemeData _build(Brightness brightness) {
       contentTextStyle: base.textTheme.bodyMedium?.copyWith(
         color: scheme.onInverseSurface,
       ),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(14),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
     ),
     bottomSheetTheme: BottomSheetThemeData(
       backgroundColor: scheme.surfaceContainerHigh,
@@ -123,9 +113,7 @@ ThemeData _build(Brightness brightness) {
       backgroundColor: scheme.surfaceContainer,
       side: BorderSide.none,
       labelStyle: base.textTheme.labelLarge,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(10),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
     ),
     navigationBarTheme: NavigationBarThemeData(
       backgroundColor: scheme.surface,
@@ -176,14 +164,8 @@ TextTheme _textTheme(TextTheme base, ColorScheme scheme) {
           height: 1.5,
           fontWeight: FontWeight.w500,
         ),
-        bodyLarge: base.bodyLarge?.copyWith(
-          fontSize: 16,
-          height: 1.5,
-        ),
-        bodyMedium: base.bodyMedium?.copyWith(
-          fontSize: 14,
-          height: 1.43,
-        ),
+        bodyLarge: base.bodyLarge?.copyWith(fontSize: 16, height: 1.5),
+        bodyMedium: base.bodyMedium?.copyWith(fontSize: 14, height: 1.43),
         labelLarge: base.labelLarge?.copyWith(
           fontSize: 14,
           height: 1.43,
@@ -196,14 +178,15 @@ TextTheme _textTheme(TextTheme base, ColorScheme scheme) {
           letterSpacing: 0.5,
         ),
       )
-      .apply(
-        bodyColor: scheme.onSurface,
-        displayColor: scheme.onSurface,
-      );
+      .apply(bodyColor: scheme.onSurface, displayColor: scheme.onSurface);
 }
 
 /// Mono-spaced number style for amounts. Falls back to the platform mono.
-TextStyle moneyStyle(BuildContext context, {double size = 16, FontWeight weight = FontWeight.w600}) {
+TextStyle moneyStyle(
+  BuildContext context, {
+  double size = 16,
+  FontWeight weight = FontWeight.w600,
+}) {
   final theme = Theme.of(context);
   return TextStyle(
     fontFamily: 'Menlo',

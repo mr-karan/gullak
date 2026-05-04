@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'core/notification_service.dart';
 import 'core/prefs.dart';
 import 'data/db/database.dart';
 import 'router/router.dart';
@@ -16,6 +17,7 @@ Future<void> main() async {
 
   final db = AppDatabase();
   final prefs = await Prefs.load();
+  await NotificationService.instance.init();
 
   runApp(
     ProviderScope(

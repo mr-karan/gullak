@@ -29,8 +29,11 @@ class ParserUtil {
 
   static String? extractMerchant(String body, {int maxWords = 6}) {
     final patterns = <RegExp>[
-      RegExp(r'(?:at|@)\s+([A-Z][A-Z0-9 \-&._]+?)(?:\s+on\s|\s+ON\s|\s+\.|,|\.$|$)'),
+      RegExp(
+        r'(?:at|@)\s+([A-Z][A-Z0-9 \-&._]+?)(?:\s+on\s|\s+ON\s|\s+\.|,|\.$|$)',
+      ),
       RegExp(r'to\s+([A-Z0-9 @.\-_]+?)(?:\s+on\s|\s+ON\s|\.|,|$)'),
+      RegExp(r'from\s+([A-Z0-9 @.\-_]+?)(?:\s+on\s|\s+ON\s|\.|,|$)'),
       RegExp(r'merchant\s+([A-Za-z0-9 \-&._]+)', caseSensitive: false),
     ];
     for (final p in patterns) {
@@ -45,13 +48,16 @@ class ParserUtil {
   }
 
   static String? extractCardLast4(String body) {
-    final m = RegExp(r'(?:xx|XX|x|\*+|ending|ending\s+with)\s*(\d{4})')
-        .firstMatch(body);
+    final m = RegExp(
+      r'(?:xx|XX|x|\*+|ending|ending\s+with)\s*(\d{4})',
+    ).firstMatch(body);
     return m?.group(1);
   }
 
   static DateTime? extractDate(String body, DateTime fallback) {
-    final p1 = RegExp(r'\b(\d{1,2})[-/](\d{1,2})[-/](\d{2,4})').firstMatch(body);
+    final p1 = RegExp(
+      r'\b(\d{1,2})[-/](\d{1,2})[-/](\d{2,4})',
+    ).firstMatch(body);
     if (p1 != null) {
       final d = int.tryParse(p1.group(1)!);
       final m = int.tryParse(p1.group(2)!);
@@ -82,8 +88,19 @@ class ParserUtil {
 
   static int? _monthIndex(String s) {
     const months = {
-      'jan': 1, 'feb': 2, 'mar': 3, 'apr': 4, 'may': 5, 'jun': 6,
-      'jul': 7, 'aug': 8, 'sep': 9, 'sept': 9, 'oct': 10, 'nov': 11, 'dec': 12,
+      'jan': 1,
+      'feb': 2,
+      'mar': 3,
+      'apr': 4,
+      'may': 5,
+      'jun': 6,
+      'jul': 7,
+      'aug': 8,
+      'sep': 9,
+      'sept': 9,
+      'oct': 10,
+      'nov': 11,
+      'dec': 12,
     };
     return months[s.toLowerCase().substring(0, 3)];
   }

@@ -23,11 +23,10 @@ class CategoryRepository {
   }
 
   Stream<List<CategoryGroupRow>> watchGroups() {
-    return (_db.select(_db.categoryGroups)
-          ..orderBy([
-            (t) => OrderingTerm.asc(t.sortOrder),
-            (t) => OrderingTerm.asc(t.name),
-          ]))
+    return (_db.select(_db.categoryGroups)..orderBy([
+          (t) => OrderingTerm.asc(t.sortOrder),
+          (t) => OrderingTerm.asc(t.name),
+        ]))
         .watch();
   }
 
@@ -42,26 +41,33 @@ class CategoryRepository {
   }
 
   Future<List<CategoryGroupRow>> listGroups() {
-    return (_db.select(_db.categoryGroups)
-          ..orderBy([
-            (t) => OrderingTerm.asc(t.sortOrder),
-            (t) => OrderingTerm.asc(t.name),
-          ]))
+    return (_db.select(_db.categoryGroups)..orderBy([
+          (t) => OrderingTerm.asc(t.sortOrder),
+          (t) => OrderingTerm.asc(t.name),
+        ]))
         .get();
   }
 
-  Future<CategoryRow?> byId(String id) =>
-      (_db.select(_db.categories)..where((t) => t.id.equals(id))).getSingleOrNull();
+  Future<CategoryRow?> byId(String id) => (_db.select(
+    _db.categories,
+  )..where((t) => t.id.equals(id))).getSingleOrNull();
 
-  Future<String> createGroup({required String name, bool isIncome = false}) async {
+  Future<String> createGroup({
+    required String name,
+    bool isIncome = false,
+  }) async {
     final id = _uuid.v4();
     final next = await _nextGroupSortOrder();
-    await _db.into(_db.categoryGroups).insert(CategoryGroupsCompanion.insert(
-          id: id,
-          name: name,
-          isIncome: Value(isIncome),
-          sortOrder: Value(next),
-        ));
+    await _db
+        .into(_db.categoryGroups)
+        .insert(
+          CategoryGroupsCompanion.insert(
+            id: id,
+            name: name,
+            isIncome: Value(isIncome),
+            sortOrder: Value(next),
+          ),
+        );
     return id;
   }
 
@@ -74,15 +80,19 @@ class CategoryRepository {
     final id = _uuid.v4();
     final next = await _nextSortOrder(groupId);
     final now = DateTime.now().millisecondsSinceEpoch;
-    await _db.into(_db.categories).insert(CategoriesCompanion.insert(
-          id: id,
-          name: name,
-          groupId: groupId,
-          color: Value(color),
-          icon: Value(icon),
-          sortOrder: Value(next),
-          updatedAt: now,
-        ));
+    await _db
+        .into(_db.categories)
+        .insert(
+          CategoriesCompanion.insert(
+            id: id,
+            name: name,
+            groupId: groupId,
+            color: Value(color),
+            icon: Value(icon),
+            sortOrder: Value(next),
+            updatedAt: now,
+          ),
+        );
     return id;
   }
 
@@ -110,13 +120,17 @@ class CategoryRepository {
   Future<void> deleteCategory(String id, {String? reassignTo}) async {
     await _db.transaction(() async {
       if (reassignTo != null) {
-        await (_db.update(_db.transactions)..where((t) => t.categoryId.equals(id)))
+        await (_db.update(_db.transactions)
+              ..where((t) => t.categoryId.equals(id)))
             .write(TransactionsCompanion(categoryId: Value(reassignTo)));
       } else {
-        await (_db.update(_db.transactions)..where((t) => t.categoryId.equals(id)))
+        await (_db.update(_db.transactions)
+              ..where((t) => t.categoryId.equals(id)))
             .write(const TransactionsCompanion(categoryId: Value(null)));
       }
-      await (_db.delete(_db.budgets)..where((b) => b.categoryId.equals(id))).go();
+      await (_db.delete(
+        _db.budgets,
+      )..where((b) => b.categoryId.equals(id))).go();
       await (_db.delete(_db.categories)..where((t) => t.id.equals(id))).go();
     });
   }
@@ -129,41 +143,48 @@ class CategoryRepository {
       final ungrouped = await _ensureUngroupedGroup();
       await (_db.update(_db.categories)..where((t) => t.groupId.equals(id)))
           .write(CategoriesCompanion(groupId: Value(ungrouped)));
-      await (_db.delete(_db.categoryGroups)..where((t) => t.id.equals(id))).go();
+      await (_db.delete(
+        _db.categoryGroups,
+      )..where((t) => t.id.equals(id))).go();
     });
   }
 
   Future<String> _ensureUngroupedGroup() async {
-    final existing = await (_db.select(_db.categoryGroups)
-          ..where((t) => t.name.equals('Other')))
-        .getSingleOrNull();
+    final existing = await (_db.select(
+      _db.categoryGroups,
+    )..where((t) => t.name.equals('Other'))).getSingleOrNull();
     if (existing != null) return existing.id;
     return createGroup(name: 'Other');
   }
 
   Future<int> _nextGroupSortOrder() async {
-    final r = await (_db.selectOnly(_db.categoryGroups)
-          ..addColumns([_db.categoryGroups.sortOrder.max()]))
-        .getSingle();
+    final r = await (_db.selectOnly(
+      _db.categoryGroups,
+    )..addColumns([_db.categoryGroups.sortOrder.max()])).getSingle();
     return (r.read(_db.categoryGroups.sortOrder.max()) ?? -1) + 1;
   }
 
   Future<int> _nextSortOrder(String groupId) async {
-    final r = await (_db.selectOnly(_db.categories)
-          ..addColumns([_db.categories.sortOrder.max()])
-          ..where(_db.categories.groupId.equals(groupId)))
-        .getSingle();
+    final r =
+        await (_db.selectOnly(_db.categories)
+              ..addColumns([_db.categories.sortOrder.max()])
+              ..where(_db.categories.groupId.equals(groupId)))
+            .getSingle();
     return (r.read(_db.categories.sortOrder.max()) ?? -1) + 1;
   }
 }
 
-final Provider<CategoryRepository> categoryRepoProvider = Provider<CategoryRepository>(
-  (ref) => CategoryRepository(ref.watch(dbProvider)),
-);
+final Provider<CategoryRepository> categoryRepoProvider =
+    Provider<CategoryRepository>(
+      (ref) => CategoryRepository(ref.watch(dbProvider)),
+    );
 
 final StreamProvider<List<CategoryRow>> categoriesListProvider =
-    StreamProvider<List<CategoryRow>>((ref) => ref.watch(categoryRepoProvider).watch());
+    StreamProvider<List<CategoryRow>>(
+      (ref) => ref.watch(categoryRepoProvider).watch(),
+    );
 
 final StreamProvider<List<CategoryGroupRow>> categoryGroupsListProvider =
     StreamProvider<List<CategoryGroupRow>>(
-        (ref) => ref.watch(categoryRepoProvider).watchGroups());
+      (ref) => ref.watch(categoryRepoProvider).watchGroups(),
+    );

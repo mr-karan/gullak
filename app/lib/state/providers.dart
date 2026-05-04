@@ -14,24 +14,54 @@ final Provider<Prefs> prefsProvider = Provider<Prefs>((ref) {
   throw UnimplementedError('prefsProvider must be overridden in main()');
 });
 
+/// Bumped by settings setters so widgets watching prefs values rebuild.
+/// Needed because [Prefs] is a long-lived shared instance — mutating it
+/// doesn't change identity, so [prefsProvider] alone won't notify watchers.
+class PrefsRevision extends Notifier<int> {
+  @override
+  int build() => 0;
+  void bump() => state = state + 1;
+}
+
+final NotifierProvider<PrefsRevision, int> prefsRevisionProvider =
+    NotifierProvider<PrefsRevision, int>(PrefsRevision.new);
+
+/// Reactive read of [Prefs]. Use this whenever the widget should
+/// rebuild on a settings toggle (theme, currency, AI/SMS toggles).
+Prefs watchPrefs(WidgetRef ref) {
+  ref.watch(prefsRevisionProvider);
+  return ref.read(prefsProvider);
+}
+
+/// Call after a [Prefs] setter to wake up watchers of [watchPrefs].
+void bumpPrefs(WidgetRef ref) {
+  ref.read(prefsRevisionProvider.notifier).bump();
+}
+
 final Provider<SecureStore> secureStoreProvider = Provider<SecureStore>((ref) {
   return SecureStore();
 });
 
 /// Has the user finished onboarding? Set once on the last onboarding step.
-final FutureProvider<bool> onboardedProvider = FutureProvider<bool>((ref) async {
+final FutureProvider<bool> onboardedProvider = FutureProvider<bool>((
+  ref,
+) async {
   final db = ref.watch(dbProvider);
   return (await db.kvGet('onboarded')) == 'true';
 });
 
-final FutureProvider<LlmClient?> llmClientProvider = FutureProvider<LlmClient?>((ref) async {
-  final s = ref.watch(secureStoreProvider);
-  final base = await s.readLlmBaseUrl();
-  final model = await s.readLlmModel();
-  final key = await s.readLlmApiKey();
-  if (base == null || base.isEmpty || model == null || model.isEmpty) return null;
-  return LlmClient(baseUrl: base, model: model, apiKey: key);
-});
+final FutureProvider<LlmClient?> llmClientProvider = FutureProvider<LlmClient?>(
+  (ref) async {
+    final s = ref.watch(secureStoreProvider);
+    final base = await s.readLlmBaseUrl();
+    final model = await s.readLlmModel();
+    final key = await s.readLlmApiKey();
+    if (base == null || base.isEmpty || model == null || model.isEmpty) {
+      return null;
+    }
+    return LlmClient(baseUrl: base, model: model, apiKey: key);
+  },
+);
 
 final Provider<ThemeMode> themeModeProvider = Provider<ThemeMode>((ref) {
   final p = ref.watch(prefsProvider);

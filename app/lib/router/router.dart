@@ -10,10 +10,13 @@ import '../features/home/home_shell.dart';
 import '../features/home/home_screen.dart';
 import '../features/inbox/inbox_screen.dart';
 import '../features/onboarding/onboarding_flow.dart';
+import '../features/recurrences/recurrences_screen.dart';
 import '../features/reports/reports_screen.dart';
 import '../features/settings/settings_screen.dart';
 import '../features/transactions/transactions_screen.dart';
 import '../state/providers.dart';
+
+final rootNavigatorKey = GlobalKey<NavigatorState>();
 
 final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
   // Bump this whenever onboarded state changes so go_router re-runs the
@@ -24,6 +27,7 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
     ..onDispose(tick.dispose);
 
   return GoRouter(
+    navigatorKey: rootNavigatorKey,
     initialLocation: '/loading',
     debugLogDiagnostics: false,
     refreshListenable: tick,
@@ -47,43 +51,55 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
         routes: [
           GoRoute(
             path: '/',
-            pageBuilder: (_, _) => const NoTransitionPage<void>(child: HomeScreen()),
+            pageBuilder: (_, _) =>
+                const NoTransitionPage<void>(child: HomeScreen()),
           ),
           GoRoute(
             path: '/transactions',
-            pageBuilder: (_, _) => const NoTransitionPage<void>(child: TransactionsScreen()),
+            pageBuilder: (_, _) =>
+                const NoTransitionPage<void>(child: TransactionsScreen()),
           ),
           GoRoute(
             path: '/budgets',
-            pageBuilder: (_, _) => const NoTransitionPage<void>(child: BudgetScreen()),
+            pageBuilder: (_, _) =>
+                const NoTransitionPage<void>(child: BudgetScreen()),
           ),
           GoRoute(
             path: '/inbox',
-            pageBuilder: (_, _) => const NoTransitionPage<void>(child: InboxScreen()),
+            pageBuilder: (_, _) =>
+                const NoTransitionPage<void>(child: InboxScreen()),
           ),
           GoRoute(
             path: '/accounts',
-            pageBuilder: (_, _) => const NoTransitionPage<void>(child: AccountsScreen()),
+            pageBuilder: (_, _) =>
+                const NoTransitionPage<void>(child: AccountsScreen()),
             routes: [
               GoRoute(
                 path: ':id',
-                builder: (_, s) => AccountDetailScreen(id: s.pathParameters['id']!),
+                builder: (_, s) =>
+                    AccountDetailScreen(id: s.pathParameters['id']!),
               ),
             ],
           ),
           GoRoute(
             path: '/settings',
-            pageBuilder: (_, _) => const NoTransitionPage<void>(child: SettingsScreen()),
+            pageBuilder: (_, _) =>
+                const NoTransitionPage<void>(child: SettingsScreen()),
             routes: [
               GoRoute(
                 path: 'categories',
                 builder: (_, _) => const CategoriesScreen(),
               ),
+              GoRoute(
+                path: 'recurrences',
+                builder: (_, _) => const RecurrencesScreen(),
+              ),
             ],
           ),
           GoRoute(
             path: '/reports',
-            pageBuilder: (_, _) => const NoTransitionPage<void>(child: ReportsScreen()),
+            pageBuilder: (_, _) =>
+                const NoTransitionPage<void>(child: ReportsScreen()),
           ),
         ],
       ),
@@ -95,12 +111,12 @@ class _Splash extends StatelessWidget {
   const _Splash();
   @override
   Widget build(BuildContext context) => const Scaffold(
-        body: Center(
-          child: SizedBox(
-            width: 28,
-            height: 28,
-            child: CircularProgressIndicator(strokeWidth: 2.5),
-          ),
-        ),
-      );
+    body: Center(
+      child: SizedBox(
+        width: 28,
+        height: 28,
+        child: CircularProgressIndicator(strokeWidth: 2.5),
+      ),
+    ),
+  );
 }

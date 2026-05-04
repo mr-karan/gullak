@@ -1,15 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/ai_defaults.dart';
 import '../../core/money.dart';
 import '../../state/providers.dart';
 import '../accounts/data/account_repository.dart';
 import '../categories/data/category_repository.dart';
 
 /// First-run wizard. Three quick steps:
-///   1. Welcome
-///   2. Currency
-///   3. First account
+///   1. Welcome + currency
+///   2. First account
+///   3. AI assist (optional — paste OpenRouter key or skip)
 /// On completion we seed default category groups and mark onboarded.
 class OnboardingFlow extends ConsumerStatefulWidget {
   const OnboardingFlow({super.key});
@@ -35,12 +36,18 @@ class _OnboardingFlowState extends ConsumerState<OnboardingFlow> {
   }
 
   void _next() => _ctrl.nextPage(
-        duration: const Duration(milliseconds: 220),
-        curve: Curves.easeOut,
-      );
+    duration: const Duration(milliseconds: 220),
+    curve: Curves.easeOut,
+  );
 
-  Future<void> _finish() async {
-    await ref.read(accountRepoProvider).create(
+  Future<void> _finish({
+    String? aiBaseUrl,
+    String? aiModel,
+    String? aiApiKey,
+  }) async {
+    await ref
+        .read(accountRepoProvider)
+        .create(
           name: _accountName.trim(),
           kind: _kind,
           openingBalanceCents: _openingBalanceCents,
@@ -49,6 +56,23 @@ class _OnboardingFlowState extends ConsumerState<OnboardingFlow> {
     final prefs = ref.read(prefsProvider);
     await prefs.setCurrencySymbol(_symbol);
     await prefs.setCurrencyMinorDigits(_minorDigits);
+
+    final apiKey = aiApiKey?.trim();
+    if (apiKey != null && apiKey.isNotEmpty) {
+      await ref
+          .read(secureStoreProvider)
+          .writeLlm(
+            baseUrl: aiBaseUrl?.trim().isEmpty ?? true
+                ? kDefaultAiBaseUrl
+                : aiBaseUrl!.trim(),
+            model: aiModel?.trim().isEmpty ?? true
+                ? kDefaultAiModel
+                : aiModel!.trim(),
+            apiKey: apiKey,
+          );
+      await prefs.setAiEnabled(true);
+    }
+
     // Set onboarded *last* and invalidate — the router listens to
     // onboardedProvider via a refreshListenable and redirects to '/'
     // automatically. Calling context.go on top of that double-navigates
@@ -78,14 +102,28 @@ class _OnboardingFlowState extends ConsumerState<OnboardingFlow> {
             _FirstAccount(
               symbol: _symbol,
               minorDigits: _minorDigits,
-              onSubmit: ({required name, required kind, required openingCents}) {
-                setState(() {
-                  _accountName = name;
-                  _kind = kind;
-                  _openingBalanceCents = openingCents;
-                });
-                _finish();
-              },
+              onSubmit:
+                  ({required name, required kind, required openingCents}) {
+                    setState(() {
+                      _accountName = name;
+                      _kind = kind;
+                      _openingBalanceCents = openingCents;
+                    });
+                    _next();
+                  },
+            ),
+            _AiSetup(
+              onSkip: () => _finish(),
+              onSubmit:
+                  ({
+                    required String baseUrl,
+                    required String model,
+                    required String apiKey,
+                  }) => _finish(
+                    aiBaseUrl: baseUrl,
+                    aiModel: model,
+                    aiApiKey: apiKey,
+                  ),
             ),
           ],
         ),
@@ -93,7 +131,6 @@ class _OnboardingFlowState extends ConsumerState<OnboardingFlow> {
     );
   }
 }
-
 
 /// Combined welcome + currency picker — saves a screen by merging
 /// branding and the currency choice. Branding sits at the top, a
@@ -142,17 +179,17 @@ class _WelcomeAndCurrency extends StatelessWidget {
           const SizedBox(height: 8),
           Text(
             'A local-first expense tracker. Lives on your phone, syncs nowhere.',
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  color: cs.onSurfaceVariant,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(color: cs.onSurfaceVariant),
           ),
           const SizedBox(height: 32),
           Text(
             'CURRENCY',
             style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: cs.onSurfaceVariant,
-                  letterSpacing: 1.2,
-                ),
+              color: cs.onSurfaceVariant,
+              letterSpacing: 1.2,
+            ),
           ),
           const SizedBox(height: 8),
           Wrap(
@@ -188,7 +225,8 @@ class _FirstAccount extends StatefulWidget {
     required String name,
     required AccountKind kind,
     required int openingCents,
-  }) onSubmit;
+  })
+  onSubmit;
 
   @override
   State<_FirstAccount> createState() => _FirstAccountState();
@@ -213,13 +251,16 @@ class _FirstAccountState extends State<_FirstAccount> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('First account', style: Theme.of(context).textTheme.headlineMedium),
+          Text(
+            'First account',
+            style: Theme.of(context).textTheme.headlineMedium,
+          ),
           const SizedBox(height: 8),
           Text(
             'Add the bank, card or wallet you spend from most.',
             style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
           ),
           const SizedBox(height: 24),
           TextField(
@@ -255,13 +296,134 @@ class _FirstAccountState extends State<_FirstAccount> {
                 _balance.text,
                 minorDigits: widget.minorDigits,
               );
-              widget.onSubmit(
-                name: name,
-                kind: _kind,
-                openingCents: cents,
-              );
+              widget.onSubmit(name: name, kind: _kind, openingCents: cents);
             },
-            child: const Text('Done'),
+            child: const Text('Continue'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Optional final step. Prefilled with the OpenRouter + Gemini Flash
+/// defaults that match the homelab pi-server config; the user only
+/// needs to paste an API key. Skipping leaves AI disabled — it can be
+/// configured later from Settings → AI assist.
+class _AiSetup extends StatefulWidget {
+  const _AiSetup({required this.onSubmit, required this.onSkip});
+
+  final void Function({
+    required String baseUrl,
+    required String model,
+    required String apiKey,
+  })
+  onSubmit;
+  final VoidCallback onSkip;
+
+  @override
+  State<_AiSetup> createState() => _AiSetupState();
+}
+
+class _AiSetupState extends State<_AiSetup> {
+  final _baseUrl = TextEditingController(text: kDefaultAiBaseUrl);
+  final _model = TextEditingController(text: kDefaultAiModel);
+  final _apiKey = TextEditingController();
+  bool _showAdvanced = false;
+
+  @override
+  void dispose() {
+    _baseUrl.dispose();
+    _model.dispose();
+    _apiKey.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 48, 24, 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('AI assist', style: Theme.of(context).textTheme.headlineMedium),
+          const SizedBox(height: 8),
+          Text(
+            'Optional. Paste an OpenRouter API key to type expenses in '
+            'natural language ("blinkit 450 hdfc"). Stored on this device only.',
+            style: Theme.of(
+              context,
+            ).textTheme.bodyLarge?.copyWith(color: cs.onSurfaceVariant),
+          ),
+          const SizedBox(height: 24),
+          TextField(
+            controller: _apiKey,
+            decoration: const InputDecoration(
+              labelText: 'OpenRouter API key',
+              hintText: 'sk-or-v1-…',
+            ),
+            obscureText: true,
+            autocorrect: false,
+            enableSuggestions: false,
+          ),
+          const SizedBox(height: 16),
+          InkWell(
+            onTap: () => setState(() => _showAdvanced = !_showAdvanced),
+            child: Row(
+              children: [
+                Icon(
+                  _showAdvanced ? Icons.expand_less : Icons.expand_more,
+                  size: 20,
+                  color: cs.onSurfaceVariant,
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  'Advanced',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.labelLarge?.copyWith(color: cs.onSurfaceVariant),
+                ),
+              ],
+            ),
+          ),
+          if (_showAdvanced) ...[
+            const SizedBox(height: 12),
+            TextField(
+              controller: _baseUrl,
+              decoration: const InputDecoration(labelText: 'Base URL'),
+              autocorrect: false,
+              enableSuggestions: false,
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _model,
+              decoration: const InputDecoration(labelText: 'Model'),
+              autocorrect: false,
+              enableSuggestions: false,
+            ),
+          ],
+          const Spacer(),
+          Row(
+            children: [
+              TextButton(onPressed: widget.onSkip, child: const Text('Skip')),
+              const Spacer(),
+              FilledButton(
+                onPressed: () {
+                  final key = _apiKey.text.trim();
+                  if (key.isEmpty) {
+                    widget.onSkip();
+                    return;
+                  }
+                  widget.onSubmit(
+                    baseUrl: _baseUrl.text,
+                    model: _model.text,
+                    apiKey: key,
+                  );
+                },
+                child: const Text('Done'),
+              ),
+            ],
           ),
         ],
       ),

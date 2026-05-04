@@ -12,22 +12,22 @@ class LlmException implements Exception {
 }
 
 class LlmClient {
-  LlmClient({
-    required this.baseUrl,
-    required this.model,
-    this.apiKey,
-    Dio? dio,
-  }) : _dio = dio ??
-            Dio(BaseOptions(
+  LlmClient({required this.baseUrl, required this.model, this.apiKey, Dio? dio})
+    : _dio =
+          dio ??
+          Dio(
+            BaseOptions(
               baseUrl: _normalize(baseUrl),
               connectTimeout: const Duration(seconds: 8),
               receiveTimeout: const Duration(seconds: 25),
               contentType: 'application/json',
               headers: {
-                if (apiKey != null && apiKey.isNotEmpty) 'authorization': 'Bearer $apiKey',
+                if (apiKey != null && apiKey.isNotEmpty)
+                  'authorization': 'Bearer $apiKey',
                 'accept': 'application/json',
               },
-            ));
+            ),
+          );
 
   final String baseUrl;
   final String model;
@@ -65,7 +65,9 @@ class LlmClient {
       if (choices == null || choices.isEmpty) {
         throw LlmException('no choices in response');
       }
-      final msg = (choices.first as Map<String, dynamic>)['message'] as Map<String, dynamic>?;
+      final msg =
+          (choices.first as Map<String, dynamic>)['message']
+              as Map<String, dynamic>?;
       final content = msg?['content'] as String?;
       if (content == null) {
         throw LlmException('no content');
@@ -81,7 +83,9 @@ class LlmClient {
     try {
       final decoded = jsonDecode(raw);
       if (decoded is Map<String, dynamic>) return decoded;
-    } catch (_) {/* fall through */}
+    } catch (_) {
+      /* fall through */
+    }
     final start = raw.indexOf('{');
     final end = raw.lastIndexOf('}');
     if (start >= 0 && end > start) {

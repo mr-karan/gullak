@@ -21,7 +21,11 @@ class BackupService {
   Future<File> exportToFile() async {
     final json = await exportToJson();
     final dir = await getApplicationDocumentsDirectory();
-    final stamp = DateTime.now().toIso8601String().replaceAll(':', '-').split('.').first;
+    final stamp = DateTime.now()
+        .toIso8601String()
+        .replaceAll(':', '-')
+        .split('.')
+        .first;
     final file = File(p.join(dir.path, 'gullak-backup-$stamp.json'));
     await file.writeAsString(json, flush: true);
     return file;
@@ -61,7 +65,9 @@ class BackupService {
     }
     final version = dec['schema_version'] as int?;
     if (version != _schemaVersion) {
-      throw FormatException('schema mismatch: expected $_schemaVersion, got $version');
+      throw FormatException(
+        'schema mismatch: expected $_schemaVersion, got $version',
+      );
     }
 
     var imported = 0;
@@ -120,22 +126,25 @@ class BackupService {
   // ── serializers ──────────────────────────────────────────────────
 
   Map<String, dynamic> _accountToJson(AccountRow a) => {
-        'id': a.id,
-        'name': a.name,
-        'kind': a.kind,
-        'opening_balance_cents': a.openingBalanceCents,
-        'on_budget': a.onBudget,
-        'archived': a.archived,
-        'sort_order': a.sortOrder,
-        'created_at': a.createdAt,
-        'updated_at': a.updatedAt,
-      };
+    'id': a.id,
+    'name': a.name,
+    'kind': a.kind,
+    'opening_balance_cents': a.openingBalanceCents,
+    'on_budget': a.onBudget,
+    'archived': a.archived,
+    'sort_order': a.sortOrder,
+    'created_at': a.createdAt,
+    'updated_at': a.updatedAt,
+  };
 
-  AccountsCompanion _accountFromJson(Map<String, dynamic> j) => AccountsCompanion.insert(
+  AccountsCompanion _accountFromJson(Map<String, dynamic> j) =>
+      AccountsCompanion.insert(
         id: j['id'] as String,
         name: j['name'] as String,
         kind: drift.Value(j['kind'] as String? ?? 'checking'),
-        openingBalanceCents: drift.Value((j['opening_balance_cents'] as num?)?.toInt() ?? 0),
+        openingBalanceCents: drift.Value(
+          (j['opening_balance_cents'] as num?)?.toInt() ?? 0,
+        ),
         onBudget: drift.Value(j['on_budget'] as bool? ?? true),
         archived: drift.Value(j['archived'] as bool? ?? false),
         sortOrder: drift.Value((j['sort_order'] as num?)?.toInt() ?? 0),
@@ -144,11 +153,11 @@ class BackupService {
       );
 
   Map<String, dynamic> _groupToJson(CategoryGroupRow g) => {
-        'id': g.id,
-        'name': g.name,
-        'is_income': g.isIncome,
-        'sort_order': g.sortOrder,
-      };
+    'id': g.id,
+    'name': g.name,
+    'is_income': g.isIncome,
+    'sort_order': g.sortOrder,
+  };
 
   CategoryGroupsCompanion _groupFromJson(Map<String, dynamic> j) =>
       CategoryGroupsCompanion.insert(
@@ -159,17 +168,18 @@ class BackupService {
       );
 
   Map<String, dynamic> _catToJson(CategoryRow c) => {
-        'id': c.id,
-        'name': c.name,
-        'group_id': c.groupId,
-        'color': c.color,
-        'icon': c.icon,
-        'hidden': c.hidden,
-        'sort_order': c.sortOrder,
-        'updated_at': c.updatedAt,
-      };
+    'id': c.id,
+    'name': c.name,
+    'group_id': c.groupId,
+    'color': c.color,
+    'icon': c.icon,
+    'hidden': c.hidden,
+    'sort_order': c.sortOrder,
+    'updated_at': c.updatedAt,
+  };
 
-  CategoriesCompanion _catFromJson(Map<String, dynamic> j) => CategoriesCompanion.insert(
+  CategoriesCompanion _catFromJson(Map<String, dynamic> j) =>
+      CategoriesCompanion.insert(
         id: j['id'] as String,
         name: j['name'] as String,
         groupId: j['group_id'] as String,
@@ -181,13 +191,14 @@ class BackupService {
       );
 
   Map<String, dynamic> _payeeToJson(PayeeRow p) => {
-        'id': p.id,
-        'name': p.name,
-        'use_count': p.useCount,
-        'updated_at': p.updatedAt,
-      };
+    'id': p.id,
+    'name': p.name,
+    'use_count': p.useCount,
+    'updated_at': p.updatedAt,
+  };
 
-  PayeesCompanion _payeeFromJson(Map<String, dynamic> j) => PayeesCompanion.insert(
+  PayeesCompanion _payeeFromJson(Map<String, dynamic> j) =>
+      PayeesCompanion.insert(
         id: j['id'] as String,
         name: j['name'] as String,
         useCount: drift.Value((j['use_count'] as num?)?.toInt() ?? 0),
@@ -195,26 +206,27 @@ class BackupService {
       );
 
   Map<String, dynamic> _txToJson(TransactionRow t) => {
-        'id': t.id,
-        'account_id': t.accountId,
-        'category_id': t.categoryId,
-        'payee_id': t.payeeId,
-        'payee_name': t.payeeName,
-        'amount_cents': t.amountCents,
-        'date': t.date,
-        'notes': t.notes,
-        'cleared': t.cleared,
-        'origin': t.origin,
-        'origin_ref': t.originRef,
-        'transfer_account_id': t.transferAccountId,
-        'transfer_group_id': t.transferGroupId,
-        'parent_id': t.parentId,
-        'split_total_cents': t.splitTotalCents,
-        'created_at': t.createdAt,
-        'updated_at': t.updatedAt,
-      };
+    'id': t.id,
+    'account_id': t.accountId,
+    'category_id': t.categoryId,
+    'payee_id': t.payeeId,
+    'payee_name': t.payeeName,
+    'amount_cents': t.amountCents,
+    'date': t.date,
+    'notes': t.notes,
+    'cleared': t.cleared,
+    'origin': t.origin,
+    'origin_ref': t.originRef,
+    'transfer_account_id': t.transferAccountId,
+    'transfer_group_id': t.transferGroupId,
+    'parent_id': t.parentId,
+    'split_total_cents': t.splitTotalCents,
+    'created_at': t.createdAt,
+    'updated_at': t.updatedAt,
+  };
 
-  TransactionsCompanion _txFromJson(Map<String, dynamic> j) => TransactionsCompanion.insert(
+  TransactionsCompanion _txFromJson(Map<String, dynamic> j) =>
+      TransactionsCompanion.insert(
         id: j['id'] as String,
         accountId: j['account_id'] as String,
         amountCents: (j['amount_cents'] as num).toInt(),
@@ -235,15 +247,16 @@ class BackupService {
       );
 
   Map<String, dynamic> _budgetToJson(BudgetRow b) => {
-        'id': b.id,
-        'category_id': b.categoryId,
-        'month': b.month,
-        'target_cents': b.targetCents,
-        'rollover_cents': b.rolloverCents,
-        'updated_at': b.updatedAt,
-      };
+    'id': b.id,
+    'category_id': b.categoryId,
+    'month': b.month,
+    'target_cents': b.targetCents,
+    'rollover_cents': b.rolloverCents,
+    'updated_at': b.updatedAt,
+  };
 
-  BudgetsCompanion _budgetFromJson(Map<String, dynamic> j) => BudgetsCompanion.insert(
+  BudgetsCompanion _budgetFromJson(Map<String, dynamic> j) =>
+      BudgetsCompanion.insert(
         id: j['id'] as String,
         categoryId: j['category_id'] as String,
         month: j['month'] as String,
@@ -253,20 +266,21 @@ class BackupService {
       );
 
   Map<String, dynamic> _recurToJson(RecurrenceRow r) => {
-        'id': r.id,
-        'account_id': r.accountId,
-        'category_id': r.categoryId,
-        'payee_id': r.payeeId,
-        'payee_name': r.payeeName,
-        'amount_cents': r.amountCents,
-        'notes': r.notes,
-        'cadence': r.cadence,
-        'next_date': r.nextDate,
-        'created_at': r.createdAt,
-        'updated_at': r.updatedAt,
-      };
+    'id': r.id,
+    'account_id': r.accountId,
+    'category_id': r.categoryId,
+    'payee_id': r.payeeId,
+    'payee_name': r.payeeName,
+    'amount_cents': r.amountCents,
+    'notes': r.notes,
+    'cadence': r.cadence,
+    'next_date': r.nextDate,
+    'created_at': r.createdAt,
+    'updated_at': r.updatedAt,
+  };
 
-  RecurrencesCompanion _recurFromJson(Map<String, dynamic> j) => RecurrencesCompanion.insert(
+  RecurrencesCompanion _recurFromJson(Map<String, dynamic> j) =>
+      RecurrencesCompanion.insert(
         id: j['id'] as String,
         accountId: j['account_id'] as String,
         amountCents: (j['amount_cents'] as num).toInt(),
@@ -280,10 +294,16 @@ class BackupService {
         notes: drift.Value(j['notes'] as String?),
       );
 
-  Map<String, dynamic> _kvToJson(AppKvRow r) => {'key': r.key, 'value': r.value};
-  AppKvCompanion _kvFromJson(Map<String, dynamic> j) =>
-      AppKvCompanion.insert(key: j['key'] as String, value: drift.Value(j['value'] as String?));
+  Map<String, dynamic> _kvToJson(AppKvRow r) => {
+    'key': r.key,
+    'value': r.value,
+  };
+  AppKvCompanion _kvFromJson(Map<String, dynamic> j) => AppKvCompanion.insert(
+    key: j['key'] as String,
+    value: drift.Value(j['value'] as String?),
+  );
 }
 
-final Provider<BackupService> backupServiceProvider =
-    Provider<BackupService>((ref) => BackupService(ref.watch(dbProvider)));
+final Provider<BackupService> backupServiceProvider = Provider<BackupService>(
+  (ref) => BackupService(ref.watch(dbProvider)),
+);

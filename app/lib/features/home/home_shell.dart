@@ -11,24 +11,52 @@ class HomeShell extends ConsumerWidget {
   final Widget child;
 
   static const _tabs = [
-    _Tab(icon: Icons.home_outlined, selected: Icons.home, label: 'Home', path: '/'),
-    _Tab(icon: Icons.receipt_long_outlined, selected: Icons.receipt_long, label: 'Activity', path: '/transactions'),
-    _Tab(icon: Icons.pie_chart_outline, selected: Icons.pie_chart, label: 'Budget', path: '/budgets'),
-    _Tab(icon: Icons.inbox_outlined, selected: Icons.inbox, label: 'Inbox', path: '/inbox'),
-    _Tab(icon: Icons.account_balance_outlined, selected: Icons.account_balance, label: 'Accounts', path: '/accounts'),
+    _Tab(
+      icon: Icons.home_outlined,
+      selected: Icons.home,
+      label: 'Home',
+      path: '/',
+    ),
+    _Tab(
+      icon: Icons.receipt_long_outlined,
+      selected: Icons.receipt_long,
+      label: 'Activity',
+      path: '/transactions',
+    ),
+    _Tab(
+      icon: Icons.pie_chart_outline,
+      selected: Icons.pie_chart,
+      label: 'Budget',
+      path: '/budgets',
+    ),
+    _Tab(
+      icon: Icons.inbox_outlined,
+      selected: Icons.inbox,
+      label: 'Inbox',
+      path: '/inbox',
+    ),
+    _Tab(
+      icon: Icons.account_balance_outlined,
+      selected: Icons.account_balance,
+      label: 'Accounts',
+      path: '/accounts',
+    ),
   ];
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final loc = GoRouterState.of(context).matchedLocation;
-    final smsEnabled = ref.watch(prefsProvider).smsEnabled;
+    final smsEnabled = watchPrefs(ref).smsEnabled;
     final tabs = smsEnabled
         ? _tabs
         : _tabs.where((t) => t.path != '/inbox').toList(growable: false);
     final index = _indexOf(tabs, loc);
 
     final showFab =
-        loc == '/' || loc == '/transactions' || loc == '/budgets' || loc == '/accounts';
+        loc == '/' ||
+        loc == '/transactions' ||
+        loc == '/budgets' ||
+        loc == '/accounts';
 
     return Scaffold(
       body: child,
@@ -54,8 +82,7 @@ class HomeShell extends ConsumerWidget {
     );
   }
 
-  Future<void> _openQuickEntry(BuildContext context) =>
-      openQuickEntry(context);
+  Future<void> _openQuickEntry(BuildContext context) => openQuickEntry(context);
 
   int _indexOf(List<_Tab> tabs, String loc) {
     for (var i = 0; i < tabs.length; i++) {

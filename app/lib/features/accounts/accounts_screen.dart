@@ -33,7 +33,8 @@ class AccountsScreen extends ConsumerWidget {
             return EmptyState(
               icon: Icons.account_balance_outlined,
               title: 'No accounts',
-              body: 'Add your first one — bank, card, cash, anything you spend from.',
+              body:
+                  'Add your first one — bank, card, cash, anything you spend from.',
               action: FilledButton.icon(
                 onPressed: () => _newAccount(context),
                 icon: const Icon(Icons.add),
@@ -98,9 +99,9 @@ class _GroupHeader extends StatelessWidget {
       child: Text(
         text.toUpperCase(),
         style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: cs.onSurfaceVariant,
-              letterSpacing: 1.2,
-            ),
+          color: cs.onSurfaceVariant,
+          letterSpacing: 1.2,
+        ),
       ),
     );
   }
@@ -178,14 +179,15 @@ class _AccountCard extends ConsumerWidget {
                       Text(
                         kind.label,
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: cs.onSurfaceVariant,
-                            ),
+                          color: cs.onSurfaceVariant,
+                        ),
                       ),
                     ],
                   ),
                 ),
                 MoneyText(
-                  amountCents: balanceAsync.value ?? account.openingBalanceCents,
+                  amountCents:
+                      balanceAsync.value ?? account.openingBalanceCents,
                   symbol: symbol,
                   minorDigits: minorDigits,
                   size: MoneySize.large,

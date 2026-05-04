@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
@@ -11,6 +13,7 @@ import '../../ui/widgets/empty_state.dart';
 import '../../ui/widgets/money_text.dart';
 import '../entry/quick_entry.dart';
 import 'data/transaction_repository.dart';
+import 'split_transaction_sheet.dart';
 
 class TransactionsScreen extends ConsumerStatefulWidget {
   const TransactionsScreen({super.key});
@@ -21,23 +24,42 @@ class TransactionsScreen extends ConsumerStatefulWidget {
 
 class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
   final _searchCtrl = TextEditingController();
+  Timer? _searchDebounce;
   String _query = '';
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
     _searchCtrl.dispose();
     super.dispose();
+  }
+
+  void _onSearchChanged(String value) {
+    _searchDebounce?.cancel();
+    _searchDebounce = Timer(const Duration(milliseconds: 275), () {
+      if (!mounted) return;
+      setState(() => _query = value.trim());
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     final prefs = ref.watch(prefsProvider);
-    final listAsync = ref.watch(transactionsListProvider(
-      TransactionListQuery(search: _query.isEmpty ? null : _query),
-    ));
+    final listAsync = ref.watch(
+      transactionsListProvider(
+        TransactionListQuery(search: _query.isEmpty ? null : _query),
+      ),
+    );
     return Scaffold(
       appBar: AppBar(
         title: const Text('Activity'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.call_split_outlined),
+            tooltip: 'New split',
+            onPressed: () => _openSplitSheet(context),
+          ),
+        ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(56),
           child: Padding(
@@ -48,7 +70,7 @@ class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
                 hintText: 'Search payee, notes…',
                 prefixIcon: Icon(Icons.search),
               ),
-              onChanged: (v) => setState(() => _query = v.trim()),
+              onChanged: _onSearchChanged,
             ),
           ),
         ),
@@ -73,7 +95,8 @@ class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
           for (final r in rows) {
             groups.putIfAbsent(r.date, () => []).add(r);
           }
-          final orderedDates = groups.keys.toList()..sort((a, b) => b.compareTo(a));
+          final orderedDates = groups.keys.toList()
+            ..sort((a, b) => b.compareTo(a));
           return ListView.builder(
             physics: const AlwaysScrollableScrollPhysics(),
             itemCount: orderedDates.length,
@@ -103,6 +126,15 @@ class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
       ),
     );
   }
+
+  Future<void> _openSplitSheet(BuildContext context) {
+    return showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (_) => const SplitTransactionSheet(),
+    );
+  }
 }
 
 class _DateHeader extends StatelessWidget {
@@ -127,8 +159,8 @@ class _DateHeader extends StatelessWidget {
     final label = diff == 0
         ? 'Today'
         : diff == 1
-            ? 'Yesterday'
-            : DateFormat('EEE, d MMM').format(d);
+        ? 'Yesterday'
+        : DateFormat('EEE, d MMM').format(d);
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
       child: Row(
@@ -137,17 +169,17 @@ class _DateHeader extends StatelessWidget {
             child: Text(
               label.toUpperCase(),
               style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: cs.onSurfaceVariant,
-                    letterSpacing: 1.2,
-                  ),
+                color: cs.onSurfaceVariant,
+                letterSpacing: 1.2,
+              ),
             ),
           ),
           Text(
             Money.format(netCents, symbol: symbol, minorDigits: minorDigits),
             style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: cs.onSurfaceVariant,
-                  fontFeatures: const [FontFeature.tabularFigures()],
-                ),
+              color: cs.onSurfaceVariant,
+              fontFeatures: const [FontFeature.tabularFigures()],
+            ),
           ),
         ],
       ),
@@ -187,13 +219,13 @@ class _TxRow extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final cs = Theme.of(context).colorScheme;
-    final swatchLabel = row.categoryName ??
-        (row.isTransfer ? 'Transfer' : 'Other');
+    final swatchLabel =
+        row.categoryName ?? (row.isTransfer ? 'Transfer' : 'Other');
     final amountColor = row.isTransfer
         ? cs.onSurfaceVariant
         : row.amountCents < 0
-            ? cs.onSurface
-            : cs.tertiary;
+        ? cs.onSurface
+        : cs.tertiary;
     return Slidable(
       key: ValueKey(row.id),
       endActionPane: ActionPane(
@@ -201,7 +233,8 @@ class _TxRow extends ConsumerWidget {
         extentRatio: 0.55,
         children: [
           SlidableAction(
-            onPressed: (ctx) => openQuickEntry(ctx, editingTransactionId: row.id),
+            onPressed: (ctx) =>
+                openQuickEntry(ctx, editingTransactionId: row.id),
             backgroundColor: cs.surfaceContainerHigh,
             foregroundColor: cs.onSurface,
             icon: Icons.edit_outlined,
@@ -227,8 +260,8 @@ class _TxRow extends ConsumerWidget {
                 icon: row.isTransfer
                     ? Icons.swap_horiz
                     : row.isSplit
-                        ? Icons.call_split
-                        : null,
+                    ? Icons.call_split
+                    : null,
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -246,12 +279,13 @@ class _TxRow extends ConsumerWidget {
                     const SizedBox(height: 2),
                     Text(
                       [
-                        row.categoryName ?? (row.isTransfer ? 'Transfer' : 'Uncategorised'),
+                        row.categoryName ??
+                            (row.isTransfer ? 'Transfer' : 'Uncategorised'),
                         row.accountName ?? '',
                       ].where((e) => e.isNotEmpty).join(' · '),
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: cs.onSurfaceVariant,
-                          ),
+                        color: cs.onSurfaceVariant,
+                      ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),

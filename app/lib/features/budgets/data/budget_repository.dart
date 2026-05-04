@@ -64,40 +64,61 @@ class BudgetRepository {
     required int targetCents,
   }) async {
     final now = DateTime.now().millisecondsSinceEpoch;
-    final existing = await (_db.select(_db.budgets)
-          ..where((b) => b.categoryId.equals(categoryId) & b.month.equals(month)))
-        .getSingleOrNull();
+    final existing =
+        await (_db.select(_db.budgets)..where(
+              (b) => b.categoryId.equals(categoryId) & b.month.equals(month),
+            ))
+            .getSingleOrNull();
     if (existing == null) {
-      await _db.into(_db.budgets).insert(BudgetsCompanion.insert(
-            id: _uuid.v4(),
-            categoryId: categoryId,
-            month: month,
-            targetCents: targetCents,
-            updatedAt: now,
-          ));
+      await _db
+          .into(_db.budgets)
+          .insert(
+            BudgetsCompanion.insert(
+              id: _uuid.v4(),
+              categoryId: categoryId,
+              month: month,
+              targetCents: targetCents,
+              updatedAt: now,
+            ),
+          );
     } else {
-      await (_db.update(_db.budgets)..where((b) => b.id.equals(existing.id))).write(
-        BudgetsCompanion(targetCents: Value(targetCents), updatedAt: Value(now)),
+      await (_db.update(
+        _db.budgets,
+      )..where((b) => b.id.equals(existing.id))).write(
+        BudgetsCompanion(
+          targetCents: Value(targetCents),
+          updatedAt: Value(now),
+        ),
       );
     }
   }
 
-  Future<void> clearTarget({required String categoryId, required String month}) async {
-    await (_db.delete(_db.budgets)
-          ..where((b) => b.categoryId.equals(categoryId) & b.month.equals(month)))
+  Future<void> clearTarget({
+    required String categoryId,
+    required String month,
+  }) async {
+    await (_db.delete(_db.budgets)..where(
+          (b) => b.categoryId.equals(categoryId) & b.month.equals(month),
+        ))
         .go();
   }
 
   /// Compose a list of all categories with their budget + spend for the
   /// month. Categories without a target appear with target=0.
   Future<BudgetMonthOverview> summary(String month) async {
-    final categories = await (_db.select(_db.categories)
-          ..where((c) => c.hidden.equals(false))
-          ..orderBy([(c) => OrderingTerm.asc(c.sortOrder), (c) => OrderingTerm.asc(c.name)]))
-        .get();
+    final categories =
+        await (_db.select(_db.categories)
+              ..where((c) => c.hidden.equals(false))
+              ..orderBy([
+                (c) => OrderingTerm.asc(c.sortOrder),
+                (c) => OrderingTerm.asc(c.name),
+              ]))
+            .get();
     final groups = await _db.select(_db.categoryGroups).get();
     final groupName = {for (final g in groups) g.id: g.name};
-    final budgets = await (_db.select(_db.budgets)..where((b) => b.month.equals(month))).get();
+    final budgets = await (_db.select(
+      _db.budgets,
+    )..where((b) => b.month.equals(month))).get();
     final targetByCat = {for (final b in budgets) b.categoryId: b.targetCents};
 
     final txRepo = TransactionRepository(_db);
@@ -109,13 +130,15 @@ class BudgetRepository {
       final target = targetByCat[c.id] ?? 0;
       totalAssigned += target;
       totalSpent += spent;
-      entries.add(BudgetSummary(
-        categoryId: c.id,
-        categoryName: c.name,
-        groupName: groupName[c.groupId] ?? 'Other',
-        targetCents: target,
-        spentCents: spent,
-      ));
+      entries.add(
+        BudgetSummary(
+          categoryId: c.id,
+          categoryName: c.name,
+          groupName: groupName[c.groupId] ?? 'Other',
+          targetCents: target,
+          spentCents: spent,
+        ),
+      );
     }
     return BudgetMonthOverview(
       month: month,
@@ -127,10 +150,14 @@ class BudgetRepository {
 }
 
 final Provider<BudgetRepository> budgetRepoProvider =
-    Provider<BudgetRepository>((ref) => BudgetRepository(ref.watch(dbProvider)));
+    Provider<BudgetRepository>(
+      (ref) => BudgetRepository(ref.watch(dbProvider)),
+    );
 
-final budgetMonthProvider =
-    FutureProvider.family<BudgetMonthOverview, String>((ref, month) {
+final budgetMonthProvider = FutureProvider.family<BudgetMonthOverview, String>((
+  ref,
+  month,
+) {
   // Re-derive when transactions or categories change.
   ref.watch(recentTransactionsProvider);
   return ref.watch(budgetRepoProvider).summary(month);
