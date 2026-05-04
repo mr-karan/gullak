@@ -1,14 +1,23 @@
-# Node
-node_modules/
+# Build artefacts
 dist/
+build/
+
+# Node / Bun
+node_modules/
+bun.lockb
+*.log
+
+# Local data
+data/
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
 
 # Environment
 .env
 *.env
 !.env.example
-
-# Data directory (ledger files, state, db)
-data/
 
 # IDE
 .idea/

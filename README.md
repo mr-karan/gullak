@@ -1,93 +1,82 @@
 # Gullak
 
-Ledger-first expense tracker. Natural-language messages in, plain-text [`ledger-cli`](https://ledger-cli.org/) entries out.
+Local-first mobile expense tracker with an optional self-hosted sync server. SQLite is the source of truth — both on-device (Drift, in the Flutter app) and on the homelab (Bun + Hono + Drizzle, in `pi-server`). The phone works fully offline; if you point it at a `pi-server`, multiple devices and a WhatsApp bridge converge on the same data.
 
-> _"Spent 450 on groceries at Blinkit on HDFC UPI"_ → a structured, double-entry transaction appended to `data/main.ledger`.
-
-## Why
-
-Paisa-style dashboards and fancy UIs get in the way. Gullak keeps a single plain-text ledger file as the source of truth, uses a small LLM to turn messages into postings, and exposes everything through a minimal JSON HTTP API. WhatsApp is a thin transport on top.
-
-## Architecture
+## Components
 
 ```
-              ┌──────────────┐         ┌──────────────┐
-  WhatsApp ──▶│   bridge     │──POST──▶│  pi-server   │──▶ data/main.ledger
-              │ (Baileys)    │         │ (TypeScript) │──▶ data/pi-state.json
-              └──────────────┘         └──────┬───────┘
-                    ▲                         │
-                    └─────── /api/sendText ◀──┘
+┌─────────────────┐         ┌──────────────────┐         ┌─────────────────────┐
+│ Flutter app     │  HTTPS  │ pi-server        │ ←────── │ whatsapp-bridge     │
+│ (Drift+SQLite)  │ ◀─────▶ │ (Bun+Hono+SQLite)│ webhook │ (Baileys, Bun)      │
+└─────────────────┘         └──────────────────┘         └─────────────────────┘
 ```
 
-- **`pi-server/`** — Express JSON API, pi-sdk agent, ledger IO, weekly recap. Node ≥ 20.
-- **`whatsapp-bridge/`** — Baileys WhatsApp socket; posts `{event, payload}` webhooks to `pi-server`.
-- **`data/main.ledger`** — the only persistent store. App state (payee memory, dedupe, recap history) sits next to it in `pi-state.json`.
+- **`app/`** — Flutter, Riverpod, Drift, go_router. Sub-3s expense logging is the point.
+- **`pi-server/`** — Bun + Hono, Drizzle ORM over `bun:sqlite`. Mirrors the Flutter Drift schema. Cross-device merge point.
+- **`whatsapp-bridge/`** — Bun + Baileys WhatsApp socket. Posts inbound messages to `pi-server`.
+
+## Stack
+
+| | App | pi-server | bridge |
+|--|--|--|--|
+| Lang | Dart | TypeScript | JS/TS |
+| Runtime | Flutter | Bun ≥1.1 | Bun ≥1.1 |
+| HTTP | Dio | Hono | Express (light) |
+| DB | Drift / sqlite3_flutter_libs | Drizzle / bun:sqlite | (SQLite migration pending) |
+| Validation | (Drift typed rows) | Zod + drizzle-zod | — |
+| AI | OpenAI-compatible client (default OpenRouter + Gemini 3 Flash) | pi-sdk (rewired pending) | — |
 
 ## Quick start
-
-Requires `pnpm`, `node >=20`, and `ledger` (for write validation — optional, can be disabled).
 
 ```bash
 # pi-server
 cd pi-server
-cp .env.example .env           # fill in model + api keys
-pnpm install
-pnpm dev                       # http://127.0.0.1:8787
+bun install
+bun run db:generate                       # regenerate migrations if schema changed
+bun run dev                               # localhost:8787
 
-# whatsapp-bridge (separate terminal; optional)
-cd whatsapp-bridge
-cp .env.example .env
-pnpm install
-pnpm start                     # prints a URL to fetch the QR
+# Flutter app
+cd ../app
+flutter pub get
+flutter run                               # or `just install` from repo root
+
+# whatsapp-bridge (optional)
+cd ../whatsapp-bridge
+bun install
+bun run index.js
 ```
 
-Scan the QR at `http://localhost:3000/api/default/auth/qr` from WhatsApp → Linked Devices.
+## Endpoints (pi-server)
 
-## HTTP API
-
-| Method | Path | Purpose |
-|--------|------|---------|
-| POST | `/v1/messages` | Free-form natural-language message → agent |
-| GET  | `/v1/accounts` | List accounts from the ledger |
-| GET  | `/v1/transactions` | Query transactions (filter by date, payee, account) |
-| PATCH | `/v1/transactions/:id` | Edit an app-authored transaction |
-| DELETE | `/v1/transactions/:id` | Remove an app-authored transaction |
-| GET  | `/v1/summary` | Totals for a period |
-| POST | `/v1/recaps/weekly/run` | Generate (and optionally send) a weekly recap |
-| POST | `/v1/whatsapp/webhook` | Inbound WhatsApp messages (alias: `/api/whatsapp/webhook`) |
-
-Auth: set `GULLAK_HTTP_API_KEY` and pass it via `X-Api-Key`. Webhook paths are exempt.
-
-## Weekly recap
-
-```bash
-cd pi-server
-pnpm recap:weekly                       # writes data/recaps/<iso-week>.md
-pnpm recap:weekly --send-whatsapp       # also posts to GULLAK_RECAP_WHATSAPP_CHAT_ID
+```
+GET    /v1/health
+GET    /v1/accounts            POST/PATCH/DELETE /v1/accounts(/:id)
+GET    /v1/category-groups     POST/PATCH/DELETE /v1/category-groups(/:id)
+GET    /v1/categories          POST/PATCH/DELETE /v1/categories(/:id)
+GET    /v1/payees              POST/PATCH/DELETE /v1/payees(/:id)
+GET    /v1/transactions        POST/PATCH/DELETE /v1/transactions(/:id)
+GET    /v1/budgets             POST/PATCH/DELETE /v1/budgets(/:id)
+GET    /v1/recurrences         POST/PATCH/DELETE /v1/recurrences(/:id)
+GET    /v1/summary?startDate=&endDate=&accountId=
+GET    /v1/sync/changes?since=<id>
+POST   /v1/sync/push
+POST   /v1/messages           (stub)
+POST   /v1/whatsapp/webhook   (stub)
 ```
 
-Math is deterministic — the LLM only phrases the summary.
+Auth: `x-api-key` header. Set `GULLAK_HTTP_API_KEY` to enable.
 
 ## Configuration
 
-All env is documented in [`pi-server/.env.example`](./pi-server/.env.example) and [`whatsapp-bridge/.env.example`](./whatsapp-bridge/.env.example). Key pieces:
+Server env (all optional):
 
-- `GULLAK_LEDGER_PATH` — path to `main.ledger` (default `../data/main.ledger`)
-- `GULLAK_MODEL_*` — model endpoint, id, key. Works with any OpenAI-compatible API (Ollama, OpenRouter, etc.)
-- `GULLAK_WHATSAPP_ALLOWED_NUMBERS` — DM allowlist
-- `GULLAK_VALIDATE_WRITES` — run `ledger source` on every write (default `true`)
+- `GULLAK_DB_PATH` — defaults to `../data/gullak.db`
+- `GULLAK_HOST`, `GULLAK_PORT` — defaults `127.0.0.1:8787`
+- `GULLAK_HTTP_API_KEY` — turns on the API-key gate
+- `GULLAK_MODEL_*`, `OPENROUTER_API_KEY` — for the agent (when re-wired)
+- `GULLAK_WHATSAPP_*` — bridge interaction
 
-## Repo layout
-
-```
-gullak/
-├── pi-server/          # the app
-├── whatsapp-bridge/    # Baileys bridge
-├── data/               # main.ledger (gitignored)
-├── docs/               # architecture notes
-├── AGENTS.md / CLAUDE.md
-└── README.md
-```
+App AI defaults match the homelab: OpenRouter + `google/gemini-3-flash-preview`. Configure in onboarding or `Settings → AI assist`.
 
 ## License
 
