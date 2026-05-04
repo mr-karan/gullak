@@ -12,6 +12,7 @@ import '../../data/ai/llm_client.dart';
 import '../../data/sms/sms_pipeline.dart';
 import '../../data/sms/sms_reader.dart';
 import '../../state/providers.dart';
+import '../../sync/sync_service.dart';
 import '../backup/backup_service.dart';
 import '../backup/file_pick.dart';
 import '../accounts/data/account_repository.dart';
@@ -90,6 +91,27 @@ class SettingsScreen extends ConsumerWidget {
                 ).showSnackBar(SnackBar(content: Text('Re-ingested $added.')));
               },
             ),
+          const _SectionHeader('Sync'),
+          ListTile(
+            leading: const Icon(Icons.cloud_outlined),
+            title: const Text('Sync server'),
+            subtitle: FutureBuilder<String?>(
+              future: ref.read(secureStoreProvider).readSyncBaseUrl(),
+              builder: (_, s) =>
+                  Text(s.data ?? 'Not configured — runs fully on-device'),
+            ),
+            onTap: () => _editSync(context, ref),
+          ),
+          ListTile(
+            leading: const Icon(Icons.sync),
+            title: const Text('Sync now'),
+            subtitle: Text(
+              prefs.syncLastAt == null
+                  ? 'Never synced'
+                  : 'Last: ${_formatTime(prefs.syncLastAt!)}',
+            ),
+            onTap: () => _syncNow(context, ref),
+          ),
           const _SectionHeader('Appearance'),
           ListTile(
             leading: const Icon(Icons.brightness_6_outlined),
@@ -296,6 +318,108 @@ class SettingsScreen extends ConsumerWidget {
   }
 
   Future<String?> _pickJsonFile() => jsonPicker.pickJson();
+
+  static String _formatTime(int epochMs) {
+    final t = DateTime.fromMillisecondsSinceEpoch(epochMs);
+    final diff = DateTime.now().difference(t);
+    if (diff.inMinutes < 1) return 'just now';
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+    if (diff.inHours < 24) return '${diff.inHours}h ago';
+    if (diff.inDays < 7) return '${diff.inDays}d ago';
+    return '${t.day}/${t.month}/${t.year % 100}';
+  }
+
+  Future<void> _editSync(BuildContext context, WidgetRef ref) async {
+    final s = ref.read(secureStoreProvider);
+    final base = TextEditingController(text: await s.readSyncBaseUrl() ?? '');
+    final key = TextEditingController(text: await s.readSyncApiKey() ?? '');
+    if (!context.mounted) return;
+    try {
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (dialogCtx) {
+          final width = MediaQuery.of(dialogCtx).size.width - 48;
+          return AlertDialog(
+            title: const Text('Sync server'),
+            contentPadding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+            content: SizedBox(
+              width: width,
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'Optional. Point at a self-hosted Gullak server to '
+                      'merge data across devices. The phone keeps working '
+                      'offline either way.',
+                      style: Theme.of(dialogCtx).textTheme.bodyMedium?.copyWith(
+                        color: Theme.of(dialogCtx).colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: base,
+                      decoration: const InputDecoration(
+                        labelText: 'Base URL',
+                        hintText: 'https://gullak.mrkaran.dev',
+                      ),
+                      autocorrect: false,
+                      enableSuggestions: false,
+                      keyboardType: TextInputType.url,
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: key,
+                      decoration: const InputDecoration(
+                        labelText: 'API key',
+                        hintText: 'optional',
+                      ),
+                      obscureText: true,
+                      autocorrect: false,
+                      enableSuggestions: false,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogCtx).pop(false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(dialogCtx).pop(true),
+                child: const Text('Save'),
+              ),
+            ],
+          );
+        },
+      );
+      if (ok == true) {
+        await s.writeSync(
+          baseUrl: base.text.trim().isEmpty ? null : base.text.trim(),
+          apiKey: key.text.trim().isEmpty ? null : key.text.trim(),
+        );
+      }
+    } finally {
+      base.dispose();
+      key.dispose();
+    }
+  }
+
+  Future<void> _syncNow(BuildContext context, WidgetRef ref) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final result = await ref.read(syncServiceProvider).syncOnce();
+    if (!context.mounted) return;
+    bumpPrefs(ref);
+    final msg = result.error != null
+        ? 'Sync failed: ${result.error}'
+        : 'Pushed ${result.pushed}, pulled ${result.pulled}';
+    messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(msg)));
+  }
 
   Future<void> _editLlm(BuildContext context, WidgetRef ref) async {
     final s = ref.read(secureStoreProvider);

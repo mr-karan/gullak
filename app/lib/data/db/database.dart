@@ -25,6 +25,7 @@ part 'database.g.dart';
     SmsMessages,
     AppKv,
     AuditLog,
+    ChangeLog,
   ],
 )
 class AppDatabase extends _$AppDatabase {
@@ -32,7 +33,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -58,6 +59,19 @@ class AppDatabase extends _$AppDatabase {
         'CREATE INDEX IF NOT EXISTS idx_sms_status '
         'ON sms_messages(candidate_status)',
       );
+      await customStatement(
+        'CREATE INDEX IF NOT EXISTS idx_change_log_synced '
+        'ON change_log(synced, id)',
+      );
+    },
+    onUpgrade: (m, from, to) async {
+      if (from < 2) {
+        await m.createTable(changeLog);
+        await customStatement(
+          'CREATE INDEX IF NOT EXISTS idx_change_log_synced '
+          'ON change_log(synced, id)',
+        );
+      }
     },
   );
 

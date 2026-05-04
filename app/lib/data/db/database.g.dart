@@ -4915,6 +4915,445 @@ class AuditLogCompanion extends UpdateCompanion<AuditLogRow> {
   }
 }
 
+class $ChangeLogTable extends ChangeLog
+    with TableInfo<$ChangeLogTable, ChangeLogRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $ChangeLogTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    hasAutoIncrement: true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'PRIMARY KEY AUTOINCREMENT',
+    ),
+  );
+  static const VerificationMeta _atMeta = const VerificationMeta('at');
+  @override
+  late final GeneratedColumn<int> at = GeneratedColumn<int>(
+    'at',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _resourceMeta = const VerificationMeta(
+    'resource',
+  );
+  @override
+  late final GeneratedColumn<String> resource = GeneratedColumn<String>(
+    'resource',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _resourceIdMeta = const VerificationMeta(
+    'resourceId',
+  );
+  @override
+  late final GeneratedColumn<String> resourceId = GeneratedColumn<String>(
+    'resource_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _opMeta = const VerificationMeta('op');
+  @override
+  late final GeneratedColumn<String> op = GeneratedColumn<String>(
+    'op',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _payloadMeta = const VerificationMeta(
+    'payload',
+  );
+  @override
+  late final GeneratedColumn<String> payload = GeneratedColumn<String>(
+    'payload',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _syncedMeta = const VerificationMeta('synced');
+  @override
+  late final GeneratedColumn<bool> synced = GeneratedColumn<bool>(
+    'synced',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("synced" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    at,
+    resource,
+    resourceId,
+    op,
+    payload,
+    synced,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'change_log';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<ChangeLogRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('at')) {
+      context.handle(_atMeta, at.isAcceptableOrUnknown(data['at']!, _atMeta));
+    } else if (isInserting) {
+      context.missing(_atMeta);
+    }
+    if (data.containsKey('resource')) {
+      context.handle(
+        _resourceMeta,
+        resource.isAcceptableOrUnknown(data['resource']!, _resourceMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_resourceMeta);
+    }
+    if (data.containsKey('resource_id')) {
+      context.handle(
+        _resourceIdMeta,
+        resourceId.isAcceptableOrUnknown(data['resource_id']!, _resourceIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_resourceIdMeta);
+    }
+    if (data.containsKey('op')) {
+      context.handle(_opMeta, op.isAcceptableOrUnknown(data['op']!, _opMeta));
+    } else if (isInserting) {
+      context.missing(_opMeta);
+    }
+    if (data.containsKey('payload')) {
+      context.handle(
+        _payloadMeta,
+        payload.isAcceptableOrUnknown(data['payload']!, _payloadMeta),
+      );
+    }
+    if (data.containsKey('synced')) {
+      context.handle(
+        _syncedMeta,
+        synced.isAcceptableOrUnknown(data['synced']!, _syncedMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  ChangeLogRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return ChangeLogRow(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}id'],
+      )!,
+      at: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}at'],
+      )!,
+      resource: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}resource'],
+      )!,
+      resourceId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}resource_id'],
+      )!,
+      op: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}op'],
+      )!,
+      payload: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}payload'],
+      ),
+      synced: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}synced'],
+      )!,
+    );
+  }
+
+  @override
+  $ChangeLogTable createAlias(String alias) {
+    return $ChangeLogTable(attachedDatabase, alias);
+  }
+}
+
+class ChangeLogRow extends DataClass implements Insertable<ChangeLogRow> {
+  final int id;
+  final int at;
+  final String resource;
+  final String resourceId;
+  final String op;
+  final String? payload;
+  final bool synced;
+  const ChangeLogRow({
+    required this.id,
+    required this.at,
+    required this.resource,
+    required this.resourceId,
+    required this.op,
+    this.payload,
+    required this.synced,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['at'] = Variable<int>(at);
+    map['resource'] = Variable<String>(resource);
+    map['resource_id'] = Variable<String>(resourceId);
+    map['op'] = Variable<String>(op);
+    if (!nullToAbsent || payload != null) {
+      map['payload'] = Variable<String>(payload);
+    }
+    map['synced'] = Variable<bool>(synced);
+    return map;
+  }
+
+  ChangeLogCompanion toCompanion(bool nullToAbsent) {
+    return ChangeLogCompanion(
+      id: Value(id),
+      at: Value(at),
+      resource: Value(resource),
+      resourceId: Value(resourceId),
+      op: Value(op),
+      payload: payload == null && nullToAbsent
+          ? const Value.absent()
+          : Value(payload),
+      synced: Value(synced),
+    );
+  }
+
+  factory ChangeLogRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return ChangeLogRow(
+      id: serializer.fromJson<int>(json['id']),
+      at: serializer.fromJson<int>(json['at']),
+      resource: serializer.fromJson<String>(json['resource']),
+      resourceId: serializer.fromJson<String>(json['resourceId']),
+      op: serializer.fromJson<String>(json['op']),
+      payload: serializer.fromJson<String?>(json['payload']),
+      synced: serializer.fromJson<bool>(json['synced']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'at': serializer.toJson<int>(at),
+      'resource': serializer.toJson<String>(resource),
+      'resourceId': serializer.toJson<String>(resourceId),
+      'op': serializer.toJson<String>(op),
+      'payload': serializer.toJson<String?>(payload),
+      'synced': serializer.toJson<bool>(synced),
+    };
+  }
+
+  ChangeLogRow copyWith({
+    int? id,
+    int? at,
+    String? resource,
+    String? resourceId,
+    String? op,
+    Value<String?> payload = const Value.absent(),
+    bool? synced,
+  }) => ChangeLogRow(
+    id: id ?? this.id,
+    at: at ?? this.at,
+    resource: resource ?? this.resource,
+    resourceId: resourceId ?? this.resourceId,
+    op: op ?? this.op,
+    payload: payload.present ? payload.value : this.payload,
+    synced: synced ?? this.synced,
+  );
+  ChangeLogRow copyWithCompanion(ChangeLogCompanion data) {
+    return ChangeLogRow(
+      id: data.id.present ? data.id.value : this.id,
+      at: data.at.present ? data.at.value : this.at,
+      resource: data.resource.present ? data.resource.value : this.resource,
+      resourceId: data.resourceId.present
+          ? data.resourceId.value
+          : this.resourceId,
+      op: data.op.present ? data.op.value : this.op,
+      payload: data.payload.present ? data.payload.value : this.payload,
+      synced: data.synced.present ? data.synced.value : this.synced,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ChangeLogRow(')
+          ..write('id: $id, ')
+          ..write('at: $at, ')
+          ..write('resource: $resource, ')
+          ..write('resourceId: $resourceId, ')
+          ..write('op: $op, ')
+          ..write('payload: $payload, ')
+          ..write('synced: $synced')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode =>
+      Object.hash(id, at, resource, resourceId, op, payload, synced);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is ChangeLogRow &&
+          other.id == this.id &&
+          other.at == this.at &&
+          other.resource == this.resource &&
+          other.resourceId == this.resourceId &&
+          other.op == this.op &&
+          other.payload == this.payload &&
+          other.synced == this.synced);
+}
+
+class ChangeLogCompanion extends UpdateCompanion<ChangeLogRow> {
+  final Value<int> id;
+  final Value<int> at;
+  final Value<String> resource;
+  final Value<String> resourceId;
+  final Value<String> op;
+  final Value<String?> payload;
+  final Value<bool> synced;
+  const ChangeLogCompanion({
+    this.id = const Value.absent(),
+    this.at = const Value.absent(),
+    this.resource = const Value.absent(),
+    this.resourceId = const Value.absent(),
+    this.op = const Value.absent(),
+    this.payload = const Value.absent(),
+    this.synced = const Value.absent(),
+  });
+  ChangeLogCompanion.insert({
+    this.id = const Value.absent(),
+    required int at,
+    required String resource,
+    required String resourceId,
+    required String op,
+    this.payload = const Value.absent(),
+    this.synced = const Value.absent(),
+  }) : at = Value(at),
+       resource = Value(resource),
+       resourceId = Value(resourceId),
+       op = Value(op);
+  static Insertable<ChangeLogRow> custom({
+    Expression<int>? id,
+    Expression<int>? at,
+    Expression<String>? resource,
+    Expression<String>? resourceId,
+    Expression<String>? op,
+    Expression<String>? payload,
+    Expression<bool>? synced,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (at != null) 'at': at,
+      if (resource != null) 'resource': resource,
+      if (resourceId != null) 'resource_id': resourceId,
+      if (op != null) 'op': op,
+      if (payload != null) 'payload': payload,
+      if (synced != null) 'synced': synced,
+    });
+  }
+
+  ChangeLogCompanion copyWith({
+    Value<int>? id,
+    Value<int>? at,
+    Value<String>? resource,
+    Value<String>? resourceId,
+    Value<String>? op,
+    Value<String?>? payload,
+    Value<bool>? synced,
+  }) {
+    return ChangeLogCompanion(
+      id: id ?? this.id,
+      at: at ?? this.at,
+      resource: resource ?? this.resource,
+      resourceId: resourceId ?? this.resourceId,
+      op: op ?? this.op,
+      payload: payload ?? this.payload,
+      synced: synced ?? this.synced,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (at.present) {
+      map['at'] = Variable<int>(at.value);
+    }
+    if (resource.present) {
+      map['resource'] = Variable<String>(resource.value);
+    }
+    if (resourceId.present) {
+      map['resource_id'] = Variable<String>(resourceId.value);
+    }
+    if (op.present) {
+      map['op'] = Variable<String>(op.value);
+    }
+    if (payload.present) {
+      map['payload'] = Variable<String>(payload.value);
+    }
+    if (synced.present) {
+      map['synced'] = Variable<bool>(synced.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ChangeLogCompanion(')
+          ..write('id: $id, ')
+          ..write('at: $at, ')
+          ..write('resource: $resource, ')
+          ..write('resourceId: $resourceId, ')
+          ..write('op: $op, ')
+          ..write('payload: $payload, ')
+          ..write('synced: $synced')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -4928,6 +5367,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $SmsMessagesTable smsMessages = $SmsMessagesTable(this);
   late final $AppKvTable appKv = $AppKvTable(this);
   late final $AuditLogTable auditLog = $AuditLogTable(this);
+  late final $ChangeLogTable changeLog = $ChangeLogTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -4943,6 +5383,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     smsMessages,
     appKv,
     auditLog,
+    changeLog,
   ];
 }
 
@@ -7429,6 +7870,240 @@ typedef $$AuditLogTableProcessedTableManager =
       AuditLogRow,
       PrefetchHooks Function()
     >;
+typedef $$ChangeLogTableCreateCompanionBuilder =
+    ChangeLogCompanion Function({
+      Value<int> id,
+      required int at,
+      required String resource,
+      required String resourceId,
+      required String op,
+      Value<String?> payload,
+      Value<bool> synced,
+    });
+typedef $$ChangeLogTableUpdateCompanionBuilder =
+    ChangeLogCompanion Function({
+      Value<int> id,
+      Value<int> at,
+      Value<String> resource,
+      Value<String> resourceId,
+      Value<String> op,
+      Value<String?> payload,
+      Value<bool> synced,
+    });
+
+class $$ChangeLogTableFilterComposer
+    extends Composer<_$AppDatabase, $ChangeLogTable> {
+  $$ChangeLogTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get at => $composableBuilder(
+    column: $table.at,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get resource => $composableBuilder(
+    column: $table.resource,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get resourceId => $composableBuilder(
+    column: $table.resourceId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get op => $composableBuilder(
+    column: $table.op,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get payload => $composableBuilder(
+    column: $table.payload,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get synced => $composableBuilder(
+    column: $table.synced,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$ChangeLogTableOrderingComposer
+    extends Composer<_$AppDatabase, $ChangeLogTable> {
+  $$ChangeLogTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get at => $composableBuilder(
+    column: $table.at,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get resource => $composableBuilder(
+    column: $table.resource,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get resourceId => $composableBuilder(
+    column: $table.resourceId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get op => $composableBuilder(
+    column: $table.op,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get payload => $composableBuilder(
+    column: $table.payload,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get synced => $composableBuilder(
+    column: $table.synced,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$ChangeLogTableAnnotationComposer
+    extends Composer<_$AppDatabase, $ChangeLogTable> {
+  $$ChangeLogTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<int> get at =>
+      $composableBuilder(column: $table.at, builder: (column) => column);
+
+  GeneratedColumn<String> get resource =>
+      $composableBuilder(column: $table.resource, builder: (column) => column);
+
+  GeneratedColumn<String> get resourceId => $composableBuilder(
+    column: $table.resourceId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get op =>
+      $composableBuilder(column: $table.op, builder: (column) => column);
+
+  GeneratedColumn<String> get payload =>
+      $composableBuilder(column: $table.payload, builder: (column) => column);
+
+  GeneratedColumn<bool> get synced =>
+      $composableBuilder(column: $table.synced, builder: (column) => column);
+}
+
+class $$ChangeLogTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $ChangeLogTable,
+          ChangeLogRow,
+          $$ChangeLogTableFilterComposer,
+          $$ChangeLogTableOrderingComposer,
+          $$ChangeLogTableAnnotationComposer,
+          $$ChangeLogTableCreateCompanionBuilder,
+          $$ChangeLogTableUpdateCompanionBuilder,
+          (
+            ChangeLogRow,
+            BaseReferences<_$AppDatabase, $ChangeLogTable, ChangeLogRow>,
+          ),
+          ChangeLogRow,
+          PrefetchHooks Function()
+        > {
+  $$ChangeLogTableTableManager(_$AppDatabase db, $ChangeLogTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$ChangeLogTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$ChangeLogTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$ChangeLogTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<int> at = const Value.absent(),
+                Value<String> resource = const Value.absent(),
+                Value<String> resourceId = const Value.absent(),
+                Value<String> op = const Value.absent(),
+                Value<String?> payload = const Value.absent(),
+                Value<bool> synced = const Value.absent(),
+              }) => ChangeLogCompanion(
+                id: id,
+                at: at,
+                resource: resource,
+                resourceId: resourceId,
+                op: op,
+                payload: payload,
+                synced: synced,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                required int at,
+                required String resource,
+                required String resourceId,
+                required String op,
+                Value<String?> payload = const Value.absent(),
+                Value<bool> synced = const Value.absent(),
+              }) => ChangeLogCompanion.insert(
+                id: id,
+                at: at,
+                resource: resource,
+                resourceId: resourceId,
+                op: op,
+                payload: payload,
+                synced: synced,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$ChangeLogTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $ChangeLogTable,
+      ChangeLogRow,
+      $$ChangeLogTableFilterComposer,
+      $$ChangeLogTableOrderingComposer,
+      $$ChangeLogTableAnnotationComposer,
+      $$ChangeLogTableCreateCompanionBuilder,
+      $$ChangeLogTableUpdateCompanionBuilder,
+      (
+        ChangeLogRow,
+        BaseReferences<_$AppDatabase, $ChangeLogTable, ChangeLogRow>,
+      ),
+      ChangeLogRow,
+      PrefetchHooks Function()
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -7453,4 +8128,6 @@ class $AppDatabaseManager {
       $$AppKvTableTableManager(_db, _db.appKv);
   $$AuditLogTableTableManager get auditLog =>
       $$AuditLogTableTableManager(_db, _db.auditLog);
+  $$ChangeLogTableTableManager get changeLog =>
+      $$ChangeLogTableTableManager(_db, _db.changeLog);
 }

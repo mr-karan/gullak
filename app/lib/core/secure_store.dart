@@ -17,6 +17,8 @@ class SecureStore {
   static const _kLlmBaseUrl = 'gullak.llm.baseUrl';
   static const _kLlmApiKey = 'gullak.llm.apiKey';
   static const _kLlmModel = 'gullak.llm.model';
+  static const _kSyncBaseUrl = 'gullak.sync.baseUrl';
+  static const _kSyncApiKey = 'gullak.sync.apiKey';
 
   Future<String?> _read(String key) async {
     try {
@@ -52,6 +54,14 @@ class SecureStore {
   Future<String?> readLlmBaseUrl() => _read(_kLlmBaseUrl);
   Future<String?> readLlmApiKey() => _read(_kLlmApiKey);
   Future<String?> readLlmModel() => _read(_kLlmModel);
+
+  Future<void> writeSync({String? baseUrl, String? apiKey}) async {
+    await _write(_kSyncBaseUrl, baseUrl);
+    await _write(_kSyncApiKey, apiKey);
+  }
+
+  Future<String?> readSyncBaseUrl() => _read(_kSyncBaseUrl);
+  Future<String?> readSyncApiKey() => _read(_kSyncApiKey);
 
   Future<void> wipe() async {
     try {

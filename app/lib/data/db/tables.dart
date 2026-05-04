@@ -169,3 +169,17 @@ class AuditLog extends Table {
   TextColumn get event => text()();
   TextColumn get payload => text().nullable()();
 }
+
+/// Local mutation log used by the sync layer. Every repository write
+/// inserts a row here; SyncService batch-pushes unsynced entries to
+/// the server's /v1/sync/push and marks them synced.
+@DataClassName('ChangeLogRow')
+class ChangeLog extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  IntColumn get at => integer()();
+  TextColumn get resource => text()();
+  TextColumn get resourceId => text()();
+  TextColumn get op => text()(); // 'upsert' | 'delete'
+  TextColumn get payload => text().nullable()(); // JSON snapshot
+  BoolColumn get synced => boolean().withDefault(const Constant(false))();
+}
