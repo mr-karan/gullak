@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 // Mirrors the Flutter app's Drift tables. Money is stored as integer
 // minor units throughout, dates as YYYY-MM-DD text, timestamps as ms
@@ -97,15 +97,34 @@ export const appKv = sqliteTable("app_kv", {
 // Append-only mutation log for sync clients. Each row is a single
 // row-level upsert/delete from any client. Clients pull rows after a
 // cursor (id) and apply LWW per-row by updatedAt.
-export const changeLog = sqliteTable("change_log", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
-  at: integer("at").notNull().default(now),
-  clientId: text("client_id"),
-  resource: text("resource").notNull(), // 'accounts' | 'categories' | …
-  resourceId: text("resource_id").notNull(),
-  op: text("op").notNull(), // 'upsert' | 'delete'
-  payload: text("payload"), // JSON snapshot at the time of change
-});
+//
+// `clientChangeId` is a UUID assigned by the originating client at the
+// moment the mutation was logged locally; combined with `clientId` it
+// gives us a per-row idempotency key so retried push batches don't
+// duplicate. Server-side mutations leave it null.
+//
+// NB: cursor-via-id assumes a single Bun writer. Multi-process workers
+// would need a "safely-committed cursor" abstraction.
+export const changeLog = sqliteTable(
+  "change_log",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    at: integer("at").notNull().default(now),
+    clientId: text("client_id"),
+    clientChangeId: text("client_change_id"),
+    resource: text("resource").notNull(), // 'accounts' | 'categories' | …
+    resourceId: text("resource_id").notNull(),
+    op: text("op").notNull(), // 'upsert' | 'delete'
+    payload: text("payload"), // JSON snapshot at the time of change
+  },
+  (t) => ({
+    // Partial unique index: dedupes retried client pushes without
+    // affecting server-originated rows where both columns are null.
+    uniqClientChange: uniqueIndex("uniq_client_change")
+      .on(t.clientId, t.clientChangeId)
+      .where(sql`${t.clientId} IS NOT NULL AND ${t.clientChangeId} IS NOT NULL`),
+  }),
+);
 
 export type Account = typeof accounts.$inferSelect;
 export type NewAccount = typeof accounts.$inferInsert;

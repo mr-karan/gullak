@@ -20,8 +20,7 @@ export const accountsRouter = new Hono<AppEnv>();
 
 accountsRouter.get("/", (c) => {
   const db = c.get("db");
-  const rows = db.select().from(accounts).all();
-  return c.json({ accounts: rows });
+  return c.json({ accounts: db.select().from(accounts).all() });
 });
 
 accountsRouter.get("/:id", (c) => {
@@ -37,8 +36,7 @@ accountsRouter.get("/:id", (c) => {
 
 accountsRouter.post("/", async (c) => {
   const db = c.get("db");
-  const body = await c.req.json();
-  const parsed = upsertSchema.parse(body);
+  const parsed = upsertSchema.parse(await c.req.json());
   const id = parsed.id ?? newId();
   const at = nowMs();
   const row = {
@@ -52,32 +50,51 @@ accountsRouter.post("/", async (c) => {
     createdAt: at,
     updatedAt: at,
   };
-  db.insert(accounts).values(row).onConflictDoUpdate({
-    target: accounts.id,
-    set: row,
-  }).run();
-  recordChange(db, "accounts", id, "upsert", row);
+  db.transaction((tx) => {
+    tx.insert(accounts).values(row).onConflictDoUpdate({
+      target: accounts.id,
+      set: row,
+    }).run();
+    recordChange(tx, {
+      resource: "accounts",
+      resourceId: id,
+      op: "upsert",
+      payload: row,
+    });
+  });
   return c.json({ account: row }, 201);
 });
 
 accountsRouter.patch("/:id", async (c) => {
   const db = c.get("db");
   const id = c.req.param("id");
-  const body = await c.req.json();
-  const partial = upsertSchema.partial().parse(body);
+  const partial = upsertSchema.partial().parse(await c.req.json());
   const existing = db.select().from(accounts).where(eq(accounts.id, id)).get();
   if (!existing) return c.json({ error: "Not found" }, 404);
   const next = { ...existing, ...partial, updatedAt: nowMs() };
-  db.update(accounts).set(next).where(eq(accounts.id, id)).run();
-  recordChange(db, "accounts", id, "upsert", next);
+  db.transaction((tx) => {
+    tx.update(accounts).set(next).where(eq(accounts.id, id)).run();
+    recordChange(tx, {
+      resource: "accounts",
+      resourceId: id,
+      op: "upsert",
+      payload: next,
+    });
+  });
   return c.json({ account: next });
 });
 
 accountsRouter.delete("/:id", (c) => {
   const db = c.get("db");
   const id = c.req.param("id");
-  const removed = db.delete(accounts).where(eq(accounts.id, id)).returning().all();
-  if (removed.length === 0) return c.json({ error: "Not found" }, 404);
-  recordChange(db, "accounts", id, "delete", null);
+  let removed = 0;
+  db.transaction((tx) => {
+    const rows = tx.delete(accounts).where(eq(accounts.id, id)).returning().all();
+    removed = rows.length;
+    if (removed > 0) {
+      recordChange(tx, { resource: "accounts", resourceId: id, op: "delete" });
+    }
+  });
+  if (removed === 0) return c.json({ error: "Not found" }, 404);
   return c.json({ deleted: true, id });
 });

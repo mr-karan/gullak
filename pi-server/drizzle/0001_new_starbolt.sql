@@ -1,0 +1,2 @@
+ALTER TABLE `change_log` ADD `client_change_id` text;--> statement-breakpoint
+CREATE UNIQUE INDEX `uniq_client_change` ON `change_log` (`client_id`,`client_change_id`) WHERE "change_log"."client_id" IS NOT NULL AND "change_log"."client_change_id" IS NOT NULL;

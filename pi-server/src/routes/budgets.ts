@@ -33,11 +33,18 @@ budgetsRouter.post("/", async (c) => {
     rolloverCents: parsed.rolloverCents,
     updatedAt: nowMs(),
   };
-  db.insert(budgets).values(row).onConflictDoUpdate({
-    target: budgets.id,
-    set: row,
-  }).run();
-  recordChange(db, "budgets", id, "upsert", row);
+  db.transaction((tx) => {
+    tx.insert(budgets).values(row).onConflictDoUpdate({
+      target: budgets.id,
+      set: row,
+    }).run();
+    recordChange(tx, {
+      resource: "budgets",
+      resourceId: id,
+      op: "upsert",
+      payload: row,
+    });
+  });
   return c.json({ budget: row }, 201);
 });
 
@@ -48,16 +55,29 @@ budgetsRouter.patch("/:id", async (c) => {
   const existing = db.select().from(budgets).where(eq(budgets.id, id)).get();
   if (!existing) return c.json({ error: "Not found" }, 404);
   const next = { ...existing, ...partial, updatedAt: nowMs() };
-  db.update(budgets).set(next).where(eq(budgets.id, id)).run();
-  recordChange(db, "budgets", id, "upsert", next);
+  db.transaction((tx) => {
+    tx.update(budgets).set(next).where(eq(budgets.id, id)).run();
+    recordChange(tx, {
+      resource: "budgets",
+      resourceId: id,
+      op: "upsert",
+      payload: next,
+    });
+  });
   return c.json({ budget: next });
 });
 
 budgetsRouter.delete("/:id", (c) => {
   const db = c.get("db");
   const id = c.req.param("id");
-  const removed = db.delete(budgets).where(eq(budgets.id, id)).returning().all();
-  if (removed.length === 0) return c.json({ error: "Not found" }, 404);
-  recordChange(db, "budgets", id, "delete", null);
+  let removed = 0;
+  db.transaction((tx) => {
+    const rows = tx.delete(budgets).where(eq(budgets.id, id)).returning().all();
+    removed = rows.length;
+    if (removed > 0) {
+      recordChange(tx, { resource: "budgets", resourceId: id, op: "delete" });
+    }
+  });
+  if (removed === 0) return c.json({ error: "Not found" }, 404);
   return c.json({ deleted: true, id });
 });

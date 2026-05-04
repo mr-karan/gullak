@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, lte, sql } from "drizzle-orm";
+import { and, desc, eq, gte, lte } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
 
@@ -81,11 +81,18 @@ transactionsRouter.post("/", async (c) => {
     createdAt: at,
     updatedAt: at,
   };
-  db.insert(transactions).values(row).onConflictDoUpdate({
-    target: transactions.id,
-    set: row,
-  }).run();
-  recordChange(db, "transactions", id, "upsert", row);
+  db.transaction((tx) => {
+    tx.insert(transactions).values(row).onConflictDoUpdate({
+      target: transactions.id,
+      set: row,
+    }).run();
+    recordChange(tx, {
+      resource: "transactions",
+      resourceId: id,
+      op: "upsert",
+      payload: row,
+    });
+  });
   return c.json({ transaction: row }, 201);
 });
 
@@ -100,20 +107,37 @@ transactionsRouter.patch("/:id", async (c) => {
     .get();
   if (!existing) return c.json({ error: "Not found" }, 404);
   const next = { ...existing, ...partial, updatedAt: nowMs() };
-  db.update(transactions).set(next).where(eq(transactions.id, id)).run();
-  recordChange(db, "transactions", id, "upsert", next);
+  db.transaction((tx) => {
+    tx.update(transactions).set(next).where(eq(transactions.id, id)).run();
+    recordChange(tx, {
+      resource: "transactions",
+      resourceId: id,
+      op: "upsert",
+      payload: next,
+    });
+  });
   return c.json({ transaction: next });
 });
 
 transactionsRouter.delete("/:id", (c) => {
   const db = c.get("db");
   const id = c.req.param("id");
-  const removed = db.delete(transactions).where(eq(transactions.id, id)).returning().all();
-  if (removed.length === 0) return c.json({ error: "Not found" }, 404);
-  recordChange(db, "transactions", id, "delete", null);
+  let removed = 0;
+  db.transaction((tx) => {
+    const rows = tx
+      .delete(transactions)
+      .where(eq(transactions.id, id))
+      .returning()
+      .all();
+    removed = rows.length;
+    if (removed > 0) {
+      recordChange(tx, {
+        resource: "transactions",
+        resourceId: id,
+        op: "delete",
+      });
+    }
+  });
+  if (removed === 0) return c.json({ error: "Not found" }, 404);
   return c.json({ deleted: true, id });
 });
-
-// silence unused-import warning in some typecheck modes — sql lives
-// here so future endpoints can drop in without re-importing.
-void sql;

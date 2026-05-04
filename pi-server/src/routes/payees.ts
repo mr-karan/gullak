@@ -29,11 +29,18 @@ payeesRouter.post("/", async (c) => {
     useCount: parsed.useCount,
     updatedAt: nowMs(),
   };
-  db.insert(payees).values(row).onConflictDoUpdate({
-    target: payees.id,
-    set: row,
-  }).run();
-  recordChange(db, "payees", id, "upsert", row);
+  db.transaction((tx) => {
+    tx.insert(payees).values(row).onConflictDoUpdate({
+      target: payees.id,
+      set: row,
+    }).run();
+    recordChange(tx, {
+      resource: "payees",
+      resourceId: id,
+      op: "upsert",
+      payload: row,
+    });
+  });
   return c.json({ payee: row }, 201);
 });
 
@@ -44,16 +51,29 @@ payeesRouter.patch("/:id", async (c) => {
   const existing = db.select().from(payees).where(eq(payees.id, id)).get();
   if (!existing) return c.json({ error: "Not found" }, 404);
   const next = { ...existing, ...partial, updatedAt: nowMs() };
-  db.update(payees).set(next).where(eq(payees.id, id)).run();
-  recordChange(db, "payees", id, "upsert", next);
+  db.transaction((tx) => {
+    tx.update(payees).set(next).where(eq(payees.id, id)).run();
+    recordChange(tx, {
+      resource: "payees",
+      resourceId: id,
+      op: "upsert",
+      payload: next,
+    });
+  });
   return c.json({ payee: next });
 });
 
 payeesRouter.delete("/:id", (c) => {
   const db = c.get("db");
   const id = c.req.param("id");
-  const removed = db.delete(payees).where(eq(payees.id, id)).returning().all();
-  if (removed.length === 0) return c.json({ error: "Not found" }, 404);
-  recordChange(db, "payees", id, "delete", null);
+  let removed = 0;
+  db.transaction((tx) => {
+    const rows = tx.delete(payees).where(eq(payees.id, id)).returning().all();
+    removed = rows.length;
+    if (removed > 0) {
+      recordChange(tx, { resource: "payees", resourceId: id, op: "delete" });
+    }
+  });
+  if (removed === 0) return c.json({ error: "Not found" }, 404);
   return c.json({ deleted: true, id });
 });

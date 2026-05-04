@@ -43,11 +43,18 @@ recurrencesRouter.post("/", async (c) => {
     createdAt: at,
     updatedAt: at,
   };
-  db.insert(recurrences).values(row).onConflictDoUpdate({
-    target: recurrences.id,
-    set: row,
-  }).run();
-  recordChange(db, "recurrences", id, "upsert", row);
+  db.transaction((tx) => {
+    tx.insert(recurrences).values(row).onConflictDoUpdate({
+      target: recurrences.id,
+      set: row,
+    }).run();
+    recordChange(tx, {
+      resource: "recurrences",
+      resourceId: id,
+      op: "upsert",
+      payload: row,
+    });
+  });
   return c.json({ recurrence: row }, 201);
 });
 
@@ -62,16 +69,37 @@ recurrencesRouter.patch("/:id", async (c) => {
     .get();
   if (!existing) return c.json({ error: "Not found" }, 404);
   const next = { ...existing, ...partial, updatedAt: nowMs() };
-  db.update(recurrences).set(next).where(eq(recurrences.id, id)).run();
-  recordChange(db, "recurrences", id, "upsert", next);
+  db.transaction((tx) => {
+    tx.update(recurrences).set(next).where(eq(recurrences.id, id)).run();
+    recordChange(tx, {
+      resource: "recurrences",
+      resourceId: id,
+      op: "upsert",
+      payload: next,
+    });
+  });
   return c.json({ recurrence: next });
 });
 
 recurrencesRouter.delete("/:id", (c) => {
   const db = c.get("db");
   const id = c.req.param("id");
-  const removed = db.delete(recurrences).where(eq(recurrences.id, id)).returning().all();
-  if (removed.length === 0) return c.json({ error: "Not found" }, 404);
-  recordChange(db, "recurrences", id, "delete", null);
+  let removed = 0;
+  db.transaction((tx) => {
+    const rows = tx
+      .delete(recurrences)
+      .where(eq(recurrences.id, id))
+      .returning()
+      .all();
+    removed = rows.length;
+    if (removed > 0) {
+      recordChange(tx, {
+        resource: "recurrences",
+        resourceId: id,
+        op: "delete",
+      });
+    }
+  });
+  if (removed === 0) return c.json({ error: "Not found" }, 404);
   return c.json({ deleted: true, id });
 });

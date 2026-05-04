@@ -40,11 +40,18 @@ groups.post("/", async (c) => {
     isIncome: parsed.isIncome,
     sortOrder: parsed.sortOrder,
   };
-  db.insert(categoryGroups).values(row).onConflictDoUpdate({
-    target: categoryGroups.id,
-    set: row,
-  }).run();
-  recordChange(db, "category_groups", id, "upsert", row);
+  db.transaction((tx) => {
+    tx.insert(categoryGroups).values(row).onConflictDoUpdate({
+      target: categoryGroups.id,
+      set: row,
+    }).run();
+    recordChange(tx, {
+      resource: "category_groups",
+      resourceId: id,
+      op: "upsert",
+      payload: row,
+    });
+  });
   return c.json({ group: row }, 201);
 });
 
@@ -59,17 +66,38 @@ groups.patch("/:id", async (c) => {
     .get();
   if (!existing) return c.json({ error: "Not found" }, 404);
   const next = { ...existing, ...partial };
-  db.update(categoryGroups).set(next).where(eq(categoryGroups.id, id)).run();
-  recordChange(db, "category_groups", id, "upsert", next);
+  db.transaction((tx) => {
+    tx.update(categoryGroups).set(next).where(eq(categoryGroups.id, id)).run();
+    recordChange(tx, {
+      resource: "category_groups",
+      resourceId: id,
+      op: "upsert",
+      payload: next,
+    });
+  });
   return c.json({ group: next });
 });
 
 groups.delete("/:id", (c) => {
   const db = c.get("db");
   const id = c.req.param("id");
-  const removed = db.delete(categoryGroups).where(eq(categoryGroups.id, id)).returning().all();
-  if (removed.length === 0) return c.json({ error: "Not found" }, 404);
-  recordChange(db, "category_groups", id, "delete", null);
+  let removed = 0;
+  db.transaction((tx) => {
+    const rows = tx
+      .delete(categoryGroups)
+      .where(eq(categoryGroups.id, id))
+      .returning()
+      .all();
+    removed = rows.length;
+    if (removed > 0) {
+      recordChange(tx, {
+        resource: "category_groups",
+        resourceId: id,
+        op: "delete",
+      });
+    }
+  });
+  if (removed === 0) return c.json({ error: "Not found" }, 404);
   return c.json({ deleted: true, id });
 });
 
@@ -94,11 +122,18 @@ cats.post("/", async (c) => {
     sortOrder: parsed.sortOrder,
     updatedAt: nowMs(),
   };
-  db.insert(categories).values(row).onConflictDoUpdate({
-    target: categories.id,
-    set: row,
-  }).run();
-  recordChange(db, "categories", id, "upsert", row);
+  db.transaction((tx) => {
+    tx.insert(categories).values(row).onConflictDoUpdate({
+      target: categories.id,
+      set: row,
+    }).run();
+    recordChange(tx, {
+      resource: "categories",
+      resourceId: id,
+      op: "upsert",
+      payload: row,
+    });
+  });
   return c.json({ category: row }, 201);
 });
 
@@ -109,17 +144,34 @@ cats.patch("/:id", async (c) => {
   const existing = db.select().from(categories).where(eq(categories.id, id)).get();
   if (!existing) return c.json({ error: "Not found" }, 404);
   const next = { ...existing, ...partial, updatedAt: nowMs() };
-  db.update(categories).set(next).where(eq(categories.id, id)).run();
-  recordChange(db, "categories", id, "upsert", next);
+  db.transaction((tx) => {
+    tx.update(categories).set(next).where(eq(categories.id, id)).run();
+    recordChange(tx, {
+      resource: "categories",
+      resourceId: id,
+      op: "upsert",
+      payload: next,
+    });
+  });
   return c.json({ category: next });
 });
 
 cats.delete("/:id", (c) => {
   const db = c.get("db");
   const id = c.req.param("id");
-  const removed = db.delete(categories).where(eq(categories.id, id)).returning().all();
-  if (removed.length === 0) return c.json({ error: "Not found" }, 404);
-  recordChange(db, "categories", id, "delete", null);
+  let removed = 0;
+  db.transaction((tx) => {
+    const rows = tx.delete(categories).where(eq(categories.id, id)).returning().all();
+    removed = rows.length;
+    if (removed > 0) {
+      recordChange(tx, {
+        resource: "categories",
+        resourceId: id,
+        op: "delete",
+      });
+    }
+  });
+  if (removed === 0) return c.json({ error: "Not found" }, 404);
   return c.json({ deleted: true, id });
 });
 
