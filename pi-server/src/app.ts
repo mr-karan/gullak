@@ -1,126 +1,78 @@
-import express, { type NextFunction, type Request, type Response } from "express";
+import { Hono } from "hono";
+import { cors } from "hono/cors";
+import { logger } from "hono/logger";
 
-import type { Runtime } from "./runtime.js";
+import type { AppConfig } from "./config.ts";
+import type { Db } from "./db/index.ts";
+import { accountsRouter } from "./routes/accounts.ts";
+import { budgetsRouter } from "./routes/budgets.ts";
+import { categoriesRouter } from "./routes/categories.ts";
+import { healthRouter } from "./routes/health.ts";
+import { messagesRouter, whatsappRouter } from "./routes/messages.ts";
+import { payeesRouter } from "./routes/payees.ts";
+import { recurrencesRouter } from "./routes/recurrences.ts";
+import { summaryRouter } from "./routes/summary.ts";
+import { syncRouter } from "./routes/sync.ts";
+import { transactionsRouter } from "./routes/transactions.ts";
 
-export function createApp(runtime: Runtime) {
-  const app = express();
-  app.use(express.json({ limit: "10mb" }));
+export type AppEnv = {
+  Variables: {
+    db: Db;
+    config: AppConfig;
+  };
+};
 
-  app.use((request, response, next) => {
-    if (!runtime.config.httpApiKey) {
-      next();
-      return;
-    }
+export interface AppContext {
+  db: Db;
+  config: AppConfig;
+}
 
-    if (request.path === "/health" || request.path.endsWith("/whatsapp/webhook")) {
-      next();
-      return;
-    }
+export function createApp(ctx: AppContext) {
+  const app = new Hono<AppEnv>();
 
-    if (request.header("x-api-key") !== runtime.config.httpApiKey) {
-      response.status(401).json({ error: "Unauthorized" });
-      return;
-    }
+  app.use("*", logger());
+  app.use("*", cors());
 
-    next();
+  app.use("*", async (c, next) => {
+    c.set("db", ctx.db);
+    c.set("config", ctx.config);
+    await next();
   });
 
-  app.get("/health", async (_request, response) => {
-    response.json({
-      status: (await runtime.validator.isCliAvailable()) ? "ok" : "degraded",
-      version: runtime.config.version,
-      ledgerCli: await runtime.validator.isCliAvailable(),
-    });
+  // API key gate. /v1/health and the WhatsApp webhook are exempt so
+  // monitoring and the bridge can hit us without auth.
+  app.use("*", async (c, next) => {
+    const key = ctx.config.httpApiKey;
+    if (!key) return next();
+    const path = c.req.path;
+    if (path === "/v1/health" || path.endsWith("/whatsapp/webhook")) {
+      return next();
+    }
+    if (c.req.header("x-api-key") !== key) {
+      return c.json({ error: "Unauthorized" }, 401);
+    }
+    return next();
   });
 
-  app.post("/v1/messages", asyncHandler(async (request, response) => {
-    const result = await runtime.agentService.handleMessage({
-      text: String(request.body.text || ""),
-      threadId: request.body.threadId,
-      source: request.body.source,
-      sourceUser: request.body.sourceUser,
-      quotedMessageId: request.body.quotedMessageId,
-    });
-    response.json(result);
-  }));
+  app.route("/v1/health", healthRouter);
+  app.route("/v1/accounts", accountsRouter);
+  app.route("/v1/category-groups", categoriesRouter.groups);
+  app.route("/v1/categories", categoriesRouter.categories);
+  app.route("/v1/payees", payeesRouter);
+  app.route("/v1/transactions", transactionsRouter);
+  app.route("/v1/budgets", budgetsRouter);
+  app.route("/v1/recurrences", recurrencesRouter);
+  app.route("/v1/summary", summaryRouter);
+  app.route("/v1/sync", syncRouter);
+  app.route("/v1/messages", messagesRouter);
+  app.route("/v1/whatsapp", whatsappRouter);
 
-  app.get("/v1/accounts", asyncHandler(async (_request, response) => {
-    response.json({ accounts: await runtime.ledgerService.listAccounts() });
-  }));
-
-  app.get("/v1/transactions", asyncHandler(async (request, response) => {
-    const limit = request.query.limit ? Number.parseInt(String(request.query.limit), 10) : undefined;
-    const transactions = await runtime.ledgerService.listTransactions({
-      limit,
-      startDate: asOptionalString(request.query.startDate),
-      endDate: asOptionalString(request.query.endDate),
-      payee: asOptionalString(request.query.payee),
-      account: asOptionalString(request.query.account),
-    });
-    response.json({ transactions });
-  }));
-
-  app.patch("/v1/transactions/:id", asyncHandler(async (request, response) => {
-    const updated = await runtime.ledgerService.updateTransaction(String(request.params.id), request.body);
-    if (!updated) {
-      response.status(404).json({ error: "Transaction not found" });
-      return;
-    }
-
-    response.json({ transaction: updated });
-  }));
-
-  app.delete("/v1/transactions/:id", asyncHandler(async (request, response) => {
-    const deleted = await runtime.ledgerService.deleteTransaction(String(request.params.id));
-    if (!deleted) {
-      response.status(404).json({ error: "Transaction not found" });
-      return;
-    }
-
-    response.json({ deleted: true, transactionId: request.params.id });
-  }));
-
-  app.get("/v1/summary", asyncHandler(async (request, response) => {
-    const summary = await runtime.ledgerService.getSummary({
-      period: asOptionalString(request.query.period),
-      startDate: asOptionalString(request.query.startDate),
-      endDate: asOptionalString(request.query.endDate),
-    });
-    response.json(summary);
-  }));
-
-  app.post("/v1/recaps/weekly/run", asyncHandler(async (request, response) => {
-    const recap = await runtime.weeklyRecapService.run({
-      force: Boolean(request.body.force),
-      sendWhatsapp: Boolean(request.body.sendWhatsapp),
-    });
-    response.json(recap);
-  }));
-
-  app.post("/v1/whatsapp/webhook", asyncHandler(async (request, response) => {
-    response.json(await runtime.whatsappService.handleWebhook(request.body));
-  }));
-
-  app.post("/api/whatsapp/webhook", asyncHandler(async (request, response) => {
-    response.json(await runtime.whatsappService.handleWebhook(request.body));
-  }));
-
-  app.use((error: unknown, _request: Request, response: Response, _next: NextFunction) => {
+  app.onError((error, c) => {
     const message = error instanceof Error ? error.message : "Unknown error";
-    response.status(500).json({ error: message });
+    return c.json({ error: message }, 500);
   });
+
+  app.notFound((c) => c.json({ error: "Not found" }, 404));
 
   return app;
-}
-
-function asyncHandler(
-  handler: (request: Request, response: Response) => Promise<void>,
-) {
-  return (request: Request, response: Response, next: NextFunction) => {
-    handler(request, response).catch(next);
-  };
-}
-
-function asOptionalString(value: unknown): string | undefined {
-  return typeof value === "string" && value.trim().length > 0 ? value.trim() : undefined;
 }

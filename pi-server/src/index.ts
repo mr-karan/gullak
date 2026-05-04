@@ -1,11 +1,20 @@
-import { createApp } from "./app.js";
-import { createRuntime } from "./runtime.js";
+import { migrate } from "drizzle-orm/bun-sqlite/migrator";
 
-const runtime = createRuntime();
-const app = createApp(runtime);
+import { createApp } from "./app.ts";
+import { loadConfig } from "./config.ts";
+import { getDb } from "./db/index.ts";
 
-app.listen(runtime.config.port, runtime.config.host, () => {
-  console.log(
-    `Gullak pi-server listening on http://${runtime.config.host}:${runtime.config.port}`,
-  );
+const config = loadConfig();
+const db = getDb();
+
+migrate(db, { migrationsFolder: "./drizzle" });
+
+const app = createApp({ db, config });
+
+const server = Bun.serve({
+  hostname: config.host,
+  port: config.port,
+  fetch: app.fetch,
 });
+
+console.log(`gullak v${config.version} listening on http://${server.hostname}:${server.port}`);

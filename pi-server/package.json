@@ -1,31 +1,31 @@
 {
-  "name": "gullak-pi-server",
+  "name": "gullak-server",
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "tsx watch src/index.ts",
-    "build": "tsc -p tsconfig.json",
-    "start": "node dist/index.js",
-    "test": "tsx --test test/**/*.test.ts",
-    "recap:weekly": "tsx src/cli/weekly-recap.ts",
-    "evals": "tsx src/cli/evals.ts"
+    "dev": "bun --hot run src/index.ts",
+    "start": "bun run src/index.ts",
+    "test": "bun test",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "bun run src/db/migrate.ts",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@mariozechner/pi-agent-core": "^0.67.3",
     "@mariozechner/pi-ai": "^0.67.3",
-    "@sinclair/typebox": "^0.34.49",
-    "express": "^4.21.2",
-    "luxon": "^3.6.1"
+    "drizzle-orm": "^0.36.4",
+    "drizzle-zod": "^0.5.1",
+    "hono": "^4.6.14",
+    "luxon": "^3.6.1",
+    "zod": "^3.24.1"
   },
   "devDependencies": {
-    "@types/express": "^5.0.3",
+    "@types/bun": "^1.1.15",
     "@types/luxon": "^3.6.2",
-    "@types/node": "^24.3.0",
-    "tsx": "^4.20.3",
+    "drizzle-kit": "^0.30.1",
     "typescript": "^5.7.3"
   },
   "engines": {
-    "node": ">=20.0.0"
-  },
-  "packageManager": "pnpm@10.33.0"
+    "bun": ">=1.1.0"
+  }
 }
