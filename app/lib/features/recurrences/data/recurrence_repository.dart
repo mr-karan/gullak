@@ -4,14 +4,25 @@ import 'package:uuid/uuid.dart';
 
 import '../../../data/db/database.dart';
 import '../../../state/providers.dart';
+import '../../../sync/changelog_writer.dart';
 
 export '../../../data/db/database.dart' show RecurrenceRow;
 
 class RecurrenceRepository {
-  RecurrenceRepository(this._db);
+  RecurrenceRepository(this._db, {ChangeLogWriter? changes})
+    : _changes = changes;
 
   final AppDatabase _db;
+  final ChangeLogWriter? _changes;
   static const _uuid = Uuid();
+
+  Future<void> _logRow(String id) async {
+    if (_changes == null) return;
+    final row = await (_db.select(
+      _db.recurrences,
+    )..where((t) => t.id.equals(id))).getSingleOrNull();
+    if (row != null) await _changes.upsert('recurrences', id, row.toJson());
+  }
 
   Stream<List<RecurrenceRow>> watch() {
     return (_db.select(_db.recurrences)..orderBy([
@@ -58,11 +69,14 @@ class RecurrenceRepository {
             notes: Value(notes),
           ),
         );
+    await _logRow(id);
     return id;
   }
 
-  Future<void> delete(String id) =>
-      (_db.delete(_db.recurrences)..where((t) => t.id.equals(id))).go();
+  Future<void> delete(String id) async {
+    await (_db.delete(_db.recurrences)..where((t) => t.id.equals(id))).go();
+    await _changes?.delete('recurrences', id);
+  }
 
   static String _ymd(DateTime d) =>
       '${d.year.toString().padLeft(4, '0')}-'
@@ -72,7 +86,10 @@ class RecurrenceRepository {
 
 final Provider<RecurrenceRepository> recurrenceRepoProvider =
     Provider<RecurrenceRepository>(
-      (ref) => RecurrenceRepository(ref.watch(dbProvider)),
+      (ref) => RecurrenceRepository(
+        ref.watch(dbProvider),
+        changes: ref.watch(changeLogWriterProvider),
+      ),
     );
 
 final StreamProvider<List<RecurrenceRow>> recurrencesListProvider =

@@ -4,6 +4,7 @@ import 'package:uuid/uuid.dart';
 
 import '../../../data/db/database.dart';
 import '../../../state/providers.dart';
+import '../../../sync/changelog_writer.dart';
 
 export '../../../data/db/database.dart' show AccountRow;
 
@@ -40,9 +41,16 @@ enum AccountKind {
 }
 
 class AccountRepository {
-  AccountRepository(this._db);
+  AccountRepository(this._db, {ChangeLogWriter? changes}) : _changes = changes;
   final AppDatabase _db;
+  final ChangeLogWriter? _changes;
   static const _uuid = Uuid();
+
+  Future<void> _logRow(String id) async {
+    if (_changes == null) return;
+    final row = await byId(id);
+    if (row != null) await _changes.upsert('accounts', id, row.toJson());
+  }
 
   Future<List<AccountRow>> list({bool includeArchived = false}) {
     final q = _db.select(_db.accounts);
@@ -89,6 +97,7 @@ class AccountRepository {
             updatedAt: now,
           ),
         );
+    await _logRow(id);
     return id;
   }
 
@@ -111,27 +120,47 @@ class AccountRepository {
         updatedAt: Value(now),
       ),
     );
+    await _logRow(id);
   }
 
-  Future<void> archive(String id) =>
-      (_db.update(_db.accounts)..where((t) => t.id.equals(id))).write(
-        const AccountsCompanion(archived: Value(true)),
-      );
+  Future<void> archive(String id) async {
+    await (_db.update(_db.accounts)..where((t) => t.id.equals(id))).write(
+      AccountsCompanion(
+        archived: const Value(true),
+        updatedAt: Value(DateTime.now().millisecondsSinceEpoch),
+      ),
+    );
+    await _logRow(id);
+  }
 
-  Future<void> unarchive(String id) =>
-      (_db.update(_db.accounts)..where((t) => t.id.equals(id))).write(
-        const AccountsCompanion(archived: Value(false)),
-      );
+  Future<void> unarchive(String id) async {
+    await (_db.update(_db.accounts)..where((t) => t.id.equals(id))).write(
+      AccountsCompanion(
+        archived: const Value(false),
+        updatedAt: Value(DateTime.now().millisecondsSinceEpoch),
+      ),
+    );
+    await _logRow(id);
+  }
 
   /// Hard delete: drops the account and *also* its transactions. Use
   /// [archive] if you want to preserve history.
   Future<void> delete(String id) async {
+    final txIds = (await (_db.select(
+      _db.transactions,
+    )..where((t) => t.accountId.equals(id))).get()).map((t) => t.id).toList();
     await _db.transaction(() async {
       await (_db.delete(
         _db.transactions,
       )..where((t) => t.accountId.equals(id))).go();
       await (_db.delete(_db.accounts)..where((t) => t.id.equals(id))).go();
     });
+    if (_changes != null) {
+      for (final tid in txIds) {
+        await _changes.delete('transactions', tid);
+      }
+      await _changes.delete('accounts', id);
+    }
   }
 
   /// Sum of opening balance + all transactions on this account.
@@ -155,7 +184,10 @@ class AccountRepository {
 
 final Provider<AccountRepository> accountRepoProvider =
     Provider<AccountRepository>(
-      (ref) => AccountRepository(ref.watch(dbProvider)),
+      (ref) => AccountRepository(
+        ref.watch(dbProvider),
+        changes: ref.watch(changeLogWriterProvider),
+      ),
     );
 
 final StreamProvider<List<AccountRow>> accountsListProvider =

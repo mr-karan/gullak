@@ -5,6 +5,7 @@ import 'package:uuid/uuid.dart';
 import '../../../core/clock.dart';
 import '../../../data/db/database.dart';
 import '../../../state/providers.dart';
+import '../../../sync/changelog_writer.dart';
 import '../../transactions/data/transaction_repository.dart';
 
 export '../../../data/db/database.dart' show BudgetRow;
@@ -49,9 +50,18 @@ class BudgetMonthOverview {
 }
 
 class BudgetRepository {
-  BudgetRepository(this._db);
+  BudgetRepository(this._db, {ChangeLogWriter? changes}) : _changes = changes;
   final AppDatabase _db;
+  final ChangeLogWriter? _changes;
   static const _uuid = Uuid();
+
+  Future<void> _logRow(String id) async {
+    if (_changes == null) return;
+    final row = await (_db.select(
+      _db.budgets,
+    )..where((b) => b.id.equals(id))).getSingleOrNull();
+    if (row != null) await _changes.upsert('budgets', id, row.toJson());
+  }
 
   static String monthOf(DateTime d) =>
       '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}';
@@ -69,12 +79,14 @@ class BudgetRepository {
               (b) => b.categoryId.equals(categoryId) & b.month.equals(month),
             ))
             .getSingleOrNull();
+    final String id;
     if (existing == null) {
+      id = _uuid.v4();
       await _db
           .into(_db.budgets)
           .insert(
             BudgetsCompanion.insert(
-              id: _uuid.v4(),
+              id: id,
               categoryId: categoryId,
               month: month,
               targetCents: targetCents,
@@ -82,6 +94,7 @@ class BudgetRepository {
             ),
           );
     } else {
+      id = existing.id;
       await (_db.update(
         _db.budgets,
       )..where((b) => b.id.equals(existing.id))).write(
@@ -91,16 +104,30 @@ class BudgetRepository {
         ),
       );
     }
+    await _logRow(id);
   }
 
   Future<void> clearTarget({
     required String categoryId,
     required String month,
   }) async {
+    final affected =
+        (await (_db.select(_db.budgets)..where(
+                  (b) =>
+                      b.categoryId.equals(categoryId) & b.month.equals(month),
+                ))
+                .get())
+            .map((b) => b.id)
+            .toList();
     await (_db.delete(_db.budgets)..where(
           (b) => b.categoryId.equals(categoryId) & b.month.equals(month),
         ))
         .go();
+    if (_changes != null) {
+      for (final id in affected) {
+        await _changes.delete('budgets', id);
+      }
+    }
   }
 
   /// Compose a list of all categories with their budget + spend for the
@@ -151,7 +178,10 @@ class BudgetRepository {
 
 final Provider<BudgetRepository> budgetRepoProvider =
     Provider<BudgetRepository>(
-      (ref) => BudgetRepository(ref.watch(dbProvider)),
+      (ref) => BudgetRepository(
+        ref.watch(dbProvider),
+        changes: ref.watch(changeLogWriterProvider),
+      ),
     );
 
 final budgetMonthProvider = FutureProvider.family<BudgetMonthOverview, String>((

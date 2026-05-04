@@ -10,6 +10,7 @@ import '../core/prefs.dart';
 import '../core/secure_store.dart';
 import '../data/db/database.dart';
 import '../state/providers.dart';
+import 'remote_applier.dart';
 
 /// Talks to the homelab pi-server's /v1/sync endpoints. Local mutations
 /// land in the [ChangeLog] Drift table via repositories; this service
@@ -23,12 +24,13 @@ import '../state/providers.dart';
 /// LWW per row by `updatedAt` is the conflict policy. Fine for
 /// personal use; revisit if anything important ever clobbers.
 class SyncService {
-  SyncService(this._db, this._secure, this._prefs, {Dio? dio})
+  SyncService(this._db, this._secure, this._prefs, this._applier, {Dio? dio})
     : _dio = dio ?? Dio();
 
   final AppDatabase _db;
   final SecureStore _secure;
   final Prefs _prefs;
+  final RemoteApplier _applier;
   final Dio _dio;
   final Uuid _uuid = const Uuid();
   String? _clientId;
@@ -96,9 +98,7 @@ class SyncService {
     }
     try {
       final pushed = await pushPending();
-      // Pull is wired in a follow-up — the server already filters out
-      // our own clientId so we won't echo loop.
-      const pulled = 0;
+      final pulled = await pullChanges();
       await _prefs.setSyncLastAt(DateTime.now().millisecondsSinceEpoch);
       await pruneSynced();
       return (pushed: pushed, pulled: pulled, error: null);
@@ -106,6 +106,46 @@ class SyncService {
       log.w('sync failed: $e');
       return (pushed: 0, pulled: 0, error: '$e');
     }
+  }
+
+  Future<int> pullChanges() async {
+    final baseUrl = (await _secure.readSyncBaseUrl())?.trim();
+    final apiKey = (await _secure.readSyncApiKey())?.trim();
+    if (baseUrl == null || baseUrl.isEmpty) return 0;
+
+    final clientId = await _getClientId();
+    var pulled = 0;
+    while (true) {
+      final cursor = _prefs.syncCursor;
+      final r = await _dio.get<dynamic>(
+        _join(baseUrl, '/v1/sync/changes'),
+        queryParameters: {'since': cursor, 'limit': 500, 'clientId': clientId},
+        options: Options(
+          headers: {
+            if (apiKey != null && apiKey.isNotEmpty) 'x-api-key': apiKey,
+            'accept': 'application/json',
+          },
+          receiveTimeout: const Duration(seconds: 30),
+        ),
+      );
+      final data = r.data;
+      if (data is! Map) break;
+      final changes = data['changes'];
+      final nextCursor = (data['cursor'] as num?)?.toInt() ?? cursor;
+      if (changes is! List || changes.isEmpty) {
+        if (nextCursor != cursor) await _prefs.setSyncCursor(nextCursor);
+        break;
+      }
+      for (final change in changes) {
+        if (change is Map<String, dynamic>) {
+          await _applier.apply(change);
+        }
+      }
+      pulled += changes.length;
+      await _prefs.setSyncCursor(nextCursor);
+      if (changes.length < 500) break;
+    }
+    return pulled;
   }
 
   Future<int> pushPending() async {
@@ -186,5 +226,6 @@ final Provider<SyncService> syncServiceProvider = Provider<SyncService>((ref) {
     ref.read(dbProvider),
     ref.read(secureStoreProvider),
     ref.read(prefsProvider),
+    ref.read(remoteApplierProvider),
   );
 });

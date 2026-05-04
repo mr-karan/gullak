@@ -4,13 +4,29 @@ import 'package:uuid/uuid.dart';
 
 import '../../../data/db/database.dart';
 import '../../../state/providers.dart';
+import '../../../sync/changelog_writer.dart';
 
 export '../../../data/db/database.dart' show CategoryRow, CategoryGroupRow;
 
 class CategoryRepository {
-  CategoryRepository(this._db);
+  CategoryRepository(this._db, {ChangeLogWriter? changes}) : _changes = changes;
   final AppDatabase _db;
+  final ChangeLogWriter? _changes;
   static const _uuid = Uuid();
+
+  Future<void> _logCategory(String id) async {
+    if (_changes == null) return;
+    final row = await byId(id);
+    if (row != null) await _changes.upsert('categories', id, row.toJson());
+  }
+
+  Future<void> _logGroup(String id) async {
+    if (_changes == null) return;
+    final row = await (_db.select(
+      _db.categoryGroups,
+    )..where((t) => t.id.equals(id))).getSingleOrNull();
+    if (row != null) await _changes.upsert('category_groups', id, row.toJson());
+  }
 
   Stream<List<CategoryRow>> watch({bool includeHidden = false}) {
     final q = _db.select(_db.categories);
@@ -68,6 +84,7 @@ class CategoryRepository {
             sortOrder: Value(next),
           ),
         );
+    await _logGroup(id);
     return id;
   }
 
@@ -93,6 +110,7 @@ class CategoryRepository {
             updatedAt: now,
           ),
         );
+    await _logCategory(id);
     return id;
   }
 
@@ -115,9 +133,16 @@ class CategoryRepository {
         updatedAt: Value(now),
       ),
     );
+    await _logCategory(id);
   }
 
   Future<void> deleteCategory(String id, {String? reassignTo}) async {
+    final affectedTx = (await (_db.select(
+      _db.transactions,
+    )..where((t) => t.categoryId.equals(id))).get()).map((t) => t.id).toList();
+    final affectedBudgets = (await (_db.select(
+      _db.budgets,
+    )..where((b) => b.categoryId.equals(id))).get()).map((b) => b.id).toList();
     await _db.transaction(() async {
       if (reassignTo != null) {
         await (_db.update(_db.transactions)
@@ -133,20 +158,40 @@ class CategoryRepository {
       )..where((b) => b.categoryId.equals(id))).go();
       await (_db.delete(_db.categories)..where((t) => t.id.equals(id))).go();
     });
+    if (_changes != null) {
+      for (final tid in affectedTx) {
+        final row = await (_db.select(
+          _db.transactions,
+        )..where((t) => t.id.equals(tid))).getSingleOrNull();
+        if (row != null) {
+          await _changes.upsert('transactions', tid, row.toJson());
+        }
+      }
+      for (final bid in affectedBudgets) {
+        await _changes.delete('budgets', bid);
+      }
+      await _changes.delete('categories', id);
+    }
   }
 
   Future<void> deleteGroup(String id) async {
+    final ungroupedId = await _ensureUngroupedGroup();
+    final reparented = (await (_db.select(
+      _db.categories,
+    )..where((t) => t.groupId.equals(id))).get()).map((c) => c.id).toList();
     await _db.transaction(() async {
-      // Re-parent any orphan categories to a synthetic 'ungrouped' group
-      // when their group is deleted. Keep them around so transactions
-      // don't lose categorisation.
-      final ungrouped = await _ensureUngroupedGroup();
       await (_db.update(_db.categories)..where((t) => t.groupId.equals(id)))
-          .write(CategoriesCompanion(groupId: Value(ungrouped)));
+          .write(CategoriesCompanion(groupId: Value(ungroupedId)));
       await (_db.delete(
         _db.categoryGroups,
       )..where((t) => t.id.equals(id))).go();
     });
+    if (_changes != null) {
+      for (final cid in reparented) {
+        await _logCategory(cid);
+      }
+      await _changes.delete('category_groups', id);
+    }
   }
 
   Future<String> _ensureUngroupedGroup() async {
@@ -176,7 +221,10 @@ class CategoryRepository {
 
 final Provider<CategoryRepository> categoryRepoProvider =
     Provider<CategoryRepository>(
-      (ref) => CategoryRepository(ref.watch(dbProvider)),
+      (ref) => CategoryRepository(
+        ref.watch(dbProvider),
+        changes: ref.watch(changeLogWriterProvider),
+      ),
     );
 
 final StreamProvider<List<CategoryRow>> categoriesListProvider =

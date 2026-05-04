@@ -4,13 +4,21 @@ import 'package:uuid/uuid.dart';
 
 import '../../../data/db/database.dart';
 import '../../../state/providers.dart';
+import '../../../sync/changelog_writer.dart';
 
 export '../../../data/db/database.dart' show PayeeRow;
 
 class PayeeRepository {
-  PayeeRepository(this._db);
+  PayeeRepository(this._db, {ChangeLogWriter? changes}) : _changes = changes;
   final AppDatabase _db;
+  final ChangeLogWriter? _changes;
   static const _uuid = Uuid();
+
+  Future<void> _logRow(String id) async {
+    if (_changes == null) return;
+    final row = await byId(id);
+    if (row != null) await _changes.upsert('payees', id, row.toJson());
+  }
 
   Stream<List<PayeeRow>> watch() {
     return (_db.select(_db.payees)..orderBy([
@@ -56,6 +64,7 @@ class PayeeRepository {
         .insert(
           PayeesCompanion.insert(id: id, name: name.trim(), updatedAt: now),
         );
+    await _logRow(id);
     return id;
   }
 
@@ -64,14 +73,29 @@ class PayeeRepository {
     await (_db.update(_db.payees)..where((t) => t.id.equals(id))).write(
       PayeesCompanion(name: Value(name.trim()), updatedAt: Value(now)),
     );
+    await _logRow(id);
   }
 
   Future<void> delete(String id) async {
+    final affected = (await (_db.select(
+      _db.transactions,
+    )..where((t) => t.payeeId.equals(id))).get()).map((t) => t.id).toList();
     await _db.transaction(() async {
       await (_db.update(_db.transactions)..where((t) => t.payeeId.equals(id)))
           .write(const TransactionsCompanion(payeeId: Value(null)));
       await (_db.delete(_db.payees)..where((t) => t.id.equals(id))).go();
     });
+    if (_changes != null) {
+      for (final tid in affected) {
+        final row = await (_db.select(
+          _db.transactions,
+        )..where((t) => t.id.equals(tid))).getSingleOrNull();
+        if (row != null) {
+          await _changes.upsert('transactions', tid, row.toJson());
+        }
+      }
+      await _changes.delete('payees', id);
+    }
   }
 
   Future<void> bumpUseCount(String id) async {
@@ -79,11 +103,15 @@ class PayeeRepository {
       'UPDATE payees SET use_count = use_count + 1 WHERE id = ?',
       [id],
     );
+    await _logRow(id);
   }
 }
 
 final Provider<PayeeRepository> payeeRepoProvider = Provider<PayeeRepository>(
-  (ref) => PayeeRepository(ref.watch(dbProvider)),
+  (ref) => PayeeRepository(
+    ref.watch(dbProvider),
+    changes: ref.watch(changeLogWriterProvider),
+  ),
 );
 
 final StreamProvider<List<PayeeRow>> payeesListProvider =

@@ -6,6 +6,7 @@ import 'package:uuid/uuid.dart';
 import '../../../core/clock.dart';
 import '../../../data/db/database.dart';
 import '../../../state/providers.dart';
+import '../../../sync/changelog_writer.dart';
 
 export '../../../data/db/database.dart' show TransactionRow;
 
@@ -40,9 +41,17 @@ class TransactionListItem {
 }
 
 class TransactionRepository {
-  TransactionRepository(this._db);
+  TransactionRepository(this._db, {ChangeLogWriter? changes})
+    : _changes = changes;
   final AppDatabase _db;
+  final ChangeLogWriter? _changes;
   static const _uuid = Uuid();
+
+  Future<void> _logRow(String id) async {
+    if (_changes == null) return;
+    final row = await byRow(id);
+    if (row != null) await _changes.upsert('transactions', id, row.toJson());
+  }
 
   // ── inserts ──────────────────────────────────────────────────────────
 
@@ -80,6 +89,7 @@ class TransactionRepository {
             originRef: Value(originRef),
           ),
         );
+    await _logRow(id);
     return id;
   }
 
@@ -139,6 +149,8 @@ class TransactionRepository {
         ),
       );
     });
+    await _logRow(outId);
+    await _logRow(inId);
     return group;
   }
 
@@ -159,6 +171,7 @@ class TransactionRepository {
     }
     final total = splits.fold<int>(0, (s, x) => s + x.amountCents);
     final parentId = _uuid.v4();
+    final childIds = <String>[];
     final now = DateTime.now().millisecondsSinceEpoch;
     final ymd = _ymd(date);
     await _db.batch((batch) {
@@ -180,10 +193,12 @@ class TransactionRepository {
         ),
       );
       for (final s in splits) {
+        final childId = _uuid.v4();
+        childIds.add(childId);
         batch.insert(
           _db.transactions,
           TransactionsCompanion.insert(
-            id: _uuid.v4(),
+            id: childId,
             accountId: accountId,
             amountCents: s.amountCents,
             date: ymd,
@@ -200,6 +215,10 @@ class TransactionRepository {
         );
       }
     });
+    await _logRow(parentId);
+    for (final cid in childIds) {
+      await _logRow(cid);
+    }
     return parentId;
   }
 
@@ -232,6 +251,7 @@ class TransactionRepository {
         updatedAt: Value(now),
       ),
     );
+    await _logRow(id);
   }
 
   /// Hard-delete a transaction (and its split children / transfer pair).
@@ -266,6 +286,15 @@ class TransactionRepository {
       }
       await (_db.delete(_db.transactions)..where((t) => t.id.equals(id))).go();
     });
+    if (_changes != null) {
+      for (final child in children) {
+        await _changes.delete('transactions', child.id);
+      }
+      if (transferPair != null) {
+        await _changes.delete('transactions', transferPair.id);
+      }
+      await _changes.delete('transactions', id);
+    }
     return DeletedTransactionSnapshot._(
       parent: row,
       splitChildren: children,
@@ -289,6 +318,12 @@ class TransactionRepository {
         await _db.into(_db.transactions).insertOnConflictUpdate(pair);
       }
     });
+    await _logRow(p.id);
+    for (final c in snap.splitChildren) {
+      await _logRow(c.id);
+    }
+    final pair = snap.transferPair;
+    if (pair != null) await _logRow(pair.id);
   }
 
   // ── reads ────────────────────────────────────────────────────────────
@@ -575,7 +610,10 @@ class DeletedTransactionSnapshot {
 
 final Provider<TransactionRepository> transactionRepoProvider =
     Provider<TransactionRepository>(
-      (ref) => TransactionRepository(ref.watch(dbProvider)),
+      (ref) => TransactionRepository(
+        ref.watch(dbProvider),
+        changes: ref.watch(changeLogWriterProvider),
+      ),
     );
 
 final StreamProvider<List<TransactionListItem>> recentTransactionsProvider =
