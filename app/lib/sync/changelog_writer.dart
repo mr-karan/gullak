@@ -32,7 +32,7 @@ class ChangeLogWriter {
         .insert(
           ChangeLogCompanion.insert(
             at: DateTime.now().millisecondsSinceEpoch,
-            clientChangeId: _uuid.v4(),
+            clientChangeId: Value(_uuid.v4()),
             resource: resource,
             resourceId: id,
             op: 'upsert',
@@ -48,7 +48,7 @@ class ChangeLogWriter {
         .insert(
           ChangeLogCompanion.insert(
             at: DateTime.now().millisecondsSinceEpoch,
-            clientChangeId: _uuid.v4(),
+            clientChangeId: Value(_uuid.v4()),
             resource: resource,
             resourceId: id,
             op: 'delete',

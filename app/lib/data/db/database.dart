@@ -75,10 +75,14 @@ class AppDatabase extends _$AppDatabase {
       }
       if (from < 3) {
         // Schema v3 adds clientChangeId so server-side dedupe works.
-        // Existing rows (none, in practice — sync isn't wired into repos
-        // yet) get an empty string; SyncService treats empty as "drop"
-        // since the server requires non-empty.
+        // The column has DEFAULT '' so the ALTER TABLE on populated
+        // installs doesn't fail. Pre-existing rows predate sync; mark
+        // them synced=true so they never reach the push path with an
+        // empty client_change_id (the server requires non-empty).
         await m.addColumn(changeLog, changeLog.clientChangeId);
+        await customStatement(
+          'UPDATE change_log SET synced = 1 WHERE client_change_id = ""',
+        );
       }
       if (from < 4) {
         // Schema v4 introduces the SMS LLM-parse cache. The bank

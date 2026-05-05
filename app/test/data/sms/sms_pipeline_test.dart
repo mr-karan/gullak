@@ -20,7 +20,7 @@ void main() {
     db = AppDatabase.forTesting(NativeDatabase.memory());
     reader = _FakeSmsReader();
     fakeParser = _FakeSmsParser();
-    registry = ParserRegistry(db: db, parser: fakeParser);
+    registry = ParserRegistry(db: db, parserFuture: Future.value(fakeParser));
     notifications = [];
   });
 

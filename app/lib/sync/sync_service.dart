@@ -158,7 +158,11 @@ class SyncService {
     while (true) {
       final batch =
           await (_db.select(_db.changeLog)
-                ..where((t) => t.synced.equals(false))
+                ..where(
+                  (t) =>
+                      t.synced.equals(false) &
+                      t.clientChangeId.equals('').not(),
+                )
                 ..orderBy([(t) => OrderingTerm.asc(t.id)])
                 ..limit(200))
               .get();

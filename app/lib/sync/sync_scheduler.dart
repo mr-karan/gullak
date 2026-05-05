@@ -17,11 +17,20 @@ class SyncScheduler {
   final Duration _debounce;
   Timer? _timer;
   bool _running = false;
+  // Set when a schedule()/runNow() arrives while a sync is already
+  // in flight. We re-arm after the in-flight one finishes so the
+  // mutation that caused the second call doesn't sit unsynced until
+  // the next unrelated trigger.
+  bool _rerunRequested = false;
 
   /// Schedule a sync after [_debounce]. Repeated calls within the
   /// window collapse to a single run, so a flurry of writes (split
   /// transactions, batch imports) only triggers one round-trip.
   void schedule() {
+    if (_running) {
+      _rerunRequested = true;
+      return;
+    }
     _timer?.cancel();
     _timer = Timer(_debounce, _runIfPossible);
   }
@@ -29,12 +38,19 @@ class SyncScheduler {
   /// Cancel any pending debounce and sync right now. Used on app
   /// foreground so the user sees fresh data after coming back.
   Future<void> runNow() async {
+    if (_running) {
+      _rerunRequested = true;
+      return;
+    }
     _timer?.cancel();
     await _runIfPossible();
   }
 
   Future<void> _runIfPossible() async {
-    if (_running) return;
+    if (_running) {
+      _rerunRequested = true;
+      return;
+    }
     if (!await _sync.isConfigured()) return;
     _running = true;
     try {
@@ -44,6 +60,10 @@ class SyncScheduler {
       }
     } finally {
       _running = false;
+      if (_rerunRequested) {
+        _rerunRequested = false;
+        schedule();
+      }
     }
   }
 

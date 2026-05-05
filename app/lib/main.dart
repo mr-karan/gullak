@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/notification_service.dart';
 import 'core/prefs.dart';
 import 'data/db/database.dart';
+import 'data/sms/sms_pipeline.dart';
 import 'features/entry/quick_entry.dart';
 import 'features/entry/share_intake.dart';
 import 'router/router.dart';
@@ -52,6 +53,15 @@ class _GullakAppState extends ConsumerState<GullakApp> {
     _lifecycle = AppLifecycleListener(
       onResume: () => ref.read(syncSchedulerProvider).runNow(),
     );
+    // If the user already enabled SMS in a previous session, the
+    // listener has to be re-armed each launch — the pref persists
+    // but the Stream subscription doesn't.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (ref.read(prefsProvider).smsEnabled) {
+        ref.read(smsPipelineProvider).startListening();
+      }
+    });
   }
 
   @override

@@ -200,7 +200,10 @@ class SmsParseCache extends Table {
 class ChangeLog extends Table {
   IntColumn get id => integer().autoIncrement()();
   IntColumn get at => integer()();
-  TextColumn get clientChangeId => text()();
+  // Default empty so the v2→v3 ALTER TABLE on existing installs
+  // doesn't blow up on populated rows. SyncService skips empty
+  // values so they don't reach the server.
+  TextColumn get clientChangeId => text().withDefault(const Constant(''))();
   TextColumn get resource => text()();
   TextColumn get resourceId => text()();
   TextColumn get op => text()(); // 'upsert' | 'delete'

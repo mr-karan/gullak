@@ -11,76 +11,77 @@ import 'llm_sms_parser.dart';
 import 'sms_models.dart';
 import 'sms_parser.dart';
 
-/// Top-level SMS parser entry point. Cache-first, LLM-second.
+/// Top-level SMS parser entry point.
 ///
-/// Cache key is `hash(sender + body_template)` where the template
-/// masks digit runs and dates so two messages from the same sender
-/// in the same shape collapse to one cache row. First SMS of a
-/// format pays the LLM cost; every subsequent same-shape SMS is free.
+/// The cache stores **only negative classifications** — i.e. "this
+/// `sender + body-template` is not a transaction" (OTPs, marketing,
+/// balance reminders). On a cache hit we skip the LLM entirely and
+/// return null, which is the same thing the parser would have said.
+///
+/// We deliberately do NOT cache parsed candidates: amount, payee,
+/// date and bank-ref vary message-by-message even when the printed
+/// format is identical, so reusing a previous candidate would silently
+/// corrupt financial data. Only the boolean "is this template
+/// transactional?" decision is reusable across messages.
 class ParserRegistry {
-  ParserRegistry({required this.db, this.parser});
+  ParserRegistry({required this.db, Future<SmsParser?>? parserFuture})
+    : _parserFuture = parserFuture ?? Future.value(null);
 
   final AppDatabase db;
-  final SmsParser? parser;
+  final Future<SmsParser?> _parserFuture;
 
   Future<SmsCandidate?> tryParse(IncomingSms sms) async {
     final template = _bodyTemplate(sms.body);
     final key = _cacheKey(sms.address, template);
 
-    // 1. Cache lookup.
+    // 1. Negative-cache lookup. If we've previously parsed this
+    // template and the LLM said "not a transaction", skip it again.
     final cached = await (db.select(
       db.smsParseCache,
     )..where((t) => t.key.equals(key))).getSingleOrNull();
     if (cached != null) {
-      try {
-        final candidate = decodeCandidate(cached.payloadJson);
-        // Use the actual SMS date — cached candidates' "date" is
-        // when the original cached message arrived, not this one.
-        final patched = SmsCandidate(
-          amountCents: candidate.amountCents,
-          isIncome: candidate.isIncome,
-          date: sms.receivedAt,
-          confidence: candidate.confidence,
-          payee: candidate.payee,
-          accountHint: candidate.accountHint,
-          bankRef: candidate.bankRef,
-          parserVersion: candidate.parserVersion,
-        );
-        await (db.update(
-          db.smsParseCache,
-        )..where((t) => t.key.equals(key))).write(
-          SmsParseCacheCompanion(
-            hits: Value(cached.hits + 1),
-            lastSeenAt: Value(DateTime.now().millisecondsSinceEpoch),
-          ),
-        );
-        return patched;
-      } catch (e) {
-        log.w('cached sms candidate decode failed, re-parsing: $e');
-      }
+      await (db.update(
+        db.smsParseCache,
+      )..where((t) => t.key.equals(key))).write(
+        SmsParseCacheCompanion(
+          hits: Value(cached.hits + 1),
+          lastSeenAt: Value(DateTime.now().millisecondsSinceEpoch),
+        ),
+      );
+      return null;
     }
 
-    // 2. LLM parse.
-    final p = parser;
+    // 2. Wait for the LLM parser provider — during cold start the
+    // ref.watch(llmSmsParserProvider.future) may still be loading,
+    // and snapshotting it would mark the SMS as 'error' permanently.
+    final p = await _parserFuture;
     if (p == null) return null;
-    final candidate = await p.parse(sms);
-    if (candidate == null) return null;
 
-    // 3. Cache the result.
-    final now = DateTime.now().millisecondsSinceEpoch;
-    await db
-        .into(db.smsParseCache)
-        .insertOnConflictUpdate(
-          SmsParseCacheCompanion(
-            key: Value(key),
-            senderSample: Value(sms.address),
-            bodyTemplate: Value(template),
-            payloadJson: Value(encodeCandidate(candidate)),
-            hits: const Value(1),
-            createdAt: Value(now),
-            lastSeenAt: Value(now),
-          ),
-        );
+    final candidate = await p.parse(sms);
+
+    // 3. Cache the negative classification. Positive candidates are
+    // never cached — every transactional SMS gets a fresh parse so
+    // amount/date/payee come from THIS body, not a prior one.
+    if (candidate == null) {
+      final now = DateTime.now().millisecondsSinceEpoch;
+      try {
+        await db
+            .into(db.smsParseCache)
+            .insertOnConflictUpdate(
+              SmsParseCacheCompanion(
+                key: Value(key),
+                senderSample: Value(sms.address),
+                bodyTemplate: Value(template),
+                payloadJson: const Value('{"is_transaction":false}'),
+                hits: const Value(1),
+                createdAt: Value(now),
+                lastSeenAt: Value(now),
+              ),
+            );
+      } catch (e) {
+        log.w('sms negative-cache insert failed: $e');
+      }
+    }
 
     return candidate;
   }
@@ -105,10 +106,9 @@ class ParserRegistry {
 }
 
 final Provider<ParserRegistry> parserRegistryProvider =
-    Provider<ParserRegistry>((ref) {
-      final llmParserAsync = ref.watch(llmSmsParserProvider);
-      return ParserRegistry(
+    Provider<ParserRegistry>(
+      (ref) => ParserRegistry(
         db: ref.watch(dbProvider),
-        parser: llmParserAsync.maybeWhen(data: (p) => p, orElse: () => null),
-      );
-    });
+        parserFuture: ref.watch(llmSmsParserProvider.future),
+      ),
+    );

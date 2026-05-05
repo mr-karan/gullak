@@ -5437,7 +5437,8 @@ class $ChangeLogTable extends ChangeLog
     aliasedName,
     false,
     type: DriftSqlType.string,
-    requiredDuringInsert: true,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(''),
   );
   static const VerificationMeta _resourceMeta = const VerificationMeta(
     'resource',
@@ -5533,8 +5534,6 @@ class $ChangeLogTable extends ChangeLog
           _clientChangeIdMeta,
         ),
       );
-    } else if (isInserting) {
-      context.missing(_clientChangeIdMeta);
     }
     if (data.containsKey('resource')) {
       context.handle(
@@ -5798,14 +5797,13 @@ class ChangeLogCompanion extends UpdateCompanion<ChangeLogRow> {
   ChangeLogCompanion.insert({
     this.id = const Value.absent(),
     required int at,
-    required String clientChangeId,
+    this.clientChangeId = const Value.absent(),
     required String resource,
     required String resourceId,
     required String op,
     this.payload = const Value.absent(),
     this.synced = const Value.absent(),
   }) : at = Value(at),
-       clientChangeId = Value(clientChangeId),
        resource = Value(resource),
        resourceId = Value(resourceId),
        op = Value(op);
@@ -8671,7 +8669,7 @@ typedef $$ChangeLogTableCreateCompanionBuilder =
     ChangeLogCompanion Function({
       Value<int> id,
       required int at,
-      required String clientChangeId,
+      Value<String> clientChangeId,
       required String resource,
       required String resourceId,
       required String op,
@@ -8881,7 +8879,7 @@ class $$ChangeLogTableTableManager
               ({
                 Value<int> id = const Value.absent(),
                 required int at,
-                required String clientChangeId,
+                Value<String> clientChangeId = const Value.absent(),
                 required String resource,
                 required String resourceId,
                 required String op,
