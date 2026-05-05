@@ -6,6 +6,7 @@ import 'package:uuid/uuid.dart';
 
 import '../data/db/database.dart';
 import '../state/providers.dart';
+import 'sync_scheduler.dart';
 
 /// Append-only writer for the local sync change log. Every repository
 /// mutation (insert, update, delete) calls one of these so the
@@ -15,8 +16,10 @@ import '../state/providers.dart';
 /// our installation's `clientId`) as a per-row idempotency key, so a
 /// retried push after a transient failure doesn't duplicate.
 class ChangeLogWriter {
-  ChangeLogWriter(this._db);
+  ChangeLogWriter(this._db, {SyncScheduler? scheduler})
+    : _scheduler = scheduler;
   final AppDatabase _db;
+  final SyncScheduler? _scheduler;
   static const _uuid = Uuid();
 
   Future<void> upsert(
@@ -36,6 +39,7 @@ class ChangeLogWriter {
             payload: Value(jsonEncode(payload)),
           ),
         );
+    _scheduler?.schedule();
   }
 
   Future<void> delete(String resource, String id) async {
@@ -50,8 +54,14 @@ class ChangeLogWriter {
             op: 'delete',
           ),
         );
+    _scheduler?.schedule();
   }
 }
 
 final Provider<ChangeLogWriter> changeLogWriterProvider =
-    Provider<ChangeLogWriter>((ref) => ChangeLogWriter(ref.read(dbProvider)));
+    Provider<ChangeLogWriter>(
+      (ref) => ChangeLogWriter(
+        ref.read(dbProvider),
+        scheduler: ref.read(syncSchedulerProvider),
+      ),
+    );

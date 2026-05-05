@@ -9,6 +9,7 @@ import 'features/entry/quick_entry.dart';
 import 'features/entry/share_intake.dart';
 import 'router/router.dart';
 import 'state/providers.dart';
+import 'sync/sync_scheduler.dart';
 import 'ui/theme.dart';
 
 Future<void> main() async {
@@ -32,11 +33,35 @@ Future<void> main() async {
   );
 }
 
-class GullakApp extends ConsumerWidget {
+class GullakApp extends ConsumerStatefulWidget {
   const GullakApp({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<GullakApp> createState() => _GullakAppState();
+}
+
+class _GullakAppState extends ConsumerState<GullakApp> {
+  AppLifecycleListener? _lifecycle;
+
+  @override
+  void initState() {
+    super.initState();
+    // Sync on every resume so we get whatever the homelab learned
+    // about while we were backgrounded (wife's iPhone logged
+    // expenses, WhatsApp messages came through, etc.).
+    _lifecycle = AppLifecycleListener(
+      onResume: () => ref.read(syncSchedulerProvider).runNow(),
+    );
+  }
+
+  @override
+  void dispose() {
+    _lifecycle?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final router = ref.watch(routerProvider);
     final mode = ref.watch(themeModeProvider);
 
