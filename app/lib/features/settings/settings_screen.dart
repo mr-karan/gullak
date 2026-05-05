@@ -77,7 +77,21 @@ class SettingsScreen extends ConsumerWidget {
                 ? null
                 : (v) => _toggleSms(context, ref, v),
           ),
-          if (prefs.smsEnabled && Platform.isAndroid)
+          if (prefs.smsEnabled && Platform.isAndroid) ...[
+            SwitchListTile(
+              secondary: const Icon(Icons.bolt_outlined),
+              title: const Text('Auto-confirm high-confidence SMS'),
+              subtitle: Text(
+                'Skip the Inbox when a parser is at least '
+                '${(prefs.smsAutoConfirmThreshold * 100).round()}% confident '
+                'and no matching transaction exists yet.',
+              ),
+              value: prefs.smsAutoConfirm,
+              onChanged: (v) async {
+                await prefs.setSmsAutoConfirm(v);
+                bumpPrefs(ref);
+              },
+            ),
             ListTile(
               leading: const Icon(Icons.refresh),
               title: const Text('Re-scan SMS inbox'),
@@ -91,6 +105,7 @@ class SettingsScreen extends ConsumerWidget {
                 ).showSnackBar(SnackBar(content: Text('Re-ingested $added.')));
               },
             ),
+          ],
           const _SectionHeader('Sync'),
           ListTile(
             leading: const Icon(Icons.cloud_outlined),

@@ -6,8 +6,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/logger.dart';
 import '../../core/notification_service.dart';
-import '../db/database.dart';
+import '../../core/prefs.dart';
+import '../../features/transactions/data/transaction_repository.dart';
 import '../../state/providers.dart';
+import '../db/database.dart';
 import 'classifier.dart';
 import 'parser_registry.dart';
 import 'sms_models.dart';
@@ -20,6 +22,8 @@ class SmsPipeline {
     required this.reader,
     this.notifications,
     this.notifyInboxCandidate,
+    this.transactionRepo,
+    this.prefs,
   });
 
   final AppDatabase db;
@@ -30,6 +34,11 @@ class SmsPipeline {
     required String? payee,
   })?
   notifyInboxCandidate;
+
+  /// Required for auto-confirm and dedupe. Optional so existing tests
+  /// that exercise pipeline-only behaviour stay green.
+  final TransactionRepository? transactionRepo;
+  final Prefs? prefs;
 
   StreamSubscription<IncomingSms>? _sub;
 
@@ -100,7 +109,33 @@ class SmsPipeline {
             'bank_ref': candidate.bankRef,
             'confidence': candidate.confidence,
           });
-    final status = candidate == null ? 'error' : 'inbox';
+
+    String status;
+    String? linkedTransactionId;
+    var notifyHighConfidence = false;
+
+    if (candidate == null) {
+      status = 'error';
+    } else {
+      final dupId = await _findDuplicateTransaction(candidate);
+      if (dupId != null) {
+        status = 'duplicate';
+        linkedTransactionId = dupId;
+      } else if (await _shouldAutoConfirm(candidate)) {
+        try {
+          linkedTransactionId = await _autoCreateTransaction(candidate, sms);
+          status = 'accepted';
+        } catch (e) {
+          log.w('auto-confirm failed, falling back to inbox: $e');
+          status = 'inbox';
+          notifyHighConfidence = true;
+        }
+      } else {
+        status = 'inbox';
+        notifyHighConfidence = candidate.confidence >= 0.8;
+      }
+    }
+
     await db
         .into(db.smsMessages)
         .insert(
@@ -117,9 +152,11 @@ class SmsPipeline {
             parserVersion: Value(candidate?.parserVersion),
             candidateJson: Value(candidateJson),
             candidateStatus: Value(status),
+            linkedTransactionId: Value(linkedTransactionId),
           ),
         );
-    if (candidate != null && candidate.confidence >= 0.8) {
+
+    if (notifyHighConfidence && candidate != null) {
       final notify = notifyInboxCandidate ?? notifications?.showInboxCandidate;
       await notify?.call(
         amountCents: candidate.amountCents,
@@ -128,6 +165,76 @@ class SmsPipeline {
     }
     return candidate != null;
   }
+
+  Future<bool> _shouldAutoConfirm(SmsCandidate candidate) async {
+    if (transactionRepo == null || prefs == null) return false;
+    if (!prefs!.smsAutoConfirm) return false;
+    return candidate.confidence >= prefs!.smsAutoConfirmThreshold;
+  }
+
+  /// Look for an existing non-SMS transaction matching this candidate
+  /// (same signed amount, within ±1 day). Returns the transaction id
+  /// if a match is found so the SMS row can link to it instead of
+  /// double-counting.
+  Future<String?> _findDuplicateTransaction(SmsCandidate candidate) async {
+    final signed = candidate.isIncome
+        ? candidate.amountCents.abs()
+        : -candidate.amountCents.abs();
+    final lo = _ymd(candidate.date.subtract(const Duration(days: 1)));
+    final hi = _ymd(candidate.date.add(const Duration(days: 1)));
+    final matches =
+        await (db.select(db.transactions)..where(
+              (t) =>
+                  t.amountCents.equals(signed) &
+                  t.date.isBiggerOrEqualValue(lo) &
+                  t.date.isSmallerOrEqualValue(hi) &
+                  t.origin.equals('sms').not(),
+            ))
+            .get();
+    if (matches.isEmpty) return null;
+    return matches.first.id;
+  }
+
+  Future<String> _autoCreateTransaction(
+    SmsCandidate candidate,
+    IncomingSms sms,
+  ) async {
+    final accounts = await (db.select(
+      db.accounts,
+    )..where((a) => a.archived.equals(false))).get();
+    if (accounts.isEmpty) {
+      throw StateError('no accounts available for auto-confirm');
+    }
+    String? acctId;
+    final hint = candidate.accountHint?.toLowerCase();
+    if (hint != null && hint.isNotEmpty) {
+      for (final a in accounts) {
+        final n = a.name.toLowerCase();
+        if (n == hint || n.contains(hint) || hint.contains(n)) {
+          acctId = a.id;
+          break;
+        }
+      }
+    }
+    acctId ??= accounts.first.id;
+    final signed = candidate.isIncome
+        ? candidate.amountCents.abs()
+        : -candidate.amountCents.abs();
+    return transactionRepo!.create(
+      accountId: acctId,
+      payeeName: candidate.payee,
+      amountCents: signed,
+      date: candidate.date,
+      notes: 'SMS · ${sms.address}',
+      origin: 'sms',
+      originRef: sms.id,
+    );
+  }
+
+  static String _ymd(DateTime d) =>
+      '${d.year.toString().padLeft(4, '0')}-'
+      '${d.month.toString().padLeft(2, '0')}-'
+      '${d.day.toString().padLeft(2, '0')}';
 }
 
 final Provider<SmsPipeline> smsPipelineProvider = Provider<SmsPipeline>((ref) {
@@ -135,6 +242,8 @@ final Provider<SmsPipeline> smsPipelineProvider = Provider<SmsPipeline>((ref) {
     db: ref.watch(dbProvider),
     reader: ref.watch(smsReaderProvider),
     notifications: ref.watch(notificationServiceProvider),
+    transactionRepo: ref.watch(transactionRepoProvider),
+    prefs: ref.watch(prefsProvider),
   );
   ref.onDispose(pipeline.stop);
   return pipeline;
