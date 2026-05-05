@@ -1,11 +1,11 @@
-FROM oven/bun:1.1-debian AS install
+FROM oven/bun:1.3-debian AS install
 
 WORKDIR /app
 
 COPY package.json bun.lock ./
 RUN bun install --frozen-lockfile --production
 
-FROM oven/bun:1.1-debian
+FROM oven/bun:1.3-debian
 
 RUN apt-get update \
   && apt-get install -y --no-install-recommends ca-certificates curl \
