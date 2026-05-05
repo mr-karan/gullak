@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -19,7 +20,6 @@ import '../backup/file_pick.dart';
 import '../accounts/data/account_repository.dart';
 import '../categories/data/category_repository.dart';
 import '../entry/ai_extractor.dart';
-import '../inbox/data/sms_repository.dart';
 import '../payees/data/payee_repository.dart';
 
 class SettingsScreen extends ConsumerWidget {
@@ -114,15 +114,12 @@ class SettingsScreen extends ConsumerWidget {
             ListTile(
               leading: const Icon(Icons.refresh),
               title: const Text('Re-scan SMS inbox'),
-              subtitle: const Text('Re-process the last 90 days.'),
-              onTap: () async {
-                final added = await ref.read(smsPipelineProvider).backfill();
-                ref.invalidate(inboxItemsProvider);
-                if (!context.mounted) return;
-                ScaffoldMessenger.of(
-                  context,
-                ).showSnackBar(SnackBar(content: Text('Re-ingested $added.')));
-              },
+              subtitle: const Text(
+                'Drops cached parses and re-processes the last 90 days '
+                'in the background. Pending Inbox candidates survive — '
+                'rows already accepted as transactions are unaffected.',
+              ),
+              onTap: () => _rescanSms(context, ref),
             ),
           ],
           const _SectionHeader('Sync'),
@@ -198,6 +195,37 @@ class SettingsScreen extends ConsumerWidget {
     );
   }
 
+  /// Wipes everything except already-accepted transactions and the
+  /// rows the user is still reviewing in the Inbox, then kicks off a
+  /// fresh backfill. Targets two recurring symptoms: stale cache rows
+  /// from a previous parser version silently suppressing today's SMS,
+  /// and per-message dedupe locking past parser failures into
+  /// permanent `status='error'` rows.
+  void _rescanSms(BuildContext context, WidgetRef ref) {
+    final db = ref.read(dbProvider);
+    final messenger = ScaffoldMessenger.of(context);
+    unawaited(() async {
+      // The cache is dead code as of the registry cleanup but old
+      // installs still have rows; clear it so anyone who upgrades in
+      // place sees the same behaviour as a fresh install.
+      await db.customStatement('DELETE FROM sms_parse_cache');
+      // Keep the Inbox ('inbox') and accepted history ('accepted'); drop
+      // anything else so dedupe doesn't lock past parser failures into
+      // permanent `error`/`none` rows.
+      await db.customStatement(
+        // ignore: prefer_single_quotes
+        "DELETE FROM sms_messages WHERE candidate_status IN "
+        "('error', 'none', 'duplicate', 'dismissed')",
+      );
+      await ref.read(smsPipelineProvider).backfill();
+    }());
+    messenger.showSnackBar(
+      const SnackBar(
+        content: Text('Re-scanning — Inbox updates as messages parse.'),
+      ),
+    );
+  }
+
   Future<void> _toggleSms(BuildContext context, WidgetRef ref, bool v) async {
     final prefs = ref.read(prefsProvider);
     if (v) {
@@ -215,11 +243,17 @@ class SettingsScreen extends ConsumerWidget {
       await ref.read(notificationServiceProvider).requestPermission();
       final pipeline = ref.read(smsPipelineProvider);
       pipeline.startListening();
-      final added = await pipeline.backfill();
-      ref.invalidate(inboxItemsProvider);
+      // Fire-and-forget: backfill walks the whole 90-day inbox through
+      // the LLM serially, which can take minutes. Awaiting it here
+      // freezes the toggle and makes the Inbox look broken. The
+      // pipeline writes rows incrementally and the Inbox StreamProvider
+      // picks them up as they land.
+      unawaited(pipeline.backfill());
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Backfilled $added candidate(s).')),
+        const SnackBar(
+          content: Text('Scanning inbox — items will appear as they\'re parsed.'),
+        ),
       );
     } else {
       await prefs.setSmsEnabled(false);

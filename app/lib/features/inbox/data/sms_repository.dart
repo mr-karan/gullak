@@ -16,6 +16,7 @@ class InboxItem {
     required this.address,
     required this.body,
     required this.receivedAt,
+    required this.status,
     this.suggestedPayee,
     this.suggestedAmountCents,
     this.suggestedAccountName,
@@ -26,10 +27,20 @@ class InboxItem {
   final String address;
   final String body;
   final int receivedAt;
+
+  /// Underlying [SmsMessages.candidateStatus]. 'inbox' means the parser
+  /// produced a candidate the user can confirm. 'error' means the
+  /// classifier was confident the SMS is transactional but no parsed
+  /// candidate is available — the row still shows up so the user can
+  /// open it in QuickEntry manually instead of it disappearing into
+  /// the void.
+  final String status;
   final String? suggestedPayee;
   final int? suggestedAmountCents;
   final String? suggestedAccountName;
   final String? suggestedCategoryName;
+
+  bool get hasCandidate => status == 'inbox' && suggestedAmountCents != null;
 }
 
 class SmsRepository {
@@ -38,10 +49,18 @@ class SmsRepository {
 
   AppDatabase get _db => ref.read(dbProvider);
 
+  /// Pending review: classifier-positive SMS that either parsed into a
+  /// candidate (status='inbox') or that the parser couldn't structure
+  /// (status='error'). The latter still belongs in the user's view —
+  /// silently dropping classifier-positive SMS made the Inbox look
+  /// permanently empty when the LLM was misconfigured or the parse
+  /// cache was poisoned.
+  static const _pendingStatuses = ['inbox', 'error'];
+
   Future<List<InboxItem>> listInbox() async {
     final rows =
         await (_db.select(_db.smsMessages)
-              ..where((t) => t.candidateStatus.equals('inbox'))
+              ..where((t) => t.candidateStatus.isIn(_pendingStatuses))
               ..orderBy([(t) => OrderingTerm.desc(t.receivedAt)]))
             .get();
     return _enrichRows(rows);
@@ -52,7 +71,7 @@ class SmsRepository {
   /// up automatically without anyone calling [Ref.invalidate].
   Stream<List<InboxItem>> watchInbox() {
     final query = _db.select(_db.smsMessages)
-      ..where((t) => t.candidateStatus.equals('inbox'))
+      ..where((t) => t.candidateStatus.isIn(_pendingStatuses))
       ..orderBy([(t) => OrderingTerm.desc(t.receivedAt)]);
     return query.watch().asyncMap(_enrichRows);
   }
@@ -133,6 +152,7 @@ class SmsRepository {
       address: r.address,
       body: r.body,
       receivedAt: r.receivedAt,
+      status: r.candidateStatus,
       suggestedPayee: payeeText,
       suggestedAmountCents: amount,
       suggestedAccountName: accountName,

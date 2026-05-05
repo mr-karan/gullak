@@ -19,16 +19,18 @@ class InboxScreen extends ConsumerWidget {
         title: const Text('Inbox'),
         actions: [
           asyncRows.maybeWhen(
-            data: (rows) => rows.isEmpty
-                ? const SizedBox.shrink()
-                : Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: TextButton.icon(
-                      onPressed: () => _confirmAll(context, ref, rows.length),
-                      icon: const Icon(Icons.done_all, size: 18),
-                      label: Text('Confirm all (${rows.length})'),
-                    ),
-                  ),
+            data: (rows) {
+              final ready = rows.where((r) => r.hasCandidate).length;
+              if (ready == 0) return const SizedBox.shrink();
+              return Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: TextButton.icon(
+                  onPressed: () => _confirmAll(context, ref, ready),
+                  icon: const Icon(Icons.done_all, size: 18),
+                  label: Text('Confirm all ($ready)'),
+                ),
+              );
+            },
             orElse: () => const SizedBox.shrink(),
           ),
         ],
@@ -185,6 +187,15 @@ class _InboxRow extends ConsumerWidget {
                 ],
               ),
             ],
+            if (!item.hasCandidate) ...[
+              const SizedBox(height: 8),
+              Text(
+                'Couldn\'t parse this one — open it manually to log.',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: cs.error,
+                ),
+              ),
+            ],
             const SizedBox(height: 12),
             Row(
               children: [
@@ -201,15 +212,16 @@ class _InboxRow extends ConsumerWidget {
                   child: const Text('Dismiss'),
                 ),
                 const SizedBox(width: 4),
-                FilledButton.tonal(
-                  onPressed: () =>
-                      ref.read(smsRepositoryProvider).confirm(item.id),
-                  style: FilledButton.styleFrom(
-                    minimumSize: const Size(0, 36),
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                if (item.hasCandidate)
+                  FilledButton.tonal(
+                    onPressed: () =>
+                        ref.read(smsRepositoryProvider).confirm(item.id),
+                    style: FilledButton.styleFrom(
+                      minimumSize: const Size(0, 36),
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                    ),
+                    child: const Text('Confirm'),
                   ),
-                  child: const Text('Confirm'),
-                ),
               ],
             ),
           ],

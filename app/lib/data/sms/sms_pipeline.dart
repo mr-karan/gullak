@@ -53,7 +53,7 @@ class SmsPipeline {
     ];
     var added = 0;
     for (final m in messages) {
-      if (await _ingest(m)) added += 1;
+      if (await _safeIngest(m)) added += 1;
     }
     log.i('sms backfill ingested $added/${messages.length}');
     return added;
@@ -63,12 +63,25 @@ class SmsPipeline {
     if (_sub != null) return;
     reader.drainBackgroundQueue().then((messages) async {
       for (final message in messages) {
-        await _ingest(message);
+        await _safeIngest(message);
       }
     });
     _sub = reader.listen().listen((m) async {
-      await _ingest(m);
+      await _safeIngest(m);
     });
+  }
+
+  /// Each message is parsed independently — the LLM, the network, or
+  /// the SQLite write can fail mid-scan. We log and move on so one bad
+  /// SMS does not abort the rest of a 90-day backfill or kill the live
+  /// listener for the rest of the session.
+  Future<bool> _safeIngest(IncomingSms sms) async {
+    try {
+      return await _ingest(sms);
+    } catch (e, st) {
+      log.w('sms ingest failed for ${sms.address}', error: e, stackTrace: st);
+      return false;
+    }
   }
 
   Future<void> stop() async {
@@ -240,14 +253,20 @@ class SmsPipeline {
 }
 
 final Provider<SmsPipeline> smsPipelineProvider = Provider<SmsPipeline>((ref) {
+  final prefs = ref.watch(prefsProvider);
   final pipeline = SmsPipeline(
     db: ref.watch(dbProvider),
     reader: ref.watch(smsReaderProvider),
     parserRegistry: ref.watch(parserRegistryProvider),
     notifications: ref.watch(notificationServiceProvider),
     transactionRepo: ref.watch(transactionRepoProvider),
-    prefs: ref.watch(prefsProvider),
+    prefs: prefs,
   );
+  // Re-arm the live listener whenever this provider rebuilds (e.g. after
+  // the user updates the LLM API key, which invalidates parserRegistry
+  // and therefore this provider). Otherwise rebuild → onDispose → stop()
+  // silently kills incoming SMS for the rest of the session.
+  if (prefs.smsEnabled) pipeline.startListening();
   ref.onDispose(pipeline.stop);
   return pipeline;
 });
