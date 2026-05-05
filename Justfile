@@ -28,8 +28,15 @@ gate:
 
 # Build a release APK and copy it to {{dist-dir}}/ with a sha+timestamp
 # filename, plus a `gullak-latest.apk` symlink. Prints the artifact path.
+# Stamps the build with --dart-define so Settings → About can show
+# exactly which commit you're running.
 apk:
-    cd {{app-dir}} && flutter build apk --release
+    set -eu; \
+      sha="$(git rev-parse --short HEAD)"; \
+      ts="$(date +%Y%m%d-%H%M%S)"; \
+      cd {{app-dir}} && flutter build apk --release \
+        --dart-define="GULLAK_BUILD_SHA=$sha" \
+        --dart-define="GULLAK_BUILD_AT=$ts"
     mkdir -p {{dist-dir}}
     set -eu; \
       sha="$(git rev-parse --short HEAD)"; \
@@ -38,6 +45,12 @@ apk:
       cp {{apk-out}} "$out"; \
       ln -sfn "$(basename "$out")" {{dist-dir}}/gullak-latest.apk; \
       ls -lh "$out" {{dist-dir}}/gullak-latest.apk
+
+# Hot-reload dev loop on the connected Android device. Far faster
+# than `just install` for iterating on UI / logic — saves 60s per
+# round-trip and you get stack traces straight in the terminal.
+run:
+    cd {{app-dir}} && flutter run --device-id=$(adb devices | awk 'NR>1 && $2=="device"{print $1; exit}')
 
 # Build the APK and install on the first connected Android device.
 install: apk

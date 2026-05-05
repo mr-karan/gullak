@@ -28,6 +28,7 @@ class _OnboardingFlowState extends ConsumerState<OnboardingFlow> {
   String _accountName = '';
   AccountKind _kind = AccountKind.checking;
   int _openingBalanceCents = 0;
+  bool _finishing = false;
 
   @override
   void dispose() {
@@ -45,86 +46,120 @@ class _OnboardingFlowState extends ConsumerState<OnboardingFlow> {
     String? aiModel,
     String? aiApiKey,
   }) async {
-    await ref
-        .read(accountRepoProvider)
-        .create(
-          name: _accountName.trim(),
-          kind: _kind,
-          openingBalanceCents: _openingBalanceCents,
-        );
-    await _seedDefaults(ref);
-    final prefs = ref.read(prefsProvider);
-    await prefs.setCurrencySymbol(_symbol);
-    await prefs.setCurrencyMinorDigits(_minorDigits);
-
-    final apiKey = aiApiKey?.trim();
-    if (apiKey != null && apiKey.isNotEmpty) {
+    if (_finishing) return;
+    setState(() => _finishing = true);
+    try {
       await ref
-          .read(secureStoreProvider)
-          .writeLlm(
-            baseUrl: aiBaseUrl?.trim().isEmpty ?? true
-                ? kDefaultAiBaseUrl
-                : aiBaseUrl!.trim(),
-            model: aiModel?.trim().isEmpty ?? true
-                ? kDefaultAiModel
-                : aiModel!.trim(),
-            apiKey: apiKey,
+          .read(accountRepoProvider)
+          .create(
+            name: _accountName.trim(),
+            kind: _kind,
+            openingBalanceCents: _openingBalanceCents,
           );
-      await prefs.setAiEnabled(true);
-    }
+      await _seedDefaults(ref);
+      final prefs = ref.read(prefsProvider);
+      await prefs.setCurrencySymbol(_symbol);
+      await prefs.setCurrencyMinorDigits(_minorDigits);
 
-    // Set onboarded *last* and invalidate — the router listens to
-    // onboardedProvider via a refreshListenable and redirects to '/'
-    // automatically. Calling context.go on top of that double-navigates
-    // and races the widget being unmounted by the redirect.
-    final db = ref.read(dbProvider);
-    await db.kvSet('onboarded', 'true');
-    ref.invalidate(onboardedProvider);
+      final apiKey = aiApiKey?.trim();
+      if (apiKey != null && apiKey.isNotEmpty) {
+        await ref
+            .read(secureStoreProvider)
+            .writeLlm(
+              baseUrl: aiBaseUrl?.trim().isEmpty ?? true
+                  ? kDefaultAiBaseUrl
+                  : aiBaseUrl!.trim(),
+              model: aiModel?.trim().isEmpty ?? true
+                  ? kDefaultAiModel
+                  : aiModel!.trim(),
+              apiKey: apiKey,
+            );
+        await prefs.setAiEnabled(true);
+      }
+
+      // Set onboarded *last* and invalidate — the router listens to
+      // onboardedProvider via a refreshListenable and redirects to '/'
+      // automatically. Calling context.go on top of that double-navigates
+      // and races the widget being unmounted by the redirect.
+      final db = ref.read(dbProvider);
+      await db.kvSet('onboarded', 'true');
+      ref.invalidate(onboardedProvider);
+    } finally {
+      if (mounted) setState(() => _finishing = false);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: SafeArea(
-        child: PageView(
-          controller: _ctrl,
-          physics: const NeverScrollableScrollPhysics(),
+        child: Stack(
           children: [
-            _WelcomeAndCurrency(
-              symbol: _symbol,
-              minorDigits: _minorDigits,
-              onChange: (s, d) => setState(() {
-                _symbol = s;
-                _minorDigits = d;
-              }),
-              onNext: _next,
+            PageView(
+              controller: _ctrl,
+              physics: const NeverScrollableScrollPhysics(),
+              children: [
+                _WelcomeAndCurrency(
+                  symbol: _symbol,
+                  minorDigits: _minorDigits,
+                  onChange: (s, d) => setState(() {
+                    _symbol = s;
+                    _minorDigits = d;
+                  }),
+                  onNext: _next,
+                ),
+                _FirstAccount(
+                  symbol: _symbol,
+                  minorDigits: _minorDigits,
+                  onSubmit:
+                      ({required name, required kind, required openingCents}) {
+                        setState(() {
+                          _accountName = name;
+                          _kind = kind;
+                          _openingBalanceCents = openingCents;
+                        });
+                        _next();
+                      },
+                ),
+                _AiSetup(
+                  busy: _finishing,
+                  onSkip: () => _finish(),
+                  onSubmit:
+                      ({
+                        required String baseUrl,
+                        required String model,
+                        required String apiKey,
+                      }) => _finish(
+                        aiBaseUrl: baseUrl,
+                        aiModel: model,
+                        aiApiKey: apiKey,
+                      ),
+                ),
+              ],
             ),
-            _FirstAccount(
-              symbol: _symbol,
-              minorDigits: _minorDigits,
-              onSubmit:
-                  ({required name, required kind, required openingCents}) {
-                    setState(() {
-                      _accountName = name;
-                      _kind = kind;
-                      _openingBalanceCents = openingCents;
-                    });
-                    _next();
-                  },
-            ),
-            _AiSetup(
-              onSkip: () => _finish(),
-              onSubmit:
-                  ({
-                    required String baseUrl,
-                    required String model,
-                    required String apiKey,
-                  }) => _finish(
-                    aiBaseUrl: baseUrl,
-                    aiModel: model,
-                    aiApiKey: apiKey,
+            if (_finishing)
+              Positioned.fill(
+                child: ColoredBox(
+                  color: Colors.black.withValues(alpha: 0.45),
+                  child: const Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        SizedBox(
+                          width: 32,
+                          height: 32,
+                          child: CircularProgressIndicator(strokeWidth: 2.5),
+                        ),
+                        SizedBox(height: 16),
+                        Text(
+                          'Setting things up…',
+                          style: TextStyle(color: Colors.white),
+                        ),
+                      ],
+                    ),
                   ),
-            ),
+                ),
+              ),
           ],
         ),
       ),
@@ -311,7 +346,11 @@ class _FirstAccountState extends State<_FirstAccount> {
 /// needs to paste an API key. Skipping leaves AI disabled — it can be
 /// configured later from Settings → AI assist.
 class _AiSetup extends StatefulWidget {
-  const _AiSetup({required this.onSubmit, required this.onSkip});
+  const _AiSetup({
+    required this.onSubmit,
+    required this.onSkip,
+    this.busy = false,
+  });
 
   final void Function({
     required String baseUrl,
@@ -320,6 +359,7 @@ class _AiSetup extends StatefulWidget {
   })
   onSubmit;
   final VoidCallback onSkip;
+  final bool busy;
 
   @override
   State<_AiSetup> createState() => _AiSetupState();
@@ -406,21 +446,26 @@ class _AiSetupState extends State<_AiSetup> {
           const Spacer(),
           Row(
             children: [
-              TextButton(onPressed: widget.onSkip, child: const Text('Skip')),
+              TextButton(
+                onPressed: widget.busy ? null : widget.onSkip,
+                child: const Text('Skip'),
+              ),
               const Spacer(),
               FilledButton(
-                onPressed: () {
-                  final key = _apiKey.text.trim();
-                  if (key.isEmpty) {
-                    widget.onSkip();
-                    return;
-                  }
-                  widget.onSubmit(
-                    baseUrl: _baseUrl.text,
-                    model: _model.text,
-                    apiKey: key,
-                  );
-                },
+                onPressed: widget.busy
+                    ? null
+                    : () {
+                        final key = _apiKey.text.trim();
+                        if (key.isEmpty) {
+                          widget.onSkip();
+                          return;
+                        }
+                        widget.onSubmit(
+                          baseUrl: _baseUrl.text,
+                          model: _model.text,
+                          apiKey: key,
+                        );
+                      },
                 child: const Text('Done'),
               ),
             ],

@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../core/ai_defaults.dart';
+import '../../core/build_info.dart';
 import '../../core/money.dart';
 import '../../core/notification_service.dart';
 import '../../data/ai/llm_client.dart';
@@ -181,6 +182,16 @@ class SettingsScreen extends ConsumerWidget {
               'Wipes existing data and restores from a JSON file.',
             ),
             onTap: () => _importBackup(context, ref),
+          ),
+          const _SectionHeader('About'),
+          const ListTile(
+            leading: Icon(Icons.info_outline),
+            title: Text('Build'),
+            subtitle: Text(
+              buildSha == 'dev'
+                  ? 'dev build · v$buildVersion'
+                  : 'v$buildVersion · $buildSha · $buildTimestamp',
+            ),
           ),
         ],
       ),
