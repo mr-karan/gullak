@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../core/ai_defaults.dart';
 import '../../core/money.dart';
+import '../../data/ai/pi_ai_client.dart';
 import '../../state/providers.dart';
 import '../accounts/data/account_repository.dart';
 import '../categories/data/category_repository.dart';
@@ -10,7 +10,13 @@ import '../categories/data/category_repository.dart';
 /// First-run wizard. Three quick steps:
 ///   1. Welcome + currency
 ///   2. First account
-///   3. AI assist (optional — paste OpenRouter key or skip)
+///   3. Sync server (optional — URL + API key, or skip)
+///
+/// The sync server is the single trusted box that holds the LLM
+/// credentials, so SMS parsing, natural-language QuickEntry, and
+/// receipt-photo parsing all stay disabled until the user configures
+/// it (either here or later in Settings → Sync).
+///
 /// On completion we seed default category groups and mark onboarded.
 class OnboardingFlow extends ConsumerStatefulWidget {
   const OnboardingFlow({super.key});
@@ -41,11 +47,7 @@ class _OnboardingFlowState extends ConsumerState<OnboardingFlow> {
     curve: Curves.easeOut,
   );
 
-  Future<void> _finish({
-    String? aiBaseUrl,
-    String? aiModel,
-    String? aiApiKey,
-  }) async {
+  Future<void> _finish({String? syncBaseUrl, String? syncApiKey}) async {
     if (_finishing) return;
     setState(() => _finishing = true);
     try {
@@ -61,20 +63,16 @@ class _OnboardingFlowState extends ConsumerState<OnboardingFlow> {
       await prefs.setCurrencySymbol(_symbol);
       await prefs.setCurrencyMinorDigits(_minorDigits);
 
-      final apiKey = aiApiKey?.trim();
-      if (apiKey != null && apiKey.isNotEmpty) {
+      final url = syncBaseUrl?.trim();
+      if (url != null && url.isNotEmpty) {
+        final key = syncApiKey?.trim();
         await ref
             .read(secureStoreProvider)
-            .writeLlm(
-              baseUrl: aiBaseUrl?.trim().isEmpty ?? true
-                  ? kDefaultAiBaseUrl
-                  : aiBaseUrl!.trim(),
-              model: aiModel?.trim().isEmpty ?? true
-                  ? kDefaultAiModel
-                  : aiModel!.trim(),
-              apiKey: apiKey,
+            .writeSync(
+              baseUrl: url,
+              apiKey: key == null || key.isEmpty ? null : key,
             );
-        await prefs.setAiEnabled(true);
+        ref.invalidate(piAiClientProvider);
       }
 
       // Set onboarded *last* and invalidate — the router listens to
@@ -121,19 +119,12 @@ class _OnboardingFlowState extends ConsumerState<OnboardingFlow> {
                         _next();
                       },
                 ),
-                _AiSetup(
+                _SyncSetup(
                   busy: _finishing,
                   onSkip: () => _finish(),
                   onSubmit:
-                      ({
-                        required String baseUrl,
-                        required String model,
-                        required String apiKey,
-                      }) => _finish(
-                        aiBaseUrl: baseUrl,
-                        aiModel: model,
-                        aiApiKey: apiKey,
-                      ),
+                      ({required String baseUrl, required String apiKey}) =>
+                          _finish(syncBaseUrl: baseUrl, syncApiKey: apiKey),
                 ),
               ],
             ),
@@ -381,40 +372,34 @@ class _FirstAccountState extends State<_FirstAccount> {
   }
 }
 
-/// Optional final step. Prefilled with the OpenRouter + Gemini Flash
-/// defaults that match the homelab pi-server config; the user only
-/// needs to paste an API key. Skipping leaves AI disabled — it can be
-/// configured later from Settings → AI assist.
-class _AiSetup extends StatefulWidget {
-  const _AiSetup({
+/// Optional final step. The homelab pi-server holds the LLM
+/// credentials and runs all parsing for SMS, natural-language
+/// QuickEntry, and receipt photos. Skipping is fine — those features
+/// stay disabled until the server is configured here or later in
+/// Settings → Sync.
+class _SyncSetup extends StatefulWidget {
+  const _SyncSetup({
     required this.onSubmit,
     required this.onSkip,
     this.busy = false,
   });
 
-  final void Function({
-    required String baseUrl,
-    required String model,
-    required String apiKey,
-  })
+  final void Function({required String baseUrl, required String apiKey})
   onSubmit;
   final VoidCallback onSkip;
   final bool busy;
 
   @override
-  State<_AiSetup> createState() => _AiSetupState();
+  State<_SyncSetup> createState() => _SyncSetupState();
 }
 
-class _AiSetupState extends State<_AiSetup> {
-  final _baseUrl = TextEditingController(text: kDefaultAiBaseUrl);
-  final _model = TextEditingController(text: kDefaultAiModel);
+class _SyncSetupState extends State<_SyncSetup> {
+  final _baseUrl = TextEditingController();
   final _apiKey = TextEditingController();
-  bool _showAdvanced = false;
 
   @override
   void dispose() {
     _baseUrl.dispose();
-    _model.dispose();
     _apiKey.dispose();
     super.dispose();
   }
@@ -426,62 +411,42 @@ class _AiSetupState extends State<_AiSetup> {
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('AI assist', style: Theme.of(context).textTheme.headlineMedium),
+          Text(
+            'Sync server',
+            style: Theme.of(context).textTheme.headlineMedium,
+          ),
           const SizedBox(height: 8),
           Text(
-            'Optional. Paste an OpenRouter API key to type expenses in '
-            'natural language ("blinkit 450 hdfc"). Stored on this device only.',
+            'Optional. Point at a self-hosted Gullak server to merge data '
+            'across devices and unlock SMS parsing, photo receipts, and '
+            'natural-language entry — those run on the server. Skip if '
+            'you just want a local ledger.',
             style: Theme.of(
               context,
             ).textTheme.bodyLarge?.copyWith(color: cs.onSurfaceVariant),
           ),
           const SizedBox(height: 24),
           TextField(
+            controller: _baseUrl,
+            keyboardType: TextInputType.url,
+            decoration: const InputDecoration(
+              labelText: 'Base URL',
+              hintText: 'https://gullak.mrkaran.dev',
+            ),
+            autocorrect: false,
+            enableSuggestions: false,
+          ),
+          const SizedBox(height: 12),
+          TextField(
             controller: _apiKey,
             decoration: const InputDecoration(
-              labelText: 'OpenRouter API key',
-              hintText: 'sk-or-v1-…',
+              labelText: 'API key',
+              hintText: 'optional',
             ),
             obscureText: true,
             autocorrect: false,
             enableSuggestions: false,
           ),
-          const SizedBox(height: 16),
-          InkWell(
-            onTap: () => setState(() => _showAdvanced = !_showAdvanced),
-            child: Row(
-              children: [
-                Icon(
-                  _showAdvanced ? Icons.expand_less : Icons.expand_more,
-                  size: 20,
-                  color: cs.onSurfaceVariant,
-                ),
-                const SizedBox(width: 4),
-                Text(
-                  'Advanced',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.labelLarge?.copyWith(color: cs.onSurfaceVariant),
-                ),
-              ],
-            ),
-          ),
-          if (_showAdvanced) ...[
-            const SizedBox(height: 12),
-            TextField(
-              controller: _baseUrl,
-              decoration: const InputDecoration(labelText: 'Base URL'),
-              autocorrect: false,
-              enableSuggestions: false,
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _model,
-              decoration: const InputDecoration(labelText: 'Model'),
-              autocorrect: false,
-              enableSuggestions: false,
-            ),
-          ],
         ],
       ),
       footer: Row(
@@ -495,15 +460,14 @@ class _AiSetupState extends State<_AiSetup> {
             onPressed: widget.busy
                 ? null
                 : () {
-                    final key = _apiKey.text.trim();
-                    if (key.isEmpty) {
+                    final url = _baseUrl.text.trim();
+                    if (url.isEmpty) {
                       widget.onSkip();
                       return;
                     }
                     widget.onSubmit(
-                      baseUrl: _baseUrl.text,
-                      model: _model.text,
-                      apiKey: key,
+                      baseUrl: url,
+                      apiKey: _apiKey.text.trim(),
                     );
                   },
             child: const Text('Done'),

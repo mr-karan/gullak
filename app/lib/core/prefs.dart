@@ -17,7 +17,6 @@ class Prefs {
   static const _kDefaultAccountId = 'gullak.default.account';
   static const _kLastPullDate = 'gullak.sync.lastPull';
   static const _kQuickEntryTab = 'gullak.entry.tab';
-  static const _kAiEnabled = 'gullak.ai.enabled';
   static const _kSmsEnabled = 'gullak.sms.enabled';
   static const _kLastAccountId = 'gullak.entry.lastAccountId';
   // Persisted as JSON: { "<payeeId>": "<accountId>" }
@@ -51,9 +50,6 @@ class Prefs {
   String get quickEntryTab => _inner.getString(_kQuickEntryTab) ?? 'form';
   Future<void> setQuickEntryTab(String tab) =>
       _inner.setString(_kQuickEntryTab, tab);
-
-  bool get aiEnabled => _inner.getBool(_kAiEnabled) ?? false;
-  Future<void> setAiEnabled(bool v) => _inner.setBool(_kAiEnabled, v);
 
   bool get smsEnabled => _inner.getBool(_kSmsEnabled) ?? false;
   Future<void> setSmsEnabled(bool v) => _inner.setBool(_kSmsEnabled, v);

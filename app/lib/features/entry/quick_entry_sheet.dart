@@ -31,7 +31,7 @@ class QuickEntrySheet extends ConsumerStatefulWidget {
 
 class _QuickEntrySheetState extends ConsumerState<QuickEntrySheet>
     with SingleTickerProviderStateMixin {
-  late final bool _showType;
+  bool _showType = false;
   TabController? _tabs;
 
   bool get _isEditing => widget.editingTransactionId != null;
@@ -39,18 +39,25 @@ class _QuickEntrySheetState extends ConsumerState<QuickEntrySheet>
   @override
   void initState() {
     super.initState();
-    // Decide once at open-time: editing always goes straight to Form;
-    // creating uses the user's last tab. Toggling AI preferences while
-    // the sheet is open shouldn't recreate or dispose the controller.
-    final prefs = ref.read(prefsProvider);
-    _showType = !_isEditing && prefs.aiEnabled;
-    if (_showType) {
-      _tabs = TabController(
-        length: 2,
-        vsync: this,
-        initialIndex: prefs.quickEntryTab == 'type' ? 0 : 1,
-      );
-    }
+    // Editing always goes straight to Form. Creating shows the
+    // natural-language tab only when the homelab pi-server is
+    // configured (it does the parsing). The check is async so we
+    // start without the tab and add it once we know.
+    if (_isEditing) return;
+    () async {
+      final base = await ref.read(secureStoreProvider).readSyncBaseUrl();
+      if (!mounted) return;
+      if (base == null || base.trim().isEmpty) return;
+      final prefs = ref.read(prefsProvider);
+      setState(() {
+        _showType = true;
+        _tabs = TabController(
+          length: 2,
+          vsync: this,
+          initialIndex: prefs.quickEntryTab == 'type' ? 0 : 1,
+        );
+      });
+    }();
   }
 
   @override

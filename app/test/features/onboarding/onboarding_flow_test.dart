@@ -11,13 +11,13 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// Smoke harness for the onboarding flow.
 ///
 /// Catches a class of bug we've been hitting at the device level —
-/// the most recent example: `FilledButtonThemeData.minimumSize =
-/// Size.fromHeight(52)` produced an Infinity min-width that worked
-/// inside a Column but blew up inside a Row, leaving the Done button
-/// missing on the AI assist page and Skip routing into a black
-/// screen. This test pumps the real OnboardingFlow with Drift in
-/// memory, drives through all three pages, and asserts both action
-/// buttons render at non-zero size with no FlutterError emissions.
+/// e.g. `FilledButtonThemeData.minimumSize = Size.fromHeight(52)`
+/// produced an Infinity min-width that worked inside a Column but
+/// blew up inside a Row, leaving the Done button missing on the
+/// final page. This test pumps the real OnboardingFlow with Drift
+/// in memory, drives through all three pages, and asserts both
+/// action buttons on the final page render at non-zero size with
+/// no FlutterError emissions.
 ///
 /// If any layout exception fires during the pump (RenderFlex
 /// overflow, Infinity constraint, missing size), [FlutterError.onError]
@@ -81,9 +81,9 @@ void main() {
     await tester.tap(find.text('Continue'));
     await tester.pumpAndSettle();
 
-    // Page 3: AI assist — both action buttons must be visible AND
+    // Page 3: Sync server — both action buttons must be visible AND
     // non-zero size, which is what the previous theme bug tripped.
-    expect(find.text('AI assist'), findsOneWidget);
+    expect(find.text('Sync server'), findsOneWidget);
     expect(find.text('Skip'), findsOneWidget);
     expect(find.text('Done'), findsOneWidget);
     expect(tester.getRect(find.text('Skip')).width, greaterThan(0));
@@ -96,7 +96,7 @@ void main() {
     );
   });
 
-  testWidgets('AI assist page survives larger text scale + small viewport',
+  testWidgets('Sync server page survives larger text scale + small viewport',
       (tester) async {
     final layoutErrors = <FlutterErrorDetails>[];
     final original = FlutterError.onError;
@@ -118,7 +118,7 @@ void main() {
 
     // The page is allowed to require scrolling; the test only insists
     // there's no layout exception and both buttons exist somewhere.
-    expect(find.text('AI assist'), findsOneWidget);
+    expect(find.text('Sync server'), findsOneWidget);
     expect(find.text('Skip'), findsOneWidget);
     expect(find.text('Done'), findsOneWidget);
     expect(

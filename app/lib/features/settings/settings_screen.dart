@@ -6,21 +6,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:share_plus/share_plus.dart';
 
-import '../../core/ai_defaults.dart';
 import '../../core/build_info.dart';
-import '../../core/money.dart';
 import '../../core/notification_service.dart';
-import '../../data/ai/llm_client.dart';
 import '../../data/sms/sms_pipeline.dart';
 import '../../data/sms/sms_reader.dart';
 import '../../state/providers.dart';
 import '../../sync/sync_service.dart';
 import '../backup/backup_service.dart';
 import '../backup/file_pick.dart';
-import '../accounts/data/account_repository.dart';
-import '../categories/data/category_repository.dart';
-import '../entry/ai_extractor.dart';
-import '../payees/data/payee_repository.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -45,38 +38,28 @@ class SettingsScreen extends ConsumerWidget {
             subtitle: Text('${prefs.currencyMinorDigits}'),
             onTap: () => _editMinorDigits(context, ref),
           ),
-          const _SectionHeader('AI assist'),
-          SwitchListTile(
-            secondary: const Icon(Icons.auto_awesome_outlined),
-            title: const Text('Enable AI parsing'),
-            value: prefs.aiEnabled,
-            onChanged: (v) async {
-              await prefs.setAiEnabled(v);
-              bumpPrefs(ref);
-            },
-          ),
-          ListTile(
-            leading: const Icon(Icons.link),
-            title: const Text('AI endpoint'),
-            subtitle: FutureBuilder<String?>(
-              future: ref.read(secureStoreProvider).readLlmBaseUrl(),
-              builder: (_, s) => Text(s.data ?? 'Not configured'),
-            ),
-            onTap: () => _editLlm(context, ref),
-          ),
           const _SectionHeader('SMS'),
-          SwitchListTile(
-            secondary: const Icon(Icons.sms_outlined),
-            title: const Text('Read transactional SMS'),
-            subtitle: Text(
-              Platform.isAndroid
-                  ? 'Reads only bank/transactional SMS. Everything else is ignored.'
-                  : 'Available on Android only.',
-            ),
-            value: prefs.smsEnabled && Platform.isAndroid,
-            onChanged: !Platform.isAndroid
-                ? null
-                : (v) => _toggleSms(context, ref, v),
+          FutureBuilder<String?>(
+            future: ref.read(secureStoreProvider).readSyncBaseUrl(),
+            builder: (_, snap) {
+              final syncConfigured =
+                  Platform.isAndroid && (snap.data?.trim().isNotEmpty ?? false);
+              return SwitchListTile(
+                secondary: const Icon(Icons.sms_outlined),
+                title: const Text('Read transactional SMS'),
+                subtitle: Text(
+                  !Platform.isAndroid
+                      ? 'Available on Android only.'
+                      : !syncConfigured
+                            ? 'Configure Sync server first — SMS parsing runs there.'
+                            : 'Reads only bank/transactional SMS. Everything else is ignored.',
+                ),
+                value: prefs.smsEnabled && syncConfigured,
+                onChanged: !syncConfigured
+                    ? null
+                    : (v) => _toggleSms(context, ref, v),
+              );
+            },
           ),
           if (prefs.smsEnabled && Platform.isAndroid) ...[
             SwitchListTile(
@@ -544,176 +527,6 @@ class SettingsScreen extends ConsumerWidget {
       ..showSnackBar(SnackBar(content: Text(msg)));
   }
 
-  Future<void> _editLlm(BuildContext context, WidgetRef ref) async {
-    final s = ref.read(secureStoreProvider);
-    final base = TextEditingController(text: await s.readLlmBaseUrl() ?? '');
-    final key = TextEditingController(text: await s.readLlmApiKey() ?? '');
-    final model = TextEditingController(text: await s.readLlmModel() ?? '');
-    if (!context.mounted) return;
-    try {
-      final ok = await showDialog<bool>(
-        context: context,
-        builder: (dialogCtx) {
-          final width =
-              MediaQuery.of(dialogCtx).size.width -
-              48; // wider than the AlertDialog default
-          return AlertDialog(
-            title: const Text('AI endpoint'),
-            contentPadding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
-            content: SizedBox(
-              width: width,
-              child: StatefulBuilder(
-                builder: (ctx, setLocal) => SingleChildScrollView(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        'PRESETS',
-                        style: Theme.of(ctx).textTheme.labelSmall?.copyWith(
-                          color: Theme.of(ctx).colorScheme.onSurfaceVariant,
-                          letterSpacing: 1.2,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: [
-                          ActionChip(
-                            avatar: const Icon(Icons.auto_awesome, size: 16),
-                            label: const Text('OpenRouter • Gemini 3 Flash'),
-                            onPressed: () => setLocal(() {
-                              base.text = kDefaultAiBaseUrl;
-                              model.text = kDefaultAiModel;
-                            }),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-                      TextField(
-                        controller: base,
-                        decoration: const InputDecoration(
-                          labelText: 'Base URL',
-                          hintText: 'https://openrouter.ai/api/v1',
-                        ),
-                        autocorrect: false,
-                        enableSuggestions: false,
-                      ),
-                      const SizedBox(height: 12),
-                      TextField(
-                        controller: model,
-                        decoration: const InputDecoration(
-                          labelText: 'Model',
-                          hintText: 'google/gemini-3-flash-preview',
-                        ),
-                        autocorrect: false,
-                        enableSuggestions: false,
-                      ),
-                      const SizedBox(height: 12),
-                      TextField(
-                        controller: key,
-                        decoration: const InputDecoration(
-                          labelText: 'API key',
-                          hintText: 'sk-or-v1-…',
-                        ),
-                        obscureText: true,
-                        autocorrect: false,
-                        enableSuggestions: false,
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => _testLlm(
-                  context,
-                  ref,
-                  baseUrl: base.text,
-                  apiKey: key.text,
-                  model: model.text,
-                ),
-                child: const Text('Test'),
-              ),
-              TextButton(
-                onPressed: () => Navigator.of(dialogCtx).pop(false),
-                child: const Text('Cancel'),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.of(dialogCtx).pop(true),
-                child: const Text('Save'),
-              ),
-            ],
-          );
-        },
-      );
-      if (ok == true) {
-        await s.writeLlm(
-          baseUrl: base.text.trim().isEmpty ? null : base.text.trim(),
-          apiKey: key.text.trim().isEmpty ? null : key.text.trim(),
-          model: model.text.trim().isEmpty ? null : model.text.trim(),
-        );
-        ref.invalidate(llmClientProvider);
-      }
-    } finally {
-      base.dispose();
-      key.dispose();
-      model.dispose();
-    }
-  }
-
-  Future<void> _testLlm(
-    BuildContext context,
-    WidgetRef ref, {
-    required String baseUrl,
-    required String apiKey,
-    required String model,
-  }) async {
-    final messenger = ScaffoldMessenger.of(context);
-    final trimmedBaseUrl = baseUrl.trim();
-    final trimmedModel = model.trim();
-    if (trimmedBaseUrl.isEmpty || trimmedModel.isEmpty) {
-      messenger
-        ..hideCurrentSnackBar()
-        ..showSnackBar(
-          const SnackBar(content: Text('Enter endpoint and model first.')),
-        );
-      return;
-    }
-    try {
-      final extractor = AiExtractor(
-        llm: LlmClient(
-          baseUrl: trimmedBaseUrl,
-          model: trimmedModel,
-          apiKey: apiKey.trim().isEmpty ? null : apiKey.trim(),
-        ),
-        accountRepo: ref.read(accountRepoProvider),
-        categoryRepo: ref.read(categoryRepoProvider),
-        payeeRepo: ref.read(payeeRepoProvider),
-        minorDigits: ref.read(prefsProvider).currencyMinorDigits,
-      );
-      final parsed = await extractor.parse('blinkit 450 hdfc groceries');
-      if (!context.mounted) return;
-      final prefs = ref.read(prefsProvider);
-      messenger
-        ..hideCurrentSnackBar()
-        ..showSnackBar(
-          SnackBar(
-            content: Text(
-              'Parsed ${Money.format(parsed.amountCents, symbol: prefs.currencySymbol, minorDigits: prefs.currencyMinorDigits)}'
-              '${parsed.payeeName == null ? '' : ' at ${parsed.payeeName}'}',
-            ),
-          ),
-        );
-    } catch (e) {
-      if (!context.mounted) return;
-      messenger
-        ..hideCurrentSnackBar()
-        ..showSnackBar(SnackBar(content: Text('AI test failed: $e')));
-    }
-  }
 }
 
 class _SectionHeader extends StatelessWidget {

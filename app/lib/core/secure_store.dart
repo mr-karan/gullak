@@ -4,19 +4,17 @@ import 'logger.dart';
 
 /// Secrets-only storage. Public preferences live in [Prefs].
 ///
-/// Today this is just the LLM endpoint config; we keep it because LLM
-/// keys are sensitive. Reads/writes are guarded so an unentitled
-/// keychain (e.g. an unsigned simulator build) returns null instead
-/// of throwing.
+/// Just the sync-server URL + API key. The phone delegates all LLM
+/// work to the homelab pi-server (SMS parsing, QuickEntry parsing,
+/// receipt photos), so the OpenRouter key lives there, not here.
+/// Reads/writes are guarded so an unentitled keychain (e.g. an
+/// unsigned simulator build) returns null instead of throwing.
 class SecureStore {
   SecureStore({FlutterSecureStorage? storage})
     : _storage = storage ?? const FlutterSecureStorage();
 
   final FlutterSecureStorage _storage;
 
-  static const _kLlmBaseUrl = 'gullak.llm.baseUrl';
-  static const _kLlmApiKey = 'gullak.llm.apiKey';
-  static const _kLlmModel = 'gullak.llm.model';
   static const _kSyncBaseUrl = 'gullak.sync.baseUrl';
   static const _kSyncApiKey = 'gullak.sync.apiKey';
 
@@ -40,20 +38,6 @@ class SecureStore {
       log.w('secure write failed for $key: $e');
     }
   }
-
-  Future<void> writeLlm({
-    String? baseUrl,
-    String? apiKey,
-    String? model,
-  }) async {
-    await _write(_kLlmBaseUrl, baseUrl);
-    await _write(_kLlmApiKey, apiKey);
-    await _write(_kLlmModel, model);
-  }
-
-  Future<String?> readLlmBaseUrl() => _read(_kLlmBaseUrl);
-  Future<String?> readLlmApiKey() => _read(_kLlmApiKey);
-  Future<String?> readLlmModel() => _read(_kLlmModel);
 
   Future<void> writeSync({String? baseUrl, String? apiKey}) async {
     await _write(_kSyncBaseUrl, baseUrl);

@@ -41,11 +41,15 @@ GET    /v1/recurrences         POST/PATCH/DELETE /v1/recurrences(/:id)
 GET    /v1/summary?startDate=&endDate=&accountId=
 GET    /v1/sync/changes?since=<id>&limit=<n>
 POST   /v1/sync/push           # client batch push of mutations
-POST   /v1/messages            # natural-language → agent (STUB; pending rewrite)
-POST   /v1/whatsapp/webhook    # bridge inbound (STUB; pending rewrite)
+POST   /v1/messages            # natural-language → agent (multi-turn assistant)
+POST   /v1/whatsapp/webhook    # bridge inbound for the WhatsApp socket
+POST   /v1/ai/sms/parse        # bank/transaction SMS → SmsCandidate JSON
+POST   /v1/ai/quick-entry/parse  # one-line note (or receipt photo, base64) → ParsedExpense
 ```
 
 Auth: `x-api-key` header. `/v1/health` and `/v1/whatsapp/webhook` exempt. Set `GULLAK_HTTP_API_KEY` to enable.
+
+The pi-server holds the OpenRouter / OpenAI / local-Ollama credentials; the Flutter app never sees them. Configure via `GULLAK_MODEL_BASE_URL`, `GULLAK_MODEL_ID`, `GULLAK_MODEL_API_KEY` (`OPENROUTER_API_KEY` / `OPENAI_API_KEY` are accepted aliases). The phone just hits these endpoints over its sync URL + sync API key.
 
 ## Where to look
 
@@ -56,7 +60,7 @@ Auth: `x-api-key` header. `/v1/health` and `/v1/whatsapp/webhook` exempt. Set `G
 | Change log helper | `pi-server/src/repos/changelog.ts` |
 | Config / env | `pi-server/src/config.ts` |
 | Flutter Drift schema | `app/lib/data/db/tables.dart` |
-| Flutter LLM client | `app/lib/data/ai/llm_client.dart` |
+| Flutter pi-server AI client | `app/lib/data/ai/pi_ai_client.dart` |
 | Flutter onboarding | `app/lib/features/onboarding/onboarding_flow.dart` |
 | Reactive prefs helpers | `app/lib/state/providers.dart` (`watchPrefs`, `bumpPrefs`) |
 | Justfile recipes | `/Justfile` |
@@ -97,11 +101,21 @@ Local-first. The Flutter app's Drift DB is the source of truth on-device; the ho
 - The server filters out rows originated by the requesting `clientId` so clients don't echo their own mutations back.
 - Conflict policy: last-write-wins. Fine for single-user-with-spouse personal use.
 
+## AI architecture
+
+All LLM work runs on pi-server. The Flutter app never holds an OpenRouter / OpenAI key — it talks to its sync server (URL + API key in flutter_secure_storage) and posts:
+
+- `POST /v1/ai/sms/parse` — `SmsPipeline._ingest` → `LlmSmsParser` → `PiAiClient.parseSms` for every classifier-positive SMS.
+- `POST /v1/ai/quick-entry/parse` — `AiExtractor.parse` / `parseImage` for natural-language QuickEntry and receipt-photo OCR. The image goes up as `imageBase64` + `imageMimeType`.
+- `POST /v1/messages` — multi-turn natural-language agent that may write transactions itself (the Settings → AI assistant chat).
+- `POST /v1/whatsapp/webhook` — same agent, fed by the Baileys bridge.
+
+Practically this means: SMS toggle, the QuickEntry "type" tab, and the share-target receipt flow all stay disabled until the user has configured a sync server. The Settings UI hides them with "Configure Sync server first" until then. There is no longer an "AI assist" section in Settings or onboarding.
+
 ## Outstanding work
 
-- **Agent rewrite**: `/v1/messages` and `/v1/whatsapp/webhook` are stubs returning 501. The pi-sdk `Agent` loop + Zod-typed tools + SQL writes need to be reimplemented; the old TS version was too coupled to ledger-cli to port directly.
 - **Auto-sync triggers**: today sync runs only when the user taps Settings → Sync now. Foreground + post-mutation triggers are a follow-up.
-- **Photo → expense flow**: vision-capable LLM call from QuickEntry; Android share-target wiring so Gullak appears in the Share menu for images.
+- **Server-side rate caps and timeout**: `/v1/ai/*` routes use the existing `chatJson` helper without per-request rate limiting or image-size caps. Add when this is more than one user.
 
 ## Removed surfaces (don't go looking)
 

@@ -5,6 +5,7 @@ import { logger } from "hono/logger";
 import type { AppConfig } from "./config.ts";
 import type { Db } from "./db/index.ts";
 import { accountsRouter } from "./routes/accounts.ts";
+import { aiRouter } from "./routes/ai.ts";
 import { budgetsRouter } from "./routes/budgets.ts";
 import { categoriesRouter } from "./routes/categories.ts";
 import { healthRouter } from "./routes/health.ts";
@@ -66,6 +67,7 @@ export function createApp(ctx: AppContext) {
   app.route("/v1/sync", syncRouter);
   app.route("/v1/messages", messagesRouter);
   app.route("/v1/whatsapp", whatsappRouter);
+  app.route("/v1/ai", aiRouter);
 
   app.onError((error, c) => {
     const message = error instanceof Error ? error.message : "Unknown error";

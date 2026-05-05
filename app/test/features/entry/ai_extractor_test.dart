@@ -3,13 +3,19 @@ import 'dart:io';
 
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:gullak/data/ai/llm_client.dart';
+import 'package:gullak/data/ai/pi_ai_client.dart';
 import 'package:gullak/data/db/database.dart';
 import 'package:gullak/features/accounts/data/account_repository.dart';
 import 'package:gullak/features/categories/data/category_repository.dart';
 import 'package:gullak/features/entry/ai_extractor.dart';
 import 'package:gullak/features/payees/data/payee_repository.dart';
 
+/// The Flutter app no longer talks to OpenRouter — it posts the
+/// QuickEntry note (and the user's library) to pi-server's
+/// /v1/ai/quick-entry/parse and reads back already-resolved IDs. This
+/// test stands up a fake of that endpoint and asserts (a) the right
+/// payload goes out, (b) the response shape is mapped to a
+/// [ParsedExpense] correctly.
 void main() {
   late AppDatabase db;
   late AccountRepository accounts;
@@ -18,6 +24,9 @@ void main() {
   late HttpServer server;
   late Uri serverUri;
   Map<String, dynamic>? capturedBody;
+  late Map<String, String> accountIds;
+  late Map<String, String> payeeIds;
+  late Map<String, String> categoryIds;
 
   setUp(() async {
     db = AppDatabase.forTesting(NativeDatabase.memory());
@@ -30,35 +39,50 @@ void main() {
       name: 'Income',
       isIncome: true,
     );
-    await accounts.create(name: 'HDFC Bank', kind: AccountKind.checking);
-    await categories.create(name: 'Groceries', groupId: groupId);
-    await categories.create(name: 'Transport', groupId: groupId);
-    await categories.create(name: 'Salary', groupId: incomeGroupId);
-    await payees.create('Blinkit');
-    await payees.create('Uber');
-    await payees.create('Zomato');
+    accountIds = {
+      'HDFC Bank': await accounts.create(
+        name: 'HDFC Bank',
+        kind: AccountKind.savings,
+      ),
+    };
+    categoryIds = {
+      'Groceries': await categories.create(
+        name: 'Groceries',
+        groupId: groupId,
+      ),
+      'Transport': await categories.create(
+        name: 'Transport',
+        groupId: groupId,
+      ),
+      'Salary': await categories.create(
+        name: 'Salary',
+        groupId: incomeGroupId,
+      ),
+    };
+    payeeIds = {
+      'Blinkit': await payees.create('Blinkit'),
+      'Uber': await payees.create('Uber'),
+      'Zomato': await payees.create('Zomato'),
+    };
 
     server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
     serverUri = Uri.parse('http://${server.address.host}:${server.port}');
     server.listen((request) async {
-      capturedBody =
+      final body =
           jsonDecode(await utf8.decoder.bind(request).join())
               as Map<String, dynamic>;
-      final response = _responseFor(_noteFrom(capturedBody!));
+      capturedBody = body;
+      final note = body['text'] as String;
+      final response = _responseFor(
+        note,
+        accountIds: accountIds,
+        payeeIds: payeeIds,
+        categoryIds: categoryIds,
+      );
       request.response
         ..statusCode = 200
         ..headers.contentType = ContentType.json
-        ..write(
-          jsonEncode({
-            'choices': [
-              {
-                'message': {
-                  'content': jsonEncode({...response, 'confidence': 0.87}),
-                },
-              },
-            ],
-          }),
-        );
+        ..write(jsonEncode(response));
       await request.response.close();
     });
   });
@@ -68,137 +92,133 @@ void main() {
     await db.close();
   });
 
-  test(
-    'passes hints and examples to the model and fuzzy-resolves results',
-    () async {
-      final extractor = AiExtractor(
-        llm: LlmClient(baseUrl: serverUri.toString(), model: 'test-model'),
-        accountRepo: accounts,
-        categoryRepo: categories,
-        payeeRepo: payees,
-        minorDigits: 2,
-      );
-
-      final parsed = await extractor.parse('blinkit 450 hdfc groceries');
-      final account = (await accounts.list()).single;
-      final categoriesByName = {
-        for (final c in await categories.list()) c.name: c,
-      };
-      final payeesByName = {for (final p in await payees.list()) p.name: p};
-
-      expect(parsed.amountCents, 45000);
-      expect(parsed.accountId, account.id);
-      expect(parsed.categoryId, categoriesByName['Groceries']!.id);
-      expect(parsed.payeeId, payeesByName['Blinkit']!.id);
-      expect(parsed.confidence, 0.87);
-
-      final body = capturedBody!;
-      expect(body['model'], 'test-model');
-      final messages = body['messages'] as List<dynamic>;
-      final system =
-          (messages.first as Map<String, dynamic>)['content'] as String;
-      final user = (messages.last as Map<String, dynamic>)['content'] as String;
-      expect(system, contains('Examples:'));
-      expect(system, contains('blinkit 450 hdfc groceries'));
-      expect(system, contains('1.5L emi axis'));
-      expect(system, contains('salary 1.2L'));
-      expect(system, contains('uber 250 split with karan'));
-      expect(user, contains('<known_accounts>: [HDFC Bank]'));
-      expect(user, contains('<known_categories>:'));
-      expect(user, contains('Groceries'));
-      expect(user, contains('<known_payees>:'));
-      expect(user, contains('Blinkit'));
-    },
-  );
-
-  test('parses required done-definition phrases from model JSON', () async {
+  test('passes the user library and shapes the server response back', () async {
     final extractor = AiExtractor(
-      llm: LlmClient(baseUrl: serverUri.toString(), model: 'test-model'),
+      client: PiAiClient(baseUrl: serverUri.toString()),
       accountRepo: accounts,
       categoryRepo: categories,
       payeeRepo: payees,
       minorDigits: 2,
     );
-    final account = (await accounts.list()).single;
-    final categoriesByName = {
-      for (final c in await categories.list()) c.name: c,
-    };
-    final payeesByName = {for (final p in await payees.list()) p.name: p};
 
-    final blinkit = await extractor.parse('blinkit 450 hdfc');
-    expect(blinkit.amountCents, 45000);
-    expect(blinkit.isIncome, isFalse);
-    expect(blinkit.accountId, account.id);
-    expect(blinkit.payeeId, payeesByName['Blinkit']!.id);
+    final parsed = await extractor.parse('blinkit 450 hdfc groceries');
 
-    final zomato = await extractor.parse('zomato 300 yesterday');
-    expect(zomato.amountCents, 30000);
-    expect(zomato.isIncome, isFalse);
-    expect(zomato.payeeId, payeesByName['Zomato']!.id);
-    expect(zomato.date, DateTime(2026, 5, 3));
+    expect(parsed.amountCents, 45000);
+    expect(parsed.accountId, accountIds['HDFC Bank']);
+    expect(parsed.categoryId, categoryIds['Groceries']);
+    expect(parsed.payeeId, payeeIds['Blinkit']);
+    expect(parsed.confidence, 0.87);
+
+    final body = capturedBody!;
+    expect(body['text'], 'blinkit 450 hdfc groceries');
+    expect(body['minorDigits'], 2);
+    expect(
+      (body['accounts'] as List<dynamic>).map((a) => (a as Map)['name']),
+      contains('HDFC Bank'),
+    );
+    expect(
+      (body['categories'] as List<dynamic>).map((c) => (c as Map)['name']),
+      contains('Groceries'),
+    );
+    expect(
+      (body['payees'] as List<dynamic>).map((p) => (p as Map)['name']),
+      contains('Blinkit'),
+    );
+  });
+
+  test('income, dates, and notes round-trip through the server', () async {
+    final extractor = AiExtractor(
+      client: PiAiClient(baseUrl: serverUri.toString()),
+      accountRepo: accounts,
+      categoryRepo: categories,
+      payeeRepo: payees,
+      minorDigits: 2,
+    );
 
     final salary = await extractor.parse('salary 1.2L');
     expect(salary.amountCents, 12000000);
     expect(salary.isIncome, isTrue);
-    expect(salary.categoryId, categoriesByName['Salary']!.id);
+    expect(salary.categoryId, categoryIds['Salary']);
 
     final uber = await extractor.parse('uber 250 split with karan');
     expect(uber.amountCents, 25000);
     expect(uber.isIncome, isFalse);
-    expect(uber.payeeId, payeesByName['Uber']!.id);
-    expect(uber.categoryId, categoriesByName['Transport']!.id);
+    expect(uber.payeeId, payeeIds['Uber']);
+    expect(uber.categoryId, categoryIds['Transport']);
     expect(uber.notes, 'split with karan');
+
+    final zomato = await extractor.parse('zomato 300 yesterday');
+    expect(zomato.amountCents, 30000);
+    expect(zomato.payeeId, payeeIds['Zomato']);
+    expect(zomato.date, DateTime(2026, 5, 4));
   });
 }
 
-String _noteFrom(Map<String, dynamic> request) {
-  final messages = request['messages'] as List<dynamic>;
-  final user = (messages.last as Map<String, dynamic>)['content'] as String;
-  return user.split('Note:').last.trim();
-}
-
-Map<String, dynamic> _responseFor(String note) {
+/// Server-side fake — mirrors the shape pi-server's
+/// /v1/ai/quick-entry/parse returns: amounts in minor units and IDs
+/// already resolved against the libraries the client sent in.
+Map<String, dynamic> _responseFor(
+  String note, {
+  required Map<String, String> accountIds,
+  required Map<String, String> payeeIds,
+  required Map<String, String> categoryIds,
+}) {
   switch (note) {
-    case 'blinkit 450 hdfc':
     case 'blinkit 450 hdfc groceries':
       return {
-        'amount_minor': 45000,
-        'is_income': false,
-        'payee': 'Blinkt',
-        'account_hint': 'hdfc',
-        'category_hint': 'Grocerie',
+        'amountCents': 45000,
+        'isIncome': false,
+        'payeeName': 'Blinkit',
+        'payeeId': payeeIds['Blinkit'],
+        'accountHint': 'hdfc',
+        'accountId': accountIds['HDFC Bank'],
+        'categoryHint': 'Groceries',
+        'categoryId': categoryIds['Groceries'],
         'notes': null,
-        'date': '2026-05-04',
-      };
-    case 'zomato 300 yesterday':
-      return {
-        'amount_minor': 30000,
-        'is_income': false,
-        'payee': 'Zomto',
-        'account_hint': null,
-        'category_hint': null,
-        'notes': null,
-        'date': '2026-05-03',
+        'date': null,
+        'confidence': 0.87,
       };
     case 'salary 1.2L':
       return {
-        'amount_minor': 12000000,
-        'is_income': true,
-        'payee': 'salary',
-        'account_hint': null,
-        'category_hint': 'Sallary',
+        'amountCents': 12000000,
+        'isIncome': true,
+        'payeeName': null,
+        'payeeId': null,
+        'accountHint': null,
+        'accountId': null,
+        'categoryHint': 'Salary',
+        'categoryId': categoryIds['Salary'],
         'notes': null,
         'date': null,
+        'confidence': 0.85,
       };
     case 'uber 250 split with karan':
       return {
-        'amount_minor': 25000,
-        'is_income': false,
-        'payee': 'Ubr',
-        'account_hint': null,
-        'category_hint': 'Transprt',
+        'amountCents': 25000,
+        'isIncome': false,
+        'payeeName': 'Uber',
+        'payeeId': payeeIds['Uber'],
+        'accountHint': null,
+        'accountId': null,
+        'categoryHint': 'Transport',
+        'categoryId': categoryIds['Transport'],
         'notes': 'split with karan',
         'date': null,
+        'confidence': 0.8,
+      };
+    case 'zomato 300 yesterday':
+      return {
+        'amountCents': 30000,
+        'isIncome': false,
+        'payeeName': 'Zomato',
+        'payeeId': payeeIds['Zomato'],
+        'accountHint': null,
+        'accountId': null,
+        'categoryHint': null,
+        'categoryId': null,
+        'notes': null,
+        'date': '2026-05-04',
+        'confidence': 0.8,
       };
   }
   throw StateError('unexpected note: $note');

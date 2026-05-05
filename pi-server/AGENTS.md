@@ -1,99 +1,92 @@
 # pi-server — Agent Guide
 
-This directory contains the actual Gullak runtime: HTTP API, agent loop, ledger mutations, WhatsApp handling, and eval harness.
-
-If you are changing behavior here, optimize for two things:
-
-1. ledger correctness
-2. conversational quality without losing structural correctness
+Bun + Hono + Drizzle HTTP API. The Flutter app on the user's phone is the source of truth for ledger data; this server is the cross-device merge point AND the trusted box that holds the LLM credentials. The phone never speaks to OpenRouter / OpenAI directly — it asks this server.
 
 ## Layout
 
 ```
 pi-server/
 ├── src/
-│   ├── agent/          # prompts, tools, model wiring, follow-up resolution, reply formatting
-│   ├── cli/            # operational entrypoints (`weekly-recap`, `evals`)
-│   ├── evals/          # eval runner and types
-│   ├── ledger/         # parse, write, validate, summarise
-│   ├── recap/          # weekly recap generation
-│   ├── state/          # JSON sidecar state
-│   └── whatsapp/       # transport-facing webhook logic
-├── evals/              # checked-in eval suites + ledger/state fixtures
-└── test/               # unit and integration tests
+│   ├── agent/         # multi-turn natural-language assistant
+│   │                  # /v1/messages, /v1/whatsapp/webhook
+│   ├── ai/            # one-shot extraction prompts (sms_parser,
+│   │                  # quick_entry_parser) for the Flutter pipelines
+│   ├── llm/client.ts  # the only place a chat/completions fetch lives
+│   ├── db/            # Drizzle schema + bun:sqlite instance + migrate
+│   ├── repos/         # repos for sync changelog
+│   ├── routes/        # one Hono router per resource
+│   ├── app.ts         # Hono factory, auth middleware, route mounts
+│   ├── config.ts      # env → AppConfig (model creds live here)
+│   └── index.ts       # Bun.serve entrypoint
+└── drizzle/           # generated SQL migrations
 ```
 
-## High-value files
+## Endpoints
+
+```
+GET  /v1/health
+… CRUD /v1/{accounts,categories,category-groups,payees,transactions,
+          budgets,recurrences}
+GET  /v1/summary?startDate=&endDate=&accountId=
+GET  /v1/sync/changes?since=<id>&limit=<n>
+POST /v1/sync/push
+POST /v1/messages              # multi-turn agent
+POST /v1/whatsapp/webhook      # Baileys bridge inbound
+POST /v1/ai/sms/parse          # bank/transaction SMS → SmsCandidate
+POST /v1/ai/quick-entry/parse  # one-line note (or imageBase64) → ParsedExpense
+```
+
+`x-api-key` header required on every route except `/v1/health` and `/v1/whatsapp/webhook`. Configure via `GULLAK_HTTP_API_KEY`.
+
+## Where to look
 
 | Task | File |
 |------|------|
-| Main runtime wiring | `src/runtime.ts` |
-| HTTP surface | `src/app.ts` |
-| Agent orchestration | `src/agent/service.ts` |
-| Prompt policy | `src/agent/prompts.ts` |
-| Tool behavior | `src/agent/tools.ts` |
-| Follow-up / quoted reply resolution | `src/agent/contextual-followup.ts` |
-| User-message normalization | `src/agent/message-normalizer.ts` |
-| Final reply formatting | `src/agent/replies.ts` |
-| Ledger read/write | `src/ledger/service.ts`, `src/ledger/writer.ts` |
-| Thread / reply-anchor state | `src/state/store.ts` |
-| WhatsApp webhook flow | `src/whatsapp/service.ts` |
-| Eval runner | `src/evals/runner.ts` |
-| Eval CLI | `src/cli/evals.ts` |
+| HTTP surface + auth gate | `src/app.ts` |
+| New endpoint | `src/routes/<resource>.ts`, register in `app.ts` |
+| Drizzle schema | `src/db/schema.ts` |
+| Sync changelog helper | `src/repos/changelog.ts` |
+| LLM call (the one fetch) | `src/llm/client.ts` |
+| SMS parse prompt + zod | `src/ai/sms_parser.ts` |
+| QuickEntry parse prompt + zod | `src/ai/quick_entry_parser.ts` |
+| Multi-turn agent | `src/agent/agent.ts` |
+| Env / model config | `src/config.ts` |
 
-## Product rules
+## Conventions
 
-- `main.ledger` is the source of truth.
-- `pi-state.json` is sidecar state only. It can cache memory and reply anchors, but it must not become the source of financial truth.
-- Prefer deterministic pre-model logic for message normalization and follow-up targeting when possible.
-- If the user is vague, the system should ask one direct question, not loop through repetitive clarification text.
-- A wrong transaction edit is worse than a short clarification.
-- For ambiguous follow-ups, bias toward no write unless targeting is genuinely clear.
+- **Money**: integer minor units. Never decimal-string math.
+- **IDs**: UUIDs (text). Clients generate; server stores.
+- **Dates**: `YYYY-MM-DD` text columns. Timestamps are ms since epoch.
+- **Mutations** must call `recordChange(db, resource, id, op, payload)` so the change log captures every server-side write — sync clients pull from there.
+- **bun:sqlite** is sync. No `await` on `db.select().get()`.
+- **Conflict policy** (sync): last-write-wins by `updatedAt`. Single-user scope.
+- **AI routes do NOT mutate financial rows.** They are draft-only; the phone takes the response and decides whether to write a transaction. The multi-turn agent at `/v1/messages` is the only path that may write.
 
-## Evals
+## Model config
 
-The eval harness is not a toy test path. Keep it close to production behavior.
+`config.ts` reads in priority order:
+- `GULLAK_MODEL_BASE_URL` / `GULLAK_MODEL_ID` / `GULLAK_MODEL_API_KEY`
+- `OPENROUTER_API_KEY` → defaults to OpenRouter + Gemini 3 Flash
+- `OPENAI_API_KEY` → defaults to OpenAI + GPT-4.1 Mini
+- otherwise local Ollama (`http://localhost:11434/v1` + `gpt-oss:20b`)
 
-- Prefer running the real `AgentService` against temp ledger and temp state files.
-- Do not replace the core agent loop with mocks unless the test is explicitly a narrow unit test.
-- Add real regressions as checked-in eval cases under `evals/`.
-- Keep fixtures small and scenario-specific. Do not dump a giant production ledger into a fixture.
-- Separate:
-  - **hard checks**: action, transaction id, ledger mutation, reply anchor behavior
-  - **soft checks**: tone, verbosity, apology patterns
-- When a production incident happens, add an anonymized eval case before or alongside the fix.
+Every LLM caller routes through `src/llm/client.ts:chatJson`. Don't add a second fetch path; extend the helper.
 
-### Eval corpus conventions
-
-- Suites live in `evals/*.json`
-- Ledger fixtures live in `evals/fixtures/*.ledger`
-- Use explicit thread ids and state snapshots for quoted-reply scenarios
-- Name cases after the user-visible failure mode, not the implementation detail
-- Prefer one scenario per case
-
-## Testing expectations
-
-Before wrapping up changes here, run:
+## Commands
 
 ```bash
 cd pi-server
-pnpm test
-pnpm build
+bun install
+bun run db:generate     # regenerate migrations from schema
+bun run dev             # hot-reload server on :8787
+bun run start
+bun run typecheck
+bun test
+GULLAK_DB_PATH=/path/gullak.db bun run start
 ```
-
-For eval work, also run at least one suite:
-
-```bash
-cd pi-server
-pnpm evals evals/critical-regressions.json
-```
-
-If a suite is expected to fail because it captures a known open regression, say so explicitly.
 
 ## Editing guidance
 
-- Keep reply-copy tweaks tightly scoped; avoid broad prompt churn unless the eval corpus supports it.
-- When modifying `tools.ts`, check whether the change should be captured in an eval as well as a unit test.
-- When modifying `contextual-followup.ts` or `state/store.ts`, assume there is risk of silent regression and add targeted coverage.
-- Preserve existing file and module boundaries unless there is a clear payoff.
-
+- Keep prompt edits tightly scoped — they affect every device parsing SMS today.
+- Wrap the LLM response in a Zod schema at the boundary of `src/ai/*` so a malformed model output fails loudly instead of corrupting downstream JSON.
+- If you add a new AI extraction endpoint, register it under `/v1/ai/*` and reuse `chatJson`. Do NOT roll a new fetch.

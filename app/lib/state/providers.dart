@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/prefs.dart';
 import '../core/secure_store.dart';
-import '../data/ai/llm_client.dart';
 import '../data/db/database.dart';
 
 final Provider<AppDatabase> dbProvider = Provider<AppDatabase>((ref) {
@@ -49,19 +48,6 @@ final FutureProvider<bool> onboardedProvider = FutureProvider<bool>((
   final db = ref.watch(dbProvider);
   return (await db.kvGet('onboarded')) == 'true';
 });
-
-final FutureProvider<LlmClient?> llmClientProvider = FutureProvider<LlmClient?>(
-  (ref) async {
-    final s = ref.watch(secureStoreProvider);
-    final base = await s.readLlmBaseUrl();
-    final model = await s.readLlmModel();
-    final key = await s.readLlmApiKey();
-    if (base == null || base.isEmpty || model == null || model.isEmpty) {
-      return null;
-    }
-    return LlmClient(baseUrl: base, model: model, apiKey: key);
-  },
-);
 
 final Provider<ThemeMode> themeModeProvider = Provider<ThemeMode>((ref) {
   final p = ref.watch(prefsProvider);
