@@ -61,14 +61,15 @@ class Prefs {
   static const _kSmsAutoConfirm = 'gullak.sms.autoConfirm';
   static const _kSmsAutoConfirmThreshold = 'gullak.sms.autoConfirmThreshold';
 
-  bool get smsAutoConfirm => _inner.getBool(_kSmsAutoConfirm) ?? true;
+  /// Default off — auto-confirm writes a financial row without a user
+  /// gesture, so the user has to explicitly opt in.
+  bool get smsAutoConfirm => _inner.getBool(_kSmsAutoConfirm) ?? false;
   Future<void> setSmsAutoConfirm(bool v) => _inner.setBool(_kSmsAutoConfirm, v);
 
   /// Below this confidence, a candidate stays in Inbox for review.
-  /// Default 0.85 — high enough that most parser hits clear it but
-  /// fuzzy ones still get manual eyes.
+  /// Default 0.9 — only the cleanest parser hits clear it.
   double get smsAutoConfirmThreshold =>
-      _inner.getDouble(_kSmsAutoConfirmThreshold) ?? 0.85;
+      _inner.getDouble(_kSmsAutoConfirmThreshold) ?? 0.9;
   Future<void> setSmsAutoConfirmThreshold(double v) =>
       _inner.setDouble(_kSmsAutoConfirmThreshold, v);
 

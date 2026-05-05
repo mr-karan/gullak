@@ -94,6 +94,21 @@ export const appKv = sqliteTable("app_kv", {
   value: text("value"),
 });
 
+// Agent conversation history. One row per turn; the agent reads the
+// last N rows for a threadId so the LLM has context for follow-ups
+// like "Yes do that" or "no, the HDFC one".
+export const agentTurns = sqliteTable("agent_turns", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  threadId: text("thread_id").notNull(),
+  role: text("role").notNull(), // 'user' | 'assistant'
+  content: text("content").notNull(),
+  // Set on assistant turns when the model dispatched a structured
+  // action; lets the agent see "I just recorded txn X" if the next
+  // turn says "delete that one".
+  transactionId: text("transaction_id"),
+  at: integer("at").notNull().default(now),
+});
+
 // Append-only mutation log for sync clients. Each row is a single
 // row-level upsert/delete from any client. Clients pull rows after a
 // cursor (id) and apply LWW per-row by updatedAt.

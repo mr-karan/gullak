@@ -15,6 +15,13 @@
       "when": 1777913486462,
       "tag": "0001_new_starbolt",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1777950335860,
+      "tag": "0002_mighty_violations",
+      "breakpoints": true
     }
   ]
 }
