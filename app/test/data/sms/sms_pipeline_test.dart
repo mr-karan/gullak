@@ -3,18 +3,24 @@ import 'dart:async';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gullak/data/db/database.dart';
+import 'package:gullak/data/sms/parser_registry.dart';
 import 'package:gullak/data/sms/sms_models.dart';
+import 'package:gullak/data/sms/sms_parser.dart';
 import 'package:gullak/data/sms/sms_pipeline.dart';
 import 'package:gullak/data/sms/sms_reader.dart';
 
 void main() {
   late AppDatabase db;
   late _FakeSmsReader reader;
+  late _FakeSmsParser fakeParser;
+  late ParserRegistry registry;
   late List<_NotificationCall> notifications;
 
   setUp(() {
     db = AppDatabase.forTesting(NativeDatabase.memory());
     reader = _FakeSmsReader();
+    fakeParser = _FakeSmsParser();
+    registry = ParserRegistry(db: db, parser: fakeParser);
     notifications = [];
   });
 
@@ -30,10 +36,23 @@ void main() {
         body: 'Rs.450.00 debited from HDFC Bank card xx1234 at BLINKIT.',
         receivedAt: receivedAt,
       );
+      fakeParser.respondTo(
+        sms.body,
+        SmsCandidate(
+          amountCents: 45000,
+          isIncome: false,
+          date: receivedAt,
+          confidence: 0.9,
+          payee: 'BLINKIT',
+          accountHint: 'HDFC Card xx1234',
+          parserVersion: 1,
+        ),
+      );
       reader.backfillMessages = [sms, sms];
       final pipeline = SmsPipeline(
         db: db,
         reader: reader,
+        parserRegistry: registry,
         notifyInboxCandidate: ({required amountCents, required payee}) async {
           notifications.add(_NotificationCall(amountCents, payee));
         },
@@ -68,6 +87,7 @@ void main() {
       final pipeline = SmsPipeline(
         db: db,
         reader: reader,
+        parserRegistry: registry,
         notifyInboxCandidate: ({required amountCents, required payee}) async {
           notifications.add(_NotificationCall(amountCents, payee));
         },
@@ -86,13 +106,14 @@ void main() {
   );
 
   test('drains queued background SMS before normal backfill', () async {
+    final queuedAt = DateTime(2026, 5, 2, 9);
     reader
       ..queuedMessages = [
         IncomingSms(
           id: 'queued-1',
           address: 'AD-HDFCBK',
           body: 'Rs.99.00 debited from HDFC Bank card xx1234 at COFFEE.',
-          receivedAt: DateTime(2026, 5, 2, 9),
+          receivedAt: queuedAt,
         ),
       ]
       ..backfillMessages = [
@@ -103,7 +124,23 @@ void main() {
           receivedAt: DateTime(2025, 9, 1),
         ),
       ];
-    final pipeline = SmsPipeline(db: db, reader: reader);
+    fakeParser.respondTo(
+      reader.queuedMessages.first.body,
+      SmsCandidate(
+        amountCents: 9900,
+        isIncome: false,
+        date: queuedAt,
+        confidence: 0.9,
+        payee: 'COFFEE',
+        accountHint: 'HDFC Card xx1234',
+        parserVersion: 1,
+      ),
+    );
+    final pipeline = SmsPipeline(
+      db: db,
+      reader: reader,
+      parserRegistry: registry,
+    );
 
     final added = await pipeline.backfill(window: const Duration(days: 30));
     final rows = await db.select(db.smsMessages).get();
@@ -112,6 +149,16 @@ void main() {
     expect(rows, hasLength(1));
     expect(rows.single.androidId, 'queued-1');
   });
+}
+
+class _FakeSmsParser implements SmsParser {
+  final Map<String, SmsCandidate> _responses = {};
+  void respondTo(String body, SmsCandidate candidate) {
+    _responses[body] = candidate;
+  }
+
+  @override
+  Future<SmsCandidate?> parse(IncomingSms sms) async => _responses[sms.body];
 }
 
 class _FakeSmsReader implements SmsReader {

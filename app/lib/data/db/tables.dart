@@ -170,6 +170,24 @@ class AuditLog extends Table {
   TextColumn get payload => text().nullable()();
 }
 
+/// LLM-driven SMS parses are cached by hash(sender + body template).
+/// The template masks digits + dates so two messages from the same
+/// sender with the same shape collapse to one cache entry — first
+/// SMS pays the LLM cost, every subsequent same-format SMS is free.
+@DataClassName('SmsParseCacheRow')
+class SmsParseCache extends Table {
+  TextColumn get key => text()();
+  TextColumn get senderSample => text().nullable()();
+  TextColumn get bodyTemplate => text()();
+  TextColumn get payloadJson => text()();
+  IntColumn get hits => integer().withDefault(const Constant(1))();
+  IntColumn get createdAt => integer()();
+  IntColumn get lastSeenAt => integer()();
+
+  @override
+  Set<Column> get primaryKey => {key};
+}
+
 /// Local mutation log used by the sync layer. Every repository write
 /// inserts a row here; SyncService batch-pushes unsynced entries to
 /// the server's /v1/sync/push and marks them synced.

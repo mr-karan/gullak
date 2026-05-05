@@ -23,6 +23,7 @@ part 'database.g.dart';
     Budgets,
     Recurrences,
     SmsMessages,
+    SmsParseCache,
     AppKv,
     AuditLog,
     ChangeLog,
@@ -33,7 +34,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 4;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -78,6 +79,12 @@ class AppDatabase extends _$AppDatabase {
         // yet) get an empty string; SyncService treats empty as "drop"
         // since the server requires non-empty.
         await m.addColumn(changeLog, changeLog.clientChangeId);
+      }
+      if (from < 4) {
+        // Schema v4 introduces the SMS LLM-parse cache. The bank
+        // regex parsers are gone; this table amortises the LLM cost
+        // by collapsing same-format SMS to one cache entry.
+        await m.createTable(smsParseCache);
       }
     },
   );

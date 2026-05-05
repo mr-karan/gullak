@@ -20,6 +20,7 @@ class SmsPipeline {
   SmsPipeline({
     required this.db,
     required this.reader,
+    required this.parserRegistry,
     this.notifications,
     this.notifyInboxCandidate,
     this.transactionRepo,
@@ -28,6 +29,7 @@ class SmsPipeline {
 
   final AppDatabase db;
   final SmsReader reader;
+  final ParserRegistry parserRegistry;
   final NotificationService? notifications;
   final Future<void> Function({
     required int amountCents,
@@ -97,7 +99,7 @@ class SmsPipeline {
       return false;
     }
 
-    final candidate = ParserRegistry.tryParse(sms);
+    final candidate = await parserRegistry.tryParse(sms);
     final candidateJson = candidate == null
         ? null
         : jsonEncode({
@@ -241,6 +243,7 @@ final Provider<SmsPipeline> smsPipelineProvider = Provider<SmsPipeline>((ref) {
   final pipeline = SmsPipeline(
     db: ref.watch(dbProvider),
     reader: ref.watch(smsReaderProvider),
+    parserRegistry: ref.watch(parserRegistryProvider),
     notifications: ref.watch(notificationServiceProvider),
     transactionRepo: ref.watch(transactionRepoProvider),
     prefs: ref.watch(prefsProvider),

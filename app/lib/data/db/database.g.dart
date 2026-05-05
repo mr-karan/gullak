@@ -4363,6 +4363,491 @@ class SmsMessagesCompanion extends UpdateCompanion<SmsRow> {
   }
 }
 
+class $SmsParseCacheTable extends SmsParseCache
+    with TableInfo<$SmsParseCacheTable, SmsParseCacheRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $SmsParseCacheTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _keyMeta = const VerificationMeta('key');
+  @override
+  late final GeneratedColumn<String> key = GeneratedColumn<String>(
+    'key',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _senderSampleMeta = const VerificationMeta(
+    'senderSample',
+  );
+  @override
+  late final GeneratedColumn<String> senderSample = GeneratedColumn<String>(
+    'sender_sample',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _bodyTemplateMeta = const VerificationMeta(
+    'bodyTemplate',
+  );
+  @override
+  late final GeneratedColumn<String> bodyTemplate = GeneratedColumn<String>(
+    'body_template',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _payloadJsonMeta = const VerificationMeta(
+    'payloadJson',
+  );
+  @override
+  late final GeneratedColumn<String> payloadJson = GeneratedColumn<String>(
+    'payload_json',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _hitsMeta = const VerificationMeta('hits');
+  @override
+  late final GeneratedColumn<int> hits = GeneratedColumn<int>(
+    'hits',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(1),
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<int> createdAt = GeneratedColumn<int>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _lastSeenAtMeta = const VerificationMeta(
+    'lastSeenAt',
+  );
+  @override
+  late final GeneratedColumn<int> lastSeenAt = GeneratedColumn<int>(
+    'last_seen_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    key,
+    senderSample,
+    bodyTemplate,
+    payloadJson,
+    hits,
+    createdAt,
+    lastSeenAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'sms_parse_cache';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<SmsParseCacheRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('key')) {
+      context.handle(
+        _keyMeta,
+        key.isAcceptableOrUnknown(data['key']!, _keyMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_keyMeta);
+    }
+    if (data.containsKey('sender_sample')) {
+      context.handle(
+        _senderSampleMeta,
+        senderSample.isAcceptableOrUnknown(
+          data['sender_sample']!,
+          _senderSampleMeta,
+        ),
+      );
+    }
+    if (data.containsKey('body_template')) {
+      context.handle(
+        _bodyTemplateMeta,
+        bodyTemplate.isAcceptableOrUnknown(
+          data['body_template']!,
+          _bodyTemplateMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_bodyTemplateMeta);
+    }
+    if (data.containsKey('payload_json')) {
+      context.handle(
+        _payloadJsonMeta,
+        payloadJson.isAcceptableOrUnknown(
+          data['payload_json']!,
+          _payloadJsonMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_payloadJsonMeta);
+    }
+    if (data.containsKey('hits')) {
+      context.handle(
+        _hitsMeta,
+        hits.isAcceptableOrUnknown(data['hits']!, _hitsMeta),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    if (data.containsKey('last_seen_at')) {
+      context.handle(
+        _lastSeenAtMeta,
+        lastSeenAt.isAcceptableOrUnknown(
+          data['last_seen_at']!,
+          _lastSeenAtMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_lastSeenAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {key};
+  @override
+  SmsParseCacheRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return SmsParseCacheRow(
+      key: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}key'],
+      )!,
+      senderSample: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}sender_sample'],
+      ),
+      bodyTemplate: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}body_template'],
+      )!,
+      payloadJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}payload_json'],
+      )!,
+      hits: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}hits'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}created_at'],
+      )!,
+      lastSeenAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}last_seen_at'],
+      )!,
+    );
+  }
+
+  @override
+  $SmsParseCacheTable createAlias(String alias) {
+    return $SmsParseCacheTable(attachedDatabase, alias);
+  }
+}
+
+class SmsParseCacheRow extends DataClass
+    implements Insertable<SmsParseCacheRow> {
+  final String key;
+  final String? senderSample;
+  final String bodyTemplate;
+  final String payloadJson;
+  final int hits;
+  final int createdAt;
+  final int lastSeenAt;
+  const SmsParseCacheRow({
+    required this.key,
+    this.senderSample,
+    required this.bodyTemplate,
+    required this.payloadJson,
+    required this.hits,
+    required this.createdAt,
+    required this.lastSeenAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['key'] = Variable<String>(key);
+    if (!nullToAbsent || senderSample != null) {
+      map['sender_sample'] = Variable<String>(senderSample);
+    }
+    map['body_template'] = Variable<String>(bodyTemplate);
+    map['payload_json'] = Variable<String>(payloadJson);
+    map['hits'] = Variable<int>(hits);
+    map['created_at'] = Variable<int>(createdAt);
+    map['last_seen_at'] = Variable<int>(lastSeenAt);
+    return map;
+  }
+
+  SmsParseCacheCompanion toCompanion(bool nullToAbsent) {
+    return SmsParseCacheCompanion(
+      key: Value(key),
+      senderSample: senderSample == null && nullToAbsent
+          ? const Value.absent()
+          : Value(senderSample),
+      bodyTemplate: Value(bodyTemplate),
+      payloadJson: Value(payloadJson),
+      hits: Value(hits),
+      createdAt: Value(createdAt),
+      lastSeenAt: Value(lastSeenAt),
+    );
+  }
+
+  factory SmsParseCacheRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return SmsParseCacheRow(
+      key: serializer.fromJson<String>(json['key']),
+      senderSample: serializer.fromJson<String?>(json['senderSample']),
+      bodyTemplate: serializer.fromJson<String>(json['bodyTemplate']),
+      payloadJson: serializer.fromJson<String>(json['payloadJson']),
+      hits: serializer.fromJson<int>(json['hits']),
+      createdAt: serializer.fromJson<int>(json['createdAt']),
+      lastSeenAt: serializer.fromJson<int>(json['lastSeenAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'key': serializer.toJson<String>(key),
+      'senderSample': serializer.toJson<String?>(senderSample),
+      'bodyTemplate': serializer.toJson<String>(bodyTemplate),
+      'payloadJson': serializer.toJson<String>(payloadJson),
+      'hits': serializer.toJson<int>(hits),
+      'createdAt': serializer.toJson<int>(createdAt),
+      'lastSeenAt': serializer.toJson<int>(lastSeenAt),
+    };
+  }
+
+  SmsParseCacheRow copyWith({
+    String? key,
+    Value<String?> senderSample = const Value.absent(),
+    String? bodyTemplate,
+    String? payloadJson,
+    int? hits,
+    int? createdAt,
+    int? lastSeenAt,
+  }) => SmsParseCacheRow(
+    key: key ?? this.key,
+    senderSample: senderSample.present ? senderSample.value : this.senderSample,
+    bodyTemplate: bodyTemplate ?? this.bodyTemplate,
+    payloadJson: payloadJson ?? this.payloadJson,
+    hits: hits ?? this.hits,
+    createdAt: createdAt ?? this.createdAt,
+    lastSeenAt: lastSeenAt ?? this.lastSeenAt,
+  );
+  SmsParseCacheRow copyWithCompanion(SmsParseCacheCompanion data) {
+    return SmsParseCacheRow(
+      key: data.key.present ? data.key.value : this.key,
+      senderSample: data.senderSample.present
+          ? data.senderSample.value
+          : this.senderSample,
+      bodyTemplate: data.bodyTemplate.present
+          ? data.bodyTemplate.value
+          : this.bodyTemplate,
+      payloadJson: data.payloadJson.present
+          ? data.payloadJson.value
+          : this.payloadJson,
+      hits: data.hits.present ? data.hits.value : this.hits,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      lastSeenAt: data.lastSeenAt.present
+          ? data.lastSeenAt.value
+          : this.lastSeenAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('SmsParseCacheRow(')
+          ..write('key: $key, ')
+          ..write('senderSample: $senderSample, ')
+          ..write('bodyTemplate: $bodyTemplate, ')
+          ..write('payloadJson: $payloadJson, ')
+          ..write('hits: $hits, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('lastSeenAt: $lastSeenAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    key,
+    senderSample,
+    bodyTemplate,
+    payloadJson,
+    hits,
+    createdAt,
+    lastSeenAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is SmsParseCacheRow &&
+          other.key == this.key &&
+          other.senderSample == this.senderSample &&
+          other.bodyTemplate == this.bodyTemplate &&
+          other.payloadJson == this.payloadJson &&
+          other.hits == this.hits &&
+          other.createdAt == this.createdAt &&
+          other.lastSeenAt == this.lastSeenAt);
+}
+
+class SmsParseCacheCompanion extends UpdateCompanion<SmsParseCacheRow> {
+  final Value<String> key;
+  final Value<String?> senderSample;
+  final Value<String> bodyTemplate;
+  final Value<String> payloadJson;
+  final Value<int> hits;
+  final Value<int> createdAt;
+  final Value<int> lastSeenAt;
+  final Value<int> rowid;
+  const SmsParseCacheCompanion({
+    this.key = const Value.absent(),
+    this.senderSample = const Value.absent(),
+    this.bodyTemplate = const Value.absent(),
+    this.payloadJson = const Value.absent(),
+    this.hits = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.lastSeenAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  SmsParseCacheCompanion.insert({
+    required String key,
+    this.senderSample = const Value.absent(),
+    required String bodyTemplate,
+    required String payloadJson,
+    this.hits = const Value.absent(),
+    required int createdAt,
+    required int lastSeenAt,
+    this.rowid = const Value.absent(),
+  }) : key = Value(key),
+       bodyTemplate = Value(bodyTemplate),
+       payloadJson = Value(payloadJson),
+       createdAt = Value(createdAt),
+       lastSeenAt = Value(lastSeenAt);
+  static Insertable<SmsParseCacheRow> custom({
+    Expression<String>? key,
+    Expression<String>? senderSample,
+    Expression<String>? bodyTemplate,
+    Expression<String>? payloadJson,
+    Expression<int>? hits,
+    Expression<int>? createdAt,
+    Expression<int>? lastSeenAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (key != null) 'key': key,
+      if (senderSample != null) 'sender_sample': senderSample,
+      if (bodyTemplate != null) 'body_template': bodyTemplate,
+      if (payloadJson != null) 'payload_json': payloadJson,
+      if (hits != null) 'hits': hits,
+      if (createdAt != null) 'created_at': createdAt,
+      if (lastSeenAt != null) 'last_seen_at': lastSeenAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  SmsParseCacheCompanion copyWith({
+    Value<String>? key,
+    Value<String?>? senderSample,
+    Value<String>? bodyTemplate,
+    Value<String>? payloadJson,
+    Value<int>? hits,
+    Value<int>? createdAt,
+    Value<int>? lastSeenAt,
+    Value<int>? rowid,
+  }) {
+    return SmsParseCacheCompanion(
+      key: key ?? this.key,
+      senderSample: senderSample ?? this.senderSample,
+      bodyTemplate: bodyTemplate ?? this.bodyTemplate,
+      payloadJson: payloadJson ?? this.payloadJson,
+      hits: hits ?? this.hits,
+      createdAt: createdAt ?? this.createdAt,
+      lastSeenAt: lastSeenAt ?? this.lastSeenAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (key.present) {
+      map['key'] = Variable<String>(key.value);
+    }
+    if (senderSample.present) {
+      map['sender_sample'] = Variable<String>(senderSample.value);
+    }
+    if (bodyTemplate.present) {
+      map['body_template'] = Variable<String>(bodyTemplate.value);
+    }
+    if (payloadJson.present) {
+      map['payload_json'] = Variable<String>(payloadJson.value);
+    }
+    if (hits.present) {
+      map['hits'] = Variable<int>(hits.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<int>(createdAt.value);
+    }
+    if (lastSeenAt.present) {
+      map['last_seen_at'] = Variable<int>(lastSeenAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('SmsParseCacheCompanion(')
+          ..write('key: $key, ')
+          ..write('senderSample: $senderSample, ')
+          ..write('bodyTemplate: $bodyTemplate, ')
+          ..write('payloadJson: $payloadJson, ')
+          ..write('hits: $hits, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('lastSeenAt: $lastSeenAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 class $AppKvTable extends AppKv with TableInfo<$AppKvTable, AppKvRow> {
   @override
   final GeneratedDatabase attachedDatabase;
@@ -5425,6 +5910,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $BudgetsTable budgets = $BudgetsTable(this);
   late final $RecurrencesTable recurrences = $RecurrencesTable(this);
   late final $SmsMessagesTable smsMessages = $SmsMessagesTable(this);
+  late final $SmsParseCacheTable smsParseCache = $SmsParseCacheTable(this);
   late final $AppKvTable appKv = $AppKvTable(this);
   late final $AuditLogTable auditLog = $AuditLogTable(this);
   late final $ChangeLogTable changeLog = $ChangeLogTable(this);
@@ -5441,6 +5927,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     budgets,
     recurrences,
     smsMessages,
+    smsParseCache,
     appKv,
     auditLog,
     changeLog,
@@ -7611,6 +8098,256 @@ typedef $$SmsMessagesTableProcessedTableManager =
       SmsRow,
       PrefetchHooks Function()
     >;
+typedef $$SmsParseCacheTableCreateCompanionBuilder =
+    SmsParseCacheCompanion Function({
+      required String key,
+      Value<String?> senderSample,
+      required String bodyTemplate,
+      required String payloadJson,
+      Value<int> hits,
+      required int createdAt,
+      required int lastSeenAt,
+      Value<int> rowid,
+    });
+typedef $$SmsParseCacheTableUpdateCompanionBuilder =
+    SmsParseCacheCompanion Function({
+      Value<String> key,
+      Value<String?> senderSample,
+      Value<String> bodyTemplate,
+      Value<String> payloadJson,
+      Value<int> hits,
+      Value<int> createdAt,
+      Value<int> lastSeenAt,
+      Value<int> rowid,
+    });
+
+class $$SmsParseCacheTableFilterComposer
+    extends Composer<_$AppDatabase, $SmsParseCacheTable> {
+  $$SmsParseCacheTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get key => $composableBuilder(
+    column: $table.key,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get senderSample => $composableBuilder(
+    column: $table.senderSample,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get bodyTemplate => $composableBuilder(
+    column: $table.bodyTemplate,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get payloadJson => $composableBuilder(
+    column: $table.payloadJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get hits => $composableBuilder(
+    column: $table.hits,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get lastSeenAt => $composableBuilder(
+    column: $table.lastSeenAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$SmsParseCacheTableOrderingComposer
+    extends Composer<_$AppDatabase, $SmsParseCacheTable> {
+  $$SmsParseCacheTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get key => $composableBuilder(
+    column: $table.key,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get senderSample => $composableBuilder(
+    column: $table.senderSample,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get bodyTemplate => $composableBuilder(
+    column: $table.bodyTemplate,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get payloadJson => $composableBuilder(
+    column: $table.payloadJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get hits => $composableBuilder(
+    column: $table.hits,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get lastSeenAt => $composableBuilder(
+    column: $table.lastSeenAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$SmsParseCacheTableAnnotationComposer
+    extends Composer<_$AppDatabase, $SmsParseCacheTable> {
+  $$SmsParseCacheTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get key =>
+      $composableBuilder(column: $table.key, builder: (column) => column);
+
+  GeneratedColumn<String> get senderSample => $composableBuilder(
+    column: $table.senderSample,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get bodyTemplate => $composableBuilder(
+    column: $table.bodyTemplate,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get payloadJson => $composableBuilder(
+    column: $table.payloadJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get hits =>
+      $composableBuilder(column: $table.hits, builder: (column) => column);
+
+  GeneratedColumn<int> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<int> get lastSeenAt => $composableBuilder(
+    column: $table.lastSeenAt,
+    builder: (column) => column,
+  );
+}
+
+class $$SmsParseCacheTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $SmsParseCacheTable,
+          SmsParseCacheRow,
+          $$SmsParseCacheTableFilterComposer,
+          $$SmsParseCacheTableOrderingComposer,
+          $$SmsParseCacheTableAnnotationComposer,
+          $$SmsParseCacheTableCreateCompanionBuilder,
+          $$SmsParseCacheTableUpdateCompanionBuilder,
+          (
+            SmsParseCacheRow,
+            BaseReferences<
+              _$AppDatabase,
+              $SmsParseCacheTable,
+              SmsParseCacheRow
+            >,
+          ),
+          SmsParseCacheRow,
+          PrefetchHooks Function()
+        > {
+  $$SmsParseCacheTableTableManager(_$AppDatabase db, $SmsParseCacheTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$SmsParseCacheTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$SmsParseCacheTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$SmsParseCacheTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> key = const Value.absent(),
+                Value<String?> senderSample = const Value.absent(),
+                Value<String> bodyTemplate = const Value.absent(),
+                Value<String> payloadJson = const Value.absent(),
+                Value<int> hits = const Value.absent(),
+                Value<int> createdAt = const Value.absent(),
+                Value<int> lastSeenAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => SmsParseCacheCompanion(
+                key: key,
+                senderSample: senderSample,
+                bodyTemplate: bodyTemplate,
+                payloadJson: payloadJson,
+                hits: hits,
+                createdAt: createdAt,
+                lastSeenAt: lastSeenAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String key,
+                Value<String?> senderSample = const Value.absent(),
+                required String bodyTemplate,
+                required String payloadJson,
+                Value<int> hits = const Value.absent(),
+                required int createdAt,
+                required int lastSeenAt,
+                Value<int> rowid = const Value.absent(),
+              }) => SmsParseCacheCompanion.insert(
+                key: key,
+                senderSample: senderSample,
+                bodyTemplate: bodyTemplate,
+                payloadJson: payloadJson,
+                hits: hits,
+                createdAt: createdAt,
+                lastSeenAt: lastSeenAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$SmsParseCacheTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $SmsParseCacheTable,
+      SmsParseCacheRow,
+      $$SmsParseCacheTableFilterComposer,
+      $$SmsParseCacheTableOrderingComposer,
+      $$SmsParseCacheTableAnnotationComposer,
+      $$SmsParseCacheTableCreateCompanionBuilder,
+      $$SmsParseCacheTableUpdateCompanionBuilder,
+      (
+        SmsParseCacheRow,
+        BaseReferences<_$AppDatabase, $SmsParseCacheTable, SmsParseCacheRow>,
+      ),
+      SmsParseCacheRow,
+      PrefetchHooks Function()
+    >;
 typedef $$AppKvTableCreateCompanionBuilder =
     AppKvCompanion Function({
       required String key,
@@ -8205,6 +8942,8 @@ class $AppDatabaseManager {
       $$RecurrencesTableTableManager(_db, _db.recurrences);
   $$SmsMessagesTableTableManager get smsMessages =>
       $$SmsMessagesTableTableManager(_db, _db.smsMessages);
+  $$SmsParseCacheTableTableManager get smsParseCache =>
+      $$SmsParseCacheTableTableManager(_db, _db.smsParseCache);
   $$AppKvTableTableManager get appKv =>
       $$AppKvTableTableManager(_db, _db.appKv);
   $$AuditLogTableTableManager get auditLog =>

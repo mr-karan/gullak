@@ -103,8 +103,7 @@ class SettingsScreen extends ConsumerWidget {
                   min: 0.5,
                   max: 1.0,
                   divisions: 10,
-                  label:
-                      '${(prefs.smsAutoConfirmThreshold * 100).round()}%',
+                  label: '${(prefs.smsAutoConfirmThreshold * 100).round()}%',
                   onChanged: (v) async {
                     await prefs.setSmsAutoConfirmThreshold(v);
                     bumpPrefs(ref);
