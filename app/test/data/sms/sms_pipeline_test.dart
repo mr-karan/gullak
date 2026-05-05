@@ -187,6 +187,11 @@ class _FakeSmsReader implements SmsReader {
   }
 
   @override
+  Future<void> clearBackgroundQueue() async {
+    queuedMessages = [];
+  }
+
+  @override
   Stream<IncomingSms> listen() => _controller.stream;
 }
 

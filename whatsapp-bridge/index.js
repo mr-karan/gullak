@@ -494,21 +494,11 @@ app.get("/health", (req, res) => {
 });
 
 async function checkExistingSession() {
-  const credsPath = getCredsPath();
-  maybeRestoreCredsFromBackup();
-  if (existsSync(credsPath)) {
-    try {
-      const raw = readFileSync(credsPath, "utf-8");
-      JSON.parse(raw);
-      logger.info("Found existing session, auto-connecting...");
-      connectionStatus = "STARTING";
-      connectWhatsApp();
-    } catch {
-      logger.info("Corrupted session, waiting for QR scan request.");
-    }
-  } else {
-    logger.info("No existing session. Waiting for QR scan request.");
-  }
+  // Auth state now lives in SQLite. Starting the socket is the only reliable
+  // way to discover whether the stored session can resume or needs a QR scan.
+  logger.info("Starting WhatsApp bridge session...");
+  connectionStatus = "STARTING";
+  connectWhatsApp();
 }
 
 app.listen(PORT, () => {

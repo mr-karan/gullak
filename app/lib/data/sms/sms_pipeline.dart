@@ -43,31 +43,40 @@ class SmsPipeline {
   final Prefs? prefs;
 
   StreamSubscription<IncomingSms>? _sub;
+  int _generation = 0;
 
   Future<int> backfill({Duration window = const Duration(days: 90)}) async {
+    final generation = _generation;
     final since = DateTime.now().subtract(window);
     final queued = await reader.drainBackgroundQueue();
+    if (generation != _generation) return 0;
     final messages = [
       ...queued.where((m) => m.receivedAt.isAfter(since)),
       ...await reader.backfill(since: since),
     ];
     var added = 0;
     for (final m in messages) {
-      if (await _safeIngest(m)) added += 1;
+      if (generation != _generation) break;
+      if (await _safeIngest(m, generation: generation)) added += 1;
     }
     log.i('sms backfill ingested $added/${messages.length}');
     return added;
   }
 
-  void startListening() {
+  void startListening({bool drainQueued = true}) {
     if (_sub != null) return;
-    reader.drainBackgroundQueue().then((messages) async {
-      for (final message in messages) {
-        await _safeIngest(message);
-      }
-    });
+    final generation = _generation;
+    if (drainQueued) {
+      reader.drainBackgroundQueue().then((messages) async {
+        if (generation != _generation) return;
+        for (final message in messages) {
+          if (generation != _generation) break;
+          await _safeIngest(message, generation: generation);
+        }
+      });
+    }
     _sub = reader.listen().listen((m) async {
-      await _safeIngest(m);
+      await _safeIngest(m, generation: generation);
     });
   }
 
@@ -75,9 +84,10 @@ class SmsPipeline {
   /// the SQLite write can fail mid-scan. We log and move on so one bad
   /// SMS does not abort the rest of a 90-day backfill or kill the live
   /// listener for the rest of the session.
-  Future<bool> _safeIngest(IncomingSms sms) async {
+  Future<bool> _safeIngest(IncomingSms sms, {int? generation}) async {
+    if (generation != null && generation != _generation) return false;
     try {
-      return await _ingest(sms);
+      return await _ingest(sms, generation: generation);
     } catch (e, st) {
       log.w('sms ingest failed for ${sms.address}', error: e, stackTrace: st);
       return false;
@@ -89,7 +99,16 @@ class SmsPipeline {
     _sub = null;
   }
 
-  Future<bool> _ingest(IncomingSms sms) async {
+  Future<void> clearStoredState() async {
+    _generation += 1;
+    await stop();
+    await reader.clearBackgroundQueue();
+    await db.customStatement('DELETE FROM sms_parse_cache');
+    await db.customStatement('DELETE FROM sms_messages');
+  }
+
+  Future<bool> _ingest(IncomingSms sms, {int? generation}) async {
+    if (generation != null && generation != _generation) return false;
     if (sms.id != null) {
       final existing = await (db.select(
         db.smsMessages,
@@ -113,6 +132,7 @@ class SmsPipeline {
     }
 
     final candidate = await parserRegistry.tryParse(sms);
+    if (generation != null && generation != _generation) return false;
     final candidateJson = candidate == null
         ? null
         : jsonEncode({
@@ -137,6 +157,7 @@ class SmsPipeline {
         status = 'duplicate';
         linkedTransactionId = dupId;
       } else if (await _shouldAutoConfirm(candidate)) {
+        if (generation != null && generation != _generation) return false;
         try {
           linkedTransactionId = await _autoCreateTransaction(candidate, sms);
           status = 'accepted';
@@ -151,6 +172,7 @@ class SmsPipeline {
       }
     }
 
+    if (generation != null && generation != _generation) return false;
     await db
         .into(db.smsMessages)
         .insert(

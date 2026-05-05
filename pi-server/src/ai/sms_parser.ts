@@ -28,6 +28,9 @@ Rules:
   All other fields can be null/0 in that case.
 - amount_cents is integer minor units. Reject negative amounts;
   use is_income=true for credits, false for debits.
+- Direction is literal from the SMS: credited/received/deposited/refund/cashback/salary
+  means is_income=true; debited/spent/paid/sent/withdrawn/charged/purchase
+  means is_income=false. Do not mark credits as expenses.
 - payee: extract the merchant name only, not the bank.
 - account_hint: include the bank name AND last-4 of the card if
   present, e.g. "HDFC Card xx1234".
@@ -90,11 +93,12 @@ export async function parseSms(
     return { isTransaction: false, candidate: null };
   }
   const dateStr = isYmd(parsed.date) ? parsed.date! : ymd(new Date(req.receivedAt));
+  const inferredIncome = inferIncomeFromBody(req.body) ?? (parsed.is_income === true);
   return {
     isTransaction: true,
     candidate: {
       amountCents,
-      isIncome: parsed.is_income === true,
+      isIncome: inferredIncome,
       currency: parsed.currency ?? null,
       payee: trimOrNull(parsed.payee),
       accountHint: trimOrNull(parsed.account_hint),
@@ -104,6 +108,41 @@ export async function parseSms(
       parserVersion: 2,
     },
   };
+}
+
+function inferIncomeFromBody(body: string): boolean | null {
+  const s = body.toLowerCase();
+
+  // Prefer explicit bank/card direction over model judgment. These are the
+  // words that decide sign in Indian bank SMS; LLMs occasionally parse a
+  // credited/received amount correctly but still mark it as an expense.
+  const incomePatterns = [
+    /\bcredited\b/,
+    /\bcredit\b/,
+    /\breceived\b/,
+    /\brecvd\b/,
+    /\bdeposited\b/,
+    /\brefund(?:ed)?\b/,
+    /\bcashback\b/,
+    /\bsalary\b/,
+    /\binterest\s+(?:paid|credited)\b/,
+  ];
+  if (incomePatterns.some((re) => re.test(s))) return true;
+
+  const expensePatterns = [
+    /\bdebited\b/,
+    /\bdebit\b/,
+    /\bspent\b/,
+    /\bpaid\b/,
+    /\bsent\b/,
+    /\bwithdrawn\b/,
+    /\bcharged\b/,
+    /\bpurchase(?:d)?\b/,
+    /\bused\s+at\b/,
+  ];
+  if (expensePatterns.some((re) => re.test(s))) return false;
+
+  return null;
 }
 
 function isYmd(v: unknown): boolean {

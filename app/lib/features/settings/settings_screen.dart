@@ -51,8 +51,8 @@ class SettingsScreen extends ConsumerWidget {
                   !Platform.isAndroid
                       ? 'Available on Android only.'
                       : !syncConfigured
-                            ? 'Configure Sync server first — SMS parsing runs there.'
-                            : 'Reads only bank/transactional SMS. Everything else is ignored.',
+                      ? 'Configure Sync server first — SMS parsing runs there.'
+                      : 'Reads only bank/transactional SMS. Everything else is ignored.',
                 ),
                 value: prefs.smsEnabled && syncConfigured,
                 onChanged: !syncConfigured
@@ -61,6 +61,16 @@ class SettingsScreen extends ConsumerWidget {
               );
             },
           ),
+          if (Platform.isAndroid)
+            ListTile(
+              leading: const Icon(Icons.delete_sweep_outlined),
+              title: const Text('Clear SMS Inbox state'),
+              subtitle: const Text(
+                'Deletes parsed SMS rows and parse cache only. Accounts, '
+                'transactions, and sync settings are left untouched.',
+              ),
+              onTap: () => _clearSmsState(context, ref),
+            ),
           if (prefs.smsEnabled && Platform.isAndroid) ...[
             SwitchListTile(
               secondary: const Icon(Icons.bolt_outlined),
@@ -178,6 +188,49 @@ class SettingsScreen extends ConsumerWidget {
     );
   }
 
+  Future<void> _clearSmsState(BuildContext context, WidgetRef ref) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        title: const Text('Clear SMS Inbox state?'),
+        content: const Text(
+          'This deletes all SMS parse rows, including pending Inbox cards, '
+          'dismissed rows, error rows, and the parse cache. Existing '
+          'transactions are not deleted.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogCtx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton.tonal(
+            onPressed: () => Navigator.of(dialogCtx).pop(true),
+            child: const Text('Clear'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    final pipeline = ref.read(smsPipelineProvider);
+    final prefs = ref.read(prefsProvider);
+
+    await pipeline.clearStoredState();
+    if (prefs.smsEnabled) {
+      pipeline.startListening(drainQueued: false);
+    }
+
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        const SnackBar(
+          content: Text('SMS Inbox state cleared.'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+  }
+
   /// Wipes everything except already-accepted transactions and the
   /// rows the user is still reviewing in the Inbox, then kicks off a
   /// fresh backfill. Targets two recurring symptoms: stale cache rows
@@ -235,7 +288,9 @@ class SettingsScreen extends ConsumerWidget {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Scanning inbox — items will appear as they\'re parsed.'),
+          content: Text(
+            'Scanning inbox — items will appear as they\'re parsed.',
+          ),
         ),
       );
     } else {
@@ -251,16 +306,16 @@ class SettingsScreen extends ConsumerWidget {
     try {
       final v = await showDialog<String>(
         context: context,
-        builder: (_) => AlertDialog(
+        builder: (dialogCtx) => AlertDialog(
           title: const Text('Currency symbol'),
           content: TextField(controller: ctrl),
           actions: [
             TextButton(
-              onPressed: () => Navigator.of(context).pop(),
+              onPressed: () => Navigator.of(dialogCtx).pop(),
               child: const Text('Cancel'),
             ),
             FilledButton(
-              onPressed: () => Navigator.of(context).pop(ctrl.text),
+              onPressed: () => Navigator.of(dialogCtx).pop(ctrl.text),
               child: const Text('Save'),
             ),
           ],
@@ -279,12 +334,12 @@ class SettingsScreen extends ConsumerWidget {
     final prefs = ref.read(prefsProvider);
     final v = await showDialog<int>(
       context: context,
-      builder: (_) => SimpleDialog(
+      builder: (dialogCtx) => SimpleDialog(
         title: const Text('Minor digits'),
         children: [
           for (final n in [0, 2, 3, 4])
             SimpleDialogOption(
-              onPressed: () => Navigator.of(context).pop(n),
+              onPressed: () => Navigator.of(dialogCtx).pop(n),
               child: Text('$n'),
             ),
         ],
@@ -300,12 +355,12 @@ class SettingsScreen extends ConsumerWidget {
     final prefs = ref.read(prefsProvider);
     final v = await showDialog<String>(
       context: context,
-      builder: (_) => SimpleDialog(
+      builder: (dialogCtx) => SimpleDialog(
         title: const Text('Theme'),
         children: [
           for (final mode in ['system', 'light', 'dark'])
             SimpleDialogOption(
-              onPressed: () => Navigator.of(context).pop(mode),
+              onPressed: () => Navigator.of(dialogCtx).pop(mode),
               child: Text(mode),
             ),
         ],
@@ -339,7 +394,7 @@ class SettingsScreen extends ConsumerWidget {
   Future<void> _importBackup(BuildContext context, WidgetRef ref) async {
     final ok = await showDialog<bool>(
       context: context,
-      builder: (_) => AlertDialog(
+      builder: (dialogCtx) => AlertDialog(
         title: const Text('Replace all data?'),
         content: const Text(
           'Importing will delete every account, category, and transaction '
@@ -347,11 +402,11 @@ class SettingsScreen extends ConsumerWidget {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
+            onPressed: () => Navigator.of(dialogCtx).pop(false),
             child: const Text('Cancel'),
           ),
           FilledButton(
-            onPressed: () => Navigator.of(context).pop(true),
+            onPressed: () => Navigator.of(dialogCtx).pop(true),
             child: const Text('Continue'),
           ),
         ],
@@ -526,7 +581,6 @@ class SettingsScreen extends ConsumerWidget {
       ..hideCurrentSnackBar()
       ..showSnackBar(SnackBar(content: Text(msg)));
   }
-
 }
 
 class _SectionHeader extends StatelessWidget {

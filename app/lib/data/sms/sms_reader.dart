@@ -110,6 +110,11 @@ class SmsReader {
         .toList(growable: false);
   }
 
+  Future<void> clearBackgroundQueue() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_backgroundSmsQueueKey);
+  }
+
   Stream<IncomingSms> listen() {
     final ctrl = _controller ??= StreamController<IncomingSms>.broadcast(
       onCancel: () {
