@@ -8,15 +8,22 @@ import '../../../sync/changelog_writer.dart';
 
 export '../../../data/db/database.dart' show AccountRow;
 
-/// Bank-ish accounts: Checking, Savings, Credit Card, Cash, Wallet,
-/// Investment, Loan. UI keeps them off-budget when the kind implies
-/// it (investments, loans), but the user can override via [onBudget].
+/// Bank-ish accounts. Order here is the order shown in the UI
+/// dropdown — Savings sits first because that's the default Indian
+/// retail bank account; Current (the Indian term for what the rest
+/// of the world calls "checking") follows. UI keeps accounts
+/// off-budget when the kind implies it (investments, loans), but
+/// the user can override via [onBudget].
+///
+/// `id` strings are persisted in the DB and MUST stay stable even
+/// when the display label changes (e.g. 'checking' id → 'Current'
+/// label). Don't rename the id without a migration.
 enum AccountKind {
-  checking('Checking'),
   savings('Savings'),
-  creditCard('Credit Card'),
+  checking('Current'),
+  creditCard('Credit card'),
   cash('Cash'),
-  wallet('Wallet'),
+  wallet('UPI / Wallet'),
   investment('Investment'),
   loan('Loan');
 
@@ -34,7 +41,7 @@ enum AccountKind {
   };
 
   static AccountKind fromId(String id) =>
-      values.firstWhere((k) => k.id == id, orElse: () => AccountKind.checking);
+      values.firstWhere((k) => k.id == id, orElse: () => AccountKind.savings);
 
   bool get defaultsOffBudget =>
       this == AccountKind.investment || this == AccountKind.loan;

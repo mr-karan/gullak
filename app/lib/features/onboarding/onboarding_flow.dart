@@ -26,7 +26,7 @@ class _OnboardingFlowState extends ConsumerState<OnboardingFlow> {
   int _minorDigits = 2;
 
   String _accountName = '';
-  AccountKind _kind = AccountKind.checking;
+  AccountKind _kind = AccountKind.savings;
   int _openingBalanceCents = 0;
   bool _finishing = false;
 
@@ -167,6 +167,41 @@ class _OnboardingFlowState extends ConsumerState<OnboardingFlow> {
   }
 }
 
+/// Onboarding page chrome. The body scrolls when the keyboard is up or
+/// text scale is large; the footer (action button) stays pinned to the
+/// bottom regardless. We deliberately avoid the IntrinsicHeight + Spacer
+/// pattern — at small viewports it fights the scroll view's layout and
+/// hangs `pumpAndSettle` indefinitely.
+class _OnboardingPageShell extends StatelessWidget {
+  const _OnboardingPageShell({required this.body, required this.footer});
+
+  final Widget body;
+  final Widget footer;
+
+  static const _hPad = 24.0;
+  static const _topPad = 48.0;
+  static const _bottomPad = 24.0;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Expanded(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(_hPad, _topPad, _hPad, 16),
+            child: body,
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(_hPad, 0, _hPad, _bottomPad),
+          child: footer,
+        ),
+      ],
+    );
+  }
+}
+
 /// Combined welcome + currency picker — saves a screen by merging
 /// branding and the currency choice. Branding sits at the top, a
 /// chip strip lets the user pick currency, Continue advances.
@@ -194,9 +229,8 @@ class _WelcomeAndCurrency extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 48, 24, 24),
-      child: Column(
+    return _OnboardingPageShell(
+      body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
@@ -239,15 +273,14 @@ class _WelcomeAndCurrency extends StatelessWidget {
                 ),
             ],
           ),
-          const Spacer(),
-          SizedBox(
-            width: double.infinity,
-            child: FilledButton(
-              onPressed: onNext,
-              child: const Text('Continue'),
-            ),
-          ),
         ],
+      ),
+      footer: SizedBox(
+        width: double.infinity,
+        child: FilledButton(
+          onPressed: onNext,
+          child: const Text('Continue'),
+        ),
       ),
     );
   }
@@ -276,7 +309,7 @@ class _FirstAccount extends StatefulWidget {
 class _FirstAccountState extends State<_FirstAccount> {
   final _name = TextEditingController(text: 'Main');
   final _balance = TextEditingController();
-  AccountKind _kind = AccountKind.checking;
+  AccountKind _kind = AccountKind.savings;
 
   @override
   void dispose() {
@@ -287,9 +320,8 @@ class _FirstAccountState extends State<_FirstAccount> {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 48, 24, 24),
-      child: Column(
+    return _OnboardingPageShell(
+      body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
@@ -316,7 +348,7 @@ class _FirstAccountState extends State<_FirstAccount> {
               for (final k in AccountKind.values)
                 DropdownMenuItem(value: k, child: Text(k.label)),
             ],
-            onChanged: (v) => setState(() => _kind = v ?? AccountKind.checking),
+            onChanged: (v) => setState(() => _kind = v ?? AccountKind.savings),
           ),
           const SizedBox(height: 12),
           TextField(
@@ -328,23 +360,22 @@ class _FirstAccountState extends State<_FirstAccount> {
               hintText: '0',
             ),
           ),
-          const Spacer(),
-          SizedBox(
-            width: double.infinity,
-            child: FilledButton(
-              onPressed: () {
-                final name = _name.text.trim();
-                if (name.isEmpty) return;
-                final cents = Money.parseToMinor(
-                  _balance.text,
-                  minorDigits: widget.minorDigits,
-                );
-                widget.onSubmit(name: name, kind: _kind, openingCents: cents);
-              },
-              child: const Text('Continue'),
-            ),
-          ),
         ],
+      ),
+      footer: SizedBox(
+        width: double.infinity,
+        child: FilledButton(
+          onPressed: () {
+            final name = _name.text.trim();
+            if (name.isEmpty) return;
+            final cents = Money.parseToMinor(
+              _balance.text,
+              minorDigits: widget.minorDigits,
+            );
+            widget.onSubmit(name: name, kind: _kind, openingCents: cents);
+          },
+          child: const Text('Continue'),
+        ),
       ),
     );
   }
@@ -391,9 +422,8 @@ class _AiSetupState extends State<_AiSetup> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 48, 24, 24),
-      child: Column(
+    return _OnboardingPageShell(
+      body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text('AI assist', style: Theme.of(context).textTheme.headlineMedium),
@@ -452,32 +482,31 @@ class _AiSetupState extends State<_AiSetup> {
               enableSuggestions: false,
             ),
           ],
+        ],
+      ),
+      footer: Row(
+        children: [
+          TextButton(
+            onPressed: widget.busy ? null : widget.onSkip,
+            child: const Text('Skip'),
+          ),
           const Spacer(),
-          Row(
-            children: [
-              TextButton(
-                onPressed: widget.busy ? null : widget.onSkip,
-                child: const Text('Skip'),
-              ),
-              const Spacer(),
-              FilledButton(
-                onPressed: widget.busy
-                    ? null
-                    : () {
-                        final key = _apiKey.text.trim();
-                        if (key.isEmpty) {
-                          widget.onSkip();
-                          return;
-                        }
-                        widget.onSubmit(
-                          baseUrl: _baseUrl.text,
-                          model: _model.text,
-                          apiKey: key,
-                        );
-                      },
-                child: const Text('Done'),
-              ),
-            ],
+          FilledButton(
+            onPressed: widget.busy
+                ? null
+                : () {
+                    final key = _apiKey.text.trim();
+                    if (key.isEmpty) {
+                      widget.onSkip();
+                      return;
+                    }
+                    widget.onSubmit(
+                      baseUrl: _baseUrl.text,
+                      model: _model.text,
+                      apiKey: key,
+                    );
+                  },
+            child: const Text('Done'),
           ),
         ],
       ),

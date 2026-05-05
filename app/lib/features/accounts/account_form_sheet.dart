@@ -18,7 +18,7 @@ class AccountFormSheet extends ConsumerStatefulWidget {
 class _AccountFormSheetState extends ConsumerState<AccountFormSheet> {
   final _name = TextEditingController();
   final _balance = TextEditingController();
-  AccountKind _kind = AccountKind.checking;
+  AccountKind _kind = AccountKind.savings;
   bool _onBudget = true;
   bool _loaded = false;
 
