@@ -44,8 +44,21 @@ class SmsRepository {
               ..where((t) => t.candidateStatus.equals('inbox'))
               ..orderBy([(t) => OrderingTerm.desc(t.receivedAt)]))
             .get();
-    if (rows.isEmpty) return const [];
+    return _enrichRows(rows);
+  }
 
+  /// Reactive inbox: emits a fresh list whenever [SmsMessages] changes.
+  /// Drift watches the underlying table, so newly-ingested SMS show
+  /// up automatically without anyone calling [Ref.invalidate].
+  Stream<List<InboxItem>> watchInbox() {
+    final query = _db.select(_db.smsMessages)
+      ..where((t) => t.candidateStatus.equals('inbox'))
+      ..orderBy([(t) => OrderingTerm.desc(t.receivedAt)]);
+    return query.watch().asyncMap(_enrichRows);
+  }
+
+  Future<List<InboxItem>> _enrichRows(List<SmsRow> rows) async {
+    if (rows.isEmpty) return const [];
     final accounts = await ref.read(accountRepoProvider).list();
     final categories = await ref.read(categoryRepoProvider).list();
     final payees = await ref.read(payeeRepoProvider).list();
@@ -55,7 +68,6 @@ class SmsRepository {
           jsonDecode(ref.read(prefsProvider).payeeCategoryHints)
               as Map<String, dynamic>;
     } catch (_) {}
-
     return rows
         .map(
           (r) =>
@@ -224,9 +236,9 @@ final Provider<SmsRepository> smsRepositoryProvider = Provider<SmsRepository>(
   (ref) => SmsRepository(ref),
 );
 
-final FutureProvider<List<InboxItem>> inboxItemsProvider =
-    FutureProvider<List<InboxItem>>((ref) {
-      return ref.watch(smsRepositoryProvider).listInbox();
+final StreamProvider<List<InboxItem>> inboxItemsProvider =
+    StreamProvider<List<InboxItem>>((ref) {
+      return ref.watch(smsRepositoryProvider).watchInbox();
     });
 
 extension _FirstOrNull<T> on Iterable<T> {
