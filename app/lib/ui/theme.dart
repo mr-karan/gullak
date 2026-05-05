@@ -64,8 +64,13 @@ ThemeData _build(Brightness brightness) {
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
     ),
     filledButtonTheme: FilledButtonThemeData(
+      // Size.fromHeight(52) = Size(infinity, 52) — works inside a
+      // Column (tight width from parent) but breaks inside a Row
+      // with a Spacer because the parent passes unconstrained width
+      // and the Infinity min-width fails BoxConstraints.isValid.
+      // Use a finite min width; full-width sites wrap with SizedBox.
       style: FilledButton.styleFrom(
-        minimumSize: const Size.fromHeight(52),
+        minimumSize: const Size(64, 52),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
         textStyle: base.textTheme.titleMedium?.copyWith(
           fontWeight: FontWeight.w600,
@@ -74,7 +79,7 @@ ThemeData _build(Brightness brightness) {
     ),
     outlinedButtonTheme: OutlinedButtonThemeData(
       style: OutlinedButton.styleFrom(
-        minimumSize: const Size.fromHeight(52),
+        minimumSize: const Size(64, 52),
         side: BorderSide(color: scheme.outlineVariant),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       ),

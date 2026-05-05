@@ -240,7 +240,13 @@ class _WelcomeAndCurrency extends StatelessWidget {
             ],
           ),
           const Spacer(),
-          FilledButton(onPressed: onNext, child: const Text('Continue')),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton(
+              onPressed: onNext,
+              child: const Text('Continue'),
+            ),
+          ),
         ],
       ),
     );
@@ -323,17 +329,20 @@ class _FirstAccountState extends State<_FirstAccount> {
             ),
           ),
           const Spacer(),
-          FilledButton(
-            onPressed: () {
-              final name = _name.text.trim();
-              if (name.isEmpty) return;
-              final cents = Money.parseToMinor(
-                _balance.text,
-                minorDigits: widget.minorDigits,
-              );
-              widget.onSubmit(name: name, kind: _kind, openingCents: cents);
-            },
-            child: const Text('Continue'),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton(
+              onPressed: () {
+                final name = _name.text.trim();
+                if (name.isEmpty) return;
+                final cents = Money.parseToMinor(
+                  _balance.text,
+                  minorDigits: widget.minorDigits,
+                );
+                widget.onSubmit(name: name, kind: _kind, openingCents: cents);
+              },
+              child: const Text('Continue'),
+            ),
           ),
         ],
       ),
