@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../sync/sync_status.dart';
 import '../../state/providers.dart';
 import '../entry/quick_entry.dart';
 
@@ -57,9 +58,16 @@ class HomeShell extends ConsumerWidget {
         loc == '/transactions' ||
         loc == '/budgets' ||
         loc == '/accounts';
+    final syncStatus = ref.watch(syncStatusProvider);
 
     return Scaffold(
-      body: child,
+      body: Column(
+        children: [
+          if (syncStatus.offline)
+            _SyncOfflineBanner(message: syncStatus.message!),
+          Expanded(child: child),
+        ],
+      ),
       floatingActionButton: showFab
           ? FloatingActionButton.extended(
               onPressed: () => _openQuickEntry(context),
@@ -89,6 +97,41 @@ class HomeShell extends ConsumerWidget {
       if (loc == tabs[i].path || loc.startsWith('${tabs[i].path}/')) return i;
     }
     return 0;
+  }
+}
+
+class _SyncOfflineBanner extends StatelessWidget {
+  const _SyncOfflineBanner({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return SafeArea(
+      bottom: false,
+      child: Material(
+        color: cs.errorContainer,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          child: Row(
+            children: [
+              Icon(Icons.cloud_off_outlined, color: cs.onErrorContainer),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  message,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: cs.onErrorContainer,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
 

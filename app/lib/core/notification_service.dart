@@ -52,18 +52,22 @@ class NotificationService {
   Future<void> showInboxCandidate({
     required int amountCents,
     required String? payee,
+    int? notificationId,
   }) async {
     await init();
     const androidDetails = AndroidNotificationDetails(
       'sms_candidates',
       'SMS candidates',
       channelDescription: 'High-confidence transactional SMS drafts',
+      groupKey: 'dev.mrkaran.gullak.sms_candidates',
       importance: Importance.high,
       priority: Priority.high,
     );
     const details = NotificationDetails(android: androidDetails);
     await _plugin.show(
-      id: 1001,
+      id:
+          notificationId ??
+          DateTime.now().millisecondsSinceEpoch.remainder(1 << 31),
       title: 'New transaction draft',
       body: _body(amountCents: amountCents, payee: payee),
       notificationDetails: details,

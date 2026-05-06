@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 
 import '../core/logger.dart';
+import '../core/network_errors.dart';
 import '../core/prefs.dart';
 import '../core/secure_store.dart';
 import '../data/db/database.dart';
@@ -70,7 +71,9 @@ class SyncService {
           headers: {
             if (apiKey != null && apiKey.isNotEmpty) 'x-api-key': apiKey,
             'accept': 'application/json',
+            'connection': 'close',
           },
+          connectTimeout: const Duration(seconds: 5),
           receiveTimeout: const Duration(seconds: 8),
         ),
       );
@@ -81,14 +84,9 @@ class SyncService {
       }
       return (ok: false, message: 'Unexpected response: $data');
     } on DioException catch (e) {
-      return (
-        ok: false,
-        message: e.response?.statusCode == 401
-            ? 'Unauthorized — check the API key'
-            : (e.message ?? 'Network error'),
-      );
+      return (ok: false, message: networkErrorMessage(e));
     } catch (e) {
-      return (ok: false, message: '$e');
+      return (ok: false, message: networkErrorMessage(e));
     }
   }
 
@@ -104,7 +102,7 @@ class SyncService {
       return (pushed: pushed, pulled: pulled, error: null);
     } catch (e) {
       log.w('sync failed: $e');
-      return (pushed: 0, pulled: 0, error: '$e');
+      return (pushed: 0, pulled: 0, error: networkErrorMessage(e));
     }
   }
 
@@ -124,7 +122,9 @@ class SyncService {
           headers: {
             if (apiKey != null && apiKey.isNotEmpty) 'x-api-key': apiKey,
             'accept': 'application/json',
+            'connection': 'close',
           },
+          connectTimeout: const Duration(seconds: 5),
           receiveTimeout: const Duration(seconds: 30),
         ),
       );
@@ -190,7 +190,10 @@ class SyncService {
           headers: {
             if (apiKey != null && apiKey.isNotEmpty) 'x-api-key': apiKey,
             'content-type': 'application/json',
+            'accept': 'application/json',
+            'connection': 'close',
           },
+          connectTimeout: const Duration(seconds: 5),
           sendTimeout: const Duration(seconds: 20),
           receiveTimeout: const Duration(seconds: 30),
         ),

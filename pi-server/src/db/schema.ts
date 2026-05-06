@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { integer, real, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 // Mirrors the Flutter app's Drift tables. Money is stored as integer
 // minor units throughout, dates as YYYY-MM-DD text, timestamps as ms
@@ -53,6 +53,9 @@ export const transactions = sqliteTable("transactions", {
   amountCents: integer("amount_cents").notNull(),
   date: text("date").notNull(), // YYYY-MM-DD
   notes: text("notes"),
+  latitude: real("latitude"),
+  longitude: real("longitude"),
+  locationName: text("location_name"),
   cleared: integer("cleared", { mode: "boolean" }).notNull().default(false),
   origin: text("origin").notNull().default("manual"),
   originRef: text("origin_ref"),
@@ -65,6 +68,37 @@ export const transactions = sqliteTable("transactions", {
   createdAt: integer("created_at").notNull().default(now),
   updatedAt: integer("updated_at").notNull().default(now),
 });
+
+export const tags = sqliteTable(
+  "tags",
+  {
+    id: text("id").primaryKey(),
+    name: text("name").notNull(),
+    color: integer("color"),
+    archived: integer("archived", { mode: "boolean" }).notNull().default(false),
+    createdAt: integer("created_at").notNull().default(now),
+    updatedAt: integer("updated_at").notNull().default(now),
+  },
+  (t) => ({
+    uniqName: uniqueIndex("idx_tag_name").on(t.name),
+  }),
+);
+
+export const transactionTags = sqliteTable(
+  "transaction_tags",
+  {
+    id: text("id").primaryKey(),
+    transactionId: text("transaction_id").notNull(),
+    tagId: text("tag_id").notNull(),
+    updatedAt: integer("updated_at").notNull().default(now),
+  },
+  (t) => ({
+    uniqPair: uniqueIndex("idx_transaction_tag_pair").on(
+      t.transactionId,
+      t.tagId,
+    ),
+  }),
+);
 
 export const budgets = sqliteTable("budgets", {
   id: text("id").primaryKey(),
@@ -160,6 +194,8 @@ export type Category = typeof categories.$inferSelect;
 export type Payee = typeof payees.$inferSelect;
 export type Transaction = typeof transactions.$inferSelect;
 export type NewTransaction = typeof transactions.$inferInsert;
+export type Tag = typeof tags.$inferSelect;
+export type TransactionTag = typeof transactionTags.$inferSelect;
 export type Budget = typeof budgets.$inferSelect;
 export type Recurrence = typeof recurrences.$inferSelect;
 export type ChangeLogEntry = typeof changeLog.$inferSelect;

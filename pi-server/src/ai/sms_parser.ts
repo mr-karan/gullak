@@ -95,6 +95,9 @@ export async function parseSms(
   config: AppConfig,
   req: SmsParseRequest,
 ): Promise<SmsParseResult> {
+  const deterministic = parseDeterministicBankSms(req);
+  if (deterministic) return deterministic;
+
   const receivedDate = new Date(req.receivedAt).toISOString();
   const user = [
     `<sender>: ${req.sender}`,
@@ -136,6 +139,115 @@ export async function parseSms(
       parserVersion: 2,
     },
   };
+}
+
+function parseDeterministicBankSms(req: SmsParseRequest): SmsParseResult | null {
+  const body = req.body.replace(/\s+/g, " ").trim();
+  const isIncome = inferIncomeFromBody(body);
+  if (isIncome == null) return null;
+  const amountCents = extractAmountCents(body);
+  if (amountCents == null || amountCents <= 0) return null;
+
+  const payee = extractPayee(body);
+  const categoryHint =
+    knownPayeeCategory(payee, req.categories, req.payees) ??
+    inferCategoryHint(payee, req.categories);
+  const categoryId = matchByName(categoryHint, req.categories ?? []);
+  return {
+    isTransaction: true,
+    candidate: {
+      amountCents,
+      isIncome,
+      currency: "INR",
+      payee,
+      accountHint: extractAccountHint(body, req.sender),
+      categoryHint,
+      categoryId,
+      date: extractSmsDate(body) ?? ymd(new Date(req.receivedAt)),
+      bankRef: extractBankRef(body),
+      confidence: 0.9,
+      parserVersion: 3,
+    },
+  };
+}
+
+function extractAmountCents(body: string): number | null {
+  const amountPatterns = [
+    /\b(?:rs\.?|inr|₹)\s*([0-9][0-9,]*(?:\.[0-9]{1,2})?)/i,
+    /\b([0-9][0-9,]*(?:\.[0-9]{1,2})?)\s*(?:rs\.?|inr)\b/i,
+  ];
+  for (const re of amountPatterns) {
+    const match = body.match(re);
+    const raw = match?.[1];
+    if (!raw) continue;
+    const n = Number.parseFloat(raw.replace(/,/g, ""));
+    if (Number.isFinite(n) && n > 0) return Math.round(n * 100);
+  }
+  return null;
+}
+
+function extractPayee(body: string): string | null {
+  const patterns = [
+    /\bto\s+(.+?)\s+on\s+\d{1,2}[-/]\d{1,2}[-/]\d{2,4}\b/i,
+    /\bto\s+(.+?)\s*(?:\.|,)?\s*(?:upi\s+ref|ref(?:erence)?\b)/i,
+    /\bat\s+(.+?)\s*(?:\.|,)?\s*(?:upi\s+ref|ref(?:erence)?\b|on\s+\d{1,2}[-/]\d{1,2}[-/]\d{2,4}\b|$)/i,
+    /\bfrom\s+(.+?)\s+on\s+\d{1,2}[-/]\d{1,2}[-/]\d{2,4}\b/i,
+  ];
+  for (const re of patterns) {
+    const match = body.match(re);
+    const cleaned = cleanPayee(match?.[1]);
+    if (cleaned) return cleaned;
+  }
+  return null;
+}
+
+function cleanPayee(raw: string | undefined): string | null {
+  if (!raw) return null;
+  const cleaned = raw
+    .replace(/\b(?:UPI|NEFT|IMPS|RTGS)\b\s*$/i, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/[.,;:-]+$/g, "")
+    .trim();
+  if (!cleaned) return null;
+  if (/^(?:kotak|hdfc|axis|icici|sbi|yes|idfc|bank|a\/?c|ac)\b/i.test(cleaned)) {
+    return null;
+  }
+  return cleaned.slice(0, 120);
+}
+
+function extractAccountHint(body: string, sender: string): string | null {
+  const account = body.match(/\b(?:a\/c|ac|account|card)\s*(?:no\.?)?\s*(?:x+|xx|ending\s*)?([0-9]{3,6})\b/i);
+  const bank =
+    body.match(/\b(Kotak|HDFC|Axis|ICICI|SBI|Yes|IDFC|Federal|IndusInd|Canara|PNB)\b/i)?.[1] ??
+    sender.match(/-?([A-Z]{3,8})/i)?.[1];
+  if (!account && !bank) return null;
+  const suffix = account?.[1];
+  return [bank ? titleCase(bank) : null, suffix ? `AC X${suffix}` : null]
+    .filter(Boolean)
+    .join(" ");
+}
+
+function extractSmsDate(body: string): string | null {
+  const match = body.match(/\b(\d{1,2})[-/](\d{1,2})[-/](\d{2,4})\b/);
+  const [, rawDay, rawMonth, rawYear] = match ?? [];
+  if (!rawDay || !rawMonth || !rawYear) return null;
+  const day = Number.parseInt(rawDay, 10);
+  const month = Number.parseInt(rawMonth, 10);
+  let year = Number.parseInt(rawYear, 10);
+  if (year < 100) year += 2000;
+  if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+  return `${year.toString().padStart(4, "0")}-${month.toString().padStart(2, "0")}-${day.toString().padStart(2, "0")}`;
+}
+
+function extractBankRef(body: string): string | null {
+  const match = body.match(/\b(?:UPI\s+Ref|UPI\s+Reference|Ref(?:erence)?(?:\s+No\.?)?)\s*[:#-]?\s*([A-Z0-9]{6,})\b/i);
+  return match?.[1] ?? null;
+}
+
+function titleCase(s: string): string {
+  const lower = s.toLowerCase();
+  return lower.charAt(0).toUpperCase() + lower.slice(1);
 }
 
 function formatNamedRows(rows: { name: string }[] | undefined): string {

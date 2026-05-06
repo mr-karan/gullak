@@ -2,6 +2,17 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+SnackBar errorSnackBar(BuildContext context, String message) {
+  final cs = Theme.of(context).colorScheme;
+  return SnackBar(
+    backgroundColor: cs.errorContainer,
+    content: Text(
+      message,
+      style: TextStyle(color: cs.onErrorContainer, fontWeight: FontWeight.w600),
+    ),
+  );
+}
+
 /// Shows a snackbar and force-closes it after [duration].
 ///
 /// Two failure modes this guards against:

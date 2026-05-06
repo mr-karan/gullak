@@ -9,10 +9,13 @@ import 'package:share_plus/share_plus.dart';
 import '../../core/build_info.dart';
 import '../../core/notification_service.dart';
 import '../../core/snackbars.dart';
+import '../../data/ai/pi_ai_client.dart';
+import '../../data/sms/llm_sms_parser.dart';
 import '../../data/sms/sms_pipeline.dart';
 import '../../data/sms/sms_reader.dart';
 import '../../state/providers.dart';
 import '../../sync/sync_service.dart';
+import '../../sync/sync_status.dart';
 import '../backup/backup_service.dart';
 import '../backup/file_pick.dart';
 
@@ -236,22 +239,19 @@ class SettingsScreen extends ConsumerWidget {
   /// and per-message dedupe locking past parser failures into
   /// permanent `status='error'` rows.
   void _rescanSms(BuildContext context, WidgetRef ref) {
-    final db = ref.read(dbProvider);
     final messenger = ScaffoldMessenger.of(context);
     unawaited(() async {
-      // The cache is dead code as of the registry cleanup but old
-      // installs still have rows; clear it so anyone who upgrades in
-      // place sees the same behaviour as a fresh install.
-      await db.customStatement('DELETE FROM sms_parse_cache');
       // Keep the Inbox ('inbox') and accepted history ('accepted'); drop
-      // anything else so dedupe doesn't lock past parser failures into
-      // permanent `error`/`none` rows.
-      await db.customStatement(
-        // ignore: prefer_single_quotes
-        "DELETE FROM sms_messages WHERE candidate_status IN "
-        "('error', 'none', 'duplicate', 'dismissed')",
+      // retryable rows across the historical window so dedupe doesn't lock
+      // past parser failures into permanent `error`/`none` rows.
+      final added = await ref
+          .read(smsPipelineProvider)
+          .retryFailedBackfill(window: const Duration(days: 90));
+      if (!context.mounted) return;
+      showTimedSnackBar(
+        messenger,
+        SnackBar(content: Text('SMS re-scan complete — $added new.')),
       );
-      await ref.read(smsPipelineProvider).backfill();
     }());
     showTimedSnackBar(
       messenger,
@@ -283,8 +283,17 @@ class SettingsScreen extends ConsumerWidget {
       // the LLM serially, which can take minutes. Awaiting it here
       // freezes the toggle and makes the Inbox look broken. The
       // pipeline writes rows incrementally and the Inbox StreamProvider
-      // picks them up as they land.
-      unawaited(pipeline.backfill());
+      // picks them up as they land. The trailing .then() tees up a
+      // snackbar with the final count once it finishes.
+      unawaited(
+        pipeline.catchUpRecent(showProgress: true).then((added) {
+          if (!context.mounted) return;
+          showTimedSnackBar(
+            ScaffoldMessenger.of(context),
+            SnackBar(content: Text('SMS scan complete — $added new.')),
+          );
+        }),
+      );
       if (!context.mounted) return;
       showTimedSnackBar(
         ScaffoldMessenger.of(context),
@@ -530,6 +539,8 @@ class SettingsScreen extends ConsumerWidget {
           baseUrl: base.text.trim().isEmpty ? null : base.text.trim(),
           apiKey: key.text.trim().isEmpty ? null : key.text.trim(),
         );
+        ref.invalidate(piAiClientProvider);
+        ref.invalidate(llmSmsParserProvider);
       }
     } finally {
       base.dispose();
@@ -559,15 +570,17 @@ class SettingsScreen extends ConsumerWidget {
           apiKey: apiKey.trim().isEmpty ? null : apiKey.trim(),
         );
     if (!context.mounted) return;
+    final syncStatus = ref.read(syncStatusProvider.notifier);
+    if (result.ok) {
+      syncStatus.online();
+    } else {
+      syncStatus.offline(result.message);
+    }
     showTimedSnackBar(
       messenger,
-      SnackBar(
-        content: Text(
-          result.ok
-              ? 'Reachable: ${result.message}'
-              : 'Failed: ${result.message}',
-        ),
-      ),
+      result.ok
+          ? SnackBar(content: Text('Reachable: ${result.message}'))
+          : errorSnackBar(context, 'Failed: ${result.message}'),
     );
   }
 
@@ -576,10 +589,21 @@ class SettingsScreen extends ConsumerWidget {
     final result = await ref.read(syncServiceProvider).syncOnce();
     if (!context.mounted) return;
     bumpPrefs(ref);
+    final syncStatus = ref.read(syncStatusProvider.notifier);
+    if (result.error == null) {
+      syncStatus.online();
+    } else {
+      syncStatus.offline(result.error!);
+    }
     final msg = result.error != null
         ? 'Sync failed: ${result.error}'
         : 'Pushed ${result.pushed}, pulled ${result.pulled}';
-    showTimedSnackBar(messenger, SnackBar(content: Text(msg)));
+    showTimedSnackBar(
+      messenger,
+      result.error == null
+          ? SnackBar(content: Text(msg))
+          : errorSnackBar(context, msg),
+    );
   }
 }
 

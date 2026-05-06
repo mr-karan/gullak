@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/network_errors.dart';
 import '../../core/secure_store.dart';
 import '../../state/providers.dart';
 
@@ -12,26 +13,53 @@ import '../../state/providers.dart';
 /// inputs and reads back JSON. If the user hasn't configured a sync
 /// server, [PiAiClient.fromSecure] returns null and any caller must
 /// surface that as "AI features need the sync server first".
+///
+/// The apiKey parameter is a fallback for tests and statically-
+/// configured clients. In production, pass [store] instead — the key
+/// is read fresh from SecureStore before every request, so changing
+/// the sync server in Settings takes effect immediately without
+/// needing a provider-level invalidation race to resolve first.
 class PiAiClient {
-  PiAiClient({required this.baseUrl, this.apiKey, Dio? dio})
-    : _dio = dio ?? Dio();
+  PiAiClient({required this.baseUrl, this.apiKey, SecureStore? store, Dio? dio})
+    : _store = store,
+      _dio = dio ?? Dio();
 
   final String baseUrl;
+
+  /// Static fallback key (tests, legacy). Prefer [store] in production.
   final String? apiKey;
+
+  final SecureStore? _store;
   final Dio _dio;
 
   static Future<PiAiClient?> fromSecure(SecureStore store) async {
     final base = (await store.readSyncBaseUrl())?.trim();
     if (base == null || base.isEmpty) return null;
-    final key = (await store.readSyncApiKey())?.trim();
-    return PiAiClient(baseUrl: base, apiKey: key?.isEmpty ?? true ? null : key);
+    return PiAiClient(baseUrl: base, store: store);
   }
 
-  Map<String, dynamic> get _headers => {
-    'content-type': 'application/json',
-    'accept': 'application/json',
-    if (apiKey != null) 'x-api-key': apiKey,
-  };
+  /// Resolve the active API key. Reads from SecureStore when
+  /// available so the key is always current — no stale caches.
+  Future<String?> _resolveApiKey() async {
+    if (_store != null) {
+      final key = (await _store.readSyncApiKey())?.trim();
+      if (key != null && key.isNotEmpty) return key;
+    }
+    final fallback = apiKey?.trim();
+    if (fallback != null && fallback.isNotEmpty) return fallback;
+    return null;
+  }
+
+  Future<Map<String, String>> _buildHeaders() async {
+    final key = await _resolveApiKey();
+    final headers = {
+      'content-type': 'application/json',
+      'accept': 'application/json',
+      'connection': 'close',
+    };
+    if (key != null) headers['x-api-key'] = key;
+    return headers;
+  }
 
   String _url(String path) {
     final base = baseUrl.endsWith('/')
@@ -49,10 +77,11 @@ class PiAiClient {
       _url(path),
       data: jsonEncode(body),
       options: Options(
-        headers: _headers,
+        headers: await _buildHeaders(),
         responseType: ResponseType.json,
+        connectTimeout: const Duration(seconds: 5),
         sendTimeout: const Duration(seconds: 10),
-        receiveTimeout: const Duration(seconds: 30),
+        receiveTimeout: const Duration(seconds: 20),
       ),
     );
     final data = r.data;
@@ -78,7 +107,7 @@ class PiAiClient {
       });
       return SmsParseResponse.fromJson(json);
     } on DioException catch (e) {
-      throw PiAiException('sms parse failed: ${e.message ?? e.type.name}');
+      throw PiAiException('sms parse failed: ${networkErrorMessage(e)}');
     }
   }
 
@@ -109,7 +138,7 @@ class PiAiClient {
       return QuickEntryResponse.fromJson(json);
     } on DioException catch (e) {
       throw PiAiException(
-        'quick-entry parse failed: ${e.message ?? e.type.name}',
+        'quick-entry parse failed: ${networkErrorMessage(e)}',
       );
     }
   }
@@ -130,7 +159,7 @@ class PiAiClient {
       });
       return (json['id'] as num?)?.toInt();
     } on DioException catch (e) {
-      throw PiAiException('feedback send failed: ${e.message ?? e.type.name}');
+      throw PiAiException('feedback send failed: ${networkErrorMessage(e)}');
     }
   }
 }

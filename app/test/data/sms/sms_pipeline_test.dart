@@ -53,9 +53,12 @@ void main() {
         db: db,
         reader: reader,
         parserRegistry: registry,
-        notifyInboxCandidate: ({required amountCents, required payee}) async {
-          notifications.add(_NotificationCall(amountCents, payee));
-        },
+        notifyInboxCandidate:
+            ({required amountCents, required payee, notificationId}) async {
+              notifications.add(
+                _NotificationCall(amountCents, payee, notificationId),
+              );
+            },
       );
 
       final added = await pipeline.backfill();
@@ -70,6 +73,7 @@ void main() {
       expect(notifications, hasLength(1));
       expect(notifications.single.amountCents, 45000);
       expect(notifications.single.payee, 'BLINKIT');
+      expect(notifications.single.notificationId, isNot(1001));
     },
   );
 
@@ -88,9 +92,12 @@ void main() {
         db: db,
         reader: reader,
         parserRegistry: registry,
-        notifyInboxCandidate: ({required amountCents, required payee}) async {
-          notifications.add(_NotificationCall(amountCents, payee));
-        },
+        notifyInboxCandidate:
+            ({required amountCents, required payee, notificationId}) async {
+              notifications.add(
+                _NotificationCall(amountCents, payee, notificationId),
+              );
+            },
       );
 
       final added = await pipeline.backfill();
@@ -196,8 +203,9 @@ class _FakeSmsReader implements SmsReader {
 }
 
 class _NotificationCall {
-  const _NotificationCall(this.amountCents, this.payee);
+  const _NotificationCall(this.amountCents, this.payee, this.notificationId);
 
   final int amountCents;
   final String? payee;
+  final int? notificationId;
 }

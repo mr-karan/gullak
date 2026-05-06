@@ -20,6 +20,17 @@ class InboxScreen extends ConsumerStatefulWidget {
 
 class _InboxScreenState extends ConsumerState<InboxScreen> {
   bool _showIgnored = false;
+  bool _scanning = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (!ref.read(prefsProvider).smsEnabled) return;
+      ref.read(smsPipelineProvider).startListening();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -27,9 +38,34 @@ class _InboxScreenState extends ConsumerState<InboxScreen> {
         ? ref.watch(ignoredInboxItemsProvider)
         : ref.watch(inboxItemsProvider);
     final prefs = watchPrefs(ref);
+    final pipeline = ref.watch(smsPipelineProvider);
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Inbox'),
+        title: ValueListenableBuilder<SmsScanState>(
+          valueListenable: pipeline.scanState,
+          builder: (context, scan, _) {
+            final count = asyncRows.maybeWhen(
+              data: (r) => r.length,
+              orElse: () => 0,
+            );
+            if (!scan.running) return const Text('Inbox');
+            return Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const SizedBox(
+                  width: 14,
+                  height: 14,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  'Inbox — $count items',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+              ],
+            );
+          },
+        ),
         actions: [
           IconButton(
             tooltip: _showIgnored
@@ -50,6 +86,19 @@ class _InboxScreenState extends ConsumerState<InboxScreen> {
           if (!_showIgnored)
             asyncRows.maybeWhen(
               data: (rows) {
+                final failed = rows.where((r) => r.status == 'error').length;
+                if (failed > 0) {
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: TextButton.icon(
+                      onPressed: _scanning
+                          ? null
+                          : () => _retryFailedSms(context, ref, failed),
+                      icon: const Icon(Icons.replay_outlined, size: 18),
+                      label: Text('Retry + rescan ($failed)'),
+                    ),
+                  );
+                }
                 final ready = rows.where((r) => r.hasCandidate).length;
                 if (ready == 0) return const SizedBox.shrink();
                 return Padding(
@@ -65,42 +114,54 @@ class _InboxScreenState extends ConsumerState<InboxScreen> {
             ),
         ],
       ),
-      body: asyncRows.when(
-        data: (rows) {
-          if (rows.isEmpty) {
-            return EmptyState(
-              icon: _showIgnored
-                  ? Icons.layers_clear_outlined
-                  : Icons.inbox_outlined,
-              title: _showIgnored ? 'No ignored SMS' : 'All caught up',
-              body: _showIgnored
-                  ? 'OTPs, marketing, and other non-transactional messages '
-                        'will show here. Tap one to log it as a transaction '
-                        'manually if the classifier got it wrong.'
-                  : 'New bank SMS that look like transactions will land '
-                        'here for review.',
-            );
-          }
-          return ListView.separated(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-            itemCount: rows.length,
-            separatorBuilder: (_, _) => const SizedBox(height: 12),
-            itemBuilder: (_, i) => _InboxRow(
-              item: rows[i],
-              symbol: prefs.currencySymbol,
-              minorDigits: prefs.currencyMinorDigits,
-              isIgnoredView: _showIgnored,
+      body: Column(
+        children: [
+          ValueListenableBuilder<SmsScanState>(
+            valueListenable: pipeline.scanState,
+            builder: (context, scan, _) => _SmsScanBanner(scan: scan),
+          ),
+          Expanded(
+            child: asyncRows.when(
+              data: (rows) {
+                if (rows.isEmpty) {
+                  return EmptyState(
+                    icon: _showIgnored
+                        ? Icons.layers_clear_outlined
+                        : Icons.inbox_outlined,
+                    title: _showIgnored ? 'No ignored SMS' : 'All caught up',
+                    body: _showIgnored
+                        ? 'OTPs, marketing, and other non-transactional messages '
+                              'will show here. Tap one to log it as a transaction '
+                              'manually if the classifier got it wrong.'
+                        : 'New bank SMS that look like transactions will land '
+                              'here for review.',
+                  );
+                }
+                return ListView.separated(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+                  itemCount: rows.length,
+                  separatorBuilder: (_, _) => const SizedBox(height: 12),
+                  itemBuilder: (_, i) => _InboxRow(
+                    item: rows[i],
+                    symbol: prefs.currencySymbol,
+                    minorDigits: prefs.currencyMinorDigits,
+                    isIgnoredView: _showIgnored,
+                  ),
+                );
+              },
+              loading: () => const Center(child: CircularProgressIndicator()),
+              error: (e, _) => Center(child: Text('Error: $e')),
             ),
-          );
-        },
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('Error: $e')),
+          ),
+        ],
       ),
     );
   }
 
   void _refreshSms(BuildContext context, WidgetRef ref) {
+    if (_scanning) return;
     final messenger = ScaffoldMessenger.of(context);
+    setState(() => _scanning = true);
     showTimedSnackBar(
       messenger,
       const SnackBar(content: Text('Scanning SMS inbox…')),
@@ -110,15 +171,49 @@ class _InboxScreenState extends ConsumerState<InboxScreen> {
         .read(smsPipelineProvider)
         .retryFailedBackfill()
         .then((added) {
+          if (!mounted) return;
+          setState(() => _scanning = false);
           showTimedSnackBar(
             messenger,
             SnackBar(content: Text('SMS refresh complete — $added new.')),
           );
         })
         .catchError((Object e) {
+          if (!mounted || !context.mounted) return;
+          setState(() => _scanning = false);
           showTimedSnackBar(
             messenger,
-            SnackBar(content: Text('SMS refresh failed: $e')),
+            errorSnackBar(context, 'SMS refresh failed: $e'),
+          );
+        });
+  }
+
+  void _retryFailedSms(BuildContext context, WidgetRef ref, int count) {
+    if (_scanning) return;
+    final messenger = ScaffoldMessenger.of(context);
+    setState(() => _scanning = true);
+    showTimedSnackBar(
+      messenger,
+      const SnackBar(content: Text('Retrying failed SMS and rescanning…')),
+      duration: const Duration(seconds: 2),
+    );
+    ref
+        .read(smsPipelineProvider)
+        .retryFailuresAndRescan()
+        .then((added) {
+          if (!mounted) return;
+          setState(() => _scanning = false);
+          showTimedSnackBar(
+            messenger,
+            SnackBar(content: Text('Retry complete — $added new.')),
+          );
+        })
+        .catchError((Object e) {
+          if (!mounted || !context.mounted) return;
+          setState(() => _scanning = false);
+          showTimedSnackBar(
+            messenger,
+            errorSnackBar(context, 'Retry failed: $e'),
           );
         });
   }
@@ -169,6 +264,52 @@ class _InboxScreenState extends ConsumerState<InboxScreen> {
         SnackBar(content: Text('Confirm all failed: $e')),
       );
     }
+  }
+}
+
+class _SmsScanBanner extends StatelessWidget {
+  const _SmsScanBanner({required this.scan});
+
+  final SmsScanState scan;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!scan.running) return const SizedBox.shrink();
+    final cs = Theme.of(context).colorScheme;
+    return Material(
+      color: cs.surfaceContainerHigh,
+      child: SafeArea(
+        top: false,
+        bottom: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            LinearProgressIndicator(value: scan.progress),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+              child: Row(
+                children: [
+                  const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      scan.message,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: cs.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 
@@ -335,7 +476,8 @@ class _InboxRow extends ConsumerWidget {
 
   static String _ignoredReason(String status) => switch (status) {
     'none' => 'Ignored — classifier marked as non-transactional.',
-    'duplicate' => 'Ignored — looked like a duplicate of an existing transaction.',
+    'duplicate' =>
+      'Ignored — looked like a duplicate of an existing transaction.',
     'dismissed' => 'Dismissed by you.',
     _ => 'Ignored.',
   };
@@ -447,9 +589,7 @@ class _ParseDebugDialogState extends ConsumerState<_ParseDebugDialog> {
           label: Text(_sending ? 'Sending…' : 'Send feedback'),
         ),
         TextButton(
-          onPressed: _sending
-              ? null
-              : () => Navigator.of(context).maybePop(),
+          onPressed: _sending ? null : () => Navigator.of(context).maybePop(),
           child: const Text('Close'),
         ),
       ],
@@ -469,18 +609,20 @@ class _ParseDebugDialogState extends ConsumerState<_ParseDebugDialog> {
           'Sync server is not configured. Settings → Sync server.',
         );
       }
-      final id = await client.sendFeedback(
-        kind: 'sms_parse_failure',
-        message: 'SMS parser produced no candidate for a transactional row',
-        payload: {
-          'smsRowId': widget.item.id,
-          'status': widget.item.status,
-          'sender': widget.item.address,
-          'body': widget.item.body,
-          'receivedAt': widget.item.receivedAt,
-          'sentAt': DateTime.now().toIso8601String(),
-        },
-      );
+      final id = await client
+          .sendFeedback(
+            kind: 'sms_parse_failure',
+            message: 'SMS parser produced no candidate for a transactional row',
+            payload: {
+              'smsRowId': widget.item.id,
+              'status': widget.item.status,
+              'sender': widget.item.address,
+              'body': widget.item.body,
+              'receivedAt': widget.item.receivedAt,
+              'sentAt': DateTime.now().toIso8601String(),
+            },
+          )
+          .timeout(const Duration(seconds: 15));
       if (!mounted) return;
       setState(() {
         _sending = false;
@@ -489,11 +631,16 @@ class _ParseDebugDialogState extends ConsumerState<_ParseDebugDialog> {
       });
     } catch (e) {
       if (!mounted) return;
+      final message = e is PiAiException ? e.message : '$e';
       setState(() {
         _sending = false;
         _success = false;
-        _result = 'Failed: $e';
+        _result = 'Failed: $message';
       });
+      showTimedSnackBar(
+        ScaffoldMessenger.of(context),
+        errorSnackBar(context, message),
+      );
     }
   }
 }

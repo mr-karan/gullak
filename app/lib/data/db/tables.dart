@@ -83,6 +83,9 @@ class Transactions extends Table {
   IntColumn get amountCents => integer()();
   TextColumn get date => text()(); // YYYY-MM-DD
   TextColumn get notes => text().nullable()();
+  RealColumn get latitude => real().nullable()();
+  RealColumn get longitude => real().nullable()();
+  TextColumn get locationName => text().nullable()();
   BoolColumn get cleared => boolean().withDefault(const Constant(false))();
   TextColumn get origin => text().withDefault(const Constant('manual'))();
   TextColumn get originRef => text().nullable()();
@@ -96,6 +99,30 @@ class Transactions extends Table {
   IntColumn get splitTotalCents => integer().nullable()();
 
   IntColumn get createdAt => integer()();
+  IntColumn get updatedAt => integer()();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
+@DataClassName('TagRow')
+class Tags extends Table {
+  TextColumn get id => text()();
+  TextColumn get name => text()();
+  IntColumn get color => integer().nullable()();
+  BoolColumn get archived => boolean().withDefault(const Constant(false))();
+  IntColumn get createdAt => integer()();
+  IntColumn get updatedAt => integer()();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
+@DataClassName('TransactionTagRow')
+class TransactionTags extends Table {
+  TextColumn get id => text()();
+  TextColumn get transactionId => text()();
+  TextColumn get tagId => text()();
   IntColumn get updatedAt => integer()();
 
   @override

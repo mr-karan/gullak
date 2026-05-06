@@ -50,6 +50,34 @@ class SmsRepository {
 
   AppDatabase get _db => ref.read(dbProvider);
 
+  // Pre-loaded enrichment data. Warmed once per stream life so
+  // _enrichRows stays cheap — no DB queries on every watch event.
+  List<AccountRow>? _accounts;
+  List<CategoryRow>? _categories;
+  List<PayeeRow>? _payees;
+  Map<String, dynamic>? _payeeCategoryHints;
+
+  Future<void> _warmCache() async {
+    if (_accounts != null) return;
+    _accounts = await ref.read(accountRepoProvider).list();
+    _categories = await ref.read(categoryRepoProvider).list();
+    _payees = await ref.read(payeeRepoProvider).list();
+    try {
+      _payeeCategoryHints =
+          jsonDecode(ref.read(prefsProvider).payeeCategoryHints)
+              as Map<String, dynamic>;
+    } catch (_) {
+      _payeeCategoryHints = const {};
+    }
+  }
+
+  void invalidateCache() {
+    _accounts = null;
+    _categories = null;
+    _payees = null;
+    _payeeCategoryHints = null;
+  }
+
   /// Pending review: classifier-positive SMS that either parsed into a
   /// candidate (status='inbox') or that the parser couldn't structure
   /// (status='error'). The latter still belongs in the user's view —
@@ -67,12 +95,31 @@ class SmsRepository {
   static const _ignoredStatuses = ['none', 'duplicate', 'dismissed'];
 
   Future<List<InboxItem>> listInbox() async {
+    await _warmCache();
     final rows =
         await (_db.select(_db.smsMessages)
               ..where((t) => t.candidateStatus.isIn(_pendingStatuses))
               ..orderBy([(t) => OrderingTerm.desc(t.receivedAt)]))
             .get();
-    return _enrichRows(rows);
+    return _enrichSynced(rows);
+  }
+
+  /// Synchronous enrichment — assumes [_warmCache] has already run.
+  /// Called from the watch streams after the first event so
+  /// progressive updates are fast (no DB queries per event).
+  List<InboxItem> _enrichSynced(List<SmsRow> rows) {
+    if (rows.isEmpty) return const [];
+    return rows
+        .map(
+          (r) => _mapRow(
+            r,
+            _accounts!,
+            _categories!,
+            _payees!,
+            _payeeCategoryHints!,
+          ),
+        )
+        .toList();
   }
 
   /// Reactive inbox: emits a fresh list whenever [SmsMessages] changes.
@@ -82,7 +129,16 @@ class SmsRepository {
     final query = _db.select(_db.smsMessages)
       ..where((t) => t.candidateStatus.isIn(_pendingStatuses))
       ..orderBy([(t) => OrderingTerm.desc(t.receivedAt)]);
-    return query.watch().asyncMap(_enrichRows);
+    // Pre-warm the enrichment cache on the very first watch event so
+    // the body of the stream is a synchronous map thereafter.
+    var warmed = false;
+    return query.watch().asyncExpand((rows) async* {
+      if (!warmed) {
+        await _warmCache();
+        warmed = true;
+      }
+      yield _enrichSynced(rows);
+    });
   }
 
   /// Reactive feed of SMS the pipeline classified as non-transactional,
@@ -94,7 +150,14 @@ class SmsRepository {
       ..where((t) => t.candidateStatus.isIn(_ignoredStatuses))
       ..orderBy([(t) => OrderingTerm.desc(t.receivedAt)])
       ..limit(200);
-    return query.watch().asyncMap(_enrichRows);
+    var warmed = false;
+    return query.watch().asyncExpand((rows) async* {
+      if (!warmed) {
+        await _warmCache();
+        warmed = true;
+      }
+      yield _enrichSynced(rows);
+    });
   }
 
   /// Force a row back into the pending Inbox bucket, e.g. when the
@@ -105,25 +168,6 @@ class SmsRepository {
     await (_db.update(_db.smsMessages)..where((t) => t.id.equals(id))).write(
       const SmsMessagesCompanion(candidateStatus: Value('inbox')),
     );
-  }
-
-  Future<List<InboxItem>> _enrichRows(List<SmsRow> rows) async {
-    if (rows.isEmpty) return const [];
-    final accounts = await ref.read(accountRepoProvider).list();
-    final categories = await ref.read(categoryRepoProvider).list();
-    final payees = await ref.read(payeeRepoProvider).list();
-    Map<String, dynamic> categoryHintsByPayeeId = const {};
-    try {
-      categoryHintsByPayeeId =
-          jsonDecode(ref.read(prefsProvider).payeeCategoryHints)
-              as Map<String, dynamic>;
-    } catch (_) {}
-    return rows
-        .map(
-          (r) =>
-              _mapRow(r, accounts, categories, payees, categoryHintsByPayeeId),
-        )
-        .toList();
   }
 
   InboxItem _mapRow(

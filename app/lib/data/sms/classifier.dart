@@ -44,7 +44,12 @@ class SmsClassifier {
   );
 
   static final _marketingPattern = RegExp(
-    r'\b(loan offer|emi offer|win|congratulations|claim|prize|exciting offer|cashback offer)\b',
+    r'\b(loan offer|emi offer|win|congratulations|claim|prize|exciting offer|cashback offer|welcome to .*postpaid|unlimited data|all-new .* plan)\b',
+    caseSensitive: false,
+  );
+
+  static final _statementPattern = RegExp(
+    r'\b(statement|bill|minimum amount due|min(?:imum)? due|total amount due)\b',
     caseSensitive: false,
   );
 
@@ -63,6 +68,9 @@ class SmsClassifier {
       return SmsClassification.nonTransactional;
     }
     if (_marketingPattern.hasMatch(sms.body)) {
+      return SmsClassification.nonTransactional;
+    }
+    if (_statementPattern.hasMatch(sms.body)) {
       return SmsClassification.nonTransactional;
     }
     final senderUpper = sms.address.toUpperCase();

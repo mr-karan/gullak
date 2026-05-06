@@ -20,6 +20,8 @@ part 'database.g.dart';
     Categories,
     Payees,
     Transactions,
+    Tags,
+    TransactionTags,
     Budgets,
     Recurrences,
     SmsMessages,
@@ -34,7 +36,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 4;
+  int get schemaVersion => 5;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -55,6 +57,18 @@ class AppDatabase extends _$AppDatabase {
       await customStatement(
         'CREATE UNIQUE INDEX IF NOT EXISTS idx_budget_cat_month '
         'ON budgets(category_id, month)',
+      );
+      await customStatement(
+        'CREATE UNIQUE INDEX IF NOT EXISTS idx_tag_name '
+        'ON tags(name)',
+      );
+      await customStatement(
+        'CREATE UNIQUE INDEX IF NOT EXISTS idx_transaction_tag_pair '
+        'ON transaction_tags(transaction_id, tag_id)',
+      );
+      await customStatement(
+        'CREATE INDEX IF NOT EXISTS idx_transaction_tag_tag '
+        'ON transaction_tags(tag_id)',
       );
       await customStatement(
         'CREATE INDEX IF NOT EXISTS idx_sms_status '
@@ -89,6 +103,25 @@ class AppDatabase extends _$AppDatabase {
         // regex parsers are gone; this table amortises the LLM cost
         // by collapsing same-format SMS to one cache entry.
         await m.createTable(smsParseCache);
+      }
+      if (from < 5) {
+        await m.addColumn(transactions, transactions.latitude);
+        await m.addColumn(transactions, transactions.longitude);
+        await m.addColumn(transactions, transactions.locationName);
+        await m.createTable(tags);
+        await m.createTable(transactionTags);
+        await customStatement(
+          'CREATE UNIQUE INDEX IF NOT EXISTS idx_tag_name '
+          'ON tags(name)',
+        );
+        await customStatement(
+          'CREATE UNIQUE INDEX IF NOT EXISTS idx_transaction_tag_pair '
+          'ON transaction_tags(transaction_id, tag_id)',
+        );
+        await customStatement(
+          'CREATE INDEX IF NOT EXISTS idx_transaction_tag_tag '
+          'ON transaction_tags(tag_id)',
+        );
       }
     },
   );

@@ -12,7 +12,9 @@ import {
   changeLog,
   payees,
   recurrences,
+  tags,
   transactions,
+  transactionTags,
 } from "../db/schema.ts";
 import { recordChange } from "../repos/changelog.ts";
 
@@ -65,6 +67,8 @@ type Resource =
   | "categories"
   | "payees"
   | "transactions"
+  | "tags"
+  | "transaction_tags"
   | "budgets"
   | "recurrences";
 
@@ -133,6 +137,30 @@ const APPLIERS: Record<
     },
     remove: (tx, id) => {
       tx.delete(transactions).where(eq(transactions.id, id)).run();
+    },
+  },
+  tags: {
+    upsert: (tx, payload) => {
+      const row = payload as typeof tags.$inferInsert;
+      tx.insert(tags).values(row).onConflictDoUpdate({
+        target: tags.id,
+        set: row,
+      }).run();
+    },
+    remove: (tx, id) => {
+      tx.delete(tags).where(eq(tags.id, id)).run();
+    },
+  },
+  transaction_tags: {
+    upsert: (tx, payload) => {
+      const row = payload as typeof transactionTags.$inferInsert;
+      tx.insert(transactionTags).values(row).onConflictDoUpdate({
+        target: transactionTags.id,
+        set: row,
+      }).run();
+    },
+    remove: (tx, id) => {
+      tx.delete(transactionTags).where(eq(transactionTags.id, id)).run();
     },
   },
   budgets: {

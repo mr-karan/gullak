@@ -4,16 +4,18 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/logger.dart';
 import 'sync_service.dart';
+import 'sync_status.dart';
 
 /// Debounces local mutations into a single sync round-trip and runs
 /// sync immediately when the app comes back to the foreground. The
 /// in-flight guard means rapid-fire mutations can't fan out into
 /// overlapping push/pull cycles.
 class SyncScheduler {
-  SyncScheduler(this._sync, {Duration? debounce})
+  SyncScheduler(this._sync, this._status, {Duration? debounce})
     : _debounce = debounce ?? const Duration(seconds: 5);
 
   final SyncService _sync;
+  final SyncStatusController _status;
   final Duration _debounce;
   Timer? _timer;
   bool _running = false;
@@ -57,6 +59,9 @@ class SyncScheduler {
       final result = await _sync.syncOnce();
       if (result.error != null) {
         log.w('auto-sync failed: ${result.error}');
+        _status.offline(result.error!);
+      } else {
+        _status.online();
       }
     } finally {
       _running = false;
@@ -73,7 +78,10 @@ class SyncScheduler {
 final Provider<SyncScheduler> syncSchedulerProvider = Provider<SyncScheduler>((
   ref,
 ) {
-  final scheduler = SyncScheduler(ref.read(syncServiceProvider));
+  final scheduler = SyncScheduler(
+    ref.read(syncServiceProvider),
+    ref.read(syncStatusProvider.notifier),
+  );
   ref.onDispose(scheduler.dispose);
   return scheduler;
 });

@@ -53,7 +53,12 @@ class _GullakAppState extends ConsumerState<GullakApp> {
     // about while we were backgrounded (wife's iPhone logged
     // expenses, WhatsApp messages came through, etc.).
     _lifecycle = AppLifecycleListener(
-      onResume: () => ref.read(syncSchedulerProvider).runNow(),
+      onResume: () {
+        ref.read(syncSchedulerProvider).runNow();
+        if (ref.read(prefsProvider).smsEnabled) {
+          unawaited(ref.read(smsPipelineProvider).catchUpRecent());
+        }
+      },
     );
     // If the user already enabled SMS in a previous session, the
     // listener has to be re-armed each launch — the pref persists
@@ -64,9 +69,9 @@ class _GullakAppState extends ConsumerState<GullakApp> {
         final pipeline = ref.read(smsPipelineProvider);
         pipeline.startListening();
         // The platform SMS background callback is best-effort on modern
-        // Android. On launch, also sweep the inbox so messages received while
-        // Gullak was killed still get deduped + parsed automatically.
-        unawaited(pipeline.backfill());
+        // Android. On launch, sweep only recent SMS so new rows land quickly
+        // without walking the full historical inbox.
+        unawaited(pipeline.catchUpRecent());
       }
     });
   }

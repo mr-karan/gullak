@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:drift/drift.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/logger.dart';
@@ -14,6 +15,37 @@ import 'classifier.dart';
 import 'parser_registry.dart';
 import 'sms_models.dart';
 import 'sms_reader.dart';
+
+class SmsScanState {
+  const SmsScanState({
+    required this.running,
+    required this.label,
+    required this.processed,
+    required this.total,
+    required this.added,
+  });
+
+  const SmsScanState.idle()
+    : running = false,
+      label = '',
+      processed = 0,
+      total = 0,
+      added = 0;
+
+  final bool running;
+  final String label;
+  final int processed;
+  final int total;
+  final int added;
+
+  double? get progress => total <= 0 ? null : processed / total;
+
+  String get message {
+    if (!running) return '';
+    if (total <= 0) return label;
+    return '$label · $processed/$total checked · $added new';
+  }
+}
 
 /// Glue: SMS reader → classifier → parser → store.
 class SmsPipeline {
@@ -34,6 +66,7 @@ class SmsPipeline {
   final Future<void> Function({
     required int amountCents,
     required String? payee,
+    int? notificationId,
   })?
   notifyInboxCandidate;
 
@@ -44,23 +77,95 @@ class SmsPipeline {
 
   StreamSubscription<IncomingSms>? _sub;
   int _generation = 0;
+  bool _scanRunning = false;
+  bool _disposed = false;
+  final ValueNotifier<SmsScanState> scanState = ValueNotifier<SmsScanState>(
+    const SmsScanState.idle(),
+  );
 
-  Future<int> backfill({Duration window = const Duration(days: 90)}) async {
+  void _updateScanState(SmsScanState state) {
+    if (!_disposed) scanState.value = state;
+  }
+
+  Future<int> backfill({
+    Duration window = const Duration(days: 90),
+    String label = 'Scanning SMS',
+    bool showProgress = true,
+  }) async {
+    if (_scanRunning) return 0;
+    _scanRunning = true;
     final generation = _generation;
-    final since = DateTime.now().subtract(window);
-    final queued = await reader.drainBackgroundQueue();
-    if (generation != _generation) return 0;
-    final messages = [
-      ...queued.where((m) => m.receivedAt.isAfter(since)),
-      ...await reader.backfill(since: since),
-    ];
-    var added = 0;
-    for (final m in messages) {
-      if (generation != _generation) break;
-      if (await _safeIngest(m, generation: generation)) added += 1;
+    try {
+      if (showProgress) {
+        _updateScanState(
+          SmsScanState(
+            running: true,
+            label: label,
+            processed: 0,
+            total: 0,
+            added: 0,
+          ),
+        );
+      }
+      final since = DateTime.now().subtract(window);
+      final queued = await reader.drainBackgroundQueue();
+      if (generation != _generation) return 0;
+      final messages = [
+        ...queued.where((m) => m.receivedAt.isAfter(since)),
+        ...await reader.backfill(since: since),
+      ];
+      var added = 0;
+      if (showProgress) {
+        _updateScanState(
+          SmsScanState(
+            running: true,
+            label: label,
+            processed: 0,
+            total: messages.length,
+            added: 0,
+          ),
+        );
+      }
+      for (var i = 0; i < messages.length; i++) {
+        if (generation != _generation) break;
+        final parsed = await _safeIngest(messages[i], generation: generation)
+            .timeout(
+              const Duration(seconds: 25),
+              onTimeout: () {
+                log.w('sms ingest timed out for ${messages[i].address}');
+                return false;
+              },
+            );
+        if (parsed) added += 1;
+        if (showProgress) {
+          _updateScanState(
+            SmsScanState(
+              running: true,
+              label: label,
+              processed: i + 1,
+              total: messages.length,
+              added: added,
+            ),
+          );
+        }
+      }
+      log.i('sms backfill ingested $added/${messages.length}');
+      return added;
+    } finally {
+      _scanRunning = false;
+      if (showProgress) _updateScanState(const SmsScanState.idle());
     }
-    log.i('sms backfill ingested $added/${messages.length}');
-    return added;
+  }
+
+  Future<int> catchUpRecent({
+    Duration window = const Duration(days: 2),
+    bool showProgress = false,
+  }) {
+    return backfill(
+      window: window,
+      label: 'Checking recent SMS',
+      showProgress: showProgress,
+    );
   }
 
   void startListening({bool drainQueued = true}) {
@@ -78,6 +183,7 @@ class SmsPipeline {
     _sub = reader.listen().listen((m) async {
       await _safeIngest(m, generation: generation);
     });
+    unawaited(catchUpRecent());
   }
 
   /// Each message is parsed independently — the LLM, the network, or
@@ -99,6 +205,13 @@ class SmsPipeline {
     _sub = null;
   }
 
+  Future<void> dispose() async {
+    _disposed = true;
+    _generation += 1;
+    await stop();
+    scanState.dispose();
+  }
+
   Future<void> clearStoredState() async {
     _generation += 1;
     await stop();
@@ -108,23 +221,59 @@ class SmsPipeline {
   }
 
   Future<int> retryFailedBackfill({
-    Duration window = const Duration(days: 90),
+    Duration window = const Duration(days: 14),
   }) async {
+    final cutoff = DateTime.now().subtract(window).millisecondsSinceEpoch;
     await db.customStatement('DELETE FROM sms_parse_cache');
     await db.customStatement(
-      "DELETE FROM sms_messages WHERE candidate_status IN ('error', 'none', 'duplicate')",
+      "DELETE FROM sms_messages WHERE candidate_status IN ('error', 'none', 'duplicate') AND received_at >= ?",
+      [cutoff],
     );
-    return backfill(window: window);
+    return backfill(window: window, label: 'Refreshing SMS');
+  }
+
+  Future<int> retryFailuresAndRescan({
+    Duration minimumWindow = const Duration(days: 90),
+  }) async {
+    final oldest =
+        await (db.select(db.smsMessages)
+              ..where((t) => t.candidateStatus.equals('error'))
+              ..orderBy([(t) => OrderingTerm.asc(t.receivedAt)])
+              ..limit(1))
+            .getSingleOrNull();
+    if (oldest == null) {
+      return retryFailedBackfill(window: minimumWindow);
+    }
+
+    final oldestAt = DateTime.fromMillisecondsSinceEpoch(oldest.receivedAt);
+    final failureWindow =
+        DateTime.now().difference(oldestAt) + const Duration(days: 1);
+    final window = failureWindow > minimumWindow
+        ? failureWindow
+        : minimumWindow;
+    final cutoff = DateTime.now().subtract(window).millisecondsSinceEpoch;
+
+    await db.customStatement('DELETE FROM sms_parse_cache');
+    await db.customStatement(
+      "DELETE FROM sms_messages WHERE candidate_status IN ('error', 'none', 'duplicate') AND received_at >= ?",
+      [cutoff],
+    );
+    return backfill(window: window, label: 'Retrying failed SMS');
   }
 
   Future<bool> _ingest(IncomingSms sms, {int? generation}) async {
     if (generation != null && generation != _generation) return false;
-    if (sms.id != null) {
-      final existing = await (db.select(
-        db.smsMessages,
-      )..where((t) => t.androidId.equals(sms.id!))).getSingleOrNull();
-      if (existing != null) return false;
-    }
+    final existingQuery = db.select(db.smsMessages)
+      ..where(
+        (t) =>
+            (sms.id == null
+                ? const Constant(false)
+                : t.androidId.equals(sms.id!)) |
+            (t.address.equals(sms.address) &
+                t.body.equals(sms.body) &
+                t.receivedAt.equals(sms.receivedAt.millisecondsSinceEpoch)),
+      );
+    if (await existingQuery.getSingleOrNull() != null) return false;
     final cls = SmsClassifier.classify(sms);
     if (cls == SmsClassification.nonTransactional) {
       await db
@@ -138,6 +287,11 @@ class SmsPipeline {
               classifiedAs: const Value('non_transactional'),
             ),
           );
+      // Let the event loop drain so Drift's watch fires and the
+      // Inbox UI updates before the next SMS is ingested. Without
+      // this, non-transactional SMS process in a tight synchronous
+      // loop and all batched rows surface at once.
+      await Future<void>.delayed(Duration.zero);
       return false;
     }
 
@@ -185,7 +339,7 @@ class SmsPipeline {
     }
 
     if (generation != null && generation != _generation) return false;
-    await db
+    final smsRowId = await db
         .into(db.smsMessages)
         .insert(
           SmsMessagesCompanion.insert(
@@ -210,6 +364,7 @@ class SmsPipeline {
       await notify?.call(
         amountCents: candidate.amountCents,
         payee: candidate.payee,
+        notificationId: _notificationIdForSmsRow(smsRowId),
       );
     }
     return candidate != null;
@@ -284,6 +439,10 @@ class SmsPipeline {
       '${d.year.toString().padLeft(4, '0')}-'
       '${d.month.toString().padLeft(2, '0')}-'
       '${d.day.toString().padLeft(2, '0')}';
+
+  static int _notificationIdForSmsRow(int smsRowId) {
+    return 100000 + smsRowId.remainder(1000000000);
+  }
 }
 
 final Provider<SmsPipeline> smsPipelineProvider = Provider<SmsPipeline>((ref) {
@@ -301,6 +460,8 @@ final Provider<SmsPipeline> smsPipelineProvider = Provider<SmsPipeline>((ref) {
   // and therefore this provider). Otherwise rebuild → onDispose → stop()
   // silently kills incoming SMS for the rest of the session.
   if (prefs.smsEnabled) pipeline.startListening();
-  ref.onDispose(pipeline.stop);
+  ref.onDispose(() {
+    unawaited(pipeline.dispose());
+  });
   return pipeline;
 });
