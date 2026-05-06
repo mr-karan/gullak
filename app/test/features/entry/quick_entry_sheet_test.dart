@@ -65,8 +65,12 @@ void main() {
     }
   }
 
-  Future<void> scrollUntilTextVisible(WidgetTester tester, String text) async {
-    final finder = find.text(text);
+  Future<void> scrollUntilTextVisible(
+    WidgetTester tester,
+    String text, {
+    bool exact = true,
+  }) async {
+    final finder = exact ? find.text(text) : find.textContaining(text);
     if (finder.evaluate().isNotEmpty) return;
     final scrollable = find.byType(Scrollable);
     for (var i = 0; i < 12 && finder.evaluate().isEmpty; i++) {
@@ -133,12 +137,12 @@ void main() {
     await tester.tap(find.text('Category'));
     await tester.pumpAndSettle();
 
-    expect(find.widgetWithText(TextField, 'Search categories'), findsOneWidget);
+    expect(find.widgetWithText(TextField, 'Search or add category'), findsOneWidget);
     expect(find.text(groceries.name), findsOneWidget);
     expect(find.text(transport.name), findsOneWidget);
 
     await tester.enterText(
-      find.widgetWithText(TextField, 'Search categories'),
+      find.widgetWithText(TextField, 'Search or add category'),
       'trans',
     );
     await tester.pumpAndSettle();
@@ -204,8 +208,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('987'), findsOneWidget);
-    await scrollUntilTextVisible(tester, groceries.name);
-    expect(find.text(groceries.name), findsOneWidget);
+    // Category cell renders as "<emoji> <name>"; scroll to it and match
+    // by substring so we don't pin to a specific emoji.
+    await scrollUntilTextVisible(tester, groceries.name, exact: false);
+    expect(find.textContaining(groceries.name), findsAtLeast(1));
     await scrollUntilTextVisible(tester, 'Zomato');
     expect(find.text('Zomato'), findsOneWidget);
     await scrollUntilTextVisible(tester, 'late dinner');
