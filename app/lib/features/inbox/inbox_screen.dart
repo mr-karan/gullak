@@ -357,88 +357,143 @@ class _InboxRow extends ConsumerWidget {
   void _showParseDebug(BuildContext context, WidgetRef ref, InboxItem item) {
     showDialog<void>(
       context: context,
-      builder: (dialogCtx) => AlertDialog(
-        title: const Row(
-          children: [
-            Icon(Icons.smart_toy_outlined, size: 20),
-            SizedBox(width: 8),
-            Text('Parse debug'),
-          ],
-        ),
-        content: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                'This row was classified as transactional, but had no parser candidate when it was ingested.',
-              ),
-              const SizedBox(height: 12),
-              Text('Status: ${item.status}'),
-              Text('Sender: ${item.address}'),
-              Text(
-                'Received: ${DateTime.fromMillisecondsSinceEpoch(item.receivedAt)}',
-              ),
-              const SizedBox(height: 12),
-              const Text('SMS body'),
-              const SizedBox(height: 4),
-              SelectableText(item.body),
-              const SizedBox(height: 12),
-              const Text(
-                'After parser fixes, tap Inbox refresh. It now clears failed rows before rescanning, so stale failures are retried.',
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton.icon(
-            onPressed: () => _sendFeedback(context, dialogCtx, ref, item),
-            icon: const Icon(Icons.bug_report_outlined, size: 18),
-            label: const Text('Send feedback'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(dialogCtx).pop(),
-            child: const Text('Close'),
-          ),
+      builder: (dialogCtx) => _ParseDebugDialog(item: item),
+    );
+  }
+}
+
+/// Shows the SMS body + ingest status. Holds local state for the
+/// "Send feedback" round-trip so a press is immediately visible
+/// (button disables, label flips to "Sending…", then "Sent ✓" or an
+/// inline error). The previous version awaited the network call and
+/// only spoke to the user via a post-pop snackbar — a slow request or
+/// an exception in the Riverpod provider gave the impression the
+/// button was dead.
+class _ParseDebugDialog extends ConsumerStatefulWidget {
+  const _ParseDebugDialog({required this.item});
+  final InboxItem item;
+
+  @override
+  ConsumerState<_ParseDebugDialog> createState() => _ParseDebugDialogState();
+}
+
+class _ParseDebugDialogState extends ConsumerState<_ParseDebugDialog> {
+  bool _sending = false;
+  String? _result; // null = idle, "Sent #N" on success, "Failed: …" on error.
+  bool _success = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final item = widget.item;
+    return AlertDialog(
+      title: const Row(
+        children: [
+          Icon(Icons.smart_toy_outlined, size: 20),
+          SizedBox(width: 8),
+          Text('Parse debug'),
         ],
       ),
+      content: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'AI parsing did not return a candidate for this SMS. The '
+              'classifier thought it looked transactional, so it landed '
+              'here for review.',
+            ),
+            const SizedBox(height: 12),
+            Text('Status: ${item.status}'),
+            Text('Sender: ${item.address}'),
+            Text(
+              'Received: ${DateTime.fromMillisecondsSinceEpoch(item.receivedAt)}',
+            ),
+            const SizedBox(height: 12),
+            const Text('SMS body'),
+            const SizedBox(height: 4),
+            SelectableText(item.body),
+            const SizedBox(height: 12),
+            const Text(
+              'Tap Refresh in the Inbox after a parser fix to retry '
+              'this row. "Send feedback" uploads the SMS to your sync '
+              'server\'s /v1/feedback so you can review what tripped '
+              'the parser.',
+            ),
+            if (_result != null) ...[
+              const SizedBox(height: 12),
+              Text(
+                _result!,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: _success ? cs.primary : cs.error,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+      actions: [
+        TextButton.icon(
+          onPressed: _sending || _success ? null : _send,
+          icon: _sending
+              ? const SizedBox(
+                  width: 14,
+                  height: 14,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.bug_report_outlined, size: 18),
+          label: Text(_sending ? 'Sending…' : 'Send feedback'),
+        ),
+        TextButton(
+          onPressed: _sending
+              ? null
+              : () => Navigator.of(context).maybePop(),
+          child: const Text('Close'),
+        ),
+      ],
     );
   }
 
-  Future<void> _sendFeedback(
-    BuildContext pageContext,
-    BuildContext dialogCtx,
-    WidgetRef ref,
-    InboxItem item,
-  ) async {
-    final messenger = ScaffoldMessenger.of(pageContext);
+  Future<void> _send() async {
+    setState(() {
+      _sending = true;
+      _result = null;
+      _success = false;
+    });
     try {
       final client = await ref.read(piAiClientProvider.future);
       if (client == null) {
-        throw PiAiException('sync server is not configured');
+        throw PiAiException(
+          'Sync server is not configured. Settings → Sync server.',
+        );
       }
       final id = await client.sendFeedback(
         kind: 'sms_parse_failure',
         message: 'SMS parser produced no candidate for a transactional row',
         payload: {
-          'smsRowId': item.id,
-          'status': item.status,
-          'sender': item.address,
-          'body': item.body,
-          'receivedAt': item.receivedAt,
+          'smsRowId': widget.item.id,
+          'status': widget.item.status,
+          'sender': widget.item.address,
+          'body': widget.item.body,
+          'receivedAt': widget.item.receivedAt,
           'sentAt': DateTime.now().toIso8601String(),
         },
       );
-      if (dialogCtx.mounted) Navigator.of(dialogCtx).pop();
-      showTimedSnackBar(
-        messenger,
-        SnackBar(content: Text('Feedback sent${id == null ? '' : ' #$id'}')),
-      );
+      if (!mounted) return;
+      setState(() {
+        _sending = false;
+        _success = true;
+        _result = id == null ? 'Sent ✓' : 'Sent ✓ (#$id)';
+      });
     } catch (e) {
-      showTimedSnackBar(
-        messenger,
-        SnackBar(content: Text('Feedback failed: $e')),
-      );
+      if (!mounted) return;
+      setState(() {
+        _sending = false;
+        _success = false;
+        _result = 'Failed: $e';
+      });
     }
   }
 }
