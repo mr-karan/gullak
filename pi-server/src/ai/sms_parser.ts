@@ -24,9 +24,17 @@ Schema:
 }
 
 Rules:
-- is_transaction=false for OTPs, marketing, balance/limit alerts,
-  declined-transaction notifications, statement reminders.
-  All other fields can be null/0 in that case.
+- is_transaction=false ONLY when the SMS is purely an OTP, marketing, a
+  balance/limit reminder with no spend, a declined-transaction
+  notification, or a statement reminder. All other fields can be null/0
+  in that case.
+- A real spend or credit always wins. If the SMS contains "Spent",
+  "Debited", "Credited", "Paid", "Received", "Withdrawn", "Sent",
+  "Refunded", or a similar verb attached to an amount, treat it as
+  is_transaction=true even when the message also includes an "Avl Limit",
+  "Bal", "Available Balance", or a "Not you? SMS BLOCK" footer. Those
+  ancillary lines describe the same spend; do not let them downgrade
+  the message to a non-transaction.
 - amount_cents is integer minor units. Reject negative amounts;
   use is_income=true for credits, false for debits.
 - Direction is literal from the SMS: credited/received/deposited/refund/cashback/salary

@@ -45,6 +45,23 @@ All notable changes to Gullak are documented here.
   looks sticky. Action snackbars (Undo affordances) still get a Timer-backed
   force-close to defeat Android accessibility's extended display behaviour.
 - Onboarding large-text/small-viewport regressions are covered by widget tests.
+- SMS parser system prompt: a transactional verb attached to an amount
+  (Spent/Debited/Credited/Paid/etc.) now wins over an "Avl Limit" /
+  "Bal" / "Not you?" footer line, so Axis-style "Spent INR 189 …
+  Avl Limit: …" SMS no longer get silently classified as
+  non-transactional.
+
+### Added (Inbox)
+
+- Inbox AppBar gains a "Show ignored SMS" toggle. Hidden by default;
+  when enabled it lists messages the classifier rejected
+  (`non_transactional`), duplicates, and rows the user dismissed.
+- Each ignored row exposes a "Log manually" action that re-opens
+  Quick Entry on the natural-language tab pre-filled with the SMS
+  body — useful when the classifier or LLM was wrong.
+- Quick Entry now accepts an `initialNote` so callers (Inbox today,
+  share-target tomorrow) can hand it text to parse without making
+  the user retype.
 
 ### Changed
 

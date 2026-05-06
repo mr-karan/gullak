@@ -58,6 +58,14 @@ class SmsRepository {
   /// cache was poisoned.
   static const _pendingStatuses = ['inbox', 'error'];
 
+  /// Everything we ingested but didn't pin to the pending bucket: the
+  /// classifier-rejected SMS (`none`), duplicates of an existing
+  /// transaction (`duplicate`), and rows the user explicitly
+  /// dismissed (`dismissed`). Surfaced via the Inbox "Ignored" toggle
+  /// so a user can still log one of these manually if the classifier
+  /// was wrong about it.
+  static const _ignoredStatuses = ['none', 'duplicate', 'dismissed'];
+
   Future<List<InboxItem>> listInbox() async {
     final rows =
         await (_db.select(_db.smsMessages)
@@ -75,6 +83,28 @@ class SmsRepository {
       ..where((t) => t.candidateStatus.isIn(_pendingStatuses))
       ..orderBy([(t) => OrderingTerm.desc(t.receivedAt)]);
     return query.watch().asyncMap(_enrichRows);
+  }
+
+  /// Reactive feed of SMS the pipeline classified as non-transactional,
+  /// duplicate, or the user dismissed. Caller is the Inbox screen's
+  /// "Ignored" view. Capped at the most recent 200 so the list stays
+  /// manageable without paging.
+  Stream<List<InboxItem>> watchIgnored() {
+    final query = _db.select(_db.smsMessages)
+      ..where((t) => t.candidateStatus.isIn(_ignoredStatuses))
+      ..orderBy([(t) => OrderingTerm.desc(t.receivedAt)])
+      ..limit(200);
+    return query.watch().asyncMap(_enrichRows);
+  }
+
+  /// Force a row back into the pending Inbox bucket, e.g. when the
+  /// user disagrees with the classifier's "non-transactional" call.
+  /// Status flips to `inbox`; the parser cache is dropped so the next
+  /// re-scan reparses this template.
+  Future<void> reopen(int id) async {
+    await (_db.update(_db.smsMessages)..where((t) => t.id.equals(id))).write(
+      const SmsMessagesCompanion(candidateStatus: Value('inbox')),
+    );
   }
 
   Future<List<InboxItem>> _enrichRows(List<SmsRow> rows) async {
@@ -317,6 +347,11 @@ final Provider<SmsRepository> smsRepositoryProvider = Provider<SmsRepository>(
 final StreamProvider<List<InboxItem>> inboxItemsProvider =
     StreamProvider<List<InboxItem>>((ref) {
       return ref.watch(smsRepositoryProvider).watchInbox();
+    });
+
+final StreamProvider<List<InboxItem>> ignoredInboxItemsProvider =
+    StreamProvider<List<InboxItem>>((ref) {
+      return ref.watch(smsRepositoryProvider).watchIgnored();
     });
 
 extension _FirstOrNull<T> on Iterable<T> {

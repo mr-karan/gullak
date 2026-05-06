@@ -8,49 +8,77 @@ import '../../data/sms/sms_pipeline.dart';
 import '../../state/providers.dart';
 import '../../ui/theme.dart';
 import '../../ui/widgets/empty_state.dart';
+import '../entry/quick_entry.dart';
 import 'data/sms_repository.dart';
 
-class InboxScreen extends ConsumerWidget {
+class InboxScreen extends ConsumerStatefulWidget {
   const InboxScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final asyncRows = ref.watch(inboxItemsProvider);
+  ConsumerState<InboxScreen> createState() => _InboxScreenState();
+}
+
+class _InboxScreenState extends ConsumerState<InboxScreen> {
+  bool _showIgnored = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final asyncRows = _showIgnored
+        ? ref.watch(ignoredInboxItemsProvider)
+        : ref.watch(inboxItemsProvider);
     final prefs = watchPrefs(ref);
     return Scaffold(
       appBar: AppBar(
         title: const Text('Inbox'),
         actions: [
           IconButton(
+            tooltip: _showIgnored
+                ? 'Show pending SMS'
+                : 'Show ignored SMS (non-transactional, dismissed, duplicates)',
+            icon: Icon(
+              _showIgnored
+                  ? Icons.visibility_outlined
+                  : Icons.visibility_off_outlined,
+            ),
+            onPressed: () => setState(() => _showIgnored = !_showIgnored),
+          ),
+          IconButton(
             tooltip: 'Refresh SMS',
             icon: const Icon(Icons.refresh),
             onPressed: () => _refreshSms(context, ref),
           ),
-          asyncRows.maybeWhen(
-            data: (rows) {
-              final ready = rows.where((r) => r.hasCandidate).length;
-              if (ready == 0) return const SizedBox.shrink();
-              return Padding(
-                padding: const EdgeInsets.only(right: 8),
-                child: TextButton.icon(
-                  onPressed: () => _confirmAll(context, ref, ready),
-                  icon: const Icon(Icons.done_all, size: 18),
-                  label: Text('Confirm all ($ready)'),
-                ),
-              );
-            },
-            orElse: () => const SizedBox.shrink(),
-          ),
+          if (!_showIgnored)
+            asyncRows.maybeWhen(
+              data: (rows) {
+                final ready = rows.where((r) => r.hasCandidate).length;
+                if (ready == 0) return const SizedBox.shrink();
+                return Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: TextButton.icon(
+                    onPressed: () => _confirmAll(context, ref, ready),
+                    icon: const Icon(Icons.done_all, size: 18),
+                    label: Text('Confirm all ($ready)'),
+                  ),
+                );
+              },
+              orElse: () => const SizedBox.shrink(),
+            ),
         ],
       ),
       body: asyncRows.when(
         data: (rows) {
           if (rows.isEmpty) {
-            return const EmptyState(
-              icon: Icons.inbox_outlined,
-              title: 'All caught up',
-              body:
-                  'New bank SMS that look like transactions will land here for review.',
+            return EmptyState(
+              icon: _showIgnored
+                  ? Icons.layers_clear_outlined
+                  : Icons.inbox_outlined,
+              title: _showIgnored ? 'No ignored SMS' : 'All caught up',
+              body: _showIgnored
+                  ? 'OTPs, marketing, and other non-transactional messages '
+                        'will show here. Tap one to log it as a transaction '
+                        'manually if the classifier got it wrong.'
+                  : 'New bank SMS that look like transactions will land '
+                        'here for review.',
             );
           }
           return ListView.separated(
@@ -61,6 +89,7 @@ class InboxScreen extends ConsumerWidget {
               item: rows[i],
               symbol: prefs.currencySymbol,
               minorDigits: prefs.currencyMinorDigits,
+              isIgnoredView: _showIgnored,
             ),
           );
         },
@@ -148,11 +177,16 @@ class _InboxRow extends ConsumerWidget {
     required this.item,
     required this.symbol,
     required this.minorDigits,
+    this.isIgnoredView = false,
   });
 
   final InboxItem item;
   final String symbol;
   final int minorDigits;
+
+  /// When true, the row is rendered for the "Ignored" view: subdued
+  /// styling, a status hint, and "Log manually" instead of Confirm.
+  final bool isIgnoredView;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -219,7 +253,15 @@ class _InboxRow extends ConsumerWidget {
                 ],
               ),
             ],
-            if (!item.hasCandidate) ...[
+            if (isIgnoredView) ...[
+              const SizedBox(height: 8),
+              Text(
+                _ignoredReason(item.status),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+              ),
+            ] else if (!item.hasCandidate) ...[
               const SizedBox(height: 8),
               Text(
                 'Couldn\'t parse this one — open it manually to log.',
@@ -238,19 +280,31 @@ class _InboxRow extends ConsumerWidget {
                   ).textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant),
                 ),
                 const Spacer(),
-                TextButton(
-                  onPressed: () =>
-                      ref.read(smsRepositoryProvider).dismiss(item.id),
-                  child: const Text('Dismiss'),
-                ),
-                const SizedBox(width: 4),
-                if (!item.hasCandidate)
-                  IconButton(
-                    tooltip: 'Parse debug',
-                    icon: const Icon(Icons.smart_toy_outlined, size: 20),
-                    onPressed: () => _showParseDebug(context, ref, item),
+                if (isIgnoredView) ...[
+                  FilledButton.tonalIcon(
+                    onPressed: () => _logManually(context, ref, item),
+                    icon: const Icon(Icons.edit_note, size: 18),
+                    style: FilledButton.styleFrom(
+                      minimumSize: const Size(0, 36),
+                      padding: const EdgeInsets.symmetric(horizontal: 14),
+                    ),
+                    label: const Text('Log manually'),
                   ),
-                if (item.hasCandidate)
+                ] else ...[
+                  TextButton(
+                    onPressed: () =>
+                        ref.read(smsRepositoryProvider).dismiss(item.id),
+                    child: const Text('Dismiss'),
+                  ),
+                  const SizedBox(width: 4),
+                  if (!item.hasCandidate)
+                    IconButton(
+                      tooltip: 'Parse debug',
+                      icon: const Icon(Icons.smart_toy_outlined, size: 20),
+                      onPressed: () => _showParseDebug(context, ref, item),
+                    ),
+                ],
+                if (!isIgnoredView && item.hasCandidate)
                   FilledButton.tonal(
                     onPressed: () =>
                         ref.read(smsRepositoryProvider).confirm(item.id),
@@ -277,6 +331,27 @@ class _InboxRow extends ConsumerWidget {
     if (diff.inHours < 24) return '${diff.inHours}h ago';
     if (diff.inDays < 7) return '${diff.inDays}d ago';
     return '${t.day}/${t.month}/${t.year % 100}';
+  }
+
+  static String _ignoredReason(String status) => switch (status) {
+    'none' => 'Ignored — classifier marked as non-transactional.',
+    'duplicate' => 'Ignored — looked like a duplicate of an existing transaction.',
+    'dismissed' => 'Dismissed by you.',
+    _ => 'Ignored.',
+  };
+
+  Future<void> _logManually(
+    BuildContext context,
+    WidgetRef ref,
+    InboxItem item,
+  ) async {
+    // Re-classify on the spot: drop the row's stale `none/duplicate/
+    // dismissed` status so the user's next Re-scan reparses it, and
+    // pre-fill QuickEntry with the body so they can log it now without
+    // typing it out again.
+    await ref.read(smsRepositoryProvider).reopen(item.id);
+    if (!context.mounted) return;
+    await openQuickEntry(context, initialNote: item.body);
   }
 
   void _showParseDebug(BuildContext context, WidgetRef ref, InboxItem item) {

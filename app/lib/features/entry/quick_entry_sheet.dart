@@ -20,12 +20,22 @@ import 'entry_memory.dart';
 import 'share_intake.dart';
 
 class QuickEntrySheet extends ConsumerStatefulWidget {
-  const QuickEntrySheet({this.editingTransactionId, super.key});
+  const QuickEntrySheet({
+    this.editingTransactionId,
+    this.initialNote,
+    super.key,
+  });
 
   /// When non-null, the sheet hydrates from this transaction and Save
   /// updates instead of inserting. Header copy and the trailing icon
   /// flip accordingly.
   final String? editingTransactionId;
+
+  /// When non-null, the natural-language Type tab opens with this text
+  /// already entered (e.g. an SMS body the user wants to log manually).
+  /// Forces the Type tab to be the initial selection regardless of the
+  /// last-used tab pref.
+  final String? initialNote;
 
   @override
   ConsumerState<QuickEntrySheet> createState() => _QuickEntrySheetState();
@@ -51,12 +61,18 @@ class _QuickEntrySheetState extends ConsumerState<QuickEntrySheet>
       if (!mounted) return;
       if (base == null || base.trim().isEmpty) return;
       final prefs = ref.read(prefsProvider);
+      // If a caller pre-filled a note (e.g. "log this SMS manually"),
+      // open on the Type tab regardless of the user's last choice — the
+      // text only makes sense in the natural-language flow.
+      final initialIndex = widget.initialNote != null
+          ? 0
+          : (prefs.quickEntryTab == 'type' ? 0 : 1);
       setState(() {
         _showType = true;
         _tabs = TabController(
           length: 2,
           vsync: this,
-          initialIndex: prefs.quickEntryTab == 'type' ? 0 : 1,
+          initialIndex: initialIndex,
         );
       });
     }();
@@ -106,7 +122,10 @@ class _QuickEntrySheetState extends ConsumerState<QuickEntrySheet>
                     ? TabBarView(
                         controller: _tabs,
                         children: [
-                          _TypeTab(onTweakInForm: () => _tabs?.animateTo(1)),
+                          _TypeTab(
+                            initialText: widget.initialNote,
+                            onTweakInForm: () => _tabs?.animateTo(1),
+                          ),
                           _FormTab(
                             editingTransactionId: widget.editingTransactionId,
                             keyboardOpen: keyboardOpen,
@@ -190,16 +209,19 @@ class _Header extends ConsumerWidget {
 }
 
 class _TypeTab extends ConsumerStatefulWidget {
-  const _TypeTab({required this.onTweakInForm});
+  const _TypeTab({required this.onTweakInForm, this.initialText});
 
   final VoidCallback onTweakInForm;
+  final String? initialText;
 
   @override
   ConsumerState<_TypeTab> createState() => _TypeTabState();
 }
 
 class _TypeTabState extends ConsumerState<_TypeTab> {
-  final _ctrl = TextEditingController();
+  late final TextEditingController _ctrl = TextEditingController(
+    text: widget.initialText ?? '',
+  );
   Timer? _debounce;
   // Monotonic seq id; older parses ignore their own results when superseded.
   int _parseSeq = 0;
@@ -222,6 +244,14 @@ class _TypeTabState extends ConsumerState<_TypeTab> {
         if (!mounted) return;
         await _runImageParse(share.bytes, share.mimeType);
         ref.read(pendingShareProvider.notifier).consume();
+      });
+    } else if ((widget.initialText ?? '').trim().length >= 3) {
+      // Pre-filled note (e.g. an SMS body the user wants to log
+      // manually) — kick off the parse immediately so the user lands
+      // on a populated draft instead of a typing prompt.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _runParse(_ctrl.text);
       });
     }
   }

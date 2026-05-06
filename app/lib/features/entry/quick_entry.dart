@@ -8,6 +8,7 @@ import 'quick_entry_sheet.dart';
 Future<void> openQuickEntry(
   BuildContext context, {
   String? editingTransactionId,
+  String? initialNote,
 }) {
   return showModalBottomSheet<void>(
     context: context,
@@ -16,7 +17,10 @@ Future<void> openQuickEntry(
     useRootNavigator: true,
     builder: (ctx) => Material(
       color: Theme.of(ctx).colorScheme.surfaceContainerHigh,
-      child: QuickEntrySheet(editingTransactionId: editingTransactionId),
+      child: QuickEntrySheet(
+        editingTransactionId: editingTransactionId,
+        initialNote: initialNote,
+      ),
     ),
   );
 }
