@@ -34,9 +34,9 @@ Rules:
   means is_income=false. Do not mark credits as expenses.
 - payee: extract the merchant name only, not the bank.
 - category_hint: choose one of the supplied categories when it clearly fits.
-  Use prior payee-category mappings when present; otherwise infer from merchant
-  words (Blinkit/BigBasket→Groceries, Zomato/Swiggy→Eating Out, Uber/Ola→Travel).
-  Return null when unsure.
+  Use prior payee-category mappings when present. Otherwise choose a supplied
+  category when the SMS/merchant makes it unambiguous. Return null when unsure;
+  the app will show it as Unknown/uncategorised.
 - account_hint: include the bank name AND last-4 of the card if
   present, e.g. "HDFC Card xx1234".
 - confidence: 0.9+ when transactional and unambiguous; 0.7 when
@@ -110,7 +110,7 @@ export async function parseSms(
   }
   const dateStr = isYmd(parsed.date) ? parsed.date! : ymd(new Date(req.receivedAt));
   const inferredIncome = inferIncomeFromBody(req.body) ?? (parsed.is_income === true);
-  const categoryHint = trimOrNull(parsed.category_hint) ?? inferCategoryHint(parsed.payee, req.categories, req.payees);
+  const categoryHint = knownPayeeCategory(parsed.payee, req.categories, req.payees) ?? trimOrNull(parsed.category_hint) ?? inferCategoryHint(parsed.payee, req.categories);
   const categoryId = matchByName(categoryHint, req.categories ?? []);
   return {
     isTransaction: true,
@@ -146,7 +146,7 @@ function formatPayees(
     .join(", ");
 }
 
-function inferCategoryHint(
+function knownPayeeCategory(
   rawPayee: unknown,
   categories: { id: string; name: string }[] | undefined,
   payees: { name: string; categoryId?: string | null }[] | undefined,
@@ -160,6 +160,16 @@ function inferCategoryHint(
       return categories?.find((c) => c.id === p.categoryId)?.name ?? null;
     }
   }
+  return null;
+}
+
+function inferCategoryHint(
+  rawPayee: unknown,
+  categories: { id: string; name: string }[] | undefined,
+): string | null {
+  if (typeof rawPayee !== "string") return null;
+  const payee = rawPayee.trim().toLowerCase();
+  if (!payee) return null;
   const rules: [RegExp, string[]][] = [
     [/(blinkit|bigbasket|zepto|dmart|grocer|supermarket)/, ["groceries", "grocery"]],
     [/(zomato|swiggy|restaurant|cafe|coffee|pizza|burger|food)/, ["eating out", "food"]],

@@ -7,10 +7,12 @@ import 'package:intl/intl.dart';
 
 import '../../core/clock.dart';
 import '../../core/money.dart';
+import '../../core/snackbars.dart';
 import '../../state/providers.dart';
 import '../../ui/widgets/category_swatch.dart';
 import '../../ui/widgets/empty_state.dart';
 import '../../ui/widgets/money_text.dart';
+import '../categories/category_visuals.dart';
 import '../entry/quick_entry.dart';
 import 'data/transaction_repository.dart';
 import 'split_transaction_sheet.dart';
@@ -196,18 +198,17 @@ Future<void> _deleteWithUndo(
   final snap = await repo.delete(id);
   if (snap.isEmpty || !context.mounted) return;
   final messenger = ScaffoldMessenger.of(context);
-  messenger
-    ..hideCurrentSnackBar()
-    ..showSnackBar(
-      SnackBar(
-        content: const Text('Transaction deleted'),
-        duration: const Duration(seconds: 4),
-        action: SnackBarAction(
-          label: 'Undo',
-          onPressed: () => repo.restore(snap),
-        ),
+  showTimedSnackBar(
+    messenger,
+    SnackBar(
+      content: const Text('Transaction deleted'),
+      action: SnackBarAction(
+        label: 'Undo',
+        onPressed: () => repo.restore(snap),
       ),
-    );
+    ),
+    duration: const Duration(seconds: 4),
+  );
 }
 
 class _TxRow extends ConsumerWidget {
@@ -257,6 +258,9 @@ class _TxRow extends ConsumerWidget {
             children: [
               CategorySwatch(
                 label: swatchLabel,
+                symbol: row.categoryName == null || row.isTransfer
+                    ? null
+                    : categoryEmoji(row.categoryIcon, row.categoryName!),
                 icon: row.isTransfer
                     ? Icons.swap_horiz
                     : row.isSplit

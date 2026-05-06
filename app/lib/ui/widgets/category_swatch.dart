@@ -8,6 +8,7 @@ class CategorySwatch extends StatelessWidget {
     this.size = 36,
     this.colorOverride,
     this.icon,
+    this.symbol,
     super.key,
   });
 
@@ -15,6 +16,7 @@ class CategorySwatch extends StatelessWidget {
   final double size;
   final Color? colorOverride;
   final IconData? icon;
+  final String? symbol;
 
   @override
   Widget build(BuildContext context) {
@@ -30,9 +32,11 @@ class CategorySwatch extends StatelessWidget {
       child: icon != null
           ? Icon(icon, size: size * 0.5, color: c)
           : Text(
-              _initial(label),
+              symbol?.trim().isNotEmpty == true
+                  ? symbol!.trim()
+                  : _initial(label),
               style: TextStyle(
-                fontSize: size * 0.42,
+                fontSize: symbol == null ? size * 0.42 : size * 0.5,
                 fontWeight: FontWeight.w700,
                 color: c,
               ),

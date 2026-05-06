@@ -23,7 +23,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// overflow, Infinity constraint, missing size), [FlutterError.onError]
 /// captures it and the test fails with the captured details.
 void main() {
-  Future<({AppDatabase db, ProviderContainer container})> _bootstrap(
+  Future<({AppDatabase db, ProviderContainer container})> bootstrap(
     WidgetTester tester, {
     Size surfaceSize = const Size(390, 800),
     double textScale = 1.0,
@@ -62,13 +62,15 @@ void main() {
     );
   }
 
-  testWidgets('all three pages render with no layout exceptions', (tester) async {
+  testWidgets('all three pages render with no layout exceptions', (
+    tester,
+  ) async {
     final layoutErrors = <FlutterErrorDetails>[];
     final original = FlutterError.onError;
     FlutterError.onError = layoutErrors.add;
     addTearDown(() => FlutterError.onError = original);
 
-    await _bootstrap(tester);
+    await bootstrap(tester);
 
     // Page 1: welcome + currency
     expect(find.text('Gullak'), findsOneWidget);
@@ -96,8 +98,9 @@ void main() {
     );
   });
 
-  testWidgets('Sync server page survives larger text scale + small viewport',
-      (tester) async {
+  testWidgets('Sync server page survives larger text scale + small viewport', (
+    tester,
+  ) async {
     final layoutErrors = <FlutterErrorDetails>[];
     final original = FlutterError.onError;
     FlutterError.onError = layoutErrors.add;
@@ -105,11 +108,7 @@ void main() {
 
     // Smaller viewport + larger text — the keyboard-up / large-text
     // case that the scrollable shell is supposed to absorb.
-    await _bootstrap(
-      tester,
-      surfaceSize: const Size(360, 640),
-      textScale: 1.3,
-    );
+    await bootstrap(tester, surfaceSize: const Size(360, 640), textScale: 1.3);
 
     await tester.tap(find.text('Continue'));
     await tester.pumpAndSettle();

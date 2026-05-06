@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/snackbars.dart';
 import '../../state/providers.dart';
 import '../../ui/widgets/empty_state.dart';
 import 'category_visuals.dart';
@@ -220,9 +221,10 @@ class CategoriesScreen extends ConsumerWidget {
     final groups = await ref.read(categoryRepoProvider).listGroups();
     if (groups.isEmpty) {
       if (!context.mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Add a group first.')));
+      showTimedSnackBar(
+        ScaffoldMessenger.of(context),
+        const SnackBar(content: Text('Add a group first.')),
+      );
       return;
     }
     final ctrl = TextEditingController();

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/money.dart';
+import '../../core/snackbars.dart';
 import '../../state/providers.dart';
 import '../../ui/widgets/empty_state.dart';
 import '../../ui/widgets/money_text.dart';
@@ -100,9 +101,10 @@ class RecurrencesScreen extends ConsumerWidget {
     final categories = await ref.read(categoryRepoProvider).list();
     if (!context.mounted) return;
     if (accounts.isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Add an account first.')));
+      showTimedSnackBar(
+        ScaffoldMessenger.of(context),
+        const SnackBar(content: Text('Add an account first.')),
+      );
       return;
     }
     await showModalBottomSheet<void>(

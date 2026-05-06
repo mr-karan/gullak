@@ -8,6 +8,7 @@ import { accountsRouter } from "./routes/accounts.ts";
 import { aiRouter } from "./routes/ai.ts";
 import { budgetsRouter } from "./routes/budgets.ts";
 import { categoriesRouter } from "./routes/categories.ts";
+import { feedbackRouter } from "./routes/feedback.ts";
 import { healthRouter } from "./routes/health.ts";
 import { messagesRouter, whatsappRouter } from "./routes/messages.ts";
 import { payeesRouter } from "./routes/payees.ts";
@@ -68,6 +69,7 @@ export function createApp(ctx: AppContext) {
   app.route("/v1/messages", messagesRouter);
   app.route("/v1/whatsapp", whatsappRouter);
   app.route("/v1/ai", aiRouter);
+  app.route("/v1/feedback", feedbackRouter);
 
   app.onError((error, c) => {
     const message = error instanceof Error ? error.message : "Unknown error";

@@ -22,6 +22,13 @@
       "when": 1777950335860,
       "tag": "0002_mighty_violations",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1778036688434,
+      "tag": "0003_parched_black_cat",
+      "breakpoints": true
     }
   ]
 }

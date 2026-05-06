@@ -22,6 +22,7 @@ class TransactionListItem {
     this.accountName,
     this.payeeName,
     this.categoryName,
+    this.categoryIcon,
     this.transferAccountName,
     this.notes,
   });
@@ -36,6 +37,7 @@ class TransactionListItem {
   final String? accountName;
   final String? payeeName;
   final String? categoryName;
+  final String? categoryIcon;
   final String? transferAccountName;
   final String? notes;
 }
@@ -525,6 +527,7 @@ class TransactionRepository {
       accountName: a?.name,
       payeeName: p?.name ?? t.payeeName,
       categoryName: c?.name,
+      categoryIcon: c?.icon,
       transferAccountName: tA?.name,
       notes: t.notes,
     );

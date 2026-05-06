@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/money.dart';
+import '../../core/snackbars.dart';
+import '../../data/ai/pi_ai_client.dart';
 import '../../data/sms/sms_pipeline.dart';
 import '../../state/providers.dart';
 import '../../ui/theme.dart';
@@ -70,23 +72,25 @@ class InboxScreen extends ConsumerWidget {
 
   void _refreshSms(BuildContext context, WidgetRef ref) {
     final messenger = ScaffoldMessenger.of(context);
-    messenger
-      ..hideCurrentSnackBar()
-      ..showSnackBar(const SnackBar(content: Text('Scanning SMS inbox…')));
+    showTimedSnackBar(
+      messenger,
+      const SnackBar(content: Text('Scanning SMS inbox…')),
+      duration: const Duration(seconds: 2),
+    );
     ref
         .read(smsPipelineProvider)
         .retryFailedBackfill()
         .then((added) {
-          messenger
-            ..hideCurrentSnackBar()
-            ..showSnackBar(
-              SnackBar(content: Text('SMS refresh complete — $added new.')),
-            );
+          showTimedSnackBar(
+            messenger,
+            SnackBar(content: Text('SMS refresh complete — $added new.')),
+          );
         })
         .catchError((Object e) {
-          messenger
-            ..hideCurrentSnackBar()
-            ..showSnackBar(SnackBar(content: Text('SMS refresh failed: $e')));
+          showTimedSnackBar(
+            messenger,
+            SnackBar(content: Text('SMS refresh failed: $e')),
+          );
         });
   }
 
@@ -120,21 +124,21 @@ class InboxScreen extends ConsumerWidget {
     if (go != true) return;
     try {
       final result = await ref.read(smsRepositoryProvider).confirmAll();
-      messenger
-        ..hideCurrentSnackBar()
-        ..showSnackBar(
-          SnackBar(
-            content: Text(
-              result.failed == 0
-                  ? 'Confirmed ${result.ok} transaction${result.ok == 1 ? '' : 's'}.'
-                  : 'Confirmed ${result.ok}, ${result.failed} skipped.',
-            ),
+      showTimedSnackBar(
+        messenger,
+        SnackBar(
+          content: Text(
+            result.failed == 0
+                ? 'Confirmed ${result.ok} transaction${result.ok == 1 ? '' : 's'}.'
+                : 'Confirmed ${result.ok}, ${result.failed} skipped.',
           ),
-        );
+        ),
+      );
     } catch (e) {
-      messenger
-        ..hideCurrentSnackBar()
-        ..showSnackBar(SnackBar(content: Text('Confirm all failed: $e')));
+      showTimedSnackBar(
+        messenger,
+        SnackBar(content: Text('Confirm all failed: $e')),
+      );
     }
   }
 }
@@ -244,7 +248,7 @@ class _InboxRow extends ConsumerWidget {
                   IconButton(
                     tooltip: 'Parse debug',
                     icon: const Icon(Icons.smart_toy_outlined, size: 20),
-                    onPressed: () => _showParseDebug(context, item),
+                    onPressed: () => _showParseDebug(context, ref, item),
                   ),
                 if (item.hasCandidate)
                   FilledButton.tonal(
@@ -275,7 +279,7 @@ class _InboxRow extends ConsumerWidget {
     return '${t.day}/${t.month}/${t.year % 100}';
   }
 
-  void _showParseDebug(BuildContext context, InboxItem item) {
+  void _showParseDebug(BuildContext context, WidgetRef ref, InboxItem item) {
     showDialog<void>(
       context: context,
       builder: (dialogCtx) => AlertDialog(
@@ -312,6 +316,11 @@ class _InboxRow extends ConsumerWidget {
           ),
         ),
         actions: [
+          TextButton.icon(
+            onPressed: () => _sendFeedback(context, dialogCtx, ref, item),
+            icon: const Icon(Icons.bug_report_outlined, size: 18),
+            label: const Text('Send feedback'),
+          ),
           TextButton(
             onPressed: () => Navigator.of(dialogCtx).pop(),
             child: const Text('Close'),
@@ -319,6 +328,43 @@ class _InboxRow extends ConsumerWidget {
         ],
       ),
     );
+  }
+
+  Future<void> _sendFeedback(
+    BuildContext pageContext,
+    BuildContext dialogCtx,
+    WidgetRef ref,
+    InboxItem item,
+  ) async {
+    final messenger = ScaffoldMessenger.of(pageContext);
+    try {
+      final client = await ref.read(piAiClientProvider.future);
+      if (client == null) {
+        throw PiAiException('sync server is not configured');
+      }
+      final id = await client.sendFeedback(
+        kind: 'sms_parse_failure',
+        message: 'SMS parser produced no candidate for a transactional row',
+        payload: {
+          'smsRowId': item.id,
+          'status': item.status,
+          'sender': item.address,
+          'body': item.body,
+          'receivedAt': item.receivedAt,
+          'sentAt': DateTime.now().toIso8601String(),
+        },
+      );
+      if (dialogCtx.mounted) Navigator.of(dialogCtx).pop();
+      showTimedSnackBar(
+        messenger,
+        SnackBar(content: Text('Feedback sent${id == null ? '' : ' #$id'}')),
+      );
+    } catch (e) {
+      showTimedSnackBar(
+        messenger,
+        SnackBar(content: Text('Feedback failed: $e')),
+      );
+    }
   }
 }
 

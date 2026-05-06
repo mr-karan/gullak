@@ -113,6 +113,26 @@ class PiAiClient {
       );
     }
   }
+
+  Future<int?> sendFeedback({
+    required String kind,
+    String? message,
+    String? clientId,
+    required Map<String, dynamic> payload,
+  }) async {
+    try {
+      final json = await _post('/v1/feedback', {
+        'kind': kind,
+        if (message != null && message.trim().isNotEmpty) 'message': message,
+        if (clientId != null && clientId.trim().isNotEmpty)
+          'clientId': clientId,
+        'payload': payload,
+      });
+      return (json['id'] as num?)?.toInt();
+    } on DioException catch (e) {
+      throw PiAiException('feedback send failed: ${e.message ?? e.type.name}');
+    }
+  }
 }
 
 class NamedRow {

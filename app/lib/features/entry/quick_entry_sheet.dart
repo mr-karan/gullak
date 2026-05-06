@@ -7,6 +7,7 @@ import 'package:image_picker/image_picker.dart';
 
 import '../../core/clock.dart';
 import '../../core/money.dart';
+import '../../core/snackbars.dart';
 import '../../state/providers.dart';
 import '../../ui/theme.dart';
 import '../accounts/data/account_repository.dart';
@@ -167,17 +168,17 @@ class _Header extends ConsumerWidget {
                 final snap = await repo.delete(editingTransactionId!);
                 if (snap.isEmpty) return;
                 navigator.maybePop();
-                messenger
-                  ..hideCurrentSnackBar()
-                  ..showSnackBar(
-                    SnackBar(
-                      content: const Text('Deleted'),
-                      action: SnackBarAction(
-                        label: 'Undo',
-                        onPressed: () => repo.restore(snap),
-                      ),
+                showTimedSnackBar(
+                  messenger,
+                  SnackBar(
+                    content: const Text('Deleted'),
+                    action: SnackBarAction(
+                      label: 'Undo',
+                      onPressed: () => repo.restore(snap),
                     ),
-                  );
+                  ),
+                  duration: const Duration(seconds: 4),
+                );
               },
             )
           else
@@ -395,7 +396,7 @@ class _TypeTabState extends ConsumerState<_TypeTab> {
         await ref.read(payeeRepoProvider).bumpUseCount(value.payeeId!);
       }
       navigator.maybePop();
-      messenger.showSnackBar(_savedSnackBar('Saved'));
+      showTimedSnackBar(messenger, _savedSnackBar('Saved'));
     } catch (_) {
       if (mounted) setState(() => _saving = false);
       rethrow;
@@ -808,9 +809,10 @@ class _FormTabState extends ConsumerState<_FormTab> {
       }
 
       navigator.maybePop();
-      messenger
-        ..hideCurrentSnackBar()
-        ..showSnackBar(_savedSnackBar(_isEditing ? 'Updated' : 'Saved'));
+      showTimedSnackBar(
+        messenger,
+        _savedSnackBar(_isEditing ? 'Updated' : 'Saved'),
+      );
     } catch (_) {
       if (mounted) setState(() => _saving = false);
       rethrow;
@@ -1079,7 +1081,8 @@ class _FormTabState extends ConsumerState<_FormTab> {
     final cats = await repo.list();
     if (!mounted) return;
     if (groups.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      showTimedSnackBar(
+        ScaffoldMessenger.of(context),
         const SnackBar(
           content: Text(
             'No category groups yet. Add one in Settings → Categories.',

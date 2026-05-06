@@ -8,6 +8,7 @@ import 'package:share_plus/share_plus.dart';
 
 import '../../core/build_info.dart';
 import '../../core/notification_service.dart';
+import '../../core/snackbars.dart';
 import '../../data/sms/sms_pipeline.dart';
 import '../../data/sms/sms_reader.dart';
 import '../../state/providers.dart';
@@ -221,14 +222,11 @@ class SettingsScreen extends ConsumerWidget {
     }
 
     if (!context.mounted) return;
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        const SnackBar(
-          content: Text('SMS Inbox state cleared.'),
-          duration: Duration(seconds: 2),
-        ),
-      );
+    showTimedSnackBar(
+      ScaffoldMessenger.of(context),
+      const SnackBar(content: Text('SMS Inbox state cleared.')),
+      duration: const Duration(seconds: 2),
+    );
   }
 
   /// Wipes everything except already-accepted transactions and the
@@ -255,7 +253,8 @@ class SettingsScreen extends ConsumerWidget {
       );
       await ref.read(smsPipelineProvider).backfill();
     }());
-    messenger.showSnackBar(
+    showTimedSnackBar(
+      messenger,
       const SnackBar(
         content: Text('Re-scanning — Inbox updates as messages parse.'),
       ),
@@ -269,9 +268,10 @@ class SettingsScreen extends ConsumerWidget {
       final granted = await reader.ensurePermission();
       if (!granted) {
         if (!context.mounted) return;
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('SMS permission denied.')));
+        showTimedSnackBar(
+          ScaffoldMessenger.of(context),
+          const SnackBar(content: Text('SMS permission denied.')),
+        );
         return;
       }
       await prefs.setSmsEnabled(true);
@@ -286,7 +286,8 @@ class SettingsScreen extends ConsumerWidget {
       // picks them up as they land.
       unawaited(pipeline.backfill());
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
+      showTimedSnackBar(
+        ScaffoldMessenger.of(context),
         const SnackBar(
           content: Text(
             'Scanning inbox — items will appear as they\'re parsed.',
@@ -385,9 +386,10 @@ class SettingsScreen extends ConsumerWidget {
       );
     } catch (e) {
       if (!context.mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Export failed: $e')));
+      showTimedSnackBar(
+        ScaffoldMessenger.of(context),
+        SnackBar(content: Text('Export failed: $e')),
+      );
     }
   }
 
@@ -422,14 +424,16 @@ class SettingsScreen extends ConsumerWidget {
           .read(backupServiceProvider)
           .importFromJson(picker);
       if (!context.mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Restored $imported rows.')));
+      showTimedSnackBar(
+        ScaffoldMessenger.of(context),
+        SnackBar(content: Text('Restored $imported rows.')),
+      );
     } catch (e) {
       if (!context.mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Import failed: $e')));
+      showTimedSnackBar(
+        ScaffoldMessenger.of(context),
+        SnackBar(content: Text('Import failed: $e')),
+      );
     }
   }
 
@@ -542,11 +546,10 @@ class SettingsScreen extends ConsumerWidget {
     final messenger = ScaffoldMessenger.of(context);
     final url = baseUrl.trim();
     if (url.isEmpty) {
-      messenger
-        ..hideCurrentSnackBar()
-        ..showSnackBar(
-          const SnackBar(content: Text('Enter a Base URL first.')),
-        );
+      showTimedSnackBar(
+        messenger,
+        const SnackBar(content: Text('Enter a Base URL first.')),
+      );
       return;
     }
     final result = await ref
@@ -556,17 +559,16 @@ class SettingsScreen extends ConsumerWidget {
           apiKey: apiKey.trim().isEmpty ? null : apiKey.trim(),
         );
     if (!context.mounted) return;
-    messenger
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(
-          content: Text(
-            result.ok
-                ? 'Reachable: ${result.message}'
-                : 'Failed: ${result.message}',
-          ),
+    showTimedSnackBar(
+      messenger,
+      SnackBar(
+        content: Text(
+          result.ok
+              ? 'Reachable: ${result.message}'
+              : 'Failed: ${result.message}',
         ),
-      );
+      ),
+    );
   }
 
   Future<void> _syncNow(BuildContext context, WidgetRef ref) async {
@@ -577,9 +579,7 @@ class SettingsScreen extends ConsumerWidget {
     final msg = result.error != null
         ? 'Sync failed: ${result.error}'
         : 'Pushed ${result.pushed}, pulled ${result.pulled}';
-    messenger
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(msg)));
+    showTimedSnackBar(messenger, SnackBar(content: Text(msg)));
   }
 }
 

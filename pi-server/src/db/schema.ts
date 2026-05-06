@@ -109,6 +109,18 @@ export const agentTurns = sqliteTable("agent_turns", {
   at: integer("at").notNull().default(now),
 });
 
+// User-submitted diagnostics from the mobile app. These are intentionally
+// append-only and outside the sync changelog: feedback is for debugging the
+// parser/app, not part of the user's financial dataset.
+export const feedbackEvents = sqliteTable("feedback_events", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  kind: text("kind").notNull(), // 'sms_parse_failure' | future feedback types
+  message: text("message"),
+  payload: text("payload").notNull(), // JSON blob from the client
+  clientId: text("client_id"),
+  createdAt: integer("created_at").notNull().default(now),
+});
+
 // Append-only mutation log for sync clients. Each row is a single
 // row-level upsert/delete from any client. Clients pull rows after a
 // cursor (id) and apply LWW per-row by updatedAt.
@@ -151,3 +163,4 @@ export type NewTransaction = typeof transactions.$inferInsert;
 export type Budget = typeof budgets.$inferSelect;
 export type Recurrence = typeof recurrences.$inferSelect;
 export type ChangeLogEntry = typeof changeLog.$inferSelect;
+export type FeedbackEvent = typeof feedbackEvents.$inferSelect;
