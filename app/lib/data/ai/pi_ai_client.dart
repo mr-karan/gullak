@@ -34,7 +34,9 @@ class PiAiClient {
   };
 
   String _url(String path) {
-    final base = baseUrl.endsWith('/') ? baseUrl.substring(0, baseUrl.length - 1) : baseUrl;
+    final base = baseUrl.endsWith('/')
+        ? baseUrl.substring(0, baseUrl.length - 1)
+        : baseUrl;
     final p = path.startsWith('/') ? path : '/$path';
     return '$base$p';
   }
@@ -63,12 +65,16 @@ class PiAiClient {
     required String sender,
     required String body,
     required DateTime receivedAt,
+    List<NamedRow> categories = const [],
+    List<PayeeCategoryRow> payees = const [],
   }) async {
     try {
       final json = await _post('/v1/ai/sms/parse', {
         'sender': sender,
         'body': body,
         'receivedAt': receivedAt.millisecondsSinceEpoch,
+        'categories': categories.map((r) => r.toJson()).toList(),
+        'payees': payees.map((r) => r.toJson()).toList(),
       });
       return SmsParseResponse.fromJson(json);
     } on DioException catch (e) {
@@ -113,7 +119,18 @@ class NamedRow {
   const NamedRow(this.id, this.name);
   final String id;
   final String name;
-  Map<String, String> toJson() => {'id': id, 'name': name};
+  Map<String, dynamic> toJson() => {'id': id, 'name': name};
+}
+
+class PayeeCategoryRow extends NamedRow {
+  const PayeeCategoryRow(super.id, super.name, this.categoryId);
+  final String? categoryId;
+  @override
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'name': name,
+    if (categoryId != null) 'categoryId': categoryId,
+  };
 }
 
 class SmsParseResponse {
@@ -143,6 +160,8 @@ class SmsCandidatePayload {
     this.accountHint,
     this.bankRef,
     this.currency,
+    this.categoryHint,
+    this.categoryId,
   });
 
   final int amountCents;
@@ -154,6 +173,8 @@ class SmsCandidatePayload {
   final String? accountHint;
   final String? bankRef;
   final String? currency;
+  final String? categoryHint;
+  final String? categoryId;
 
   factory SmsCandidatePayload.fromJson(Map<String, dynamic> j) =>
       SmsCandidatePayload(
@@ -166,6 +187,8 @@ class SmsCandidatePayload {
         accountHint: j['accountHint'] as String?,
         bankRef: j['bankRef'] as String?,
         currency: j['currency'] as String?,
+        categoryHint: j['categoryHint'] as String?,
+        categoryId: j['categoryId'] as String?,
       );
 }
 

@@ -11,6 +11,7 @@ import '../../state/providers.dart';
 import '../../ui/theme.dart';
 import '../accounts/data/account_repository.dart';
 import '../categories/data/category_repository.dart';
+import '../categories/category_visuals.dart';
 import '../payees/data/payee_repository.dart';
 import '../transactions/data/transaction_repository.dart';
 import 'ai_extractor.dart';
@@ -383,6 +384,16 @@ class _TypeTabState extends ConsumerState<_TypeTab> {
             origin: 'ai',
             originRef: _ctrl.text,
           );
+      if (value.payeeId != null) {
+        await ref
+            .read(entryMemoryProvider)
+            .rememberPayeeMapping(
+              payeeId: value.payeeId!,
+              accountId: acctId,
+              categoryId: value.categoryId,
+            );
+        await ref.read(payeeRepoProvider).bumpUseCount(value.payeeId!);
+      }
       navigator.maybePop();
       messenger.showSnackBar(_savedSnackBar('Saved'));
     } catch (_) {
@@ -521,7 +532,10 @@ class _Preview extends StatelessWidget {
         if (parsed.accountHint != null)
           chip(parsed.accountHint!, Icons.account_balance_outlined),
         if (parsed.categoryHint != null)
-          chip(parsed.categoryHint!, Icons.label_outline),
+          chip(
+            '${defaultCategoryEmoji(parsed.categoryHint!)} ${parsed.categoryHint!}',
+            Icons.label_outline,
+          ),
         chip(_dateLabel(parsed.date), Icons.calendar_today_outlined),
         if (parsed.confidence < 0.5)
           chip(
@@ -854,7 +868,9 @@ class _FormTabState extends ConsumerState<_FormTab> {
                     _PickerRow(
                       icon: Icons.label_outline,
                       label: 'Category',
-                      value: _category?.name ?? 'Optional',
+                      value: _category == null
+                          ? 'Optional'
+                          : '${categoryEmoji(_category!.icon, _category!.name)} ${_category!.name}',
                       unset: _category == null,
                       onTap: _pickCategory,
                     ),
@@ -1062,11 +1078,11 @@ class _FormTabState extends ConsumerState<_FormTab> {
     final groups = await repo.listGroups();
     final cats = await repo.list();
     if (!mounted) return;
-    if (groups.isEmpty || cats.isEmpty) {
+    if (groups.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
-            'No categories yet. Add some in Settings → Categories.',
+            'No category groups yet. Add one in Settings → Categories.',
           ),
         ),
       );
@@ -1076,6 +1092,10 @@ class _FormTabState extends ConsumerState<_FormTab> {
     for (final c in cats) {
       byGroup.putIfAbsent(c.groupId, () => []).add(c);
     }
+    final defaultGroup = groups.firstWhere(
+      (g) => g.isIncome == _isIncome,
+      orElse: () => groups.first,
+    );
     final input = TextEditingController();
     CategoryRow? picked;
     try {
@@ -1092,6 +1112,7 @@ class _FormTabState extends ConsumerState<_FormTab> {
             child: StatefulBuilder(
               builder: (ctx, setSt) {
                 final q = input.text.trim().toLowerCase();
+                final addName = input.text.trim();
                 final visibleByGroup = <String, List<CategoryRow>>{};
                 for (final entry in byGroup.entries) {
                   final visible = q.isEmpty
@@ -1101,6 +1122,8 @@ class _FormTabState extends ConsumerState<_FormTab> {
                             .toList(growable: false);
                   if (visible.isNotEmpty) visibleByGroup[entry.key] = visible;
                 }
+                final exactExists = cats.any((c) => c.name.toLowerCase() == q);
+                final canAdd = addName.isNotEmpty && !exactExists;
                 return SizedBox(
                   height: MediaQuery.of(ctx).size.height * 0.7,
                   child: Column(
@@ -1112,7 +1135,7 @@ class _FormTabState extends ConsumerState<_FormTab> {
                           autofocus: true,
                           onChanged: (_) => setSt(() {}),
                           decoration: const InputDecoration(
-                            hintText: 'Search categories',
+                            hintText: 'Search or add category',
                             prefixIcon: Icon(Icons.search),
                           ),
                         ),
@@ -1120,6 +1143,23 @@ class _FormTabState extends ConsumerState<_FormTab> {
                       Expanded(
                         child: ListView(
                           children: [
+                            if (canAdd)
+                              ListTile(
+                                leading: const Icon(Icons.add),
+                                title: Text('Add "$addName"'),
+                                subtitle: Text('Under ${defaultGroup.name}'),
+                                onTap: () async {
+                                  final id = await repo.create(
+                                    name: addName,
+                                    groupId: defaultGroup.id,
+                                    icon: defaultCategoryEmoji(addName),
+                                  );
+                                  final row = await repo.byId(id);
+                                  if (row != null && ctx.mounted) {
+                                    Navigator.of(ctx).pop(row);
+                                  }
+                                },
+                              ),
                             for (final g in groups)
                               if ((visibleByGroup[g.id] ??
                                       const <CategoryRow>[])
@@ -1144,6 +1184,7 @@ class _FormTabState extends ConsumerState<_FormTab> {
                                 ),
                                 for (final c in visibleByGroup[g.id]!)
                                   ListTile(
+                                    leading: _CategoryEmoji(c),
                                     title: Text(c.name),
                                     onTap: () => Navigator.of(ctx).pop(c),
                                   ),
@@ -1382,6 +1423,25 @@ class _PickerRow extends StatelessWidget {
             Icon(Icons.chevron_right, size: 18, color: cs.onSurfaceVariant),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _CategoryEmoji extends StatelessWidget {
+  const _CategoryEmoji(this.category);
+  final CategoryRow category;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return CircleAvatar(
+      radius: 18,
+      backgroundColor: cs.secondaryContainer,
+      foregroundColor: cs.onSecondaryContainer,
+      child: Text(
+        categoryEmoji(category.icon, category.name),
+        style: const TextStyle(fontSize: 16),
       ),
     );
   }

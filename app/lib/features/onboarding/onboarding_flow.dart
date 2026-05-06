@@ -6,6 +6,7 @@ import '../../data/ai/pi_ai_client.dart';
 import '../../state/providers.dart';
 import '../accounts/data/account_repository.dart';
 import '../categories/data/category_repository.dart';
+import '../categories/category_visuals.dart';
 
 /// First-run wizard. Three quick steps:
 ///   1. Welcome + currency
@@ -268,10 +269,7 @@ class _WelcomeAndCurrency extends StatelessWidget {
       ),
       footer: SizedBox(
         width: double.infinity,
-        child: FilledButton(
-          onPressed: onNext,
-          child: const Text('Continue'),
-        ),
+        child: FilledButton(onPressed: onNext, child: const Text('Continue')),
       ),
     );
   }
@@ -465,10 +463,7 @@ class _SyncSetupState extends State<_SyncSetup> {
                       widget.onSkip();
                       return;
                     }
-                    widget.onSubmit(
-                      baseUrl: url,
-                      apiKey: _apiKey.text.trim(),
-                    );
+                    widget.onSubmit(baseUrl: url, apiKey: _apiKey.text.trim());
                   },
             child: const Text('Done'),
           ),
@@ -493,7 +488,11 @@ Future<void> _seedDefaults(WidgetRef ref) async {
   final income = await repo.createGroup(name: 'Income', isIncome: true);
 
   Future<void> add(String group, String name) async {
-    await repo.create(name: name, groupId: group);
+    await repo.create(
+      name: name,
+      groupId: group,
+      icon: defaultCategoryEmoji(name),
+    );
   }
 
   await add(daily, 'Groceries');

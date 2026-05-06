@@ -107,6 +107,16 @@ class SmsPipeline {
     await db.customStatement('DELETE FROM sms_messages');
   }
 
+  Future<int> retryFailedBackfill({
+    Duration window = const Duration(days: 90),
+  }) async {
+    await db.customStatement('DELETE FROM sms_parse_cache');
+    await db.customStatement(
+      "DELETE FROM sms_messages WHERE candidate_status IN ('error', 'none', 'duplicate')",
+    );
+    return backfill(window: window);
+  }
+
   Future<bool> _ingest(IncomingSms sms, {int? generation}) async {
     if (generation != null && generation != _generation) return false;
     if (sms.id != null) {
@@ -141,6 +151,8 @@ class SmsPipeline {
             'date': candidate.date.toIso8601String(),
             'payee': candidate.payee,
             'account_hint': candidate.accountHint,
+            'category_hint': candidate.categoryHint,
+            'category_id': candidate.categoryId,
             'bank_ref': candidate.bankRef,
             'confidence': candidate.confidence,
           });

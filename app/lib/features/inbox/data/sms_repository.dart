@@ -7,6 +7,7 @@ import '../../../data/db/database.dart';
 import '../../../state/providers.dart';
 import '../../accounts/data/account_repository.dart';
 import '../../categories/data/category_repository.dart';
+import '../../entry/entry_memory.dart';
 import '../../payees/data/payee_repository.dart';
 import '../../transactions/data/transaction_repository.dart';
 
@@ -105,12 +106,16 @@ class SmsRepository {
     String? payeeText;
     int? amount;
     String? accountHint;
+    String? categoryId;
+    String? categoryHint;
     if (r.candidateJson != null && r.candidateJson!.isNotEmpty) {
       try {
         final j = jsonDecode(r.candidateJson!) as Map<String, dynamic>;
         payeeText = j['payee'] as String?;
         amount = (j['amount_cents'] as num?)?.toInt();
         accountHint = (j['account_hint'] as String?)?.toLowerCase();
+        categoryId = j['category_id'] as String?;
+        categoryHint = (j['category_hint'] as String?)?.toLowerCase();
       } catch (_) {}
     }
 
@@ -128,7 +133,28 @@ class SmsRepository {
     }
 
     String? categoryName;
-    if (payeeText != null && payeeText.isNotEmpty) {
+    if (categoryId != null) {
+      for (final c in categories) {
+        if (c.id == categoryId) {
+          categoryName = c.name;
+          break;
+        }
+      }
+    }
+    if (categoryName == null &&
+        categoryHint != null &&
+        categoryHint.isNotEmpty) {
+      for (final c in categories) {
+        final n = c.name.toLowerCase();
+        if (n == categoryHint ||
+            n.contains(categoryHint) ||
+            categoryHint.contains(n)) {
+          categoryName = c.name;
+          break;
+        }
+      }
+    }
+    if (categoryName == null && payeeText != null && payeeText.isNotEmpty) {
       final pn = payeeText.toLowerCase();
       for (final p in payees) {
         final n = p.name.toLowerCase();
@@ -189,6 +215,8 @@ class SmsRepository {
     final isIncome = j['is_income'] == true;
     final payee = j['payee'] as String?;
     final accountHint = (j['account_hint'] as String?)?.toLowerCase();
+    var categoryId = j['category_id'] as String?;
+    final categoryHint = (j['category_hint'] as String?)?.toLowerCase();
     final dateStr = j['date'] as String?;
     final date = (dateStr != null)
         ? DateTime.tryParse(dateStr) ??
@@ -211,11 +239,31 @@ class SmsRepository {
     acctId ??= accounts.firstOrNull?.id;
     if (acctId == null) return false;
 
+    if (categoryId == null && categoryHint != null) {
+      final categories = await ref.read(categoryRepoProvider).list();
+      for (final c in categories) {
+        final n = c.name.toLowerCase();
+        if (n == categoryHint ||
+            n.contains(categoryHint) ||
+            categoryHint.contains(n)) {
+          categoryId = c.id;
+          break;
+        }
+      }
+    }
+
+    String? payeeId;
+    if (payee != null && payee.trim().isNotEmpty) {
+      payeeId = await ref.read(payeeRepoProvider).ensure(payee);
+    }
+
     final signed = isIncome ? amount.abs() : -amount.abs();
     await ref
         .read(transactionRepoProvider)
         .create(
           accountId: acctId,
+          categoryId: categoryId,
+          payeeId: payeeId,
           payeeName: payee,
           amountCents: signed,
           date: date,
@@ -223,6 +271,16 @@ class SmsRepository {
           origin: 'sms',
           originRef: row.id.toString(),
         );
+
+    if (payeeId != null) {
+      await ref
+          .read(entryMemoryProvider)
+          .rememberPayeeMapping(
+            payeeId: payeeId,
+            accountId: acctId,
+            categoryId: categoryId,
+          );
+    }
 
     await (_db.update(_db.smsMessages)..where((t) => t.id.equals(id))).write(
       const SmsMessagesCompanion(candidateStatus: Value('accepted')),

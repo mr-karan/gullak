@@ -14,6 +14,12 @@ const smsBody = z.object({
   sender: z.string().min(1).max(64),
   body: z.string().min(1).max(2000),
   receivedAt: z.number().int().nonnegative(),
+  categories: z.array(z.object({ id: z.string(), name: z.string() })).max(500).optional(),
+  payees: z.array(z.object({
+    id: z.string(),
+    name: z.string(),
+    categoryId: z.string().nullable().optional(),
+  })).max(2000).optional(),
 });
 
 aiRouter.post("/sms/parse", async (c) => {

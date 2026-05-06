@@ -27,6 +27,7 @@ Rules:
 - payee: the merchant or counterparty as written.
 - account_hint: bank/card name if mentioned ("hdfc", "axis card").
 - category_hint: a free-text category guess if obvious, else null.
+  Prefer a supplied category name. Use known payee→category mappings when present.
 - date: only set when the user explicitly named a day. "yesterday",
   "today", "5 may" → resolve against the supplied today.
 - Do NOT invent values. If unclear, leave that field null and lower
@@ -44,6 +45,7 @@ total amount as amount_minor. Set is_income=false unless the receipt
 is clearly a refund.`;
 
 const namedRow = z.object({ id: z.string(), name: z.string() });
+const payeeRow = namedRow.extend({ categoryId: z.string().nullable().optional() });
 
 export const quickEntryRequest = z.object({
   text: z.string().min(0).max(2000),
@@ -51,7 +53,7 @@ export const quickEntryRequest = z.object({
   minorDigits: z.number().int().min(0).max(4),
   accounts: z.array(namedRow).max(200).default([]),
   categories: z.array(namedRow).max(500).default([]),
-  payees: z.array(namedRow).max(2000).default([]),
+  payees: z.array(payeeRow).max(2000).default([]),
   imageBase64: z.string().optional(),
   imageMimeType: z.string().optional(),
 });
@@ -93,7 +95,7 @@ export async function parseQuickEntry(
     `minor_digits: ${minor}`,
     `accounts: ${req.accounts.map((a) => a.name).join(", ") || "(none)"}`,
     `categories: ${req.categories.map((c) => c.name).join(", ") || "(none)"}`,
-    `payees: ${req.payees.map((p) => p.name).join(", ") || "(none)"}`,
+    `payees: ${formatPayees(req.payees, req.categories)}`,
     `note: ${req.text}`,
   ];
   const raw = await chatJson<unknown>(config, {
@@ -105,6 +107,7 @@ export async function parseQuickEntry(
   const parsed = llmResponse.parse(raw);
   const amount = Math.trunc(parsed.amount_minor ?? 0);
   const date = isYmd(parsed.date) ? parsed.date! : null;
+  const categoryHint = trimOrNull(parsed.category_hint) ?? categoryForPayee(parsed.payee, req.payees, req.categories);
   return {
     amountCents: amount,
     isIncome: parsed.is_income === true,
@@ -112,12 +115,41 @@ export async function parseQuickEntry(
     payeeId: matchByName(parsed.payee, req.payees),
     accountHint: trimOrNull(parsed.account_hint),
     accountId: matchByName(parsed.account_hint, req.accounts),
-    categoryHint: trimOrNull(parsed.category_hint),
-    categoryId: matchByName(parsed.category_hint, req.categories),
+    categoryHint,
+    categoryId: matchByName(categoryHint, req.categories),
     notes: trimOrNull(parsed.notes),
     date,
     confidence: clampConfidence(parsed.confidence),
   };
+}
+
+function categoryForPayee(
+  rawPayee: unknown,
+  payees: { name: string; categoryId?: string | null }[],
+  categories: { id: string; name: string }[],
+): string | null {
+  if (typeof rawPayee !== "string") return null;
+  const payee = rawPayee.trim().toLowerCase();
+  if (!payee) return null;
+  for (const p of payees) {
+    const n = p.name.toLowerCase();
+    if ((n === payee || n.includes(payee) || payee.includes(n)) && p.categoryId) {
+      return categories.find((c) => c.id === p.categoryId)?.name ?? null;
+    }
+  }
+  return null;
+}
+
+function formatPayees(
+  payees: { name: string; categoryId?: string | null }[],
+  categories: { id: string; name: string }[],
+): string {
+  if (payees.length === 0) return "(none)";
+  const catById = new Map(categories.map((c) => [c.id, c.name]));
+  return payees
+    .slice(0, 300)
+    .map((p) => `${p.name}${p.categoryId ? `→${catById.get(p.categoryId) ?? p.categoryId}` : ""}`)
+    .join(", ");
 }
 
 function matchByName(

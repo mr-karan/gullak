@@ -17,6 +17,7 @@ Schema:
   "currency": "INR" | "USD" | "EUR" | "GBP" | "JPY" | other ISO code,
   "payee": string|null,
   "account_hint": string|null,
+  "category_hint": string|null,
   "date": string|null,
   "bank_ref": string|null,
   "confidence": number
@@ -32,6 +33,10 @@ Rules:
   means is_income=true; debited/spent/paid/sent/withdrawn/charged/purchase
   means is_income=false. Do not mark credits as expenses.
 - payee: extract the merchant name only, not the bank.
+- category_hint: choose one of the supplied categories when it clearly fits.
+  Use prior payee-category mappings when present; otherwise infer from merchant
+  words (Blinkit/BigBasket→Groceries, Zomato/Swiggy→Eating Out, Uber/Ola→Travel).
+  Return null when unsure.
 - account_hint: include the bank name AND last-4 of the card if
   present, e.g. "HDFC Card xx1234".
 - confidence: 0.9+ when transactional and unambiguous; 0.7 when
@@ -45,6 +50,7 @@ const llmResponse = z.object({
   currency: z.string().nullish(),
   payee: z.string().nullish(),
   account_hint: z.string().nullish(),
+  category_hint: z.string().nullish(),
   date: z.string().nullish(),
   bank_ref: z.string().nullish(),
   confidence: z.number().nullish(),
@@ -56,6 +62,8 @@ export interface SmsCandidate {
   currency: string | null;
   payee: string | null;
   accountHint: string | null;
+  categoryHint: string | null;
+  categoryId: string | null;
   date: string;
   bankRef: string | null;
   confidence: number;
@@ -71,6 +79,8 @@ export interface SmsParseRequest {
   sender: string;
   body: string;
   receivedAt: number;
+  categories?: { id: string; name: string }[];
+  payees?: { id: string; name: string; categoryId?: string | null }[];
 }
 
 export async function parseSms(
@@ -78,7 +88,13 @@ export async function parseSms(
   req: SmsParseRequest,
 ): Promise<SmsParseResult> {
   const receivedDate = new Date(req.receivedAt).toISOString();
-  const user = `<sender>: ${req.sender}\n<received_at>: ${receivedDate}\n<body>: ${req.body}`;
+  const user = [
+    `<sender>: ${req.sender}`,
+    `<received_at>: ${receivedDate}`,
+    `<categories>: ${formatNamedRows(req.categories)}`,
+    `<known_payees>: ${formatPayees(req.payees, req.categories)}`,
+    `<body>: ${req.body}`,
+  ].join("\n");
 
   const raw = await chatJson<unknown>(config, {
     system: SYSTEM,
@@ -94,6 +110,8 @@ export async function parseSms(
   }
   const dateStr = isYmd(parsed.date) ? parsed.date! : ymd(new Date(req.receivedAt));
   const inferredIncome = inferIncomeFromBody(req.body) ?? (parsed.is_income === true);
+  const categoryHint = trimOrNull(parsed.category_hint) ?? inferCategoryHint(parsed.payee, req.categories, req.payees);
+  const categoryId = matchByName(categoryHint, req.categories ?? []);
   return {
     isTransaction: true,
     candidate: {
@@ -102,12 +120,80 @@ export async function parseSms(
       currency: parsed.currency ?? null,
       payee: trimOrNull(parsed.payee),
       accountHint: trimOrNull(parsed.account_hint),
+      categoryHint,
+      categoryId,
       date: dateStr,
       bankRef: trimOrNull(parsed.bank_ref),
       confidence: clampConfidence(parsed.confidence),
       parserVersion: 2,
     },
   };
+}
+
+function formatNamedRows(rows: { name: string }[] | undefined): string {
+  return rows?.map((r) => r.name).join(", ") || "(none)";
+}
+
+function formatPayees(
+  payees: { name: string; categoryId?: string | null }[] | undefined,
+  categories: { id: string; name: string }[] | undefined,
+): string {
+  if (!payees?.length) return "(none)";
+  const catById = new Map((categories ?? []).map((c) => [c.id, c.name]));
+  return payees
+    .slice(0, 300)
+    .map((p) => `${p.name}${p.categoryId ? `→${catById.get(p.categoryId) ?? p.categoryId}` : ""}`)
+    .join(", ");
+}
+
+function inferCategoryHint(
+  rawPayee: unknown,
+  categories: { id: string; name: string }[] | undefined,
+  payees: { name: string; categoryId?: string | null }[] | undefined,
+): string | null {
+  if (typeof rawPayee !== "string") return null;
+  const payee = rawPayee.trim().toLowerCase();
+  if (!payee) return null;
+  for (const p of payees ?? []) {
+    const n = p.name.toLowerCase();
+    if ((n === payee || n.includes(payee) || payee.includes(n)) && p.categoryId) {
+      return categories?.find((c) => c.id === p.categoryId)?.name ?? null;
+    }
+  }
+  const rules: [RegExp, string[]][] = [
+    [/(blinkit|bigbasket|zepto|dmart|grocer|supermarket)/, ["groceries", "grocery"]],
+    [/(zomato|swiggy|restaurant|cafe|coffee|pizza|burger|food)/, ["eating out", "food"]],
+    [/(uber|ola|rapido|metro|fuel|petrol|diesel|parking|toll)/, ["travel", "transport"]],
+    [/(amazon|flipkart|myntra|nykaa|shopping|paytm)/, ["shopping"]],
+    [/(netflix|spotify|prime|hotstar|bookmyshow|movie)/, ["entertainment"]],
+    [/(salary|interest|dividend)/, ["salary", "income"]],
+  ];
+  const names = (categories ?? []).map((c) => c.name);
+  for (const [re, wanted] of rules) {
+    if (!re.test(payee)) continue;
+    for (const w of wanted) {
+      const match = names.find((n) => n.toLowerCase() === w || n.toLowerCase().includes(w));
+      if (match) return match;
+    }
+  }
+  return null;
+}
+
+function matchByName(
+  raw: unknown,
+  rows: { id: string; name: string }[],
+): string | null {
+  if (typeof raw !== "string") return null;
+  const hint = raw.trim().toLowerCase();
+  if (hint.length === 0 || rows.length === 0) return null;
+  for (const r of rows) {
+    if (r.name.toLowerCase() === hint) return r.id;
+  }
+  for (const r of rows) {
+    const n = r.name.toLowerCase();
+    if (n.includes(hint) || hint.includes(n)) return r.id;
+  }
+  return null;
 }
 
 function inferIncomeFromBody(body: string): boolean | null {
@@ -118,7 +204,7 @@ function inferIncomeFromBody(body: string): boolean | null {
   // credited/received amount correctly but still mark it as an expense.
   const incomePatterns = [
     /\bcredited\b/,
-    /\bcredit\b/,
+    /\bcredit(?:ed)?\s+to\b/,
     /\breceived\b/,
     /\brecvd\b/,
     /\bdeposited\b/,

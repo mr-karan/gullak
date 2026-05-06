@@ -1,10 +1,12 @@
 import 'dart:typed_data';
+import 'dart:convert';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/clock.dart';
 import '../../core/logger.dart';
 import '../../data/ai/pi_ai_client.dart';
+import '../../state/providers.dart';
 import '../accounts/data/account_repository.dart';
 import '../categories/data/category_repository.dart';
 import '../payees/data/payee_repository.dart';
@@ -49,6 +51,7 @@ class AiExtractor {
     required this.categoryRepo,
     required this.payeeRepo,
     required this.minorDigits,
+    this.payeeCategoryHintsJson = '{}',
   });
 
   final PiAiClient client;
@@ -56,6 +59,7 @@ class AiExtractor {
   final CategoryRepository categoryRepo;
   final PayeeRepository payeeRepo;
   final int minorDigits;
+  final String payeeCategoryHintsJson;
 
   Future<ParsedExpense> parse(String text) =>
       _parse(noteText: text, imageBytes: null);
@@ -78,6 +82,7 @@ class AiExtractor {
     final accounts = await accountRepo.list();
     final categories = await categoryRepo.list();
     final payees = await payeeRepo.list();
+    final categoryHints = _decodeHints(payeeCategoryHintsJson);
 
     final response = await client.parseQuickEntry(
       text: noteText,
@@ -85,7 +90,9 @@ class AiExtractor {
       minorDigits: minorDigits,
       accounts: accounts.map((a) => NamedRow(a.id, a.name)).toList(),
       categories: categories.map((c) => NamedRow(c.id, c.name)).toList(),
-      payees: payees.map((p) => NamedRow(p.id, p.name)).toList(),
+      payees: payees
+          .map((p) => PayeeCategoryRow(p.id, p.name, categoryHints[p.id]))
+          .toList(),
       imageBytes: imageBytes == null ? null : Uint8List.fromList(imageBytes),
       imageMimeType: imageMimeType,
     );
@@ -120,6 +127,16 @@ class AiExtractor {
 
   static String _ymd(DateTime d) =>
       '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+  Map<String, String> _decodeHints(String raw) {
+    try {
+      final m = jsonDecode(raw) as Map<String, dynamic>;
+      return m.map((k, v) => MapEntry(k, v is String ? v : ''))
+        ..removeWhere((_, v) => v.isEmpty);
+    } catch (_) {
+      return const {};
+    }
+  }
 }
 
 final FutureProvider<AiExtractor?> aiExtractorProvider =
@@ -132,5 +149,6 @@ final FutureProvider<AiExtractor?> aiExtractorProvider =
         categoryRepo: ref.watch(categoryRepoProvider),
         payeeRepo: ref.watch(payeeRepoProvider),
         minorDigits: 2,
+        payeeCategoryHintsJson: ref.watch(prefsProvider).payeeCategoryHints,
       );
     });

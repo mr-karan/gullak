@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/money.dart';
+import '../../data/sms/sms_pipeline.dart';
 import '../../state/providers.dart';
 import '../../ui/theme.dart';
 import '../../ui/widgets/empty_state.dart';
@@ -18,6 +19,11 @@ class InboxScreen extends ConsumerWidget {
       appBar: AppBar(
         title: const Text('Inbox'),
         actions: [
+          IconButton(
+            tooltip: 'Refresh SMS',
+            icon: const Icon(Icons.refresh),
+            onPressed: () => _refreshSms(context, ref),
+          ),
           asyncRows.maybeWhen(
             data: (rows) {
               final ready = rows.where((r) => r.hasCandidate).length;
@@ -60,6 +66,28 @@ class InboxScreen extends ConsumerWidget {
         error: (e, _) => Center(child: Text('Error: $e')),
       ),
     );
+  }
+
+  void _refreshSms(BuildContext context, WidgetRef ref) {
+    final messenger = ScaffoldMessenger.of(context);
+    messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(const SnackBar(content: Text('Scanning SMS inbox…')));
+    ref
+        .read(smsPipelineProvider)
+        .retryFailedBackfill()
+        .then((added) {
+          messenger
+            ..hideCurrentSnackBar()
+            ..showSnackBar(
+              SnackBar(content: Text('SMS refresh complete — $added new.')),
+            );
+        })
+        .catchError((Object e) {
+          messenger
+            ..hideCurrentSnackBar()
+            ..showSnackBar(SnackBar(content: Text('SMS refresh failed: $e')));
+        });
   }
 
   Future<void> _confirmAll(
@@ -191,9 +219,9 @@ class _InboxRow extends ConsumerWidget {
               const SizedBox(height: 8),
               Text(
                 'Couldn\'t parse this one — open it manually to log.',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: cs.error,
-                ),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: cs.error),
               ),
             ],
             const SizedBox(height: 12),
@@ -212,6 +240,12 @@ class _InboxRow extends ConsumerWidget {
                   child: const Text('Dismiss'),
                 ),
                 const SizedBox(width: 4),
+                if (!item.hasCandidate)
+                  IconButton(
+                    tooltip: 'Parse debug',
+                    icon: const Icon(Icons.smart_toy_outlined, size: 20),
+                    onPressed: () => _showParseDebug(context, item),
+                  ),
                 if (item.hasCandidate)
                   FilledButton.tonal(
                     onPressed: () =>
@@ -239,6 +273,52 @@ class _InboxRow extends ConsumerWidget {
     if (diff.inHours < 24) return '${diff.inHours}h ago';
     if (diff.inDays < 7) return '${diff.inDays}d ago';
     return '${t.day}/${t.month}/${t.year % 100}';
+  }
+
+  void _showParseDebug(BuildContext context, InboxItem item) {
+    showDialog<void>(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.smart_toy_outlined, size: 20),
+            SizedBox(width: 8),
+            Text('Parse debug'),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'This row was classified as transactional, but had no parser candidate when it was ingested.',
+              ),
+              const SizedBox(height: 12),
+              Text('Status: ${item.status}'),
+              Text('Sender: ${item.address}'),
+              Text(
+                'Received: ${DateTime.fromMillisecondsSinceEpoch(item.receivedAt)}',
+              ),
+              const SizedBox(height: 12),
+              const Text('SMS body'),
+              const SizedBox(height: 4),
+              SelectableText(item.body),
+              const SizedBox(height: 12),
+              const Text(
+                'After parser fixes, tap Inbox refresh. It now clears failed rows before rescanning, so stale failures are retried.',
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogCtx).pop(),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
   }
 }
 

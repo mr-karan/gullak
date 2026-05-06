@@ -1,6 +1,12 @@
+import 'dart:convert';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/logger.dart';
+import '../../core/prefs.dart';
+import '../../features/categories/data/category_repository.dart';
+import '../../features/payees/data/payee_repository.dart';
+import '../../state/providers.dart';
 import '../ai/pi_ai_client.dart';
 import 'sms_models.dart';
 import 'sms_parser.dart';
@@ -10,17 +16,27 @@ import 'sms_parser.dart';
 /// just hands the SMS to `/v1/ai/sms/parse` and reads back the typed
 /// candidate.
 class LlmSmsParser implements SmsParser {
-  LlmSmsParser(this._client);
+  LlmSmsParser(this._client, this._categoryRepo, this._payeeRepo, this._prefs);
   final PiAiClient _client;
+  final CategoryRepository _categoryRepo;
+  final PayeeRepository _payeeRepo;
+  final Prefs _prefs;
 
   @override
   Future<SmsCandidate?> parse(IncomingSms sms) async {
     final SmsParseResponse response;
     try {
+      final categories = await _categoryRepo.list();
+      final payees = await _payeeRepo.list();
+      final categoryHints = _decodeHints(_prefs.payeeCategoryHints);
       response = await _client.parseSms(
         sender: sms.address,
         body: sms.body,
         receivedAt: sms.receivedAt,
+        categories: categories.map((c) => NamedRow(c.id, c.name)).toList(),
+        payees: payees
+            .map((p) => PayeeCategoryRow(p.id, p.name, categoryHints[p.id]))
+            .toList(),
       );
     } on PiAiException catch (e) {
       log.w('pi-server sms parse failed: ${e.message}');
@@ -36,8 +52,20 @@ class LlmSmsParser implements SmsParser {
       payee: c.payee,
       accountHint: c.accountHint,
       bankRef: c.bankRef,
+      categoryHint: c.categoryHint,
+      categoryId: c.categoryId,
       parserVersion: c.parserVersion,
     );
+  }
+
+  Map<String, String> _decodeHints(String raw) {
+    try {
+      final m = jsonDecode(raw) as Map<String, dynamic>;
+      return m.map((k, v) => MapEntry(k, v is String ? v : ''))
+        ..removeWhere((_, v) => v.isEmpty);
+    } catch (_) {
+      return const {};
+    }
   }
 }
 
@@ -45,5 +73,10 @@ final FutureProvider<LlmSmsParser?> llmSmsParserProvider =
     FutureProvider<LlmSmsParser?>((ref) async {
       final client = await ref.watch(piAiClientProvider.future);
       if (client == null) return null;
-      return LlmSmsParser(client);
+      return LlmSmsParser(
+        client,
+        ref.watch(categoryRepoProvider),
+        ref.watch(payeeRepoProvider),
+        ref.watch(prefsProvider),
+      );
     });

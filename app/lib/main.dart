@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -59,7 +61,12 @@ class _GullakAppState extends ConsumerState<GullakApp> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       if (ref.read(prefsProvider).smsEnabled) {
-        ref.read(smsPipelineProvider).startListening();
+        final pipeline = ref.read(smsPipelineProvider);
+        pipeline.startListening();
+        // The platform SMS background callback is best-effort on modern
+        // Android. On launch, also sweep the inbox so messages received while
+        // Gullak was killed still get deduped + parsed automatically.
+        unawaited(pipeline.backfill());
       }
     });
   }

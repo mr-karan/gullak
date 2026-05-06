@@ -22,6 +22,8 @@ class SmsCandidate {
     required this.confidence,
     this.payee,
     this.accountHint,
+    this.categoryHint,
+    this.categoryId,
     this.bankRef,
     this.parserVersion = 1,
   });
@@ -32,6 +34,8 @@ class SmsCandidate {
   final double confidence;
   final String? payee;
   final String? accountHint;
+  final String? categoryHint;
+  final String? categoryId;
   final String? bankRef;
   final int parserVersion;
 }

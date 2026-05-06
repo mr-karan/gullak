@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../state/providers.dart';
 import '../../ui/widgets/empty_state.dart';
+import 'category_visuals.dart';
 import 'data/category_repository.dart';
 
 class CategoriesScreen extends ConsumerWidget {
@@ -51,10 +52,11 @@ class CategoriesScreen extends ConsumerWidget {
             byGroup.putIfAbsent(c.groupId, () => []).add(c);
           }
           return ListView(
+            padding: const EdgeInsets.only(bottom: 32),
             children: [
               for (final g in groups) ...[
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 24, 8, 8),
+                  padding: const EdgeInsets.fromLTRB(16, 24, 8, 10),
                   child: Row(
                     children: [
                       Expanded(
@@ -81,16 +83,23 @@ class CategoriesScreen extends ConsumerWidget {
                   ),
                 ),
                 for (final c in byGroup[g.id] ?? const <CategoryRow>[])
-                  ListTile(
-                    title: Text(c.name),
-                    onTap: () => _editCategory(context, ref, c),
-                    trailing: IconButton(
-                      icon: const Icon(Icons.delete_outline),
-                      onPressed: () => _deleteCategory(context, ref, c),
+                  Card(
+                    margin: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 4,
+                    ),
+                    child: ListTile(
+                      leading: _EmojiBadge(categoryEmoji(c.icon, c.name)),
+                      title: Text(c.name),
+                      subtitle: Text(g.name),
+                      onTap: () => _editCategory(context, ref, c),
+                      trailing: IconButton(
+                        icon: const Icon(Icons.delete_outline),
+                        onPressed: () => _deleteCategory(context, ref, c),
+                      ),
                     ),
                   ),
               ],
-              const SizedBox(height: 32),
             ],
           );
         },
@@ -217,6 +226,7 @@ class CategoriesScreen extends ConsumerWidget {
       return;
     }
     final ctrl = TextEditingController();
+    final iconCtrl = TextEditingController();
     String groupId = groups.first.id;
     try {
       if (!context.mounted) return;
@@ -232,6 +242,14 @@ class CategoriesScreen extends ConsumerWidget {
                   controller: ctrl,
                   autofocus: true,
                   decoration: const InputDecoration(labelText: 'Name'),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: iconCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Emoji',
+                    hintText: 'Auto-picked if blank',
+                  ),
                 ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
@@ -259,12 +277,17 @@ class CategoriesScreen extends ConsumerWidget {
         ),
       );
       if (ok == true && ctrl.text.trim().isNotEmpty) {
+        final name = ctrl.text.trim();
+        final icon = iconCtrl.text.trim().isEmpty
+            ? defaultCategoryEmoji(name)
+            : iconCtrl.text.trim();
         await ref
             .read(categoryRepoProvider)
-            .create(name: ctrl.text.trim(), groupId: groupId);
+            .create(name: name, groupId: groupId, icon: icon);
       }
     } finally {
       ctrl.dispose();
+      iconCtrl.dispose();
     }
   }
 
@@ -274,29 +297,49 @@ class CategoriesScreen extends ConsumerWidget {
     CategoryRow c,
   ) async {
     final ctrl = TextEditingController(text: c.name);
+    final iconCtrl = TextEditingController(text: c.icon ?? '');
     try {
-      final v = await showDialog<String>(
+      final ok = await showDialog<bool>(
         context: context,
-        builder: (_) => AlertDialog(
+        builder: (dialogCtx) => AlertDialog(
           title: const Text('Rename category'),
-          content: TextField(controller: ctrl, autofocus: true),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(controller: ctrl, autofocus: true),
+              const SizedBox(height: 12),
+              TextField(
+                controller: iconCtrl,
+                decoration: const InputDecoration(labelText: 'Emoji'),
+              ),
+            ],
+          ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.of(context).pop(),
+              onPressed: () => Navigator.of(dialogCtx).pop(false),
               child: const Text('Cancel'),
             ),
             FilledButton(
-              onPressed: () => Navigator.of(context).pop(ctrl.text),
+              onPressed: () => Navigator.of(dialogCtx).pop(true),
               child: const Text('Save'),
             ),
           ],
         ),
       );
-      if (v != null && v.trim().isNotEmpty) {
-        await ref.read(categoryRepoProvider).update(c.id, name: v.trim());
+      if (ok == true && ctrl.text.trim().isNotEmpty) {
+        await ref
+            .read(categoryRepoProvider)
+            .update(
+              c.id,
+              name: ctrl.text.trim(),
+              icon: iconCtrl.text.trim().isEmpty
+                  ? defaultCategoryEmoji(ctrl.text.trim())
+                  : iconCtrl.text.trim(),
+            );
       }
     } finally {
       ctrl.dispose();
+      iconCtrl.dispose();
     }
   }
 
@@ -325,5 +368,20 @@ class CategoriesScreen extends ConsumerWidget {
       ),
     );
     if (ok == true) await ref.read(categoryRepoProvider).deleteCategory(c.id);
+  }
+}
+
+class _EmojiBadge extends StatelessWidget {
+  const _EmojiBadge(this.emoji);
+  final String emoji;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return CircleAvatar(
+      backgroundColor: cs.secondaryContainer,
+      foregroundColor: cs.onSecondaryContainer,
+      child: Text(emoji, style: const TextStyle(fontSize: 18)),
+    );
   }
 }
