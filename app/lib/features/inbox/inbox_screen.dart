@@ -1,13 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../core/money.dart';
 import '../../core/snackbars.dart';
 import '../../data/ai/pi_ai_client.dart';
 import '../../data/sms/sms_pipeline.dart';
 import '../../state/providers.dart';
-import '../../ui/theme.dart';
 import '../../ui/widgets/empty_state.dart';
+import '../../ui/widgets/money_text.dart';
 import '../entry/quick_entry.dart';
 import 'data/sms_repository.dart';
 
@@ -18,8 +17,21 @@ class InboxScreen extends ConsumerStatefulWidget {
   ConsumerState<InboxScreen> createState() => _InboxScreenState();
 }
 
+enum _InboxAction { refresh, retryFailed }
+
+enum _InboxBucket {
+  ready('Ready', Icons.task_alt_outlined),
+  review('Review', Icons.rate_review_outlined),
+  matched('Matched', Icons.link_outlined),
+  ignored('Ignored', Icons.visibility_off_outlined);
+
+  const _InboxBucket(this.label, this.icon);
+  final String label;
+  final IconData icon;
+}
+
 class _InboxScreenState extends ConsumerState<InboxScreen> {
-  bool _showIgnored = false;
+  _InboxBucket _bucket = _InboxBucket.ready;
   bool _scanning = false;
 
   @override
@@ -34,84 +46,71 @@ class _InboxScreenState extends ConsumerState<InboxScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final asyncRows = _showIgnored
-        ? ref.watch(ignoredInboxItemsProvider)
-        : ref.watch(inboxItemsProvider);
+    final asyncRows = switch (_bucket) {
+      _InboxBucket.ignored => ref.watch(ignoredInboxItemsProvider),
+      _InboxBucket.matched => ref.watch(matchedInboxItemsProvider),
+      _InboxBucket.ready ||
+      _InboxBucket.review => ref.watch(inboxItemsProvider),
+    };
     final prefs = watchPrefs(ref);
     final pipeline = ref.watch(smsPipelineProvider);
     return Scaffold(
       appBar: AppBar(
-        title: ValueListenableBuilder<SmsScanState>(
-          valueListenable: pipeline.scanState,
-          builder: (context, scan, _) {
-            final count = asyncRows.maybeWhen(
-              data: (r) => r.length,
-              orElse: () => 0,
-            );
-            if (!scan.running) return const Text('Inbox');
-            return Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const SizedBox(
-                  width: 14,
-                  height: 14,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  'Inbox — $count items',
-                  style: Theme.of(context).textTheme.titleMedium,
+        title: const Text('Inbox'),
+        actions: [
+          asyncRows.maybeWhen(
+            data: (rows) {
+              final failed = rows.where((r) => r.status == 'error').length;
+              return PopupMenuButton<_InboxAction>(
+                tooltip: 'Inbox actions',
+                onSelected: (action) {
+                  switch (action) {
+                    case _InboxAction.refresh:
+                      _refreshSms(context, ref);
+                    case _InboxAction.retryFailed:
+                      _retryFailedSms(context, ref, failed);
+                  }
+                },
+                itemBuilder: (context) => [
+                  const PopupMenuItem(
+                    value: _InboxAction.refresh,
+                    child: ListTile(
+                      leading: Icon(Icons.refresh),
+                      title: Text('Scan SMS'),
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                  ),
+                  if (_bucket != _InboxBucket.ignored && failed > 0)
+                    PopupMenuItem(
+                      value: _InboxAction.retryFailed,
+                      enabled: !_scanning,
+                      child: ListTile(
+                        leading: const Icon(Icons.replay_outlined),
+                        title: Text('Retry failed ($failed)'),
+                        contentPadding: EdgeInsets.zero,
+                      ),
+                    ),
+                ],
+              );
+            },
+            orElse: () => PopupMenuButton<_InboxAction>(
+              tooltip: 'Inbox actions',
+              onSelected: (action) {
+                switch (action) {
+                  case _InboxAction.refresh:
+                    _refreshSms(context, ref);
+                  case _InboxAction.retryFailed:
+                    break;
+                }
+              },
+              itemBuilder: (context) => [
+                const PopupMenuItem(
+                  value: _InboxAction.refresh,
+                  child: Text('Scan SMS'),
                 ),
               ],
-            );
-          },
-        ),
-        actions: [
-          IconButton(
-            tooltip: _showIgnored
-                ? 'Show pending SMS'
-                : 'Show ignored SMS (non-transactional, dismissed, duplicates)',
-            icon: Icon(
-              _showIgnored
-                  ? Icons.visibility_outlined
-                  : Icons.visibility_off_outlined,
             ),
-            onPressed: () => setState(() => _showIgnored = !_showIgnored),
           ),
-          IconButton(
-            tooltip: 'Refresh SMS',
-            icon: const Icon(Icons.refresh),
-            onPressed: () => _refreshSms(context, ref),
-          ),
-          if (!_showIgnored)
-            asyncRows.maybeWhen(
-              data: (rows) {
-                final failed = rows.where((r) => r.status == 'error').length;
-                if (failed > 0) {
-                  return Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: TextButton.icon(
-                      onPressed: _scanning
-                          ? null
-                          : () => _retryFailedSms(context, ref, failed),
-                      icon: const Icon(Icons.replay_outlined, size: 18),
-                      label: Text('Retry + rescan ($failed)'),
-                    ),
-                  );
-                }
-                final ready = rows.where((r) => r.hasCandidate).length;
-                if (ready == 0) return const SizedBox.shrink();
-                return Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: TextButton.icon(
-                    onPressed: () => _confirmAll(context, ref, ready),
-                    icon: const Icon(Icons.done_all, size: 18),
-                    label: Text('Confirm all ($ready)'),
-                  ),
-                );
-              },
-              orElse: () => const SizedBox.shrink(),
-            ),
         ],
       ),
       body: Column(
@@ -120,32 +119,47 @@ class _InboxScreenState extends ConsumerState<InboxScreen> {
             valueListenable: pipeline.scanState,
             builder: (context, scan, _) => _SmsScanBanner(scan: scan),
           ),
+          asyncRows.maybeWhen(
+            data: (rows) => _InboxBucketTabs(
+              selected: _bucket,
+              rows: rows,
+              onChanged: (bucket) => setState(() => _bucket = bucket),
+            ),
+            orElse: () => _InboxBucketTabs(
+              selected: _bucket,
+              rows: const [],
+              onChanged: (bucket) => setState(() => _bucket = bucket),
+            ),
+          ),
+          if (_bucket == _InboxBucket.ready)
+            asyncRows.maybeWhen(
+              data: (rows) => _InboxBulkActions(
+                rows: rows,
+                scanning: _scanning,
+                onConfirmAll: (ready) => _confirmAll(context, ref, ready),
+              ),
+              orElse: () => const SizedBox.shrink(),
+            ),
           Expanded(
             child: asyncRows.when(
               data: (rows) {
-                if (rows.isEmpty) {
+                final visibleRows = _filterRows(rows);
+                if (visibleRows.isEmpty) {
                   return EmptyState(
-                    icon: _showIgnored
-                        ? Icons.layers_clear_outlined
-                        : Icons.inbox_outlined,
-                    title: _showIgnored ? 'No ignored SMS' : 'All caught up',
-                    body: _showIgnored
-                        ? 'OTPs, marketing, and other non-transactional messages '
-                              'will show here. Tap one to log it as a transaction '
-                              'manually if the classifier got it wrong.'
-                        : 'New bank SMS that look like transactions will land '
-                              'here for review.',
+                    icon: _emptyIcon,
+                    title: _emptyTitle,
+                    body: _emptyBody,
                   );
                 }
                 return ListView.separated(
                   padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-                  itemCount: rows.length,
+                  itemCount: visibleRows.length,
                   separatorBuilder: (_, _) => const SizedBox(height: 12),
                   itemBuilder: (_, i) => _InboxRow(
-                    item: rows[i],
+                    item: visibleRows[i],
                     symbol: prefs.currencySymbol,
                     minorDigits: prefs.currencyMinorDigits,
-                    isIgnoredView: _showIgnored,
+                    bucket: _bucket,
                   ),
                 );
               },
@@ -157,6 +171,37 @@ class _InboxScreenState extends ConsumerState<InboxScreen> {
       ),
     );
   }
+
+  List<InboxItem> _filterRows(List<InboxItem> rows) => switch (_bucket) {
+    _InboxBucket.ready => rows.where((r) => r.hasCandidate).toList(),
+    _InboxBucket.review => rows.where((r) => !r.hasCandidate).toList(),
+    _InboxBucket.matched || _InboxBucket.ignored => rows,
+  };
+
+  IconData get _emptyIcon => switch (_bucket) {
+    _InboxBucket.ready => Icons.task_alt_outlined,
+    _InboxBucket.review => Icons.rate_review_outlined,
+    _InboxBucket.matched => Icons.link_outlined,
+    _InboxBucket.ignored => Icons.layers_clear_outlined,
+  };
+
+  String get _emptyTitle => switch (_bucket) {
+    _InboxBucket.ready => 'No ready SMS',
+    _InboxBucket.review => 'No SMS need review',
+    _InboxBucket.matched => 'No matched SMS yet',
+    _InboxBucket.ignored => 'No ignored SMS',
+  };
+
+  String get _emptyBody => switch (_bucket) {
+    _InboxBucket.ready =>
+      'Parsed bank SMS that are ready to confirm will show here.',
+    _InboxBucket.review =>
+      'SMS with unclear amount, merchant, account, or transfer intent will show here.',
+    _InboxBucket.matched =>
+      'Confirmed and duplicate SMS matches will show here for audit.',
+    _InboxBucket.ignored =>
+      'OTPs, marketing, and dismissed messages will show here. Tap one to log it manually if needed.',
+  };
 
   void _refreshSms(BuildContext context, WidgetRef ref) {
     if (_scanning) return;
@@ -313,21 +358,99 @@ class _SmsScanBanner extends StatelessWidget {
   }
 }
 
+class _InboxBulkActions extends StatelessWidget {
+  const _InboxBulkActions({
+    required this.rows,
+    required this.scanning,
+    required this.onConfirmAll,
+  });
+
+  final List<InboxItem> rows;
+  final bool scanning;
+  final ValueChanged<int> onConfirmAll;
+
+  @override
+  Widget build(BuildContext context) {
+    final ready = rows.where((r) => r.hasCandidate).length;
+    if (ready == 0) return const SizedBox.shrink();
+
+    final cs = Theme.of(context).colorScheme;
+    return Material(
+      color: cs.surface,
+      child: SafeArea(
+        top: false,
+        bottom: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+          child: SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              onPressed: scanning ? null : () => onConfirmAll(ready),
+              icon: const Icon(Icons.done_all, size: 18),
+              label: Text('Confirm all ($ready)'),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _InboxBucketTabs extends StatelessWidget {
+  const _InboxBucketTabs({
+    required this.selected,
+    required this.rows,
+    required this.onChanged,
+  });
+
+  final _InboxBucket selected;
+  final List<InboxItem> rows;
+  final ValueChanged<_InboxBucket> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Theme.of(context).colorScheme.surface,
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+        child: SegmentedButton<_InboxBucket>(
+          showSelectedIcon: false,
+          segments: [
+            for (final bucket in _InboxBucket.values)
+              ButtonSegment(
+                value: bucket,
+                icon: Icon(bucket.icon, size: 18),
+                label: Text('${bucket.label} (${_count(bucket)})'),
+              ),
+          ],
+          selected: {selected},
+          onSelectionChanged: (value) => onChanged(value.single),
+        ),
+      ),
+    );
+  }
+
+  int _count(_InboxBucket bucket) => switch (bucket) {
+    _InboxBucket.ready => rows.where((r) => r.hasCandidate).length,
+    _InboxBucket.review => rows.where((r) => !r.hasCandidate).length,
+    _InboxBucket.matched || _InboxBucket.ignored => rows.length,
+  };
+}
+
 class _InboxRow extends ConsumerWidget {
   const _InboxRow({
     required this.item,
     required this.symbol,
     required this.minorDigits,
-    this.isIgnoredView = false,
+    required this.bucket,
   });
 
   final InboxItem item;
   final String symbol;
   final int minorDigits;
 
-  /// When true, the row is rendered for the "Ignored" view: subdued
-  /// styling, a status hint, and "Log manually" instead of Confirm.
-  final bool isIgnoredView;
+  final _InboxBucket bucket;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -355,13 +478,12 @@ class _InboxRow extends ConsumerWidget {
                   ),
                 ),
                 if (amount != null)
-                  Text(
-                    Money.format(
-                      amount,
-                      symbol: symbol,
-                      minorDigits: minorDigits,
-                    ),
-                    style: moneyStyle(context, size: 16),
+                  MoneyText(
+                    amountCents: item.suggestedIsIncome ? amount : -amount,
+                    symbol: symbol,
+                    minorDigits: minorDigits,
+                    showSign: true,
+                    color: item.suggestedIsIncome ? cs.tertiary : null,
                   ),
               ],
             ),
@@ -394,10 +516,11 @@ class _InboxRow extends ConsumerWidget {
                 ],
               ),
             ],
-            if (isIgnoredView) ...[
+            if (bucket == _InboxBucket.ignored ||
+                bucket == _InboxBucket.matched) ...[
               const SizedBox(height: 8),
               Text(
-                _ignoredReason(item.status),
+                _statusReason(item.status),
                 style: Theme.of(
                   context,
                 ).textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant),
@@ -405,7 +528,7 @@ class _InboxRow extends ConsumerWidget {
             ] else if (!item.hasCandidate) ...[
               const SizedBox(height: 8),
               Text(
-                'Couldn\'t parse this one — open it manually to log.',
+                _parseFailureHint(item),
                 style: Theme.of(
                   context,
                 ).textTheme.bodySmall?.copyWith(color: cs.error),
@@ -421,7 +544,7 @@ class _InboxRow extends ConsumerWidget {
                   ).textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant),
                 ),
                 const Spacer(),
-                if (isIgnoredView) ...[
+                if (bucket == _InboxBucket.ignored) ...[
                   FilledButton.tonalIcon(
                     onPressed: () => _logManually(context, ref, item),
                     icon: const Icon(Icons.edit_note, size: 18),
@@ -431,10 +554,9 @@ class _InboxRow extends ConsumerWidget {
                     ),
                     label: const Text('Log manually'),
                   ),
-                ] else ...[
+                ] else if (bucket == _InboxBucket.review) ...[
                   TextButton(
-                    onPressed: () =>
-                        ref.read(smsRepositoryProvider).dismiss(item.id),
+                    onPressed: () => _dismissWithUndo(context, ref, item),
                     child: const Text('Dismiss'),
                   ),
                   const SizedBox(width: 4),
@@ -445,7 +567,12 @@ class _InboxRow extends ConsumerWidget {
                       onPressed: () => _showParseDebug(context, ref, item),
                     ),
                 ],
-                if (!isIgnoredView && item.hasCandidate)
+                if (bucket == _InboxBucket.ready && item.hasCandidate) ...[
+                  TextButton(
+                    onPressed: () => _dismissWithUndo(context, ref, item),
+                    child: const Text('Dismiss'),
+                  ),
+                  const SizedBox(width: 4),
                   FilledButton.tonal(
                     onPressed: () =>
                         ref.read(smsRepositoryProvider).confirm(item.id),
@@ -455,6 +582,7 @@ class _InboxRow extends ConsumerWidget {
                     ),
                     child: const Text('Confirm'),
                   ),
+                ],
               ],
             ),
           ],
@@ -474,13 +602,44 @@ class _InboxRow extends ConsumerWidget {
     return '${t.day}/${t.month}/${t.year % 100}';
   }
 
-  static String _ignoredReason(String status) => switch (status) {
+  static String _statusReason(String status) => switch (status) {
+    'accepted' => 'Already matched — transaction was created from this SMS.',
     'none' => 'Ignored — classifier marked as non-transactional.',
     'duplicate' =>
       'Ignored — looked like a duplicate of an existing transaction.',
     'dismissed' => 'Dismissed by you.',
     _ => 'Ignored.',
   };
+
+  static String _parseFailureHint(InboxItem item) {
+    final body = item.body.toLowerCase();
+    if (!RegExp(r'\b(rs\.?|inr|₹)\s*[0-9]').hasMatch(body)) {
+      return 'Needs review: amount was not clear.';
+    }
+    if (RegExp(r'\bcredited|received|refund|reversal\b').hasMatch(body)) {
+      return 'Needs review: this may be income or a refund.';
+    }
+    if (RegExp(r'\btransfer|self|own account|upi ref\b').hasMatch(body)) {
+      return 'Needs review: this may be a transfer.';
+    }
+    return 'Needs review: merchant or account was not clear.';
+  }
+
+  void _dismissWithUndo(BuildContext context, WidgetRef ref, InboxItem item) {
+    final repo = ref.read(smsRepositoryProvider);
+    repo.dismiss(item.id);
+    showTimedSnackBar(
+      ScaffoldMessenger.of(context),
+      SnackBar(
+        content: const Text('Dismissed.'),
+        action: SnackBarAction(
+          label: 'Undo',
+          onPressed: () => repo.reopen(item.id),
+        ),
+      ),
+      duration: const Duration(seconds: 4),
+    );
+  }
 
   Future<void> _logManually(
     BuildContext context,

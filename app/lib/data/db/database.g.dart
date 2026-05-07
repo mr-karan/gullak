@@ -48,6 +48,27 @@ class $AccountsTable extends Accounts
     requiredDuringInsert: false,
     defaultValue: const Constant(0),
   );
+  static const VerificationMeta _reconciledBalanceCentsMeta =
+      const VerificationMeta('reconciledBalanceCents');
+  @override
+  late final GeneratedColumn<int> reconciledBalanceCents = GeneratedColumn<int>(
+    'reconciled_balance_cents',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _reconciledAtMeta = const VerificationMeta(
+    'reconciledAt',
+  );
+  @override
+  late final GeneratedColumn<int> reconciledAt = GeneratedColumn<int>(
+    'reconciled_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _onBudgetMeta = const VerificationMeta(
     'onBudget',
   );
@@ -118,6 +139,8 @@ class $AccountsTable extends Accounts
     name,
     kind,
     openingBalanceCents,
+    reconciledBalanceCents,
+    reconciledAt,
     onBudget,
     archived,
     sortOrder,
@@ -161,6 +184,24 @@ class $AccountsTable extends Accounts
         openingBalanceCents.isAcceptableOrUnknown(
           data['opening_balance_cents']!,
           _openingBalanceCentsMeta,
+        ),
+      );
+    }
+    if (data.containsKey('reconciled_balance_cents')) {
+      context.handle(
+        _reconciledBalanceCentsMeta,
+        reconciledBalanceCents.isAcceptableOrUnknown(
+          data['reconciled_balance_cents']!,
+          _reconciledBalanceCentsMeta,
+        ),
+      );
+    }
+    if (data.containsKey('reconciled_at')) {
+      context.handle(
+        _reconciledAtMeta,
+        reconciledAt.isAcceptableOrUnknown(
+          data['reconciled_at']!,
+          _reconciledAtMeta,
         ),
       );
     }
@@ -223,6 +264,14 @@ class $AccountsTable extends Accounts
         DriftSqlType.int,
         data['${effectivePrefix}opening_balance_cents'],
       )!,
+      reconciledBalanceCents: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}reconciled_balance_cents'],
+      ),
+      reconciledAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}reconciled_at'],
+      ),
       onBudget: attachedDatabase.typeMapping.read(
         DriftSqlType.bool,
         data['${effectivePrefix}on_budget'],
@@ -257,6 +306,8 @@ class AccountRow extends DataClass implements Insertable<AccountRow> {
   final String name;
   final String kind;
   final int openingBalanceCents;
+  final int? reconciledBalanceCents;
+  final int? reconciledAt;
   final bool onBudget;
   final bool archived;
   final int sortOrder;
@@ -267,6 +318,8 @@ class AccountRow extends DataClass implements Insertable<AccountRow> {
     required this.name,
     required this.kind,
     required this.openingBalanceCents,
+    this.reconciledBalanceCents,
+    this.reconciledAt,
     required this.onBudget,
     required this.archived,
     required this.sortOrder,
@@ -280,6 +333,12 @@ class AccountRow extends DataClass implements Insertable<AccountRow> {
     map['name'] = Variable<String>(name);
     map['kind'] = Variable<String>(kind);
     map['opening_balance_cents'] = Variable<int>(openingBalanceCents);
+    if (!nullToAbsent || reconciledBalanceCents != null) {
+      map['reconciled_balance_cents'] = Variable<int>(reconciledBalanceCents);
+    }
+    if (!nullToAbsent || reconciledAt != null) {
+      map['reconciled_at'] = Variable<int>(reconciledAt);
+    }
     map['on_budget'] = Variable<bool>(onBudget);
     map['archived'] = Variable<bool>(archived);
     map['sort_order'] = Variable<int>(sortOrder);
@@ -294,6 +353,12 @@ class AccountRow extends DataClass implements Insertable<AccountRow> {
       name: Value(name),
       kind: Value(kind),
       openingBalanceCents: Value(openingBalanceCents),
+      reconciledBalanceCents: reconciledBalanceCents == null && nullToAbsent
+          ? const Value.absent()
+          : Value(reconciledBalanceCents),
+      reconciledAt: reconciledAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(reconciledAt),
       onBudget: Value(onBudget),
       archived: Value(archived),
       sortOrder: Value(sortOrder),
@@ -314,6 +379,10 @@ class AccountRow extends DataClass implements Insertable<AccountRow> {
       openingBalanceCents: serializer.fromJson<int>(
         json['openingBalanceCents'],
       ),
+      reconciledBalanceCents: serializer.fromJson<int?>(
+        json['reconciledBalanceCents'],
+      ),
+      reconciledAt: serializer.fromJson<int?>(json['reconciledAt']),
       onBudget: serializer.fromJson<bool>(json['onBudget']),
       archived: serializer.fromJson<bool>(json['archived']),
       sortOrder: serializer.fromJson<int>(json['sortOrder']),
@@ -329,6 +398,8 @@ class AccountRow extends DataClass implements Insertable<AccountRow> {
       'name': serializer.toJson<String>(name),
       'kind': serializer.toJson<String>(kind),
       'openingBalanceCents': serializer.toJson<int>(openingBalanceCents),
+      'reconciledBalanceCents': serializer.toJson<int?>(reconciledBalanceCents),
+      'reconciledAt': serializer.toJson<int?>(reconciledAt),
       'onBudget': serializer.toJson<bool>(onBudget),
       'archived': serializer.toJson<bool>(archived),
       'sortOrder': serializer.toJson<int>(sortOrder),
@@ -342,6 +413,8 @@ class AccountRow extends DataClass implements Insertable<AccountRow> {
     String? name,
     String? kind,
     int? openingBalanceCents,
+    Value<int?> reconciledBalanceCents = const Value.absent(),
+    Value<int?> reconciledAt = const Value.absent(),
     bool? onBudget,
     bool? archived,
     int? sortOrder,
@@ -352,6 +425,10 @@ class AccountRow extends DataClass implements Insertable<AccountRow> {
     name: name ?? this.name,
     kind: kind ?? this.kind,
     openingBalanceCents: openingBalanceCents ?? this.openingBalanceCents,
+    reconciledBalanceCents: reconciledBalanceCents.present
+        ? reconciledBalanceCents.value
+        : this.reconciledBalanceCents,
+    reconciledAt: reconciledAt.present ? reconciledAt.value : this.reconciledAt,
     onBudget: onBudget ?? this.onBudget,
     archived: archived ?? this.archived,
     sortOrder: sortOrder ?? this.sortOrder,
@@ -366,6 +443,12 @@ class AccountRow extends DataClass implements Insertable<AccountRow> {
       openingBalanceCents: data.openingBalanceCents.present
           ? data.openingBalanceCents.value
           : this.openingBalanceCents,
+      reconciledBalanceCents: data.reconciledBalanceCents.present
+          ? data.reconciledBalanceCents.value
+          : this.reconciledBalanceCents,
+      reconciledAt: data.reconciledAt.present
+          ? data.reconciledAt.value
+          : this.reconciledAt,
       onBudget: data.onBudget.present ? data.onBudget.value : this.onBudget,
       archived: data.archived.present ? data.archived.value : this.archived,
       sortOrder: data.sortOrder.present ? data.sortOrder.value : this.sortOrder,
@@ -381,6 +464,8 @@ class AccountRow extends DataClass implements Insertable<AccountRow> {
           ..write('name: $name, ')
           ..write('kind: $kind, ')
           ..write('openingBalanceCents: $openingBalanceCents, ')
+          ..write('reconciledBalanceCents: $reconciledBalanceCents, ')
+          ..write('reconciledAt: $reconciledAt, ')
           ..write('onBudget: $onBudget, ')
           ..write('archived: $archived, ')
           ..write('sortOrder: $sortOrder, ')
@@ -396,6 +481,8 @@ class AccountRow extends DataClass implements Insertable<AccountRow> {
     name,
     kind,
     openingBalanceCents,
+    reconciledBalanceCents,
+    reconciledAt,
     onBudget,
     archived,
     sortOrder,
@@ -410,6 +497,8 @@ class AccountRow extends DataClass implements Insertable<AccountRow> {
           other.name == this.name &&
           other.kind == this.kind &&
           other.openingBalanceCents == this.openingBalanceCents &&
+          other.reconciledBalanceCents == this.reconciledBalanceCents &&
+          other.reconciledAt == this.reconciledAt &&
           other.onBudget == this.onBudget &&
           other.archived == this.archived &&
           other.sortOrder == this.sortOrder &&
@@ -422,6 +511,8 @@ class AccountsCompanion extends UpdateCompanion<AccountRow> {
   final Value<String> name;
   final Value<String> kind;
   final Value<int> openingBalanceCents;
+  final Value<int?> reconciledBalanceCents;
+  final Value<int?> reconciledAt;
   final Value<bool> onBudget;
   final Value<bool> archived;
   final Value<int> sortOrder;
@@ -433,6 +524,8 @@ class AccountsCompanion extends UpdateCompanion<AccountRow> {
     this.name = const Value.absent(),
     this.kind = const Value.absent(),
     this.openingBalanceCents = const Value.absent(),
+    this.reconciledBalanceCents = const Value.absent(),
+    this.reconciledAt = const Value.absent(),
     this.onBudget = const Value.absent(),
     this.archived = const Value.absent(),
     this.sortOrder = const Value.absent(),
@@ -445,6 +538,8 @@ class AccountsCompanion extends UpdateCompanion<AccountRow> {
     required String name,
     this.kind = const Value.absent(),
     this.openingBalanceCents = const Value.absent(),
+    this.reconciledBalanceCents = const Value.absent(),
+    this.reconciledAt = const Value.absent(),
     this.onBudget = const Value.absent(),
     this.archived = const Value.absent(),
     this.sortOrder = const Value.absent(),
@@ -460,6 +555,8 @@ class AccountsCompanion extends UpdateCompanion<AccountRow> {
     Expression<String>? name,
     Expression<String>? kind,
     Expression<int>? openingBalanceCents,
+    Expression<int>? reconciledBalanceCents,
+    Expression<int>? reconciledAt,
     Expression<bool>? onBudget,
     Expression<bool>? archived,
     Expression<int>? sortOrder,
@@ -473,6 +570,9 @@ class AccountsCompanion extends UpdateCompanion<AccountRow> {
       if (kind != null) 'kind': kind,
       if (openingBalanceCents != null)
         'opening_balance_cents': openingBalanceCents,
+      if (reconciledBalanceCents != null)
+        'reconciled_balance_cents': reconciledBalanceCents,
+      if (reconciledAt != null) 'reconciled_at': reconciledAt,
       if (onBudget != null) 'on_budget': onBudget,
       if (archived != null) 'archived': archived,
       if (sortOrder != null) 'sort_order': sortOrder,
@@ -487,6 +587,8 @@ class AccountsCompanion extends UpdateCompanion<AccountRow> {
     Value<String>? name,
     Value<String>? kind,
     Value<int>? openingBalanceCents,
+    Value<int?>? reconciledBalanceCents,
+    Value<int?>? reconciledAt,
     Value<bool>? onBudget,
     Value<bool>? archived,
     Value<int>? sortOrder,
@@ -499,6 +601,9 @@ class AccountsCompanion extends UpdateCompanion<AccountRow> {
       name: name ?? this.name,
       kind: kind ?? this.kind,
       openingBalanceCents: openingBalanceCents ?? this.openingBalanceCents,
+      reconciledBalanceCents:
+          reconciledBalanceCents ?? this.reconciledBalanceCents,
+      reconciledAt: reconciledAt ?? this.reconciledAt,
       onBudget: onBudget ?? this.onBudget,
       archived: archived ?? this.archived,
       sortOrder: sortOrder ?? this.sortOrder,
@@ -522,6 +627,14 @@ class AccountsCompanion extends UpdateCompanion<AccountRow> {
     }
     if (openingBalanceCents.present) {
       map['opening_balance_cents'] = Variable<int>(openingBalanceCents.value);
+    }
+    if (reconciledBalanceCents.present) {
+      map['reconciled_balance_cents'] = Variable<int>(
+        reconciledBalanceCents.value,
+      );
+    }
+    if (reconciledAt.present) {
+      map['reconciled_at'] = Variable<int>(reconciledAt.value);
     }
     if (onBudget.present) {
       map['on_budget'] = Variable<bool>(onBudget.value);
@@ -551,6 +664,8 @@ class AccountsCompanion extends UpdateCompanion<AccountRow> {
           ..write('name: $name, ')
           ..write('kind: $kind, ')
           ..write('openingBalanceCents: $openingBalanceCents, ')
+          ..write('reconciledBalanceCents: $reconciledBalanceCents, ')
+          ..write('reconciledAt: $reconciledAt, ')
           ..write('onBudget: $onBudget, ')
           ..write('archived: $archived, ')
           ..write('sortOrder: $sortOrder, ')
@@ -905,6 +1020,17 @@ class $CategoriesTable extends Categories
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _parentIdMeta = const VerificationMeta(
+    'parentId',
+  );
+  @override
+  late final GeneratedColumn<String> parentId = GeneratedColumn<String>(
+    'parent_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _colorMeta = const VerificationMeta('color');
   @override
   late final GeneratedColumn<int> color = GeneratedColumn<int>(
@@ -964,6 +1090,7 @@ class $CategoriesTable extends Categories
     id,
     name,
     groupId,
+    parentId,
     color,
     icon,
     hidden,
@@ -1002,6 +1129,12 @@ class $CategoriesTable extends Categories
       );
     } else if (isInserting) {
       context.missing(_groupIdMeta);
+    }
+    if (data.containsKey('parent_id')) {
+      context.handle(
+        _parentIdMeta,
+        parentId.isAcceptableOrUnknown(data['parent_id']!, _parentIdMeta),
+      );
     }
     if (data.containsKey('color')) {
       context.handle(
@@ -1056,6 +1189,10 @@ class $CategoriesTable extends Categories
         DriftSqlType.string,
         data['${effectivePrefix}group_id'],
       )!,
+      parentId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}parent_id'],
+      ),
       color: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}color'],
@@ -1089,6 +1226,7 @@ class CategoryRow extends DataClass implements Insertable<CategoryRow> {
   final String id;
   final String name;
   final String groupId;
+  final String? parentId;
   final int? color;
   final String? icon;
   final bool hidden;
@@ -1098,6 +1236,7 @@ class CategoryRow extends DataClass implements Insertable<CategoryRow> {
     required this.id,
     required this.name,
     required this.groupId,
+    this.parentId,
     this.color,
     this.icon,
     required this.hidden,
@@ -1110,6 +1249,9 @@ class CategoryRow extends DataClass implements Insertable<CategoryRow> {
     map['id'] = Variable<String>(id);
     map['name'] = Variable<String>(name);
     map['group_id'] = Variable<String>(groupId);
+    if (!nullToAbsent || parentId != null) {
+      map['parent_id'] = Variable<String>(parentId);
+    }
     if (!nullToAbsent || color != null) {
       map['color'] = Variable<int>(color);
     }
@@ -1127,6 +1269,9 @@ class CategoryRow extends DataClass implements Insertable<CategoryRow> {
       id: Value(id),
       name: Value(name),
       groupId: Value(groupId),
+      parentId: parentId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(parentId),
       color: color == null && nullToAbsent
           ? const Value.absent()
           : Value(color),
@@ -1146,6 +1291,7 @@ class CategoryRow extends DataClass implements Insertable<CategoryRow> {
       id: serializer.fromJson<String>(json['id']),
       name: serializer.fromJson<String>(json['name']),
       groupId: serializer.fromJson<String>(json['groupId']),
+      parentId: serializer.fromJson<String?>(json['parentId']),
       color: serializer.fromJson<int?>(json['color']),
       icon: serializer.fromJson<String?>(json['icon']),
       hidden: serializer.fromJson<bool>(json['hidden']),
@@ -1160,6 +1306,7 @@ class CategoryRow extends DataClass implements Insertable<CategoryRow> {
       'id': serializer.toJson<String>(id),
       'name': serializer.toJson<String>(name),
       'groupId': serializer.toJson<String>(groupId),
+      'parentId': serializer.toJson<String?>(parentId),
       'color': serializer.toJson<int?>(color),
       'icon': serializer.toJson<String?>(icon),
       'hidden': serializer.toJson<bool>(hidden),
@@ -1172,6 +1319,7 @@ class CategoryRow extends DataClass implements Insertable<CategoryRow> {
     String? id,
     String? name,
     String? groupId,
+    Value<String?> parentId = const Value.absent(),
     Value<int?> color = const Value.absent(),
     Value<String?> icon = const Value.absent(),
     bool? hidden,
@@ -1181,6 +1329,7 @@ class CategoryRow extends DataClass implements Insertable<CategoryRow> {
     id: id ?? this.id,
     name: name ?? this.name,
     groupId: groupId ?? this.groupId,
+    parentId: parentId.present ? parentId.value : this.parentId,
     color: color.present ? color.value : this.color,
     icon: icon.present ? icon.value : this.icon,
     hidden: hidden ?? this.hidden,
@@ -1192,6 +1341,7 @@ class CategoryRow extends DataClass implements Insertable<CategoryRow> {
       id: data.id.present ? data.id.value : this.id,
       name: data.name.present ? data.name.value : this.name,
       groupId: data.groupId.present ? data.groupId.value : this.groupId,
+      parentId: data.parentId.present ? data.parentId.value : this.parentId,
       color: data.color.present ? data.color.value : this.color,
       icon: data.icon.present ? data.icon.value : this.icon,
       hidden: data.hidden.present ? data.hidden.value : this.hidden,
@@ -1206,6 +1356,7 @@ class CategoryRow extends DataClass implements Insertable<CategoryRow> {
           ..write('id: $id, ')
           ..write('name: $name, ')
           ..write('groupId: $groupId, ')
+          ..write('parentId: $parentId, ')
           ..write('color: $color, ')
           ..write('icon: $icon, ')
           ..write('hidden: $hidden, ')
@@ -1216,8 +1367,17 @@ class CategoryRow extends DataClass implements Insertable<CategoryRow> {
   }
 
   @override
-  int get hashCode =>
-      Object.hash(id, name, groupId, color, icon, hidden, sortOrder, updatedAt);
+  int get hashCode => Object.hash(
+    id,
+    name,
+    groupId,
+    parentId,
+    color,
+    icon,
+    hidden,
+    sortOrder,
+    updatedAt,
+  );
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -1225,6 +1385,7 @@ class CategoryRow extends DataClass implements Insertable<CategoryRow> {
           other.id == this.id &&
           other.name == this.name &&
           other.groupId == this.groupId &&
+          other.parentId == this.parentId &&
           other.color == this.color &&
           other.icon == this.icon &&
           other.hidden == this.hidden &&
@@ -1236,6 +1397,7 @@ class CategoriesCompanion extends UpdateCompanion<CategoryRow> {
   final Value<String> id;
   final Value<String> name;
   final Value<String> groupId;
+  final Value<String?> parentId;
   final Value<int?> color;
   final Value<String?> icon;
   final Value<bool> hidden;
@@ -1246,6 +1408,7 @@ class CategoriesCompanion extends UpdateCompanion<CategoryRow> {
     this.id = const Value.absent(),
     this.name = const Value.absent(),
     this.groupId = const Value.absent(),
+    this.parentId = const Value.absent(),
     this.color = const Value.absent(),
     this.icon = const Value.absent(),
     this.hidden = const Value.absent(),
@@ -1257,6 +1420,7 @@ class CategoriesCompanion extends UpdateCompanion<CategoryRow> {
     required String id,
     required String name,
     required String groupId,
+    this.parentId = const Value.absent(),
     this.color = const Value.absent(),
     this.icon = const Value.absent(),
     this.hidden = const Value.absent(),
@@ -1271,6 +1435,7 @@ class CategoriesCompanion extends UpdateCompanion<CategoryRow> {
     Expression<String>? id,
     Expression<String>? name,
     Expression<String>? groupId,
+    Expression<String>? parentId,
     Expression<int>? color,
     Expression<String>? icon,
     Expression<bool>? hidden,
@@ -1282,6 +1447,7 @@ class CategoriesCompanion extends UpdateCompanion<CategoryRow> {
       if (id != null) 'id': id,
       if (name != null) 'name': name,
       if (groupId != null) 'group_id': groupId,
+      if (parentId != null) 'parent_id': parentId,
       if (color != null) 'color': color,
       if (icon != null) 'icon': icon,
       if (hidden != null) 'hidden': hidden,
@@ -1295,6 +1461,7 @@ class CategoriesCompanion extends UpdateCompanion<CategoryRow> {
     Value<String>? id,
     Value<String>? name,
     Value<String>? groupId,
+    Value<String?>? parentId,
     Value<int?>? color,
     Value<String?>? icon,
     Value<bool>? hidden,
@@ -1306,6 +1473,7 @@ class CategoriesCompanion extends UpdateCompanion<CategoryRow> {
       id: id ?? this.id,
       name: name ?? this.name,
       groupId: groupId ?? this.groupId,
+      parentId: parentId ?? this.parentId,
       color: color ?? this.color,
       icon: icon ?? this.icon,
       hidden: hidden ?? this.hidden,
@@ -1326,6 +1494,9 @@ class CategoriesCompanion extends UpdateCompanion<CategoryRow> {
     }
     if (groupId.present) {
       map['group_id'] = Variable<String>(groupId.value);
+    }
+    if (parentId.present) {
+      map['parent_id'] = Variable<String>(parentId.value);
     }
     if (color.present) {
       map['color'] = Variable<int>(color.value);
@@ -1354,6 +1525,7 @@ class CategoriesCompanion extends UpdateCompanion<CategoryRow> {
           ..write('id: $id, ')
           ..write('name: $name, ')
           ..write('groupId: $groupId, ')
+          ..write('parentId: $parentId, ')
           ..write('color: $color, ')
           ..write('icon: $icon, ')
           ..write('hidden: $hidden, ')
@@ -3513,6 +3685,1097 @@ class TransactionTagsCompanion extends UpdateCompanion<TransactionTagRow> {
           ..write('id: $id, ')
           ..write('transactionId: $transactionId, ')
           ..write('tagId: $tagId, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $RulesTable extends Rules with TableInfo<$RulesTable, RuleRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $RulesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _nameMeta = const VerificationMeta('name');
+  @override
+  late final GeneratedColumn<String> name = GeneratedColumn<String>(
+    'name',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _enabledMeta = const VerificationMeta(
+    'enabled',
+  );
+  @override
+  late final GeneratedColumn<bool> enabled = GeneratedColumn<bool>(
+    'enabled',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("enabled" IN (0, 1))',
+    ),
+    defaultValue: const Constant(true),
+  );
+  static const VerificationMeta _priorityMeta = const VerificationMeta(
+    'priority',
+  );
+  @override
+  late final GeneratedColumn<int> priority = GeneratedColumn<int>(
+    'priority',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(100),
+  );
+  static const VerificationMeta _triggerTypeMeta = const VerificationMeta(
+    'triggerType',
+  );
+  @override
+  late final GeneratedColumn<String> triggerType = GeneratedColumn<String>(
+    'trigger_type',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _triggerPayloadMeta = const VerificationMeta(
+    'triggerPayload',
+  );
+  @override
+  late final GeneratedColumn<String> triggerPayload = GeneratedColumn<String>(
+    'trigger_payload',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _actionPayloadMeta = const VerificationMeta(
+    'actionPayload',
+  );
+  @override
+  late final GeneratedColumn<String> actionPayload = GeneratedColumn<String>(
+    'action_payload',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<int> createdAt = GeneratedColumn<int>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<int> updatedAt = GeneratedColumn<int>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    name,
+    enabled,
+    priority,
+    triggerType,
+    triggerPayload,
+    actionPayload,
+    createdAt,
+    updatedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'rules';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<RuleRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('name')) {
+      context.handle(
+        _nameMeta,
+        name.isAcceptableOrUnknown(data['name']!, _nameMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_nameMeta);
+    }
+    if (data.containsKey('enabled')) {
+      context.handle(
+        _enabledMeta,
+        enabled.isAcceptableOrUnknown(data['enabled']!, _enabledMeta),
+      );
+    }
+    if (data.containsKey('priority')) {
+      context.handle(
+        _priorityMeta,
+        priority.isAcceptableOrUnknown(data['priority']!, _priorityMeta),
+      );
+    }
+    if (data.containsKey('trigger_type')) {
+      context.handle(
+        _triggerTypeMeta,
+        triggerType.isAcceptableOrUnknown(
+          data['trigger_type']!,
+          _triggerTypeMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_triggerTypeMeta);
+    }
+    if (data.containsKey('trigger_payload')) {
+      context.handle(
+        _triggerPayloadMeta,
+        triggerPayload.isAcceptableOrUnknown(
+          data['trigger_payload']!,
+          _triggerPayloadMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_triggerPayloadMeta);
+    }
+    if (data.containsKey('action_payload')) {
+      context.handle(
+        _actionPayloadMeta,
+        actionPayload.isAcceptableOrUnknown(
+          data['action_payload']!,
+          _actionPayloadMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_actionPayloadMeta);
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  RuleRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return RuleRow(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      name: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}name'],
+      )!,
+      enabled: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}enabled'],
+      )!,
+      priority: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}priority'],
+      )!,
+      triggerType: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}trigger_type'],
+      )!,
+      triggerPayload: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}trigger_payload'],
+      )!,
+      actionPayload: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}action_payload'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}created_at'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}updated_at'],
+      )!,
+    );
+  }
+
+  @override
+  $RulesTable createAlias(String alias) {
+    return $RulesTable(attachedDatabase, alias);
+  }
+}
+
+class RuleRow extends DataClass implements Insertable<RuleRow> {
+  final String id;
+  final String name;
+  final bool enabled;
+  final int priority;
+  final String triggerType;
+  final String triggerPayload;
+  final String actionPayload;
+  final int createdAt;
+  final int updatedAt;
+  const RuleRow({
+    required this.id,
+    required this.name,
+    required this.enabled,
+    required this.priority,
+    required this.triggerType,
+    required this.triggerPayload,
+    required this.actionPayload,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['name'] = Variable<String>(name);
+    map['enabled'] = Variable<bool>(enabled);
+    map['priority'] = Variable<int>(priority);
+    map['trigger_type'] = Variable<String>(triggerType);
+    map['trigger_payload'] = Variable<String>(triggerPayload);
+    map['action_payload'] = Variable<String>(actionPayload);
+    map['created_at'] = Variable<int>(createdAt);
+    map['updated_at'] = Variable<int>(updatedAt);
+    return map;
+  }
+
+  RulesCompanion toCompanion(bool nullToAbsent) {
+    return RulesCompanion(
+      id: Value(id),
+      name: Value(name),
+      enabled: Value(enabled),
+      priority: Value(priority),
+      triggerType: Value(triggerType),
+      triggerPayload: Value(triggerPayload),
+      actionPayload: Value(actionPayload),
+      createdAt: Value(createdAt),
+      updatedAt: Value(updatedAt),
+    );
+  }
+
+  factory RuleRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return RuleRow(
+      id: serializer.fromJson<String>(json['id']),
+      name: serializer.fromJson<String>(json['name']),
+      enabled: serializer.fromJson<bool>(json['enabled']),
+      priority: serializer.fromJson<int>(json['priority']),
+      triggerType: serializer.fromJson<String>(json['triggerType']),
+      triggerPayload: serializer.fromJson<String>(json['triggerPayload']),
+      actionPayload: serializer.fromJson<String>(json['actionPayload']),
+      createdAt: serializer.fromJson<int>(json['createdAt']),
+      updatedAt: serializer.fromJson<int>(json['updatedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'name': serializer.toJson<String>(name),
+      'enabled': serializer.toJson<bool>(enabled),
+      'priority': serializer.toJson<int>(priority),
+      'triggerType': serializer.toJson<String>(triggerType),
+      'triggerPayload': serializer.toJson<String>(triggerPayload),
+      'actionPayload': serializer.toJson<String>(actionPayload),
+      'createdAt': serializer.toJson<int>(createdAt),
+      'updatedAt': serializer.toJson<int>(updatedAt),
+    };
+  }
+
+  RuleRow copyWith({
+    String? id,
+    String? name,
+    bool? enabled,
+    int? priority,
+    String? triggerType,
+    String? triggerPayload,
+    String? actionPayload,
+    int? createdAt,
+    int? updatedAt,
+  }) => RuleRow(
+    id: id ?? this.id,
+    name: name ?? this.name,
+    enabled: enabled ?? this.enabled,
+    priority: priority ?? this.priority,
+    triggerType: triggerType ?? this.triggerType,
+    triggerPayload: triggerPayload ?? this.triggerPayload,
+    actionPayload: actionPayload ?? this.actionPayload,
+    createdAt: createdAt ?? this.createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+  );
+  RuleRow copyWithCompanion(RulesCompanion data) {
+    return RuleRow(
+      id: data.id.present ? data.id.value : this.id,
+      name: data.name.present ? data.name.value : this.name,
+      enabled: data.enabled.present ? data.enabled.value : this.enabled,
+      priority: data.priority.present ? data.priority.value : this.priority,
+      triggerType: data.triggerType.present
+          ? data.triggerType.value
+          : this.triggerType,
+      triggerPayload: data.triggerPayload.present
+          ? data.triggerPayload.value
+          : this.triggerPayload,
+      actionPayload: data.actionPayload.present
+          ? data.actionPayload.value
+          : this.actionPayload,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('RuleRow(')
+          ..write('id: $id, ')
+          ..write('name: $name, ')
+          ..write('enabled: $enabled, ')
+          ..write('priority: $priority, ')
+          ..write('triggerType: $triggerType, ')
+          ..write('triggerPayload: $triggerPayload, ')
+          ..write('actionPayload: $actionPayload, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    name,
+    enabled,
+    priority,
+    triggerType,
+    triggerPayload,
+    actionPayload,
+    createdAt,
+    updatedAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is RuleRow &&
+          other.id == this.id &&
+          other.name == this.name &&
+          other.enabled == this.enabled &&
+          other.priority == this.priority &&
+          other.triggerType == this.triggerType &&
+          other.triggerPayload == this.triggerPayload &&
+          other.actionPayload == this.actionPayload &&
+          other.createdAt == this.createdAt &&
+          other.updatedAt == this.updatedAt);
+}
+
+class RulesCompanion extends UpdateCompanion<RuleRow> {
+  final Value<String> id;
+  final Value<String> name;
+  final Value<bool> enabled;
+  final Value<int> priority;
+  final Value<String> triggerType;
+  final Value<String> triggerPayload;
+  final Value<String> actionPayload;
+  final Value<int> createdAt;
+  final Value<int> updatedAt;
+  final Value<int> rowid;
+  const RulesCompanion({
+    this.id = const Value.absent(),
+    this.name = const Value.absent(),
+    this.enabled = const Value.absent(),
+    this.priority = const Value.absent(),
+    this.triggerType = const Value.absent(),
+    this.triggerPayload = const Value.absent(),
+    this.actionPayload = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  RulesCompanion.insert({
+    required String id,
+    required String name,
+    this.enabled = const Value.absent(),
+    this.priority = const Value.absent(),
+    required String triggerType,
+    required String triggerPayload,
+    required String actionPayload,
+    required int createdAt,
+    required int updatedAt,
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       name = Value(name),
+       triggerType = Value(triggerType),
+       triggerPayload = Value(triggerPayload),
+       actionPayload = Value(actionPayload),
+       createdAt = Value(createdAt),
+       updatedAt = Value(updatedAt);
+  static Insertable<RuleRow> custom({
+    Expression<String>? id,
+    Expression<String>? name,
+    Expression<bool>? enabled,
+    Expression<int>? priority,
+    Expression<String>? triggerType,
+    Expression<String>? triggerPayload,
+    Expression<String>? actionPayload,
+    Expression<int>? createdAt,
+    Expression<int>? updatedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (name != null) 'name': name,
+      if (enabled != null) 'enabled': enabled,
+      if (priority != null) 'priority': priority,
+      if (triggerType != null) 'trigger_type': triggerType,
+      if (triggerPayload != null) 'trigger_payload': triggerPayload,
+      if (actionPayload != null) 'action_payload': actionPayload,
+      if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  RulesCompanion copyWith({
+    Value<String>? id,
+    Value<String>? name,
+    Value<bool>? enabled,
+    Value<int>? priority,
+    Value<String>? triggerType,
+    Value<String>? triggerPayload,
+    Value<String>? actionPayload,
+    Value<int>? createdAt,
+    Value<int>? updatedAt,
+    Value<int>? rowid,
+  }) {
+    return RulesCompanion(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      enabled: enabled ?? this.enabled,
+      priority: priority ?? this.priority,
+      triggerType: triggerType ?? this.triggerType,
+      triggerPayload: triggerPayload ?? this.triggerPayload,
+      actionPayload: actionPayload ?? this.actionPayload,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (name.present) {
+      map['name'] = Variable<String>(name.value);
+    }
+    if (enabled.present) {
+      map['enabled'] = Variable<bool>(enabled.value);
+    }
+    if (priority.present) {
+      map['priority'] = Variable<int>(priority.value);
+    }
+    if (triggerType.present) {
+      map['trigger_type'] = Variable<String>(triggerType.value);
+    }
+    if (triggerPayload.present) {
+      map['trigger_payload'] = Variable<String>(triggerPayload.value);
+    }
+    if (actionPayload.present) {
+      map['action_payload'] = Variable<String>(actionPayload.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<int>(createdAt.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<int>(updatedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('RulesCompanion(')
+          ..write('id: $id, ')
+          ..write('name: $name, ')
+          ..write('enabled: $enabled, ')
+          ..write('priority: $priority, ')
+          ..write('triggerType: $triggerType, ')
+          ..write('triggerPayload: $triggerPayload, ')
+          ..write('actionPayload: $actionPayload, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $RuleMatchesTable extends RuleMatches
+    with TableInfo<$RuleMatchesTable, RuleMatchRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $RuleMatchesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _ruleIdMeta = const VerificationMeta('ruleId');
+  @override
+  late final GeneratedColumn<String> ruleId = GeneratedColumn<String>(
+    'rule_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _sourceTypeMeta = const VerificationMeta(
+    'sourceType',
+  );
+  @override
+  late final GeneratedColumn<String> sourceType = GeneratedColumn<String>(
+    'source_type',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _sourceIdMeta = const VerificationMeta(
+    'sourceId',
+  );
+  @override
+  late final GeneratedColumn<String> sourceId = GeneratedColumn<String>(
+    'source_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _transactionIdMeta = const VerificationMeta(
+    'transactionId',
+  );
+  @override
+  late final GeneratedColumn<String> transactionId = GeneratedColumn<String>(
+    'transaction_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _matchedAtMeta = const VerificationMeta(
+    'matchedAt',
+  );
+  @override
+  late final GeneratedColumn<int> matchedAt = GeneratedColumn<int>(
+    'matched_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _outcomeMeta = const VerificationMeta(
+    'outcome',
+  );
+  @override
+  late final GeneratedColumn<String> outcome = GeneratedColumn<String>(
+    'outcome',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<int> updatedAt = GeneratedColumn<int>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    ruleId,
+    sourceType,
+    sourceId,
+    transactionId,
+    matchedAt,
+    outcome,
+    updatedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'rule_matches';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<RuleMatchRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('rule_id')) {
+      context.handle(
+        _ruleIdMeta,
+        ruleId.isAcceptableOrUnknown(data['rule_id']!, _ruleIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_ruleIdMeta);
+    }
+    if (data.containsKey('source_type')) {
+      context.handle(
+        _sourceTypeMeta,
+        sourceType.isAcceptableOrUnknown(data['source_type']!, _sourceTypeMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_sourceTypeMeta);
+    }
+    if (data.containsKey('source_id')) {
+      context.handle(
+        _sourceIdMeta,
+        sourceId.isAcceptableOrUnknown(data['source_id']!, _sourceIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_sourceIdMeta);
+    }
+    if (data.containsKey('transaction_id')) {
+      context.handle(
+        _transactionIdMeta,
+        transactionId.isAcceptableOrUnknown(
+          data['transaction_id']!,
+          _transactionIdMeta,
+        ),
+      );
+    }
+    if (data.containsKey('matched_at')) {
+      context.handle(
+        _matchedAtMeta,
+        matchedAt.isAcceptableOrUnknown(data['matched_at']!, _matchedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_matchedAtMeta);
+    }
+    if (data.containsKey('outcome')) {
+      context.handle(
+        _outcomeMeta,
+        outcome.isAcceptableOrUnknown(data['outcome']!, _outcomeMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_outcomeMeta);
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  RuleMatchRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return RuleMatchRow(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      ruleId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}rule_id'],
+      )!,
+      sourceType: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}source_type'],
+      )!,
+      sourceId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}source_id'],
+      )!,
+      transactionId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}transaction_id'],
+      ),
+      matchedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}matched_at'],
+      )!,
+      outcome: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}outcome'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}updated_at'],
+      )!,
+    );
+  }
+
+  @override
+  $RuleMatchesTable createAlias(String alias) {
+    return $RuleMatchesTable(attachedDatabase, alias);
+  }
+}
+
+class RuleMatchRow extends DataClass implements Insertable<RuleMatchRow> {
+  final String id;
+  final String ruleId;
+  final String sourceType;
+  final String sourceId;
+  final String? transactionId;
+  final int matchedAt;
+  final String outcome;
+  final int updatedAt;
+  const RuleMatchRow({
+    required this.id,
+    required this.ruleId,
+    required this.sourceType,
+    required this.sourceId,
+    this.transactionId,
+    required this.matchedAt,
+    required this.outcome,
+    required this.updatedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['rule_id'] = Variable<String>(ruleId);
+    map['source_type'] = Variable<String>(sourceType);
+    map['source_id'] = Variable<String>(sourceId);
+    if (!nullToAbsent || transactionId != null) {
+      map['transaction_id'] = Variable<String>(transactionId);
+    }
+    map['matched_at'] = Variable<int>(matchedAt);
+    map['outcome'] = Variable<String>(outcome);
+    map['updated_at'] = Variable<int>(updatedAt);
+    return map;
+  }
+
+  RuleMatchesCompanion toCompanion(bool nullToAbsent) {
+    return RuleMatchesCompanion(
+      id: Value(id),
+      ruleId: Value(ruleId),
+      sourceType: Value(sourceType),
+      sourceId: Value(sourceId),
+      transactionId: transactionId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(transactionId),
+      matchedAt: Value(matchedAt),
+      outcome: Value(outcome),
+      updatedAt: Value(updatedAt),
+    );
+  }
+
+  factory RuleMatchRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return RuleMatchRow(
+      id: serializer.fromJson<String>(json['id']),
+      ruleId: serializer.fromJson<String>(json['ruleId']),
+      sourceType: serializer.fromJson<String>(json['sourceType']),
+      sourceId: serializer.fromJson<String>(json['sourceId']),
+      transactionId: serializer.fromJson<String?>(json['transactionId']),
+      matchedAt: serializer.fromJson<int>(json['matchedAt']),
+      outcome: serializer.fromJson<String>(json['outcome']),
+      updatedAt: serializer.fromJson<int>(json['updatedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'ruleId': serializer.toJson<String>(ruleId),
+      'sourceType': serializer.toJson<String>(sourceType),
+      'sourceId': serializer.toJson<String>(sourceId),
+      'transactionId': serializer.toJson<String?>(transactionId),
+      'matchedAt': serializer.toJson<int>(matchedAt),
+      'outcome': serializer.toJson<String>(outcome),
+      'updatedAt': serializer.toJson<int>(updatedAt),
+    };
+  }
+
+  RuleMatchRow copyWith({
+    String? id,
+    String? ruleId,
+    String? sourceType,
+    String? sourceId,
+    Value<String?> transactionId = const Value.absent(),
+    int? matchedAt,
+    String? outcome,
+    int? updatedAt,
+  }) => RuleMatchRow(
+    id: id ?? this.id,
+    ruleId: ruleId ?? this.ruleId,
+    sourceType: sourceType ?? this.sourceType,
+    sourceId: sourceId ?? this.sourceId,
+    transactionId: transactionId.present
+        ? transactionId.value
+        : this.transactionId,
+    matchedAt: matchedAt ?? this.matchedAt,
+    outcome: outcome ?? this.outcome,
+    updatedAt: updatedAt ?? this.updatedAt,
+  );
+  RuleMatchRow copyWithCompanion(RuleMatchesCompanion data) {
+    return RuleMatchRow(
+      id: data.id.present ? data.id.value : this.id,
+      ruleId: data.ruleId.present ? data.ruleId.value : this.ruleId,
+      sourceType: data.sourceType.present
+          ? data.sourceType.value
+          : this.sourceType,
+      sourceId: data.sourceId.present ? data.sourceId.value : this.sourceId,
+      transactionId: data.transactionId.present
+          ? data.transactionId.value
+          : this.transactionId,
+      matchedAt: data.matchedAt.present ? data.matchedAt.value : this.matchedAt,
+      outcome: data.outcome.present ? data.outcome.value : this.outcome,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('RuleMatchRow(')
+          ..write('id: $id, ')
+          ..write('ruleId: $ruleId, ')
+          ..write('sourceType: $sourceType, ')
+          ..write('sourceId: $sourceId, ')
+          ..write('transactionId: $transactionId, ')
+          ..write('matchedAt: $matchedAt, ')
+          ..write('outcome: $outcome, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    ruleId,
+    sourceType,
+    sourceId,
+    transactionId,
+    matchedAt,
+    outcome,
+    updatedAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is RuleMatchRow &&
+          other.id == this.id &&
+          other.ruleId == this.ruleId &&
+          other.sourceType == this.sourceType &&
+          other.sourceId == this.sourceId &&
+          other.transactionId == this.transactionId &&
+          other.matchedAt == this.matchedAt &&
+          other.outcome == this.outcome &&
+          other.updatedAt == this.updatedAt);
+}
+
+class RuleMatchesCompanion extends UpdateCompanion<RuleMatchRow> {
+  final Value<String> id;
+  final Value<String> ruleId;
+  final Value<String> sourceType;
+  final Value<String> sourceId;
+  final Value<String?> transactionId;
+  final Value<int> matchedAt;
+  final Value<String> outcome;
+  final Value<int> updatedAt;
+  final Value<int> rowid;
+  const RuleMatchesCompanion({
+    this.id = const Value.absent(),
+    this.ruleId = const Value.absent(),
+    this.sourceType = const Value.absent(),
+    this.sourceId = const Value.absent(),
+    this.transactionId = const Value.absent(),
+    this.matchedAt = const Value.absent(),
+    this.outcome = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  RuleMatchesCompanion.insert({
+    required String id,
+    required String ruleId,
+    required String sourceType,
+    required String sourceId,
+    this.transactionId = const Value.absent(),
+    required int matchedAt,
+    required String outcome,
+    required int updatedAt,
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       ruleId = Value(ruleId),
+       sourceType = Value(sourceType),
+       sourceId = Value(sourceId),
+       matchedAt = Value(matchedAt),
+       outcome = Value(outcome),
+       updatedAt = Value(updatedAt);
+  static Insertable<RuleMatchRow> custom({
+    Expression<String>? id,
+    Expression<String>? ruleId,
+    Expression<String>? sourceType,
+    Expression<String>? sourceId,
+    Expression<String>? transactionId,
+    Expression<int>? matchedAt,
+    Expression<String>? outcome,
+    Expression<int>? updatedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (ruleId != null) 'rule_id': ruleId,
+      if (sourceType != null) 'source_type': sourceType,
+      if (sourceId != null) 'source_id': sourceId,
+      if (transactionId != null) 'transaction_id': transactionId,
+      if (matchedAt != null) 'matched_at': matchedAt,
+      if (outcome != null) 'outcome': outcome,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  RuleMatchesCompanion copyWith({
+    Value<String>? id,
+    Value<String>? ruleId,
+    Value<String>? sourceType,
+    Value<String>? sourceId,
+    Value<String?>? transactionId,
+    Value<int>? matchedAt,
+    Value<String>? outcome,
+    Value<int>? updatedAt,
+    Value<int>? rowid,
+  }) {
+    return RuleMatchesCompanion(
+      id: id ?? this.id,
+      ruleId: ruleId ?? this.ruleId,
+      sourceType: sourceType ?? this.sourceType,
+      sourceId: sourceId ?? this.sourceId,
+      transactionId: transactionId ?? this.transactionId,
+      matchedAt: matchedAt ?? this.matchedAt,
+      outcome: outcome ?? this.outcome,
+      updatedAt: updatedAt ?? this.updatedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (ruleId.present) {
+      map['rule_id'] = Variable<String>(ruleId.value);
+    }
+    if (sourceType.present) {
+      map['source_type'] = Variable<String>(sourceType.value);
+    }
+    if (sourceId.present) {
+      map['source_id'] = Variable<String>(sourceId.value);
+    }
+    if (transactionId.present) {
+      map['transaction_id'] = Variable<String>(transactionId.value);
+    }
+    if (matchedAt.present) {
+      map['matched_at'] = Variable<int>(matchedAt.value);
+    }
+    if (outcome.present) {
+      map['outcome'] = Variable<String>(outcome.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<int>(updatedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('RuleMatchesCompanion(')
+          ..write('id: $id, ')
+          ..write('ruleId: $ruleId, ')
+          ..write('sourceType: $sourceType, ')
+          ..write('sourceId: $sourceId, ')
+          ..write('transactionId: $transactionId, ')
+          ..write('matchedAt: $matchedAt, ')
+          ..write('outcome: $outcome, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('rowid: $rowid')
           ..write(')'))
@@ -6782,6 +8045,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $TransactionTagsTable transactionTags = $TransactionTagsTable(
     this,
   );
+  late final $RulesTable rules = $RulesTable(this);
+  late final $RuleMatchesTable ruleMatches = $RuleMatchesTable(this);
   late final $BudgetsTable budgets = $BudgetsTable(this);
   late final $RecurrencesTable recurrences = $RecurrencesTable(this);
   late final $SmsMessagesTable smsMessages = $SmsMessagesTable(this);
@@ -6801,6 +8066,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     transactions,
     tags,
     transactionTags,
+    rules,
+    ruleMatches,
     budgets,
     recurrences,
     smsMessages,
@@ -6817,6 +8084,8 @@ typedef $$AccountsTableCreateCompanionBuilder =
       required String name,
       Value<String> kind,
       Value<int> openingBalanceCents,
+      Value<int?> reconciledBalanceCents,
+      Value<int?> reconciledAt,
       Value<bool> onBudget,
       Value<bool> archived,
       Value<int> sortOrder,
@@ -6830,6 +8099,8 @@ typedef $$AccountsTableUpdateCompanionBuilder =
       Value<String> name,
       Value<String> kind,
       Value<int> openingBalanceCents,
+      Value<int?> reconciledBalanceCents,
+      Value<int?> reconciledAt,
       Value<bool> onBudget,
       Value<bool> archived,
       Value<int> sortOrder,
@@ -6864,6 +8135,16 @@ class $$AccountsTableFilterComposer
 
   ColumnFilters<int> get openingBalanceCents => $composableBuilder(
     column: $table.openingBalanceCents,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get reconciledBalanceCents => $composableBuilder(
+    column: $table.reconciledBalanceCents,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get reconciledAt => $composableBuilder(
+    column: $table.reconciledAt,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -6922,6 +8203,16 @@ class $$AccountsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<int> get reconciledBalanceCents => $composableBuilder(
+    column: $table.reconciledBalanceCents,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get reconciledAt => $composableBuilder(
+    column: $table.reconciledAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<bool> get onBudget => $composableBuilder(
     column: $table.onBudget,
     builder: (column) => ColumnOrderings(column),
@@ -6968,6 +8259,16 @@ class $$AccountsTableAnnotationComposer
 
   GeneratedColumn<int> get openingBalanceCents => $composableBuilder(
     column: $table.openingBalanceCents,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get reconciledBalanceCents => $composableBuilder(
+    column: $table.reconciledBalanceCents,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get reconciledAt => $composableBuilder(
+    column: $table.reconciledAt,
     builder: (column) => column,
   );
 
@@ -7022,6 +8323,8 @@ class $$AccountsTableTableManager
                 Value<String> name = const Value.absent(),
                 Value<String> kind = const Value.absent(),
                 Value<int> openingBalanceCents = const Value.absent(),
+                Value<int?> reconciledBalanceCents = const Value.absent(),
+                Value<int?> reconciledAt = const Value.absent(),
                 Value<bool> onBudget = const Value.absent(),
                 Value<bool> archived = const Value.absent(),
                 Value<int> sortOrder = const Value.absent(),
@@ -7033,6 +8336,8 @@ class $$AccountsTableTableManager
                 name: name,
                 kind: kind,
                 openingBalanceCents: openingBalanceCents,
+                reconciledBalanceCents: reconciledBalanceCents,
+                reconciledAt: reconciledAt,
                 onBudget: onBudget,
                 archived: archived,
                 sortOrder: sortOrder,
@@ -7046,6 +8351,8 @@ class $$AccountsTableTableManager
                 required String name,
                 Value<String> kind = const Value.absent(),
                 Value<int> openingBalanceCents = const Value.absent(),
+                Value<int?> reconciledBalanceCents = const Value.absent(),
+                Value<int?> reconciledAt = const Value.absent(),
                 Value<bool> onBudget = const Value.absent(),
                 Value<bool> archived = const Value.absent(),
                 Value<int> sortOrder = const Value.absent(),
@@ -7057,6 +8364,8 @@ class $$AccountsTableTableManager
                 name: name,
                 kind: kind,
                 openingBalanceCents: openingBalanceCents,
+                reconciledBalanceCents: reconciledBalanceCents,
+                reconciledAt: reconciledAt,
                 onBudget: onBudget,
                 archived: archived,
                 sortOrder: sortOrder,
@@ -7278,6 +8587,7 @@ typedef $$CategoriesTableCreateCompanionBuilder =
       required String id,
       required String name,
       required String groupId,
+      Value<String?> parentId,
       Value<int?> color,
       Value<String?> icon,
       Value<bool> hidden,
@@ -7290,6 +8600,7 @@ typedef $$CategoriesTableUpdateCompanionBuilder =
       Value<String> id,
       Value<String> name,
       Value<String> groupId,
+      Value<String?> parentId,
       Value<int?> color,
       Value<String?> icon,
       Value<bool> hidden,
@@ -7319,6 +8630,11 @@ class $$CategoriesTableFilterComposer
 
   ColumnFilters<String> get groupId => $composableBuilder(
     column: $table.groupId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get parentId => $composableBuilder(
+    column: $table.parentId,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -7372,6 +8688,11 @@ class $$CategoriesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get parentId => $composableBuilder(
+    column: $table.parentId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get color => $composableBuilder(
     column: $table.color,
     builder: (column) => ColumnOrderings(column),
@@ -7415,6 +8736,9 @@ class $$CategoriesTableAnnotationComposer
 
   GeneratedColumn<String> get groupId =>
       $composableBuilder(column: $table.groupId, builder: (column) => column);
+
+  GeneratedColumn<String> get parentId =>
+      $composableBuilder(column: $table.parentId, builder: (column) => column);
 
   GeneratedColumn<int> get color =>
       $composableBuilder(column: $table.color, builder: (column) => column);
@@ -7466,6 +8790,7 @@ class $$CategoriesTableTableManager
                 Value<String> id = const Value.absent(),
                 Value<String> name = const Value.absent(),
                 Value<String> groupId = const Value.absent(),
+                Value<String?> parentId = const Value.absent(),
                 Value<int?> color = const Value.absent(),
                 Value<String?> icon = const Value.absent(),
                 Value<bool> hidden = const Value.absent(),
@@ -7476,6 +8801,7 @@ class $$CategoriesTableTableManager
                 id: id,
                 name: name,
                 groupId: groupId,
+                parentId: parentId,
                 color: color,
                 icon: icon,
                 hidden: hidden,
@@ -7488,6 +8814,7 @@ class $$CategoriesTableTableManager
                 required String id,
                 required String name,
                 required String groupId,
+                Value<String?> parentId = const Value.absent(),
                 Value<int?> color = const Value.absent(),
                 Value<String?> icon = const Value.absent(),
                 Value<bool> hidden = const Value.absent(),
@@ -7498,6 +8825,7 @@ class $$CategoriesTableTableManager
                 id: id,
                 name: name,
                 groupId: groupId,
+                parentId: parentId,
                 color: color,
                 icon: icon,
                 hidden: hidden,
@@ -8600,6 +9928,542 @@ typedef $$TransactionTagsTableProcessedTableManager =
         BaseReferences<_$AppDatabase, $TransactionTagsTable, TransactionTagRow>,
       ),
       TransactionTagRow,
+      PrefetchHooks Function()
+    >;
+typedef $$RulesTableCreateCompanionBuilder =
+    RulesCompanion Function({
+      required String id,
+      required String name,
+      Value<bool> enabled,
+      Value<int> priority,
+      required String triggerType,
+      required String triggerPayload,
+      required String actionPayload,
+      required int createdAt,
+      required int updatedAt,
+      Value<int> rowid,
+    });
+typedef $$RulesTableUpdateCompanionBuilder =
+    RulesCompanion Function({
+      Value<String> id,
+      Value<String> name,
+      Value<bool> enabled,
+      Value<int> priority,
+      Value<String> triggerType,
+      Value<String> triggerPayload,
+      Value<String> actionPayload,
+      Value<int> createdAt,
+      Value<int> updatedAt,
+      Value<int> rowid,
+    });
+
+class $$RulesTableFilterComposer extends Composer<_$AppDatabase, $RulesTable> {
+  $$RulesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get enabled => $composableBuilder(
+    column: $table.enabled,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get priority => $composableBuilder(
+    column: $table.priority,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get triggerType => $composableBuilder(
+    column: $table.triggerType,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get triggerPayload => $composableBuilder(
+    column: $table.triggerPayload,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get actionPayload => $composableBuilder(
+    column: $table.actionPayload,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$RulesTableOrderingComposer
+    extends Composer<_$AppDatabase, $RulesTable> {
+  $$RulesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get enabled => $composableBuilder(
+    column: $table.enabled,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get priority => $composableBuilder(
+    column: $table.priority,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get triggerType => $composableBuilder(
+    column: $table.triggerType,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get triggerPayload => $composableBuilder(
+    column: $table.triggerPayload,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get actionPayload => $composableBuilder(
+    column: $table.actionPayload,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$RulesTableAnnotationComposer
+    extends Composer<_$AppDatabase, $RulesTable> {
+  $$RulesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get name =>
+      $composableBuilder(column: $table.name, builder: (column) => column);
+
+  GeneratedColumn<bool> get enabled =>
+      $composableBuilder(column: $table.enabled, builder: (column) => column);
+
+  GeneratedColumn<int> get priority =>
+      $composableBuilder(column: $table.priority, builder: (column) => column);
+
+  GeneratedColumn<String> get triggerType => $composableBuilder(
+    column: $table.triggerType,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get triggerPayload => $composableBuilder(
+    column: $table.triggerPayload,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get actionPayload => $composableBuilder(
+    column: $table.actionPayload,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<int> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+}
+
+class $$RulesTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $RulesTable,
+          RuleRow,
+          $$RulesTableFilterComposer,
+          $$RulesTableOrderingComposer,
+          $$RulesTableAnnotationComposer,
+          $$RulesTableCreateCompanionBuilder,
+          $$RulesTableUpdateCompanionBuilder,
+          (RuleRow, BaseReferences<_$AppDatabase, $RulesTable, RuleRow>),
+          RuleRow,
+          PrefetchHooks Function()
+        > {
+  $$RulesTableTableManager(_$AppDatabase db, $RulesTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$RulesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$RulesTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$RulesTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> name = const Value.absent(),
+                Value<bool> enabled = const Value.absent(),
+                Value<int> priority = const Value.absent(),
+                Value<String> triggerType = const Value.absent(),
+                Value<String> triggerPayload = const Value.absent(),
+                Value<String> actionPayload = const Value.absent(),
+                Value<int> createdAt = const Value.absent(),
+                Value<int> updatedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => RulesCompanion(
+                id: id,
+                name: name,
+                enabled: enabled,
+                priority: priority,
+                triggerType: triggerType,
+                triggerPayload: triggerPayload,
+                actionPayload: actionPayload,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String name,
+                Value<bool> enabled = const Value.absent(),
+                Value<int> priority = const Value.absent(),
+                required String triggerType,
+                required String triggerPayload,
+                required String actionPayload,
+                required int createdAt,
+                required int updatedAt,
+                Value<int> rowid = const Value.absent(),
+              }) => RulesCompanion.insert(
+                id: id,
+                name: name,
+                enabled: enabled,
+                priority: priority,
+                triggerType: triggerType,
+                triggerPayload: triggerPayload,
+                actionPayload: actionPayload,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$RulesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $RulesTable,
+      RuleRow,
+      $$RulesTableFilterComposer,
+      $$RulesTableOrderingComposer,
+      $$RulesTableAnnotationComposer,
+      $$RulesTableCreateCompanionBuilder,
+      $$RulesTableUpdateCompanionBuilder,
+      (RuleRow, BaseReferences<_$AppDatabase, $RulesTable, RuleRow>),
+      RuleRow,
+      PrefetchHooks Function()
+    >;
+typedef $$RuleMatchesTableCreateCompanionBuilder =
+    RuleMatchesCompanion Function({
+      required String id,
+      required String ruleId,
+      required String sourceType,
+      required String sourceId,
+      Value<String?> transactionId,
+      required int matchedAt,
+      required String outcome,
+      required int updatedAt,
+      Value<int> rowid,
+    });
+typedef $$RuleMatchesTableUpdateCompanionBuilder =
+    RuleMatchesCompanion Function({
+      Value<String> id,
+      Value<String> ruleId,
+      Value<String> sourceType,
+      Value<String> sourceId,
+      Value<String?> transactionId,
+      Value<int> matchedAt,
+      Value<String> outcome,
+      Value<int> updatedAt,
+      Value<int> rowid,
+    });
+
+class $$RuleMatchesTableFilterComposer
+    extends Composer<_$AppDatabase, $RuleMatchesTable> {
+  $$RuleMatchesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get ruleId => $composableBuilder(
+    column: $table.ruleId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get sourceType => $composableBuilder(
+    column: $table.sourceType,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get sourceId => $composableBuilder(
+    column: $table.sourceId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get transactionId => $composableBuilder(
+    column: $table.transactionId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get matchedAt => $composableBuilder(
+    column: $table.matchedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get outcome => $composableBuilder(
+    column: $table.outcome,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$RuleMatchesTableOrderingComposer
+    extends Composer<_$AppDatabase, $RuleMatchesTable> {
+  $$RuleMatchesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get ruleId => $composableBuilder(
+    column: $table.ruleId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get sourceType => $composableBuilder(
+    column: $table.sourceType,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get sourceId => $composableBuilder(
+    column: $table.sourceId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get transactionId => $composableBuilder(
+    column: $table.transactionId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get matchedAt => $composableBuilder(
+    column: $table.matchedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get outcome => $composableBuilder(
+    column: $table.outcome,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$RuleMatchesTableAnnotationComposer
+    extends Composer<_$AppDatabase, $RuleMatchesTable> {
+  $$RuleMatchesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get ruleId =>
+      $composableBuilder(column: $table.ruleId, builder: (column) => column);
+
+  GeneratedColumn<String> get sourceType => $composableBuilder(
+    column: $table.sourceType,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get sourceId =>
+      $composableBuilder(column: $table.sourceId, builder: (column) => column);
+
+  GeneratedColumn<String> get transactionId => $composableBuilder(
+    column: $table.transactionId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get matchedAt =>
+      $composableBuilder(column: $table.matchedAt, builder: (column) => column);
+
+  GeneratedColumn<String> get outcome =>
+      $composableBuilder(column: $table.outcome, builder: (column) => column);
+
+  GeneratedColumn<int> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+}
+
+class $$RuleMatchesTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $RuleMatchesTable,
+          RuleMatchRow,
+          $$RuleMatchesTableFilterComposer,
+          $$RuleMatchesTableOrderingComposer,
+          $$RuleMatchesTableAnnotationComposer,
+          $$RuleMatchesTableCreateCompanionBuilder,
+          $$RuleMatchesTableUpdateCompanionBuilder,
+          (
+            RuleMatchRow,
+            BaseReferences<_$AppDatabase, $RuleMatchesTable, RuleMatchRow>,
+          ),
+          RuleMatchRow,
+          PrefetchHooks Function()
+        > {
+  $$RuleMatchesTableTableManager(_$AppDatabase db, $RuleMatchesTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$RuleMatchesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$RuleMatchesTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$RuleMatchesTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> ruleId = const Value.absent(),
+                Value<String> sourceType = const Value.absent(),
+                Value<String> sourceId = const Value.absent(),
+                Value<String?> transactionId = const Value.absent(),
+                Value<int> matchedAt = const Value.absent(),
+                Value<String> outcome = const Value.absent(),
+                Value<int> updatedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => RuleMatchesCompanion(
+                id: id,
+                ruleId: ruleId,
+                sourceType: sourceType,
+                sourceId: sourceId,
+                transactionId: transactionId,
+                matchedAt: matchedAt,
+                outcome: outcome,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String ruleId,
+                required String sourceType,
+                required String sourceId,
+                Value<String?> transactionId = const Value.absent(),
+                required int matchedAt,
+                required String outcome,
+                required int updatedAt,
+                Value<int> rowid = const Value.absent(),
+              }) => RuleMatchesCompanion.insert(
+                id: id,
+                ruleId: ruleId,
+                sourceType: sourceType,
+                sourceId: sourceId,
+                transactionId: transactionId,
+                matchedAt: matchedAt,
+                outcome: outcome,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$RuleMatchesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $RuleMatchesTable,
+      RuleMatchRow,
+      $$RuleMatchesTableFilterComposer,
+      $$RuleMatchesTableOrderingComposer,
+      $$RuleMatchesTableAnnotationComposer,
+      $$RuleMatchesTableCreateCompanionBuilder,
+      $$RuleMatchesTableUpdateCompanionBuilder,
+      (
+        RuleMatchRow,
+        BaseReferences<_$AppDatabase, $RuleMatchesTable, RuleMatchRow>,
+      ),
+      RuleMatchRow,
       PrefetchHooks Function()
     >;
 typedef $$BudgetsTableCreateCompanionBuilder =
@@ -10275,6 +12139,10 @@ class $AppDatabaseManager {
   $$TagsTableTableManager get tags => $$TagsTableTableManager(_db, _db.tags);
   $$TransactionTagsTableTableManager get transactionTags =>
       $$TransactionTagsTableTableManager(_db, _db.transactionTags);
+  $$RulesTableTableManager get rules =>
+      $$RulesTableTableManager(_db, _db.rules);
+  $$RuleMatchesTableTableManager get ruleMatches =>
+      $$RuleMatchesTableTableManager(_db, _db.ruleMatches);
   $$BudgetsTableTableManager get budgets =>
       $$BudgetsTableTableManager(_db, _db.budgets);
   $$RecurrencesTableTableManager get recurrences =>

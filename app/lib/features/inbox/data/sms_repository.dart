@@ -9,6 +9,8 @@ import '../../accounts/data/account_repository.dart';
 import '../../categories/data/category_repository.dart';
 import '../../entry/entry_memory.dart';
 import '../../payees/data/payee_repository.dart';
+import '../../rules/data/rule_repository.dart';
+import '../../tags/data/tag_repository.dart';
 import '../../transactions/data/transaction_repository.dart';
 
 class InboxItem {
@@ -20,6 +22,7 @@ class InboxItem {
     required this.status,
     this.suggestedPayee,
     this.suggestedAmountCents,
+    this.suggestedIsIncome = false,
     this.suggestedAccountName,
     this.suggestedCategoryName,
   });
@@ -38,6 +41,7 @@ class InboxItem {
   final String status;
   final String? suggestedPayee;
   final int? suggestedAmountCents;
+  final bool suggestedIsIncome;
   final String? suggestedAccountName;
   final String? suggestedCategoryName;
 
@@ -93,6 +97,7 @@ class SmsRepository {
   /// so a user can still log one of these manually if the classifier
   /// was wrong about it.
   static const _ignoredStatuses = ['none', 'duplicate', 'dismissed'];
+  static const _matchedStatuses = ['accepted', 'duplicate'];
 
   Future<List<InboxItem>> listInbox() async {
     await _warmCache();
@@ -109,7 +114,9 @@ class SmsRepository {
   /// progressive updates are fast (no DB queries per event).
   List<InboxItem> _enrichSynced(List<SmsRow> rows) {
     if (rows.isEmpty) return const [];
+    final seen = <String>{};
     return rows
+        .where((r) => seen.add(_smsDisplayKey(r)))
         .map(
           (r) => _mapRow(
             r,
@@ -122,6 +129,49 @@ class SmsRepository {
         .toList();
   }
 
+  String _smsDisplayKey(SmsRow r) {
+    final candidateKey = _candidateDisplayKey(r.candidateJson);
+    if (candidateKey != null) {
+      return '${r.address.trim().toLowerCase()}|$candidateKey';
+    }
+    final body = r.body
+        .toLowerCase()
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .replaceAll(RegExp(r'\s+([.,;:])'), r'$1')
+        .trim();
+    return '${r.address.trim().toLowerCase()}|$body';
+  }
+
+  String? _candidateDisplayKey(String? candidateJson) {
+    if (candidateJson == null || candidateJson.isEmpty) return null;
+    try {
+      final j = jsonDecode(candidateJson) as Map<String, dynamic>;
+      final amount = (j['amount_cents'] as num?)?.toInt();
+      final date = DateTime.tryParse(j['date'] as String? ?? '');
+      if (amount == null || date == null) return null;
+      return [
+        (j['is_income'] as bool? ?? false) ? 'in' : 'out',
+        amount.toString(),
+        _dayKey(date),
+        _normalizeKeyPart(j['bank_ref'] as String?),
+        _normalizeKeyPart(j['payee'] as String?),
+        _normalizeKeyPart(j['account_hint'] as String?),
+      ].join('|');
+    } catch (_) {
+      return null;
+    }
+  }
+
+  String _dayKey(DateTime date) {
+    final month = date.month.toString().padLeft(2, '0');
+    final day = date.day.toString().padLeft(2, '0');
+    return '${date.year}-$month-$day';
+  }
+
+  String _normalizeKeyPart(String? value) {
+    return (value ?? '').toLowerCase().replaceAll(RegExp(r'\s+'), ' ').trim();
+  }
+
   /// Reactive inbox: emits a fresh list whenever [SmsMessages] changes.
   /// Drift watches the underlying table, so newly-ingested SMS show
   /// up automatically without anyone calling [Ref.invalidate].
@@ -131,6 +181,21 @@ class SmsRepository {
       ..orderBy([(t) => OrderingTerm.desc(t.receivedAt)]);
     // Pre-warm the enrichment cache on the very first watch event so
     // the body of the stream is a synchronous map thereafter.
+    var warmed = false;
+    return query.watch().asyncExpand((rows) async* {
+      if (!warmed) {
+        await _warmCache();
+        warmed = true;
+      }
+      yield _enrichSynced(rows);
+    });
+  }
+
+  Stream<List<InboxItem>> watchMatched() {
+    final query = _db.select(_db.smsMessages)
+      ..where((t) => t.candidateStatus.isIn(_matchedStatuses))
+      ..orderBy([(t) => OrderingTerm.desc(t.receivedAt)])
+      ..limit(200);
     var warmed = false;
     return query.watch().asyncExpand((rows) async* {
       if (!warmed) {
@@ -179,6 +244,7 @@ class SmsRepository {
   ) {
     String? payeeText;
     int? amount;
+    var isIncome = false;
     String? accountHint;
     String? categoryId;
     String? categoryHint;
@@ -187,6 +253,7 @@ class SmsRepository {
         final j = jsonDecode(r.candidateJson!) as Map<String, dynamic>;
         payeeText = j['payee'] as String?;
         amount = (j['amount_cents'] as num?)?.toInt();
+        isIncome = j['is_income'] == true;
         accountHint = (j['account_hint'] as String?)?.toLowerCase();
         categoryId = j['category_id'] as String?;
         categoryHint = (j['category_hint'] as String?)?.toLowerCase();
@@ -255,6 +322,7 @@ class SmsRepository {
       status: r.candidateStatus,
       suggestedPayee: payeeText,
       suggestedAmountCents: amount,
+      suggestedIsIncome: isIncome,
       suggestedAccountName: accountName,
       suggestedCategoryName: categoryName,
     );
@@ -287,7 +355,7 @@ class SmsRepository {
     final amount = (j['amount_cents'] as num?)?.toInt() ?? 0;
     if (amount == 0) return false;
     final isIncome = j['is_income'] == true;
-    final payee = j['payee'] as String?;
+    var payee = j['payee'] as String?;
     final accountHint = (j['account_hint'] as String?)?.toLowerCase();
     var categoryId = j['category_id'] as String?;
     final categoryHint = (j['category_hint'] as String?)?.toLowerCase();
@@ -300,9 +368,32 @@ class SmsRepository {
     final accounts = await ref
         .read(accountRepoProvider)
         .list(includeArchived: false);
+    final ruleAction = await ref
+        .read(ruleRepoProvider)
+        .actionForSms(
+          address: row.address,
+          body: row.body,
+          payeeName: payee,
+          accountHint: accountHint,
+          amountCents: amount,
+        );
+    if (ruleAction.ignore == true) {
+      await (_db.update(_db.smsMessages)..where((t) => t.id.equals(id))).write(
+        const SmsMessagesCompanion(candidateStatus: Value('dismissed')),
+      );
+      return true;
+    }
+    payee = ruleAction.payeeName ?? payee;
+    categoryId = ruleAction.categoryId ?? categoryId;
+
     String? acctId;
+    if (ruleAction.accountId != null &&
+        accounts.any((a) => a.id == ruleAction.accountId)) {
+      acctId = ruleAction.accountId;
+    }
     if (accountHint != null) {
       for (final a in accounts) {
+        if (acctId != null) break;
         if (accountHint.contains(a.name.toLowerCase()) ||
             a.name.toLowerCase().contains(accountHint)) {
           acctId = a.id;
@@ -332,19 +423,39 @@ class SmsRepository {
     }
 
     final signed = isIncome ? amount.abs() : -amount.abs();
-    await ref
-        .read(transactionRepoProvider)
-        .create(
-          accountId: acctId,
-          categoryId: categoryId,
-          payeeId: payeeId,
-          payeeName: payee,
-          amountCents: signed,
-          date: date,
-          notes: 'SMS · ${row.address}',
-          origin: 'sms',
-          originRef: row.id.toString(),
-        );
+    final txRepo = ref.read(transactionRepoProvider);
+    final existing = await txRepo.findNearDuplicate(
+      accountId: acctId,
+      amountCents: signed,
+      date: date,
+      payeeName: payee,
+    );
+    if (existing != null) {
+      await (_db.update(_db.smsMessages)..where((t) => t.id.equals(id))).write(
+        SmsMessagesCompanion(
+          candidateStatus: const Value('duplicate'),
+          linkedTransactionId: Value(existing.id),
+        ),
+      );
+      return true;
+    }
+
+    final transactionId = await txRepo.create(
+      accountId: acctId,
+      categoryId: categoryId,
+      payeeId: payeeId,
+      payeeName: payee,
+      amountCents: signed,
+      date: date,
+      notes: 'SMS · ${row.address}',
+      origin: 'sms',
+      originRef: row.id.toString(),
+    );
+    if (ruleAction.tagIds.isNotEmpty) {
+      await ref
+          .read(tagRepoProvider)
+          .setTransactionTags(transactionId, ruleAction.tagIds);
+    }
 
     if (payeeId != null) {
       await ref
@@ -365,7 +476,7 @@ class SmsRepository {
   /// Returns (ok, failed) counts. Invalidates the inbox once at the end so
   /// the list rebuilds a single time, not per-row.
   Future<({int ok, int failed})> confirmAll() async {
-    final rows = await listInbox();
+    final rows = (await listInbox()).where((r) => r.hasCandidate);
     var ok = 0;
     var failed = 0;
     for (final r in rows) {
@@ -396,6 +507,11 @@ final StreamProvider<List<InboxItem>> inboxItemsProvider =
 final StreamProvider<List<InboxItem>> ignoredInboxItemsProvider =
     StreamProvider<List<InboxItem>>((ref) {
       return ref.watch(smsRepositoryProvider).watchIgnored();
+    });
+
+final StreamProvider<List<InboxItem>> matchedInboxItemsProvider =
+    StreamProvider<List<InboxItem>>((ref) {
+      return ref.watch(smsRepositoryProvider).watchMatched();
     });
 
 extension _FirstOrNull<T> on Iterable<T> {

@@ -77,6 +77,92 @@ void main() {
     },
   );
 
+  test('collapses same sender/body even when Android ids differ', () async {
+    final receivedAt = DateTime(2026, 5, 2, 10, 30);
+    const body = 'Rs.450.00 debited from HDFC Bank card xx1234 at BLINKIT.';
+    final sms1 = IncomingSms(
+      id: 'hdfc-1',
+      address: 'VK-HDFCBK',
+      body: body,
+      receivedAt: receivedAt,
+    );
+    final sms2 = IncomingSms(
+      id: 'hdfc-2',
+      address: 'VK-HDFCBK',
+      body: body,
+      receivedAt: receivedAt.add(const Duration(milliseconds: 200)),
+    );
+    fakeParser.respondTo(
+      body,
+      SmsCandidate(
+        amountCents: 45000,
+        isIncome: false,
+        date: receivedAt,
+        confidence: 0.9,
+        payee: 'BLINKIT',
+        accountHint: 'HDFC Card xx1234',
+        parserVersion: 1,
+      ),
+    );
+    reader.backfillMessages = [sms1, sms2];
+    final pipeline = SmsPipeline(
+      db: db,
+      reader: reader,
+      parserRegistry: registry,
+    );
+
+    final added = await pipeline.backfill();
+    final rows = await db.select(db.smsMessages).get();
+
+    expect(added, 1);
+    expect(rows, hasLength(1));
+  });
+
+  test(
+    'collapses same parsed candidate when SMS body differs slightly',
+    () async {
+      final receivedAt = DateTime(2026, 5, 2, 10, 30);
+      const body1 = 'Rs.450.00 debited from HDFC Bank card xx1234 at BLINKIT.';
+      const body2 = 'Rs.450.00 debited from HDFC Bank card xx1234 at BLINKIT. ';
+      final sms1 = IncomingSms(
+        id: 'hdfc-1',
+        address: 'VK-HDFCBK',
+        body: body1,
+        receivedAt: receivedAt,
+      );
+      final sms2 = IncomingSms(
+        id: 'hdfc-2',
+        address: 'VK-HDFCBK',
+        body: body2,
+        receivedAt: receivedAt.add(const Duration(seconds: 1)),
+      );
+      final candidate = SmsCandidate(
+        amountCents: 45000,
+        isIncome: false,
+        date: receivedAt,
+        confidence: 0.9,
+        payee: 'BLINKIT',
+        accountHint: 'HDFC Card xx1234',
+        parserVersion: 1,
+      );
+      fakeParser
+        ..respondTo(body1, candidate)
+        ..respondTo(body2, candidate);
+      reader.backfillMessages = [sms1, sms2];
+      final pipeline = SmsPipeline(
+        db: db,
+        reader: reader,
+        parserRegistry: registry,
+      );
+
+      final added = await pipeline.backfill();
+      final rows = await db.select(db.smsMessages).get();
+
+      expect(added, 1);
+      expect(rows, hasLength(1));
+    },
+  );
+
   test(
     'stores non-transactional SMS without candidate or notification',
     () async {
@@ -156,16 +242,70 @@ void main() {
     expect(rows, hasLength(1));
     expect(rows.single.androidId, 'queued-1');
   });
+
+  test(
+    'live listener and catch-up do not double-ingest the same SMS',
+    () async {
+      final receivedAt = DateTime(2026, 5, 2, 10, 30);
+      final sms = IncomingSms(
+        id: 'race-1',
+        address: 'VK-HDFCBK',
+        body: 'Rs.450.00 debited from HDFC Bank card xx1234 at BLINKIT.',
+        receivedAt: receivedAt,
+      );
+      final parseGate = Completer<void>();
+      fakeParser
+        ..delay(sms.body, parseGate.future)
+        ..respondTo(
+          sms.body,
+          SmsCandidate(
+            amountCents: 45000,
+            isIncome: false,
+            date: receivedAt,
+            confidence: 0.9,
+            payee: 'BLINKIT',
+            accountHint: 'HDFC Card xx1234',
+            parserVersion: 1,
+          ),
+        );
+      reader.backfillMessages = [sms];
+      final pipeline = SmsPipeline(
+        db: db,
+        reader: reader,
+        parserRegistry: registry,
+      );
+
+      pipeline.startListening(drainQueued: false);
+      reader.emit(sms);
+      await Future<void>.delayed(Duration.zero);
+      parseGate.complete();
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      final rows = await db.select(db.smsMessages).get();
+
+      expect(rows, hasLength(1));
+      expect(rows.single.androidId, 'race-1');
+      await pipeline.dispose();
+    },
+  );
 }
 
 class _FakeSmsParser implements SmsParser {
   final Map<String, SmsCandidate> _responses = {};
+  final Map<String, Future<void>> _delays = {};
   void respondTo(String body, SmsCandidate candidate) {
     _responses[body] = candidate;
   }
 
+  void delay(String body, Future<void> future) {
+    _delays[body] = future;
+  }
+
   @override
-  Future<SmsCandidate?> parse(IncomingSms sms) async => _responses[sms.body];
+  Future<SmsCandidate?> parse(IncomingSms sms) async {
+    final delay = _delays[sms.body];
+    if (delay != null) await delay;
+    return _responses[sms.body];
+  }
 }
 
 class _FakeSmsReader implements SmsReader {
@@ -200,6 +340,8 @@ class _FakeSmsReader implements SmsReader {
 
   @override
   Stream<IncomingSms> listen() => _controller.stream;
+
+  void emit(IncomingSms sms) => _controller.add(sms);
 }
 
 class _NotificationCall {

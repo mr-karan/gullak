@@ -79,6 +79,7 @@ class SmsPipeline {
   int _generation = 0;
   bool _scanRunning = false;
   bool _disposed = false;
+  final Set<String> _inFlightSmsKeys = <String>{};
   final ValueNotifier<SmsScanState> scanState = ValueNotifier<SmsScanState>(
     const SmsScanState.idle(),
   );
@@ -88,7 +89,7 @@ class SmsPipeline {
   }
 
   Future<int> backfill({
-    Duration window = const Duration(days: 90),
+    Duration window = const Duration(days: 7),
     String label = 'Scanning SMS',
     bool showProgress = true,
   }) async {
@@ -188,15 +189,19 @@ class SmsPipeline {
 
   /// Each message is parsed independently — the LLM, the network, or
   /// the SQLite write can fail mid-scan. We log and move on so one bad
-  /// SMS does not abort the rest of a 90-day backfill or kill the live
+  /// SMS does not abort the rest of a backfill or kill the live
   /// listener for the rest of the session.
   Future<bool> _safeIngest(IncomingSms sms, {int? generation}) async {
     if (generation != null && generation != _generation) return false;
+    final key = _smsKey(sms);
+    if (!_inFlightSmsKeys.add(key)) return false;
     try {
       return await _ingest(sms, generation: generation);
     } catch (e, st) {
       log.w('sms ingest failed for ${sms.address}', error: e, stackTrace: st);
       return false;
+    } finally {
+      _inFlightSmsKeys.remove(key);
     }
   }
 
@@ -233,7 +238,7 @@ class SmsPipeline {
   }
 
   Future<int> retryFailuresAndRescan({
-    Duration minimumWindow = const Duration(days: 90),
+    Duration minimumWindow = const Duration(days: 7),
   }) async {
     final oldest =
         await (db.select(db.smsMessages)
@@ -269,6 +274,7 @@ class SmsPipeline {
             (sms.id == null
                 ? const Constant(false)
                 : t.androidId.equals(sms.id!)) |
+            (t.address.equals(sms.address) & t.body.equals(sms.body)) |
             (t.address.equals(sms.address) &
                 t.body.equals(sms.body) &
                 t.receivedAt.equals(sms.receivedAt.millisecondsSinceEpoch)),
@@ -310,6 +316,10 @@ class SmsPipeline {
             'bank_ref': candidate.bankRef,
             'confidence': candidate.confidence,
           });
+    if (candidate != null &&
+        await _hasDuplicateSmsCandidate(sms, candidate, candidateJson!)) {
+      return false;
+    }
 
     String status;
     String? linkedTransactionId;
@@ -442,6 +452,82 @@ class SmsPipeline {
 
   static int _notificationIdForSmsRow(int smsRowId) {
     return 100000 + smsRowId.remainder(1000000000);
+  }
+
+  static String _smsKey(IncomingSms sms) {
+    final address = sms.address.trim().toLowerCase();
+    final body = sms.body.replaceAll(RegExp(r'\s+'), ' ').trim();
+    return '$address|$body';
+  }
+
+  Future<bool> _hasDuplicateSmsCandidate(
+    IncomingSms sms,
+    SmsCandidate candidate,
+    String candidateJson,
+  ) async {
+    final key = _candidateDedupeKey(candidate);
+    final windowStart = sms.receivedAt
+        .subtract(const Duration(minutes: 10))
+        .millisecondsSinceEpoch;
+    final windowEnd = sms.receivedAt
+        .add(const Duration(minutes: 10))
+        .millisecondsSinceEpoch;
+    final recent =
+        await (db.select(db.smsMessages)..where(
+              (t) =>
+                  t.address.equals(sms.address) &
+                  t.candidateJson.isNotNull() &
+                  t.receivedAt.isBiggerOrEqualValue(windowStart) &
+                  t.receivedAt.isSmallerOrEqualValue(windowEnd),
+            ))
+            .get();
+    for (final row in recent) {
+      if (row.candidateJson == candidateJson) return true;
+      final rowKey = _candidateJsonDedupeKey(row.candidateJson);
+      if (rowKey != null && rowKey == key) return true;
+    }
+    return false;
+  }
+
+  static String _candidateDedupeKey(SmsCandidate c) {
+    return [
+      c.isIncome ? 'in' : 'out',
+      c.amountCents.toString(),
+      _dayKey(c.date),
+      _normalizeKeyPart(c.bankRef),
+      _normalizeKeyPart(c.payee),
+      _normalizeKeyPart(c.accountHint),
+    ].join('|');
+  }
+
+  static String? _candidateJsonDedupeKey(String? candidateJson) {
+    if (candidateJson == null || candidateJson.isEmpty) return null;
+    try {
+      final j = jsonDecode(candidateJson) as Map<String, dynamic>;
+      final amount = (j['amount_cents'] as num?)?.toInt();
+      final date = DateTime.tryParse(j['date'] as String? ?? '');
+      if (amount == null || date == null) return null;
+      return [
+        (j['is_income'] as bool? ?? false) ? 'in' : 'out',
+        amount.toString(),
+        _dayKey(date),
+        _normalizeKeyPart(j['bank_ref'] as String?),
+        _normalizeKeyPart(j['payee'] as String?),
+        _normalizeKeyPart(j['account_hint'] as String?),
+      ].join('|');
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static String _dayKey(DateTime date) {
+    final month = date.month.toString().padLeft(2, '0');
+    final day = date.day.toString().padLeft(2, '0');
+    return '${date.year}-$month-$day';
+  }
+
+  static String _normalizeKeyPart(String? value) {
+    return (value ?? '').toLowerCase().replaceAll(RegExp(r'\s+'), ' ').trim();
   }
 }
 

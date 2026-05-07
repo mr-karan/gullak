@@ -1,12 +1,9 @@
-import 'dart:convert';
-
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/logger.dart';
-import '../../core/prefs.dart';
 import '../../features/categories/data/category_repository.dart';
 import '../../features/payees/data/payee_repository.dart';
-import '../../state/providers.dart';
+import '../../features/rules/data/rule_repository.dart';
 import '../ai/pi_ai_client.dart';
 import 'sms_models.dart';
 import 'sms_parser.dart';
@@ -16,11 +13,16 @@ import 'sms_parser.dart';
 /// just hands the SMS to `/v1/ai/sms/parse` and reads back the typed
 /// candidate.
 class LlmSmsParser implements SmsParser {
-  LlmSmsParser(this._client, this._categoryRepo, this._payeeRepo, this._prefs);
+  LlmSmsParser(
+    this._client,
+    this._categoryRepo,
+    this._payeeRepo,
+    this._ruleRepo,
+  );
   final PiAiClient _client;
   final CategoryRepository _categoryRepo;
   final PayeeRepository _payeeRepo;
-  final Prefs _prefs;
+  final RuleRepository _ruleRepo;
 
   @override
   Future<SmsCandidate?> parse(IncomingSms sms) async {
@@ -28,14 +30,21 @@ class LlmSmsParser implements SmsParser {
     try {
       final categories = await _categoryRepo.list();
       final payees = await _payeeRepo.list();
-      final categoryHints = _decodeHints(_prefs.payeeCategoryHints);
+      final categoryById = {for (final c in categories) c.id: c.name};
+      final payeeCategoryHintIds = await _ruleRepo.payeeCategoryHintIds();
       response = await _client.parseSms(
         sender: sms.address,
         body: sms.body,
         receivedAt: sms.receivedAt,
         categories: categories.map((c) => NamedRow(c.id, c.name)).toList(),
         payees: payees
-            .map((p) => PayeeCategoryRow(p.id, p.name, categoryHints[p.id]))
+            .map(
+              (p) => PayeeCategoryRow(
+                p.id,
+                p.name,
+                categoryById[payeeCategoryHintIds[p.id]],
+              ),
+            )
             .toList(),
       );
     } on PiAiException catch (e) {
@@ -57,16 +66,6 @@ class LlmSmsParser implements SmsParser {
       parserVersion: c.parserVersion,
     );
   }
-
-  Map<String, String> _decodeHints(String raw) {
-    try {
-      final m = jsonDecode(raw) as Map<String, dynamic>;
-      return m.map((k, v) => MapEntry(k, v is String ? v : ''))
-        ..removeWhere((_, v) => v.isEmpty);
-    } catch (_) {
-      return const {};
-    }
-  }
 }
 
 final FutureProvider<LlmSmsParser?> llmSmsParserProvider =
@@ -77,6 +76,6 @@ final FutureProvider<LlmSmsParser?> llmSmsParserProvider =
         client,
         ref.watch(categoryRepoProvider),
         ref.watch(payeeRepoProvider),
-        ref.watch(prefsProvider),
+        ref.watch(ruleRepoProvider),
       );
     });

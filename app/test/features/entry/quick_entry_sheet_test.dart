@@ -137,7 +137,10 @@ void main() {
     await tester.tap(find.text('Category'));
     await tester.pumpAndSettle();
 
-    expect(find.widgetWithText(TextField, 'Search or add category'), findsOneWidget);
+    expect(
+      find.widgetWithText(TextField, 'Search or add category'),
+      findsOneWidget,
+    );
     expect(find.text(groceries.name), findsOneWidget);
     expect(find.text(transport.name), findsOneWidget);
 

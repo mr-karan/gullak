@@ -12,6 +12,8 @@ import {
   changeLog,
   payees,
   recurrences,
+  ruleMatches,
+  rules,
   tags,
   transactions,
   transactionTags,
@@ -69,6 +71,8 @@ type Resource =
   | "transactions"
   | "tags"
   | "transaction_tags"
+  | "rules"
+  | "rule_matches"
   | "budgets"
   | "recurrences";
 
@@ -161,6 +165,30 @@ const APPLIERS: Record<
     },
     remove: (tx, id) => {
       tx.delete(transactionTags).where(eq(transactionTags.id, id)).run();
+    },
+  },
+  rules: {
+    upsert: (tx, payload) => {
+      const row = payload as typeof rules.$inferInsert;
+      tx.insert(rules).values(row).onConflictDoUpdate({
+        target: rules.id,
+        set: row,
+      }).run();
+    },
+    remove: (tx, id) => {
+      tx.delete(rules).where(eq(rules.id, id)).run();
+    },
+  },
+  rule_matches: {
+    upsert: (tx, payload) => {
+      const row = payload as typeof ruleMatches.$inferInsert;
+      tx.insert(ruleMatches).values(row).onConflictDoUpdate({
+        target: ruleMatches.id,
+        set: row,
+      }).run();
+    },
+    remove: (tx, id) => {
+      tx.delete(ruleMatches).where(eq(ruleMatches.id, id)).run();
     },
   },
   budgets: {

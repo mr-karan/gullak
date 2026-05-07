@@ -14,6 +14,8 @@ class Accounts extends Table {
   // synthetic transaction. Stored in minor units, signed.
   IntColumn get openingBalanceCents =>
       integer().withDefault(const Constant(0))();
+  IntColumn get reconciledBalanceCents => integer().nullable()();
+  IntColumn get reconciledAt => integer().nullable()();
   BoolColumn get onBudget => boolean().withDefault(const Constant(true))();
   BoolColumn get archived => boolean().withDefault(const Constant(false))();
   IntColumn get sortOrder => integer().withDefault(const Constant(0))();
@@ -40,6 +42,10 @@ class Categories extends Table {
   TextColumn get id => text()();
   TextColumn get name => text()();
   TextColumn get groupId => text()();
+  // Optional parent category id. One level only — a category whose
+  // parentId is set is a "subcategory"; its parent must itself be a
+  // top-level category (parentId IS NULL). Enforced at the repo layer.
+  TextColumn get parentId => text().nullable()();
   // Color is an ARGB int; nullable so the UI can derive one.
   IntColumn get color => integer().nullable()();
   TextColumn get icon => text().nullable()();
@@ -123,6 +129,37 @@ class TransactionTags extends Table {
   TextColumn get id => text()();
   TextColumn get transactionId => text()();
   TextColumn get tagId => text()();
+  IntColumn get updatedAt => integer()();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
+@DataClassName('RuleRow')
+class Rules extends Table {
+  TextColumn get id => text()();
+  TextColumn get name => text()();
+  BoolColumn get enabled => boolean().withDefault(const Constant(true))();
+  IntColumn get priority => integer().withDefault(const Constant(100))();
+  TextColumn get triggerType => text()();
+  TextColumn get triggerPayload => text()();
+  TextColumn get actionPayload => text()();
+  IntColumn get createdAt => integer()();
+  IntColumn get updatedAt => integer()();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
+@DataClassName('RuleMatchRow')
+class RuleMatches extends Table {
+  TextColumn get id => text()();
+  TextColumn get ruleId => text()();
+  TextColumn get sourceType => text()();
+  TextColumn get sourceId => text()();
+  TextColumn get transactionId => text().nullable()();
+  IntColumn get matchedAt => integer()();
+  TextColumn get outcome => text()();
   IntColumn get updatedAt => integer()();
 
   @override

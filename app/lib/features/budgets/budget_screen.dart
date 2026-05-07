@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../core/money.dart';
+import '../../core/snackbars.dart';
 import '../../state/providers.dart';
 import '../../ui/widgets/empty_state.dart';
 import '../../ui/widgets/money_text.dart';
@@ -36,6 +37,11 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
           IconButton(
             icon: const Icon(Icons.chevron_right),
             onPressed: () => _shiftMonth(1),
+          ),
+          IconButton(
+            icon: const Icon(Icons.content_copy_outlined),
+            tooltip: 'Copy previous targets',
+            onPressed: () => _copyPreviousTargets(context, ref),
           ),
         ],
       ),
@@ -85,6 +91,11 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
                   ],
                 ),
               ),
+              _BudgetGuidanceCard(
+                overview: overview,
+                symbol: prefs.currencySymbol,
+                minorDigits: prefs.currencyMinorDigits,
+              ),
               for (final group in groups.entries) ...[
                 Padding(
                   padding: const EdgeInsets.fromLTRB(20, 24, 20, 4),
@@ -113,9 +124,124 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
   }
 
   void _shiftMonth(int by) {
-    final d = DateTime.parse('$_month-01');
-    final next = DateTime(d.year, d.month + by, 1);
-    setState(() => _month = BudgetRepository.monthOf(next));
+    setState(() => _month = BudgetRepository.shiftMonth(_month, by));
+  }
+
+  Future<void> _copyPreviousTargets(BuildContext context, WidgetRef ref) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final copied = await ref
+        .read(budgetRepoProvider)
+        .copyTargetsFromPreviousMonth(_month);
+    ref.invalidate(budgetMonthProvider(_month));
+    if (!context.mounted) return;
+    showTimedSnackBar(
+      messenger,
+      SnackBar(
+        content: Text(
+          copied == 0
+              ? 'No previous month targets to copy'
+              : 'Copied $copied budget targets',
+        ),
+      ),
+    );
+  }
+}
+
+class _BudgetGuidanceCard extends StatelessWidget {
+  const _BudgetGuidanceCard({
+    required this.overview,
+    required this.symbol,
+    required this.minorDigits,
+  });
+
+  final BudgetMonthOverview overview;
+  final String symbol;
+  final int minorDigits;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final assigned = overview.totalAssigned;
+    if (assigned <= 0) return const SizedBox.shrink();
+    final spent = -overview.totalSpent;
+    final left = assigned - spent;
+    final overspent = overview.entries.where((e) => e.isOverspent).toList();
+    final close =
+        overview.entries
+            .where(
+              (e) =>
+                  !e.isOverspent &&
+                  e.targetCents > 0 &&
+                  -e.spentCents >= (e.targetCents * 0.8).round(),
+            )
+            .toList()
+          ..sort((a, b) => a.availableCents.compareTo(b.availableCents));
+
+    final tone = left < 0
+        ? cs.errorContainer
+        : close.isNotEmpty
+        ? cs.tertiaryContainer
+        : cs.primaryContainer;
+    final onTone = left < 0
+        ? cs.onErrorContainer
+        : close.isNotEmpty
+        ? cs.onTertiaryContainer
+        : cs.onPrimaryContainer;
+    final headline = left < 0
+        ? 'Over budget by ${Money.format(-left, symbol: symbol, minorDigits: minorDigits)}'
+        : '${Money.format(left, symbol: symbol, minorDigits: minorDigits)} left this month';
+    final detail = overspent.isNotEmpty
+        ? '${overspent.length} categor${overspent.length == 1 ? 'y is' : 'ies are'} overspent'
+        : close.isNotEmpty
+        ? '${close.first.categoryName} is close to its limit'
+        : 'Spending is within assigned targets';
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: tone,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+          child: Row(
+            children: [
+              Icon(
+                left < 0
+                    ? Icons.warning_amber_outlined
+                    : close.isNotEmpty
+                    ? Icons.trending_up_outlined
+                    : Icons.check_circle_outline,
+                color: onTone,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      headline,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        color: onTone,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      detail,
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodySmall?.copyWith(color: onTone),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
 
@@ -202,43 +328,85 @@ class _BudgetRow extends ConsumerWidget {
           ? ''
           : Money.formatDigitsOnly(entry.targetCents, minorDigits: minorDigits),
     );
+    var saving = false;
+    String? errorText;
     try {
-      final v = await showDialog<int?>(
+      await showDialog<void>(
         context: context,
-        builder: (_) => AlertDialog(
-          title: Text('Budget for ${entry.categoryName}'),
-          content: TextField(
-            controller: ctrl,
-            autofocus: true,
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            decoration: InputDecoration(prefixText: '$symbol '),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(0),
-              child: const Text('Clear'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(
-                context,
-              ).pop(Money.parseToMinor(ctrl.text, minorDigits: minorDigits)),
-              child: const Text('Save'),
-            ),
-          ],
+        builder: (dialogContext) => StatefulBuilder(
+          builder: (context, setState) {
+            Future<void> save(int targetCents) async {
+              setState(() {
+                saving = true;
+                errorText = null;
+              });
+              try {
+                final repo = ref.read(budgetRepoProvider);
+                if (targetCents <= 0) {
+                  await repo.clearTarget(
+                    categoryId: entry.categoryId,
+                    month: month,
+                  );
+                } else {
+                  await repo.setTarget(
+                    categoryId: entry.categoryId,
+                    month: month,
+                    targetCents: targetCents,
+                  );
+                }
+                ref.invalidate(budgetMonthProvider(month));
+                if (dialogContext.mounted) {
+                  Navigator.of(dialogContext).pop();
+                }
+              } catch (e) {
+                if (!context.mounted) return;
+                setState(() {
+                  saving = false;
+                  errorText = 'Could not save budget. Please try again.';
+                });
+              }
+            }
+
+            return AlertDialog(
+              title: Text('Budget for ${entry.categoryName}'),
+              content: TextField(
+                controller: ctrl,
+                autofocus: true,
+                enabled: !saving,
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+                decoration: InputDecoration(
+                  prefixText: '$symbol ',
+                  errorText: errorText,
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: saving ? null : () => save(0),
+                  child: const Text('Clear'),
+                ),
+                FilledButton(
+                  onPressed: saving
+                      ? null
+                      : () => save(
+                          Money.parseToMinor(
+                            ctrl.text,
+                            minorDigits: minorDigits,
+                          ),
+                        ),
+                  child: saving
+                      ? const SizedBox.square(
+                          dimension: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Text('Save'),
+                ),
+              ],
+            );
+          },
         ),
       );
-      if (v == null) return;
-      final repo = ref.read(budgetRepoProvider);
-      if (v <= 0) {
-        await repo.clearTarget(categoryId: entry.categoryId, month: month);
-      } else {
-        await repo.setTarget(
-          categoryId: entry.categoryId,
-          month: month,
-          targetCents: v,
-        );
-      }
-      ref.invalidate(budgetMonthProvider(month));
     } finally {
       ctrl.dispose();
     }

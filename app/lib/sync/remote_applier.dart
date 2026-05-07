@@ -37,6 +37,18 @@ class RemoteApplier {
         case 'transactions':
           await _applyTransaction(id, op, payload);
           return;
+        case 'tags':
+          await _applyTag(id, op, payload);
+          return;
+        case 'transaction_tags':
+          await _applyTransactionTag(id, op, payload);
+          return;
+        case 'rules':
+          await _applyRule(id, op, payload);
+          return;
+        case 'rule_matches':
+          await _applyRuleMatch(id, op, payload);
+          return;
         case 'budgets':
           await _applyBudget(id, op, payload);
           return;
@@ -77,6 +89,10 @@ class RemoteApplier {
             openingBalanceCents: Value(
               (payload['openingBalanceCents'] as num?)?.toInt() ?? 0,
             ),
+            reconciledBalanceCents: Value(
+              (payload['reconciledBalanceCents'] as num?)?.toInt(),
+            ),
+            reconciledAt: Value((payload['reconciledAt'] as num?)?.toInt()),
             onBudget: Value(payload['onBudget'] as bool? ?? true),
             archived: Value(payload['archived'] as bool? ?? false),
             sortOrder: Value((payload['sortOrder'] as num?)?.toInt() ?? 0),
@@ -132,6 +148,7 @@ class RemoteApplier {
             id: Value(id),
             name: Value(payload['name'] as String? ?? ''),
             groupId: Value(payload['groupId'] as String? ?? ''),
+            parentId: Value(payload['parentId'] as String?),
             color: Value((payload['color'] as num?)?.toInt()),
             icon: Value(payload['icon'] as String?),
             hidden: Value(payload['hidden'] as bool? ?? false),
@@ -185,6 +202,9 @@ class RemoteApplier {
             amountCents: Value((payload['amountCents'] as num?)?.toInt() ?? 0),
             date: Value(payload['date'] as String? ?? ''),
             notes: Value(payload['notes'] as String?),
+            latitude: Value((payload['latitude'] as num?)?.toDouble()),
+            longitude: Value((payload['longitude'] as num?)?.toDouble()),
+            locationName: Value(payload['locationName'] as String?),
             cleared: Value(payload['cleared'] as bool? ?? false),
             origin: Value(payload['origin'] as String? ?? 'manual'),
             originRef: Value(payload['originRef'] as String?),
@@ -199,6 +219,62 @@ class RemoteApplier {
                   local?.createdAt ??
                   DateTime.now().millisecondsSinceEpoch,
             ),
+            updatedAt: Value((payload['updatedAt'] as num).toInt()),
+          ),
+        );
+  }
+
+  Future<void> _applyTag(String id, String op, dynamic payload) async {
+    if (op == 'delete') {
+      await (_db.delete(_db.tags)..where((t) => t.id.equals(id))).go();
+      return;
+    }
+    if (payload is! Map) return;
+    final local = await (_db.select(
+      _db.tags,
+    )..where((t) => t.id.equals(id))).getSingleOrNull();
+    if (!_isNewer(local?.updatedAt, payload['updatedAt'])) return;
+    await _db
+        .into(_db.tags)
+        .insertOnConflictUpdate(
+          TagsCompanion(
+            id: Value(id),
+            name: Value(payload['name'] as String? ?? ''),
+            color: Value((payload['color'] as num?)?.toInt()),
+            archived: Value(payload['archived'] as bool? ?? false),
+            createdAt: Value(
+              (payload['createdAt'] as num?)?.toInt() ??
+                  local?.createdAt ??
+                  DateTime.now().millisecondsSinceEpoch,
+            ),
+            updatedAt: Value((payload['updatedAt'] as num).toInt()),
+          ),
+        );
+  }
+
+  Future<void> _applyTransactionTag(
+    String id,
+    String op,
+    dynamic payload,
+  ) async {
+    if (op == 'delete') {
+      await (_db.delete(
+        _db.transactionTags,
+      )..where((t) => t.id.equals(id))).go();
+      return;
+    }
+    if (payload is! Map) return;
+    final local = await (_db.select(
+      _db.transactionTags,
+    )..where((t) => t.id.equals(id))).getSingleOrNull();
+    if (!_isNewer(local?.updatedAt, payload['updatedAt'])) return;
+    await _db
+        .into(_db.transactionTags)
+        .insertOnConflictUpdate(
+          TransactionTagsCompanion(
+            id: Value(id),
+            transactionId: Value(payload['transactionId'] as String? ?? ''),
+            tagId: Value(payload['tagId'] as String? ?? ''),
             updatedAt: Value((payload['updatedAt'] as num).toInt()),
           ),
         );
@@ -225,6 +301,66 @@ class RemoteApplier {
             rolloverCents: Value(
               (payload['rolloverCents'] as num?)?.toInt() ?? 0,
             ),
+            updatedAt: Value((payload['updatedAt'] as num).toInt()),
+          ),
+        );
+  }
+
+  Future<void> _applyRule(String id, String op, dynamic payload) async {
+    if (op == 'delete') {
+      await (_db.delete(_db.rules)..where((t) => t.id.equals(id))).go();
+      return;
+    }
+    if (payload is! Map) return;
+    final local = await (_db.select(
+      _db.rules,
+    )..where((t) => t.id.equals(id))).getSingleOrNull();
+    if (!_isNewer(local?.updatedAt, payload['updatedAt'])) return;
+    await _db
+        .into(_db.rules)
+        .insertOnConflictUpdate(
+          RulesCompanion(
+            id: Value(id),
+            name: Value(payload['name'] as String? ?? ''),
+            enabled: Value(payload['enabled'] as bool? ?? true),
+            priority: Value((payload['priority'] as num?)?.toInt() ?? 100),
+            triggerType: Value(payload['triggerType'] as String? ?? ''),
+            triggerPayload: Value(payload['triggerPayload'] as String? ?? '{}'),
+            actionPayload: Value(payload['actionPayload'] as String? ?? '{}'),
+            createdAt: Value(
+              (payload['createdAt'] as num?)?.toInt() ??
+                  local?.createdAt ??
+                  DateTime.now().millisecondsSinceEpoch,
+            ),
+            updatedAt: Value((payload['updatedAt'] as num).toInt()),
+          ),
+        );
+  }
+
+  Future<void> _applyRuleMatch(String id, String op, dynamic payload) async {
+    if (op == 'delete') {
+      await (_db.delete(_db.ruleMatches)..where((t) => t.id.equals(id))).go();
+      return;
+    }
+    if (payload is! Map) return;
+    final local = await (_db.select(
+      _db.ruleMatches,
+    )..where((t) => t.id.equals(id))).getSingleOrNull();
+    if (!_isNewer(local?.updatedAt, payload['updatedAt'])) return;
+    await _db
+        .into(_db.ruleMatches)
+        .insertOnConflictUpdate(
+          RuleMatchesCompanion(
+            id: Value(id),
+            ruleId: Value(payload['ruleId'] as String? ?? ''),
+            sourceType: Value(payload['sourceType'] as String? ?? ''),
+            sourceId: Value(payload['sourceId'] as String? ?? ''),
+            transactionId: Value(payload['transactionId'] as String?),
+            matchedAt: Value(
+              (payload['matchedAt'] as num?)?.toInt() ??
+                  DateTime.now().millisecondsSinceEpoch,
+            ),
+            outcome: Value(payload['outcome'] as String? ?? 'applied'),
             updatedAt: Value((payload['updatedAt'] as num).toInt()),
           ),
         );

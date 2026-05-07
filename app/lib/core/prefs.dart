@@ -19,6 +19,8 @@ class Prefs {
   static const _kQuickEntryTab = 'gullak.entry.tab';
   static const _kSmsEnabled = 'gullak.sms.enabled';
   static const _kLastAccountId = 'gullak.entry.lastAccountId';
+  static const _kActiveTagId = 'gullak.tags.activeTagId';
+  static const _kLocationCaptureEnabled = 'gullak.location.captureEnabled';
   // Persisted as JSON: { "<payeeId>": "<accountId>" }
   static const _kPayeeAccountHints = 'gullak.entry.payeeAccountHints';
   // Persisted as JSON: { "<payeeId>": "<categoryId>" }
@@ -86,6 +88,20 @@ class Prefs {
       await _inner.setString(_kLastAccountId, id);
     }
   }
+
+  String? get activeTagId => _inner.getString(_kActiveTagId);
+  Future<void> setActiveTagId(String? id) async {
+    if (id == null) {
+      await _inner.remove(_kActiveTagId);
+    } else {
+      await _inner.setString(_kActiveTagId, id);
+    }
+  }
+
+  bool get locationCaptureEnabled =>
+      _inner.getBool(_kLocationCaptureEnabled) ?? false;
+  Future<void> setLocationCaptureEnabled(bool v) =>
+      _inner.setBool(_kLocationCaptureEnabled, v);
 
   String get payeeAccountHints => _inner.getString(_kPayeeAccountHints) ?? '{}';
   Future<void> setPayeeAccountHints(String json) =>

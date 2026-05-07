@@ -88,6 +88,8 @@ class AccountRepository {
     required AccountKind kind,
     int openingBalanceCents = 0,
     bool? onBudget,
+    int? reconciledBalanceCents,
+    int? reconciledAt,
   }) async {
     final id = _uuid.v4();
     final now = DateTime.now().millisecondsSinceEpoch;
@@ -99,6 +101,8 @@ class AccountRepository {
             name: name,
             kind: Value(kind.id),
             openingBalanceCents: Value(openingBalanceCents),
+            reconciledBalanceCents: Value(reconciledBalanceCents),
+            reconciledAt: Value(reconciledAt),
             onBudget: Value(onBudget ?? !kind.defaultsOffBudget),
             createdAt: now,
             updatedAt: now,
@@ -114,6 +118,8 @@ class AccountRepository {
     AccountKind? kind,
     int? openingBalanceCents,
     bool? onBudget,
+    Object? reconciledBalanceCents = _Sentinel.value,
+    Object? reconciledAt = _Sentinel.value,
   }) async {
     final now = DateTime.now().millisecondsSinceEpoch;
     await (_db.update(_db.accounts)..where((t) => t.id.equals(id))).write(
@@ -123,6 +129,8 @@ class AccountRepository {
         openingBalanceCents: openingBalanceCents == null
             ? const Value.absent()
             : Value(openingBalanceCents),
+        reconciledBalanceCents: _v<int?>(reconciledBalanceCents),
+        reconciledAt: _v<int?>(reconciledAt),
         onBudget: onBudget == null ? const Value.absent() : Value(onBudget),
         updatedAt: Value(now),
       ),
@@ -148,6 +156,14 @@ class AccountRepository {
       ),
     );
     await _logRow(id);
+  }
+
+  Future<void> reconcile(String id, int balanceCents) async {
+    await update(
+      id,
+      reconciledBalanceCents: balanceCents,
+      reconciledAt: DateTime.now().millisecondsSinceEpoch,
+    );
   }
 
   /// Hard delete: drops the account and *also* its transactions. Use
@@ -188,6 +204,11 @@ class AccountRepository {
     return acct.openingBalanceCents + txSum;
   }
 }
+
+enum _Sentinel { value }
+
+Value<T?> _v<T>(Object? v) =>
+    identical(v, _Sentinel.value) ? const Value.absent() : Value(v as T?);
 
 final Provider<AccountRepository> accountRepoProvider =
     Provider<AccountRepository>(

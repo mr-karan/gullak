@@ -1,4 +1,4 @@
-import { desc } from "drizzle-orm";
+import { desc, lt } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
 
@@ -12,10 +12,13 @@ const feedbackBody = z.object({
   payload: z.record(z.unknown()).default({}),
 });
 
+const feedbackRetentionMs = 7 * 24 * 60 * 60 * 1000;
+
 export const feedbackRouter = new Hono<AppEnv>()
   .post("/", async (c) => {
     const body = feedbackBody.parse(await c.req.json());
     const db = c.get("db");
+    pruneOldFeedback(db);
     const inserted = db
       .insert(schema.feedbackEvents)
       .values({
@@ -31,6 +34,7 @@ export const feedbackRouter = new Hono<AppEnv>()
   })
   .get("/", (c) => {
     const db = c.get("db");
+    pruneOldFeedback(db);
     const limit = Math.min(Math.max(Number(c.req.query("limit") ?? 50), 1), 200);
     const rows = db
       .select()
@@ -45,6 +49,13 @@ export const feedbackRouter = new Hono<AppEnv>()
       })),
     });
   });
+
+function pruneOldFeedback(db: AppEnv["Variables"]["db"]) {
+  const cutoff = Date.now() - feedbackRetentionMs;
+  db.delete(schema.feedbackEvents)
+    .where(lt(schema.feedbackEvents.createdAt, cutoff))
+    .run();
+}
 
 function safeJson(raw: string): unknown {
   try {

@@ -25,6 +25,8 @@ class TransactionListItem {
     this.categoryIcon,
     this.transferAccountName,
     this.notes,
+    this.origin,
+    this.originRef,
   });
 
   final String id;
@@ -40,6 +42,8 @@ class TransactionListItem {
   final String? categoryIcon;
   final String? transferAccountName;
   final String? notes;
+  final String? origin;
+  final String? originRef;
 }
 
 class TransactionRepository {
@@ -66,6 +70,9 @@ class TransactionRepository {
     required int amountCents,
     required DateTime date,
     String? notes,
+    double? latitude,
+    double? longitude,
+    String? locationName,
     bool cleared = false,
     String origin = 'manual',
     String? originRef,
@@ -86,6 +93,9 @@ class TransactionRepository {
             payeeId: Value(payeeId),
             payeeName: Value(payeeName),
             notes: Value(notes),
+            latitude: Value(latitude),
+            longitude: Value(longitude),
+            locationName: Value(locationName),
             cleared: Value(cleared),
             origin: Value(origin),
             originRef: Value(originRef),
@@ -235,6 +245,9 @@ class TransactionRepository {
     int? amountCents,
     DateTime? date,
     Object? notes = _Sentinel.value,
+    Object? latitude = _Sentinel.value,
+    Object? longitude = _Sentinel.value,
+    Object? locationName = _Sentinel.value,
     bool? cleared,
   }) async {
     final now = DateTime.now().millisecondsSinceEpoch;
@@ -249,6 +262,9 @@ class TransactionRepository {
             : Value(amountCents),
         date: date == null ? const Value.absent() : Value(_ymd(date)),
         notes: _v<String?>(notes),
+        latitude: _v<double?>(latitude),
+        longitude: _v<double?>(longitude),
+        locationName: _v<String?>(locationName),
         cleared: cleared == null ? const Value.absent() : Value(cleared),
         updatedAt: Value(now),
       ),
@@ -266,6 +282,9 @@ class TransactionRepository {
             _db.transactions,
           )..where((t) => t.parentId.equals(id))).get()
         : <TransactionRow>[];
+    final tagLinks = await (_db.select(
+      _db.transactionTags,
+    )..where((t) => t.transactionId.equals(id))).get();
     final transferPair = row.transferGroupId != null
         ? await (_db.select(_db.transactions)..where(
                 (t) =>
@@ -277,15 +296,24 @@ class TransactionRepository {
     await _db.transaction(() async {
       if (row.splitTotalCents != null) {
         await (_db.delete(
+          _db.transactionTags,
+        )..where((t) => t.transactionId.isIn(children.map((c) => c.id)))).go();
+        await (_db.delete(
           _db.transactions,
         )..where((t) => t.parentId.equals(id))).go();
       }
       if (row.transferGroupId != null) {
         await (_db.delete(
+          _db.transactionTags,
+        )..where((t) => t.transactionId.equals(id))).go();
+        await (_db.delete(
           _db.transactions,
         )..where((t) => t.transferGroupId.equals(row.transferGroupId!))).go();
         return;
       }
+      await (_db.delete(
+        _db.transactionTags,
+      )..where((t) => t.transactionId.equals(id))).go();
       await (_db.delete(_db.transactions)..where((t) => t.id.equals(id))).go();
     });
     if (_changes != null) {
@@ -296,11 +324,15 @@ class TransactionRepository {
         await _changes.delete('transactions', transferPair.id);
       }
       await _changes.delete('transactions', id);
+      for (final link in tagLinks) {
+        await _changes.delete('transaction_tags', link.id);
+      }
     }
     return DeletedTransactionSnapshot._(
       parent: row,
       splitChildren: children,
       transferPair: transferPair,
+      tagLinks: tagLinks,
     );
   }
 
@@ -319,6 +351,9 @@ class TransactionRepository {
       if (pair != null) {
         await _db.into(_db.transactions).insertOnConflictUpdate(pair);
       }
+      for (final link in snap.tagLinks) {
+        await _db.into(_db.transactionTags).insertOnConflictUpdate(link);
+      }
     });
     await _logRow(p.id);
     for (final c in snap.splitChildren) {
@@ -326,6 +361,9 @@ class TransactionRepository {
     }
     final pair = snap.transferPair;
     if (pair != null) await _logRow(pair.id);
+    for (final link in snap.tagLinks) {
+      await _changes?.upsert('transaction_tags', link.id, link.toJson());
+    }
   }
 
   // ── reads ────────────────────────────────────────────────────────────
@@ -340,6 +378,17 @@ class TransactionRepository {
     return _mapRow(rows.first);
   }
 
+  Stream<TransactionListItem?> watchById(String id) => _select(
+    idEquals: id,
+  ).watch().map((rows) => rows.isEmpty ? null : _mapRow(rows.first));
+
+  Stream<TransactionRow?> watchRow(String id) =>
+      (_db.select(_db.transactions)
+            ..where((t) => t.id.equals(id))
+            ..limit(1))
+          .watch()
+          .map((rows) => rows.isEmpty ? null : rows.first);
+
   Stream<List<TransactionListItem>> watchRecent({int limit = 25}) {
     return _select(
       visibleOnly: true,
@@ -349,13 +398,51 @@ class TransactionRepository {
 
   Stream<List<TransactionListItem>> watchAll({
     String? accountId,
+    String? categoryId,
     String? search,
+    String? tagId,
+    String? fromDate,
+    String? toDate,
+    String? origin,
+    bool? cleared,
+    int? minAmountCents,
+    int? maxAmountCents,
+    String? smsText,
   }) {
-    return _select(
+    final stream = _select(
       visibleOnly: true,
       accountId: accountId,
+      categoryId: categoryId,
       search: search,
+      tagId: tagId,
+      origin: origin,
+      cleared: cleared,
+      minAmountCents: minAmountCents,
+      maxAmountCents: maxAmountCents,
+      dateBetween: fromDate != null && toDate != null
+          ? (fromDate, toDate)
+          : null,
     ).watch().map((rows) => rows.map(_mapRow).toList());
+    if (smsText == null || smsText.trim().isEmpty) return stream;
+    return stream.asyncMap((rows) => _filterBySmsText(rows, smsText));
+  }
+
+  Future<List<TransactionListItem>> _filterBySmsText(
+    List<TransactionListItem> rows,
+    String smsText,
+  ) async {
+    final wanted = smsText.trim().toLowerCase();
+    final out = <TransactionListItem>[];
+    for (final row in rows) {
+      if (row.origin != 'sms') continue;
+      final id = int.tryParse(row.originRef ?? '');
+      if (id == null) continue;
+      final sms = await (_db.select(
+        _db.smsMessages,
+      )..where((t) => t.id.equals(id))).getSingleOrNull();
+      if ((sms?.body.toLowerCase() ?? '').contains(wanted)) out.add(row);
+    }
+    return out;
   }
 
   Future<int> sumSpendInRange({DateTime? from, DateTime? to}) async {
@@ -452,9 +539,15 @@ class TransactionRepository {
     bool visibleOnly = false,
     String? idEquals,
     String? accountId,
+    String? categoryId,
     String? search,
     int? amountEquals,
     (String, String)? dateBetween,
+    String? tagId,
+    String? origin,
+    bool? cleared,
+    int? minAmountCents,
+    int? maxAmountCents,
     int? limit,
   }) {
     final transferAccount = _db.alias(_db.accounts, 'transferAccount');
@@ -476,6 +569,11 @@ class TransactionRepository {
             transferAccount,
             transferAccount.id.equalsExp(_db.transactions.transferAccountId),
           ),
+          if (tagId != null)
+            innerJoin(
+              _db.transactionTags,
+              _db.transactionTags.transactionId.equalsExp(_db.transactions.id),
+            ),
         ])..orderBy([
           OrderingTerm.desc(_db.transactions.date),
           OrderingTerm.desc(_db.transactions.createdAt),
@@ -487,6 +585,9 @@ class TransactionRepository {
     if (idEquals != null) q.where(_db.transactions.id.equals(idEquals));
     if (accountId != null) {
       q.where(_db.transactions.accountId.equals(accountId));
+    }
+    if (categoryId != null) {
+      q.where(_db.transactions.categoryId.equals(categoryId));
     }
     if (amountEquals != null) {
       q.where(_db.transactions.amountCents.equals(amountEquals));
@@ -502,7 +603,25 @@ class TransactionRepository {
         _db.transactions.notes.like(s) |
             _db.transactions.payeeName.like(s) |
             _db.payees.name.like(s) |
-            _db.categories.name.like(s),
+            _db.categories.name.like(s) |
+            _db.accounts.name.like(s),
+      );
+    }
+    if (tagId != null) q.where(_db.transactionTags.tagId.equals(tagId));
+    if (origin != null) q.where(_db.transactions.origin.equals(origin));
+    if (cleared != null) q.where(_db.transactions.cleared.equals(cleared));
+    if (minAmountCents != null) {
+      q.where(
+        _db.transactions.amountCents.isBiggerOrEqualValue(minAmountCents) |
+            _db.transactions.amountCents.isSmallerOrEqualValue(-minAmountCents),
+      );
+    }
+    if (maxAmountCents != null) {
+      q.where(
+        _db.transactions.amountCents.isBetweenValues(
+          -maxAmountCents,
+          maxAmountCents,
+        ),
       );
     }
     if (limit != null) q.limit(limit);
@@ -530,6 +649,8 @@ class TransactionRepository {
       categoryIcon: c?.icon,
       transferAccountName: tA?.name,
       notes: t.notes,
+      origin: t.origin,
+      originRef: t.originRef,
     );
   }
 
@@ -595,6 +716,7 @@ class DeletedTransactionSnapshot {
   const DeletedTransactionSnapshot._({
     required this.parent,
     required this.splitChildren,
+    required this.tagLinks,
     this.transferPair,
   });
 
@@ -602,10 +724,12 @@ class DeletedTransactionSnapshot {
       const DeletedTransactionSnapshot._(
         parent: null,
         splitChildren: <TransactionRow>[],
+        tagLinks: <TransactionTagRow>[],
       );
 
   final TransactionRow? parent;
   final List<TransactionRow> splitChildren;
+  final List<TransactionTagRow> tagLinks;
   final TransactionRow? transferPair;
 
   bool get isEmpty => parent == null;
@@ -625,30 +749,84 @@ final StreamProvider<List<TransactionListItem>> recentTransactionsProvider =
     );
 
 class TransactionListQuery {
-  const TransactionListQuery({this.accountId, this.search});
+  const TransactionListQuery({
+    this.accountId,
+    this.categoryId,
+    this.search,
+    this.tagId,
+    this.fromDate,
+    this.toDate,
+    this.origin,
+    this.cleared,
+    this.minAmountCents,
+    this.maxAmountCents,
+    this.smsText,
+  });
   final String? accountId;
+  final String? categoryId;
   final String? search;
+  final String? tagId;
+  final String? fromDate;
+  final String? toDate;
+  final String? origin;
+  final bool? cleared;
+  final int? minAmountCents;
+  final int? maxAmountCents;
+  final String? smsText;
 
   @override
   bool operator ==(Object other) =>
       other is TransactionListQuery &&
       other.accountId == accountId &&
-      other.search == search;
+      other.categoryId == categoryId &&
+      other.search == search &&
+      other.tagId == tagId &&
+      other.fromDate == fromDate &&
+      other.toDate == toDate &&
+      other.origin == origin &&
+      other.cleared == cleared &&
+      other.minAmountCents == minAmountCents &&
+      other.maxAmountCents == maxAmountCents &&
+      other.smsText == smsText;
 
   @override
-  int get hashCode => Object.hash(accountId, search);
+  int get hashCode => Object.hash(
+    accountId,
+    categoryId,
+    search,
+    tagId,
+    fromDate,
+    toDate,
+    origin,
+    cleared,
+    minAmountCents,
+    maxAmountCents,
+    smsText,
+  );
 }
 
 final transactionsListProvider =
     StreamProvider.family<List<TransactionListItem>, TransactionListQuery>(
       (ref, q) => ref
           .watch(transactionRepoProvider)
-          .watchAll(accountId: q.accountId, search: q.search),
+          .watchAll(
+            accountId: q.accountId,
+            categoryId: q.categoryId,
+            search: q.search,
+            tagId: q.tagId,
+            fromDate: q.fromDate,
+            toDate: q.toDate,
+            origin: q.origin,
+            cleared: q.cleared,
+            minAmountCents: q.minAmountCents,
+            maxAmountCents: q.maxAmountCents,
+            smsText: q.smsText,
+          ),
     );
 
 final transactionByIdProvider =
-    FutureProvider.family<TransactionListItem?, String>(
-      (ref, id) => ref.watch(transactionRepoProvider).byId(id),
+    StreamProvider.family<TransactionListItem?, String>(
+      (ref, id) => ref.watch(transactionRepoProvider).watchById(id),
     );
 
 final FutureProvider<int> monthSpendProvider = FutureProvider<int>((ref) async {

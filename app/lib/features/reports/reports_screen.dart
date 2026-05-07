@@ -28,6 +28,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
     final monthLabel = DateFormat('MMMM yyyy').format(monthDate);
     final async = ref.watch(budgetMonthProvider(_month));
     final daily = ref.watch(_dailySpendProvider(_month));
+    final incomeSpending = ref.watch(_incomeSpendingProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -83,6 +84,27 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                   ),
                 ],
               ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
+            child: Text(
+              'Income vs spending',
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                letterSpacing: 1.2,
+              ),
+            ),
+          ),
+          incomeSpending.when(
+            loading: () => const SizedBox(height: 96),
+            error: (e, _) => Padding(
+              padding: const EdgeInsets.all(20),
+              child: Text('Error: $e'),
+            ),
+            data: (values) => Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+              child: _IncomeSpendingChart(values: values),
             ),
           ),
           Padding(
@@ -237,6 +259,97 @@ class _Sparkline extends StatelessWidget {
   }
 }
 
+class _IncomeSpendingMonth {
+  const _IncomeSpendingMonth({
+    required this.month,
+    required this.incomeCents,
+    required this.spendingCents,
+  });
+
+  final String month;
+  final int incomeCents;
+  final int spendingCents;
+}
+
+class _IncomeSpendingChart extends StatelessWidget {
+  const _IncomeSpendingChart({required this.values});
+
+  final List<_IncomeSpendingMonth> values;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    if (values.isEmpty) return const Text('No spending history yet.');
+    final maxV = values
+        .expand((v) => [v.incomeCents, v.spendingCents])
+        .reduce((a, b) => a > b ? a : b)
+        .clamp(1, double.infinity)
+        .toInt();
+    return SizedBox(
+      height: 140,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          for (final v in values)
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    Expanded(
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Expanded(
+                            child: FractionallySizedBox(
+                              heightFactor: (v.incomeCents / maxV).clamp(
+                                0.04,
+                                1.0,
+                              ),
+                              child: DecoratedBox(
+                                decoration: BoxDecoration(
+                                  color: cs.tertiary,
+                                  borderRadius: BorderRadius.circular(3),
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 3),
+                          Expanded(
+                            child: FractionallySizedBox(
+                              heightFactor: (v.spendingCents / maxV).clamp(
+                                0.04,
+                                1.0,
+                              ),
+                              child: DecoratedBox(
+                                decoration: BoxDecoration(
+                                  color: cs.primary,
+                                  borderRadius: BorderRadius.circular(3),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      v.month.substring(5),
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: cs.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
 /// Daily *spend* per day-of-month, length = days in that month.
 final _dailySpendProvider = FutureProvider.family<List<int>, String>((
   ref,
@@ -267,4 +380,46 @@ final _dailySpendProvider = FutureProvider.family<List<int>, String>((
     if (day >= 0 && day < out.length) out[day] = -s;
   }
   return out;
+});
+
+final _incomeSpendingProvider = FutureProvider<List<_IncomeSpendingMonth>>((
+  ref,
+) async {
+  ref.watch(recentTransactionsProvider);
+  final db = ref.watch(dbProvider);
+  final now = DateTime.now();
+  final months = [
+    for (var i = 5; i >= 0; i--) DateTime(now.year, now.month - i, 1),
+  ];
+  final out = [
+    for (final d in months)
+      _IncomeSpendingMonth(
+        month: BudgetRepository.monthOf(d),
+        incomeCents: 0,
+        spendingCents: 0,
+      ),
+  ];
+  final start = out.first.month;
+  final rows = await db
+      .customSelect(
+        'SELECT substr(date, 1, 7) AS month, '
+        'SUM(CASE WHEN amount_cents > 0 THEN amount_cents ELSE 0 END) AS income, '
+        'SUM(CASE WHEN amount_cents < 0 THEN -amount_cents ELSE 0 END) AS spending '
+        'FROM transactions '
+        'WHERE parent_id IS NULL AND transfer_group_id IS NULL '
+        'AND substr(date, 1, 7) >= ? '
+        'GROUP BY month',
+        variables: [Variable.withString(start)],
+        readsFrom: {db.transactions},
+      )
+      .get();
+  final byMonth = {
+    for (final r in rows)
+      r.read<String>('month'): _IncomeSpendingMonth(
+        month: r.read<String>('month'),
+        incomeCents: r.read<int?>('income') ?? 0,
+        spendingCents: r.read<int?>('spending') ?? 0,
+      ),
+  };
+  return [for (final v in out) byMonth[v.month] ?? v];
 });

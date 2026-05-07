@@ -68,6 +68,11 @@ class BudgetRepository {
 
   static String currentMonth() => monthOf(clock.now());
 
+  static String shiftMonth(String month, int by) {
+    final d = DateTime.parse('$month-01');
+    return monthOf(DateTime(d.year, d.month + by, 1));
+  }
+
   Future<void> setTarget({
     required String categoryId,
     required String month,
@@ -128,6 +133,25 @@ class BudgetRepository {
         await _changes.delete('budgets', id);
       }
     }
+  }
+
+  Future<int> copyTargetsFromPreviousMonth(String month) async {
+    final previousMonth = shiftMonth(month, -1);
+    final previousTargets = await (_db.select(
+      _db.budgets,
+    )..where((b) => b.month.equals(previousMonth))).get();
+    if (previousTargets.isEmpty) return 0;
+
+    var copied = 0;
+    for (final target in previousTargets) {
+      await setTarget(
+        categoryId: target.categoryId,
+        month: month,
+        targetCents: target.targetCents,
+      );
+      copied++;
+    }
+    return copied;
   }
 
   /// Compose a list of all categories with their budget + spend for the

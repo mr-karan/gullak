@@ -31,6 +31,12 @@ class HomeShell extends ConsumerWidget {
       path: '/budgets',
     ),
     _Tab(
+      icon: Icons.sell_outlined,
+      selected: Icons.sell,
+      label: 'Tags',
+      path: '/tags',
+    ),
+    _Tab(
       icon: Icons.inbox_outlined,
       selected: Icons.inbox,
       label: 'Inbox',
@@ -57,6 +63,7 @@ class HomeShell extends ConsumerWidget {
         loc == '/' ||
         loc == '/transactions' ||
         loc == '/budgets' ||
+        loc == '/tags' ||
         loc == '/accounts';
     final syncStatus = ref.watch(syncStatusProvider);
 

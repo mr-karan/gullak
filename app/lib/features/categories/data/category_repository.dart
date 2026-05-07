@@ -5,6 +5,7 @@ import 'package:uuid/uuid.dart';
 import '../../../data/db/database.dart';
 import '../../../state/providers.dart';
 import '../../../sync/changelog_writer.dart';
+import '../category_visuals.dart';
 
 export '../../../data/db/database.dart' show CategoryRow, CategoryGroupRow;
 
@@ -13,6 +14,31 @@ class CategoryRepository {
   final AppDatabase _db;
   final ChangeLogWriter? _changes;
   static const _uuid = Uuid();
+  static const List<_DefaultCategoryNode> _defaultSpendingTree = [
+    _DefaultCategoryNode(
+      'Daily Living',
+      children: ['Groceries', 'Eating Out', 'Transport', 'Health'],
+    ),
+    _DefaultCategoryNode(
+      'Home & Bills',
+      children: ['Rent', 'Utilities', 'Phone & Internet', 'Insurance'],
+    ),
+    _DefaultCategoryNode(
+      'Lifestyle',
+      children: ['Shopping', 'Entertainment', 'Travel', 'Personal Care'],
+    ),
+    _DefaultCategoryNode(
+      'Savings & Goals',
+      children: ['Emergency Fund', 'Investments'],
+    ),
+    _DefaultCategoryNode('Giving', children: ['Gifts', 'Donations']),
+  ];
+  static const List<_DefaultCategoryNode> _defaultIncomeTree = [
+    _DefaultCategoryNode(
+      'Income',
+      children: ['Salary', 'Interest', 'Refunds', 'Other Income'],
+    ),
+  ];
 
   Future<void> _logCategory(String id) async {
     if (_changes == null) return;
@@ -93,9 +119,15 @@ class CategoryRepository {
     required String groupId,
     int? color,
     String? icon,
+    String? parentId,
   }) async {
+    var resolvedGroupId = groupId;
+    if (parentId != null) {
+      final parent = await _ensureTopLevel(parentId);
+      resolvedGroupId = parent.groupId;
+    }
     final id = _uuid.v4();
-    final next = await _nextSortOrder(groupId);
+    final next = await _nextSortOrder(resolvedGroupId);
     final now = DateTime.now().millisecondsSinceEpoch;
     await _db
         .into(_db.categories)
@@ -103,9 +135,10 @@ class CategoryRepository {
           CategoriesCompanion.insert(
             id: id,
             name: name,
-            groupId: groupId,
+            groupId: resolvedGroupId,
             color: Value(color),
             icon: Value(icon),
+            parentId: Value(parentId),
             sortOrder: Value(next),
             updatedAt: now,
           ),
@@ -121,19 +154,56 @@ class CategoryRepository {
     int? color,
     String? icon,
     bool? hidden,
+    Object? parentId = _Sentinel.value,
   }) async {
+    String? resolvedGroupId = groupId;
+    if (parentId != _Sentinel.value && parentId != null) {
+      if (parentId == id) {
+        throw ArgumentError('a category cannot be its own parent');
+      }
+      final parent = await _ensureTopLevel(parentId as String);
+      resolvedGroupId = parent.groupId;
+      // Block promoting a category that already has children: that would
+      // create a 2-level chain. The UI prevents this; this is a guardrail.
+      final hasKids =
+          await (_db.select(_db.categories)
+                ..where((t) => t.parentId.equals(id))
+                ..limit(1))
+              .getSingleOrNull();
+      if (hasKids != null) {
+        throw StateError(
+          'cannot make a category a sub-category while it has children',
+        );
+      }
+    }
     final now = DateTime.now().millisecondsSinceEpoch;
     await (_db.update(_db.categories)..where((t) => t.id.equals(id))).write(
       CategoriesCompanion(
         name: name == null ? const Value.absent() : Value(name),
-        groupId: groupId == null ? const Value.absent() : Value(groupId),
+        groupId: resolvedGroupId == null
+            ? const Value.absent()
+            : Value(resolvedGroupId),
         color: color == null ? const Value.absent() : Value(color),
         icon: icon == null ? const Value.absent() : Value(icon),
         hidden: hidden == null ? const Value.absent() : Value(hidden),
+        parentId: identical(parentId, _Sentinel.value)
+            ? const Value.absent()
+            : Value(parentId as String?),
         updatedAt: Value(now),
       ),
     );
     await _logCategory(id);
+  }
+
+  Future<CategoryRow> _ensureTopLevel(String id) async {
+    final row = await byId(id);
+    if (row == null) {
+      throw ArgumentError('parent category $id not found');
+    }
+    if (row.parentId != null) {
+      throw StateError('parent category must itself be top-level');
+    }
+    return row;
   }
 
   Future<void> deleteCategory(String id, {String? reassignTo}) async {
@@ -143,7 +213,24 @@ class CategoryRepository {
     final affectedBudgets = (await (_db.select(
       _db.budgets,
     )..where((b) => b.categoryId.equals(id))).get()).map((b) => b.id).toList();
+    // Children of the deleted category get promoted to top-level so they
+    // don't dangle. If we deleted them too, the user would lose history
+    // tagged against those subcategories silently.
+    final orphaned = (await (_db.select(
+      _db.categories,
+    )..where((t) => t.parentId.equals(id))).get()).map((c) => c.id).toList();
+    final now = DateTime.now().millisecondsSinceEpoch;
     await _db.transaction(() async {
+      if (orphaned.isNotEmpty) {
+        await (_db.update(
+          _db.categories,
+        )..where((t) => t.parentId.equals(id))).write(
+          CategoriesCompanion(
+            parentId: const Value(null),
+            updatedAt: Value(now),
+          ),
+        );
+      }
       if (reassignTo != null) {
         await (_db.update(_db.transactions)
               ..where((t) => t.categoryId.equals(id)))
@@ -159,6 +246,9 @@ class CategoryRepository {
       await (_db.delete(_db.categories)..where((t) => t.id.equals(id))).go();
     });
     if (_changes != null) {
+      for (final cid in orphaned) {
+        await _logCategory(cid);
+      }
       for (final tid in affectedTx) {
         final row = await (_db.select(
           _db.transactions,
@@ -191,6 +281,158 @@ class CategoryRepository {
         await _logCategory(cid);
       }
       await _changes.delete('category_groups', id);
+    }
+  }
+
+  Future<void> resetToDefaultTree() async {
+    final oldCategories = await list(includeHidden: true);
+    final oldGroups = await listGroups();
+    final affectedTx = (await _db.select(_db.transactions).get())
+        .where((t) => t.categoryId != null)
+        .map((t) => t.id)
+        .toList();
+    final oldBudgets = (await _db.select(_db.budgets).get())
+        .map((b) => b.id)
+        .toList();
+
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final spendingGroupId = _uuid.v4();
+    final incomeGroupId = _uuid.v4();
+    final inserted = <CategoryRow>[];
+    await _db.transaction(() async {
+      await (_db.update(_db.transactions)).write(
+        TransactionsCompanion(
+          categoryId: const Value(null),
+          updatedAt: Value(now),
+        ),
+      );
+      await _db.delete(_db.budgets).go();
+      await _db.delete(_db.categories).go();
+      await _db.delete(_db.categoryGroups).go();
+      await _db
+          .into(_db.categoryGroups)
+          .insert(
+            CategoryGroupsCompanion.insert(
+              id: spendingGroupId,
+              name: 'Spending',
+              isIncome: const Value(false),
+              sortOrder: const Value(0),
+            ),
+          );
+      await _db
+          .into(_db.categoryGroups)
+          .insert(
+            CategoryGroupsCompanion.insert(
+              id: incomeGroupId,
+              name: 'Income',
+              isIncome: const Value(true),
+              sortOrder: const Value(1),
+            ),
+          );
+      Future<void> insertTree(
+        String groupId,
+        List<_DefaultCategoryNode> nodes,
+      ) async {
+        var order = 0;
+        for (final node in nodes) {
+          final parentId = _uuid.v4();
+          final parent = CategoryRow(
+            id: parentId,
+            name: node.name,
+            groupId: groupId,
+            parentId: null,
+            color: null,
+            icon: defaultCategoryEmoji(node.name),
+            hidden: false,
+            sortOrder: order++,
+            updatedAt: now,
+          );
+          inserted.add(parent);
+          await _db
+              .into(_db.categories)
+              .insert(
+                CategoriesCompanion.insert(
+                  id: parent.id,
+                  name: parent.name,
+                  groupId: parent.groupId,
+                  parentId: const Value(null),
+                  icon: Value(parent.icon),
+                  sortOrder: Value(parent.sortOrder),
+                  updatedAt: parent.updatedAt,
+                ),
+              );
+          for (final childName in node.children) {
+            final child = CategoryRow(
+              id: _uuid.v4(),
+              name: childName,
+              groupId: groupId,
+              parentId: parentId,
+              color: null,
+              icon: defaultCategoryEmoji(childName),
+              hidden: false,
+              sortOrder: order++,
+              updatedAt: now,
+            );
+            inserted.add(child);
+            await _db
+                .into(_db.categories)
+                .insert(
+                  CategoriesCompanion.insert(
+                    id: child.id,
+                    name: child.name,
+                    groupId: child.groupId,
+                    parentId: Value(parentId),
+                    icon: Value(child.icon),
+                    sortOrder: Value(child.sortOrder),
+                    updatedAt: child.updatedAt,
+                  ),
+                );
+          }
+        }
+      }
+
+      await insertTree(spendingGroupId, _defaultSpendingTree);
+      await insertTree(incomeGroupId, _defaultIncomeTree);
+    });
+
+    if (_changes == null) return;
+    for (final txId in affectedTx) {
+      final row = await (_db.select(
+        _db.transactions,
+      )..where((t) => t.id.equals(txId))).getSingleOrNull();
+      if (row != null) {
+        await _changes.upsert('transactions', txId, row.toJson());
+      }
+    }
+    for (final id in oldBudgets) {
+      await _changes.delete('budgets', id);
+    }
+    for (final row in oldCategories) {
+      await _changes.delete('categories', row.id);
+    }
+    for (final row in oldGroups) {
+      await _changes.delete('category_groups', row.id);
+    }
+    await _logGroup(spendingGroupId);
+    await _logGroup(incomeGroupId);
+    for (final row in inserted) {
+      await _changes.upsert('categories', row.id, row.toJson());
+    }
+  }
+
+  Future<void> reorderVisible(List<String> orderedIds) async {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    await _db.transaction(() async {
+      for (var i = 0; i < orderedIds.length; i++) {
+        await (_db.update(
+          _db.categories,
+        )..where((t) => t.id.equals(orderedIds[i]))).write(
+          CategoriesCompanion(sortOrder: Value(i * 10), updatedAt: Value(now)),
+        );
+      }
+    });
+    for (final id in orderedIds) {
+      await _logCategory(id);
     }
   }
 
@@ -236,3 +478,12 @@ final StreamProvider<List<CategoryGroupRow>> categoryGroupsListProvider =
     StreamProvider<List<CategoryGroupRow>>(
       (ref) => ref.watch(categoryRepoProvider).watchGroups(),
     );
+
+enum _Sentinel { value }
+
+class _DefaultCategoryNode {
+  const _DefaultCategoryNode(this.name, {required this.children});
+
+  final String name;
+  final List<String> children;
+}

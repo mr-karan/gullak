@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../core/snackbars.dart';
-import '../../state/providers.dart';
 import '../../ui/widgets/empty_state.dart';
+import 'category_form_dialog.dart';
 import 'category_visuals.dart';
 import 'data/category_repository.dart';
 
@@ -19,10 +18,23 @@ class CategoriesScreen extends ConsumerWidget {
       appBar: AppBar(
         title: const Text('Categories'),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.create_new_folder_outlined),
-            tooltip: 'New group',
-            onPressed: () => _newGroup(context, ref),
+          PopupMenuButton<_CategoryMenuAction>(
+            onSelected: (action) {
+              switch (action) {
+                case _CategoryMenuAction.resetDefaults:
+                  _resetDefaults(context, ref);
+              }
+            },
+            itemBuilder: (context) => const [
+              PopupMenuItem(
+                value: _CategoryMenuAction.resetDefaults,
+                child: ListTile(
+                  leading: Icon(Icons.refresh),
+                  title: Text('Reset defaults'),
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ),
+            ],
           ),
           IconButton(
             icon: const Icon(Icons.add),
@@ -40,66 +52,44 @@ class CategoriesScreen extends ConsumerWidget {
             return EmptyState(
               icon: Icons.label_outline,
               title: 'No categories yet',
-              body: 'Add a group, then categories inside it.',
+              body: 'Add parent categories and optional subcategories.',
               action: FilledButton.icon(
-                onPressed: () => _newGroup(context, ref),
+                onPressed: () => _newCategory(context, ref),
                 icon: const Icon(Icons.add),
-                label: const Text('New group'),
+                label: const Text('New category'),
               ),
             );
           }
-          final byGroup = <String, List<CategoryRow>>{};
-          for (final c in cats) {
-            byGroup.putIfAbsent(c.groupId, () => []).add(c);
-          }
+          final incomeGroupIds = {
+            for (final g in groups)
+              if (g.isIncome) g.id,
+          };
+          final expenseCats = cats
+              .where((c) => !incomeGroupIds.contains(c.groupId))
+              .toList();
+          final incomeCats = cats
+              .where((c) => incomeGroupIds.contains(c.groupId))
+              .toList();
           return ListView(
             padding: const EdgeInsets.only(bottom: 32),
             children: [
-              for (final g in groups) ...[
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 24, 8, 10),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          g.name.toUpperCase(),
-                          style: Theme.of(context).textTheme.labelSmall
-                              ?.copyWith(
-                                color: cs.onSurfaceVariant,
-                                letterSpacing: 1.2,
-                              ),
-                        ),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.edit_outlined, size: 18),
-                        tooltip: 'Rename group',
-                        onPressed: () => _renameGroup(context, ref, g),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.delete_outline, size: 18),
-                        tooltip: 'Delete group',
-                        onPressed: () => _deleteGroup(context, ref, g),
-                      ),
-                    ],
-                  ),
+              _SectionTitle(label: 'Spending', color: cs.onSurfaceVariant),
+              _CategoryTree(
+                nodes: _layoutTree(expenseCats),
+                onEdit: (c) => _editCategory(context, ref, c),
+                onDelete: (c) => _deleteCategory(context, ref, c),
+                onReorderParents: (ids) =>
+                    ref.read(categoryRepoProvider).reorderVisible(ids),
+              ),
+              if (incomeCats.isNotEmpty) ...[
+                _SectionTitle(label: 'Income', color: cs.onSurfaceVariant),
+                _CategoryTree(
+                  nodes: _layoutTree(incomeCats),
+                  onEdit: (c) => _editCategory(context, ref, c),
+                  onDelete: (c) => _deleteCategory(context, ref, c),
+                  onReorderParents: (ids) =>
+                      ref.read(categoryRepoProvider).reorderVisible(ids),
                 ),
-                for (final c in byGroup[g.id] ?? const <CategoryRow>[])
-                  Card(
-                    margin: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 4,
-                    ),
-                    child: ListTile(
-                      leading: _EmojiBadge(categoryEmoji(c.icon, c.name)),
-                      title: Text(c.name),
-                      subtitle: Text(g.name),
-                      onTap: () => _editCategory(context, ref, c),
-                      trailing: IconButton(
-                        icon: const Icon(Icons.delete_outline),
-                        onPressed: () => _deleteCategory(context, ref, c),
-                      ),
-                    ),
-                  ),
               ],
             ],
           );
@@ -108,189 +98,29 @@ class CategoriesScreen extends ConsumerWidget {
     );
   }
 
-  Future<void> _newGroup(BuildContext context, WidgetRef ref) async {
-    final ctrl = TextEditingController();
-    bool isIncome = false;
-    try {
-      final ok = await showDialog<bool>(
-        context: context,
-        builder: (_) => StatefulBuilder(
-          builder: (ctx, setSt) => AlertDialog(
-            title: const Text('New group'),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: ctrl,
-                  autofocus: true,
-                  decoration: const InputDecoration(labelText: 'Name'),
-                ),
-                CheckboxListTile(
-                  value: isIncome,
-                  title: const Text('Income group'),
-                  onChanged: (v) => setSt(() => isIncome = v ?? false),
-                ),
-              ],
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(ctx).pop(false),
-                child: const Text('Cancel'),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.of(ctx).pop(true),
-                child: const Text('Add'),
-              ),
-            ],
-          ),
-        ),
-      );
-      if (ok == true && ctrl.text.trim().isNotEmpty) {
-        await ref
-            .read(categoryRepoProvider)
-            .createGroup(name: ctrl.text.trim(), isIncome: isIncome);
-      }
-    } finally {
-      ctrl.dispose();
-    }
-  }
-
-  Future<void> _renameGroup(
-    BuildContext context,
-    WidgetRef ref,
-    CategoryGroupRow g,
-  ) async {
-    // Drift doesn't expose direct group rename in the repo; keep simple.
-    final ctrl = TextEditingController(text: g.name);
-    try {
-      final v = await showDialog<String>(
-        context: context,
-        builder: (_) => AlertDialog(
-          title: const Text('Rename group'),
-          content: TextField(controller: ctrl, autofocus: true),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(context).pop(ctrl.text),
-              child: const Text('Save'),
-            ),
-          ],
-        ),
-      );
-      if (v == null || v.trim().isEmpty) return;
-      final db = ref.read(dbProvider);
-      await db.customStatement(
-        'UPDATE category_groups SET name = ? WHERE id = ?',
-        [v.trim(), g.id],
-      );
-      ref.invalidate(categoryGroupsListProvider);
-    } finally {
-      ctrl.dispose();
-    }
-  }
-
-  Future<void> _deleteGroup(
-    BuildContext context,
-    WidgetRef ref,
-    CategoryGroupRow g,
-  ) async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: Text('Delete "${g.name}"?'),
-        content: const Text('Categories in it will move to "Other".'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
-    );
-    if (ok == true) await ref.read(categoryRepoProvider).deleteGroup(g.id);
-  }
-
   Future<void> _newCategory(BuildContext context, WidgetRef ref) async {
-    final groups = await ref.read(categoryRepoProvider).listGroups();
+    final repo = ref.read(categoryRepoProvider);
+    var groups = await repo.listGroups();
+    if (!context.mounted) return;
     if (groups.isEmpty) {
-      if (!context.mounted) return;
-      showTimedSnackBar(
-        ScaffoldMessenger.of(context),
-        const SnackBar(content: Text('Add a group first.')),
-      );
-      return;
+      await repo.createGroup(name: 'Spending');
+      groups = await repo.listGroups();
+      if (!context.mounted || groups.isEmpty) return;
     }
-    final ctrl = TextEditingController();
-    final iconCtrl = TextEditingController();
-    String groupId = groups.first.id;
-    try {
-      if (!context.mounted) return;
-      final ok = await showDialog<bool>(
-        context: context,
-        builder: (_) => StatefulBuilder(
-          builder: (ctx, setSt) => AlertDialog(
-            title: const Text('New category'),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: ctrl,
-                  autofocus: true,
-                  decoration: const InputDecoration(labelText: 'Name'),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: iconCtrl,
-                  decoration: const InputDecoration(
-                    labelText: 'Emoji',
-                    hintText: 'Auto-picked if blank',
-                  ),
-                ),
-                const SizedBox(height: 12),
-                DropdownButtonFormField<String>(
-                  initialValue: groupId,
-                  decoration: const InputDecoration(labelText: 'Group'),
-                  items: [
-                    for (final g in groups)
-                      DropdownMenuItem(value: g.id, child: Text(g.name)),
-                  ],
-                  onChanged: (v) => setSt(() => groupId = v ?? groupId),
-                ),
-              ],
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(ctx).pop(false),
-                child: const Text('Cancel'),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.of(ctx).pop(true),
-                child: const Text('Add'),
-              ),
-            ],
-          ),
-        ),
-      );
-      if (ok == true && ctrl.text.trim().isNotEmpty) {
-        final name = ctrl.text.trim();
-        final icon = iconCtrl.text.trim().isEmpty
-            ? defaultCategoryEmoji(name)
-            : iconCtrl.text.trim();
-        await ref
-            .read(categoryRepoProvider)
-            .create(name: name, groupId: groupId, icon: icon);
-      }
-    } finally {
-      ctrl.dispose();
-      iconCtrl.dispose();
-    }
+    final result = await showCategoryFormDialog(
+      context,
+      ref,
+      title: 'New category',
+    );
+    if (result == null) return;
+    await ref
+        .read(categoryRepoProvider)
+        .create(
+          name: result.name,
+          groupId: result.groupId,
+          icon: result.icon,
+          parentId: result.parentId,
+        );
   }
 
   Future<void> _editCategory(
@@ -298,51 +128,26 @@ class CategoriesScreen extends ConsumerWidget {
     WidgetRef ref,
     CategoryRow c,
   ) async {
-    final ctrl = TextEditingController(text: c.name);
-    final iconCtrl = TextEditingController(text: c.icon ?? '');
-    try {
-      final ok = await showDialog<bool>(
-        context: context,
-        builder: (dialogCtx) => AlertDialog(
-          title: const Text('Rename category'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(controller: ctrl, autofocus: true),
-              const SizedBox(height: 12),
-              TextField(
-                controller: iconCtrl,
-                decoration: const InputDecoration(labelText: 'Emoji'),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogCtx).pop(false),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(dialogCtx).pop(true),
-              child: const Text('Save'),
-            ),
-          ],
-        ),
-      );
-      if (ok == true && ctrl.text.trim().isNotEmpty) {
-        await ref
-            .read(categoryRepoProvider)
-            .update(
-              c.id,
-              name: ctrl.text.trim(),
-              icon: iconCtrl.text.trim().isEmpty
-                  ? defaultCategoryEmoji(ctrl.text.trim())
-                  : iconCtrl.text.trim(),
-            );
-      }
-    } finally {
-      ctrl.dispose();
-      iconCtrl.dispose();
-    }
+    final result = await showCategoryFormDialog(
+      context,
+      ref,
+      title: 'Edit category',
+      initialName: c.name,
+      initialIcon: c.icon,
+      initialGroupId: c.groupId,
+      initialParentId: c.parentId,
+      selfId: c.id,
+    );
+    if (result == null) return;
+    await ref
+        .read(categoryRepoProvider)
+        .update(
+          c.id,
+          name: result.name,
+          icon: result.icon,
+          groupId: result.groupId,
+          parentId: result.parentId,
+        );
   }
 
   Future<void> _deleteCategory(
@@ -370,6 +175,251 @@ class CategoriesScreen extends ConsumerWidget {
       ),
     );
     if (ok == true) await ref.read(categoryRepoProvider).deleteCategory(c.id);
+  }
+
+  Future<void> _resetDefaults(BuildContext context, WidgetRef ref) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Reset categories?'),
+        content: const Text(
+          'This replaces the category tree with a fresh default set. Existing transactions stay in place but become uncategorised.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Reset'),
+          ),
+        ],
+      ),
+    );
+    if (ok == true) {
+      await ref.read(categoryRepoProvider).resetToDefaultTree();
+    }
+  }
+}
+
+enum _CategoryMenuAction { resetDefaults }
+
+class _CategoryNode {
+  const _CategoryNode(this.parent, this.children);
+
+  final CategoryRow parent;
+  final List<CategoryRow> children;
+}
+
+/// Order rows as: each parent category followed by its subcategories.
+/// Subcategories whose parent isn't in the slice
+/// fall to the end so they remain visible.
+List<_CategoryNode> _layoutTree(List<CategoryRow> rows) {
+  final byParent = <String, List<CategoryRow>>{};
+  for (final r in rows) {
+    if (r.parentId != null) {
+      byParent.putIfAbsent(r.parentId!, () => []).add(r);
+    }
+  }
+  final out = <_CategoryNode>[];
+  for (final r in rows) {
+    if (r.parentId == null) {
+      out.add(_CategoryNode(r, byParent[r.id] ?? const <CategoryRow>[]));
+    }
+  }
+  final present = {
+    for (final node in out) node.parent.id,
+    for (final node in out)
+      for (final child in node.children) child.id,
+  };
+  for (final r in rows) {
+    if (!present.contains(r.id)) {
+      out.add(_CategoryNode(r, const []));
+    }
+  }
+  return out;
+}
+
+class _SectionTitle extends StatelessWidget {
+  const _SectionTitle({required this.label, required this.color});
+
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 24, 16, 10),
+      child: Text(
+        label.toUpperCase(),
+        style: Theme.of(
+          context,
+        ).textTheme.labelSmall?.copyWith(color: color, letterSpacing: 1.2),
+      ),
+    );
+  }
+}
+
+class _CategoryTree extends StatelessWidget {
+  const _CategoryTree({
+    required this.nodes,
+    required this.onEdit,
+    required this.onDelete,
+    required this.onReorderParents,
+  });
+
+  final List<_CategoryNode> nodes;
+  final ValueChanged<CategoryRow> onEdit;
+  final ValueChanged<CategoryRow> onDelete;
+  final ValueChanged<List<String>> onReorderParents;
+
+  @override
+  Widget build(BuildContext context) {
+    if (nodes.isEmpty) return const SizedBox.shrink();
+    return ReorderableListView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      buildDefaultDragHandles: false,
+      itemCount: nodes.length,
+      onReorder: (oldIndex, newIndex) {
+        final next = [...nodes];
+        if (newIndex > oldIndex) newIndex -= 1;
+        final moved = next.removeAt(oldIndex);
+        next.insert(newIndex, moved);
+        onReorderParents([
+          for (final node in next) ...[
+            node.parent.id,
+            for (final child in node.children) child.id,
+          ],
+        ]);
+      },
+      itemBuilder: (context, index) {
+        final node = nodes[index];
+        return _CategoryParentBlock(
+          key: ValueKey(node.parent.id),
+          index: index,
+          node: node,
+          onEdit: onEdit,
+          onDelete: onDelete,
+        );
+      },
+    );
+  }
+}
+
+class _CategoryParentBlock extends StatelessWidget {
+  const _CategoryParentBlock({
+    super.key,
+    required this.index,
+    required this.node,
+    required this.onEdit,
+    required this.onDelete,
+  });
+
+  final int index;
+  final _CategoryNode node;
+  final ValueChanged<CategoryRow> onEdit;
+  final ValueChanged<CategoryRow> onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Material(
+        color: cs.surfaceContainerHighest.withValues(alpha: 0.55),
+        borderRadius: BorderRadius.circular(16),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 10, 4, 10),
+          child: Column(
+            children: [
+              ListTile(
+                contentPadding: const EdgeInsets.only(left: 4, right: 4),
+                leading: _EmojiBadge(
+                  categoryEmoji(node.parent.icon, node.parent.name),
+                ),
+                title: Text(
+                  node.parent.name,
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                subtitle: node.children.isEmpty
+                    ? const Text('No subcategories')
+                    : Text('${node.children.length} subcategories'),
+                onTap: () => onEdit(node.parent),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    ReorderableDragStartListener(
+                      index: index,
+                      child: const Padding(
+                        padding: EdgeInsets.all(8),
+                        child: Icon(Icons.drag_handle),
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: 'Delete',
+                      icon: const Icon(Icons.delete_outline),
+                      onPressed: () => onDelete(node.parent),
+                    ),
+                  ],
+                ),
+              ),
+              if (node.children.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(left: 58, right: 8, bottom: 2),
+                  child: Column(
+                    children: [
+                      for (final child in node.children)
+                        _SubcategoryRow(
+                          row: child,
+                          onEdit: () => onEdit(child),
+                          onDelete: () => onDelete(child),
+                        ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SubcategoryRow extends StatelessWidget {
+  const _SubcategoryRow({
+    required this.row,
+    required this.onEdit,
+    required this.onDelete,
+  });
+
+  final CategoryRow row;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Material(
+      color: Colors.transparent,
+      child: ListTile(
+        dense: true,
+        contentPadding: EdgeInsets.zero,
+        leading: Text(
+          categoryEmoji(row.icon, row.name),
+          style: const TextStyle(fontSize: 18),
+        ),
+        title: Text(row.name),
+        onTap: onEdit,
+        trailing: IconButton(
+          tooltip: 'Delete',
+          icon: Icon(Icons.delete_outline, color: cs.onSurfaceVariant),
+          onPressed: onDelete,
+        ),
+      ),
+    );
   }
 }
 

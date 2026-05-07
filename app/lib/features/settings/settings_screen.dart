@@ -112,7 +112,7 @@ class SettingsScreen extends ConsumerWidget {
               leading: const Icon(Icons.refresh),
               title: const Text('Re-scan SMS inbox'),
               subtitle: const Text(
-                'Drops cached parses and re-processes the last 90 days '
+                'Drops cached parses and re-processes the last 7 days '
                 'in the background. Pending Inbox candidates survive — '
                 'rows already accepted as transactions are unaffected.',
               ),
@@ -140,6 +140,19 @@ class SettingsScreen extends ConsumerWidget {
             ),
             onTap: () => _syncNow(context, ref),
           ),
+          const _SectionHeader('Location'),
+          SwitchListTile(
+            secondary: const Icon(Icons.my_location_outlined),
+            title: const Text('Attach location to new entries'),
+            subtitle: const Text(
+              'When enabled, manual and AI saves ask for location permission and store coordinates on the transaction.',
+            ),
+            value: prefs.locationCaptureEnabled,
+            onChanged: (v) async {
+              await prefs.setLocationCaptureEnabled(v);
+              bumpPrefs(ref);
+            },
+          ),
           const _SectionHeader('Appearance'),
           ListTile(
             leading: const Icon(Icons.brightness_6_outlined),
@@ -155,12 +168,45 @@ class SettingsScreen extends ConsumerWidget {
             onTap: () => context.go('/settings/categories'),
           ),
           ListTile(
+            leading: const Icon(Icons.sell_outlined),
+            title: const Text('Tags'),
+            subtitle: prefs.activeTagId == null
+                ? null
+                : const Text('Active tag is applied to new expenses.'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => context.go('/tags'),
+          ),
+          ListTile(
+            leading: const Icon(Icons.rule_outlined),
+            title: const Text('Rules'),
+            subtitle: const Text('Synced matching rules for SMS and entries.'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => context.go('/settings/rules'),
+          ),
+          ListTile(
             leading: const Icon(Icons.event_repeat_outlined),
             title: const Text('Recurring transactions'),
             trailing: const Icon(Icons.chevron_right),
             onTap: () => context.go('/settings/recurrences'),
           ),
           const _SectionHeader('Data'),
+          FutureBuilder<int?>(
+            future: ref.read(backupServiceProvider).lastExportAt(),
+            builder: (context, snapshot) => ListTile(
+              leading: const Icon(Icons.verified_user_outlined),
+              title: const Text('Data status'),
+              subtitle: Text(
+                [
+                  snapshot.data == null
+                      ? 'No local backup exported yet'
+                      : 'Last backup ${_formatTime(snapshot.data!)}',
+                  prefs.syncLastAt == null
+                      ? 'sync not run yet'
+                      : 'last sync ${_formatTime(prefs.syncLastAt!)}',
+                ].join(' · '),
+              ),
+            ),
+          ),
           ListTile(
             leading: const Icon(Icons.upload_file_outlined),
             title: const Text('Export backup'),
@@ -168,6 +214,12 @@ class SettingsScreen extends ConsumerWidget {
               'JSON dump of every account, category, and transaction.',
             ),
             onTap: () => _exportBackup(context, ref),
+          ),
+          ListTile(
+            leading: const Icon(Icons.table_view_outlined),
+            title: const Text('Export CSV'),
+            subtitle: const Text('Spreadsheet-friendly transaction export.'),
+            onTap: () => _exportCsv(context, ref),
           ),
           ListTile(
             leading: const Icon(Icons.download_outlined),
@@ -246,7 +298,7 @@ class SettingsScreen extends ConsumerWidget {
       // past parser failures into permanent `error`/`none` rows.
       final added = await ref
           .read(smsPipelineProvider)
-          .retryFailedBackfill(window: const Duration(days: 90));
+          .retryFailedBackfill(window: const Duration(days: 7));
       if (!context.mounted) return;
       showTimedSnackBar(
         messenger,
@@ -279,7 +331,7 @@ class SettingsScreen extends ConsumerWidget {
       await ref.read(notificationServiceProvider).requestPermission();
       final pipeline = ref.read(smsPipelineProvider);
       pipeline.startListening();
-      // Fire-and-forget: backfill walks the whole 90-day inbox through
+      // Fire-and-forget: backfill walks the recent inbox through
       // the LLM serially, which can take minutes. Awaiting it here
       // freezes the toggle and makes the Inbox look broken. The
       // pipeline writes rows incrementally and the Inbox StreamProvider
@@ -363,17 +415,51 @@ class SettingsScreen extends ConsumerWidget {
 
   Future<void> _editTheme(BuildContext context, WidgetRef ref) async {
     final prefs = ref.read(prefsProvider);
-    final v = await showDialog<String>(
+    final current = prefs.themeMode;
+    final v = await showModalBottomSheet<String>(
       context: context,
-      builder: (dialogCtx) => SimpleDialog(
-        title: const Text('Theme'),
-        children: [
-          for (final mode in ['system', 'light', 'dark'])
-            SimpleDialogOption(
-              onPressed: () => Navigator.of(dialogCtx).pop(mode),
-              child: Text(mode),
-            ),
-        ],
+      showDragHandle: true,
+      builder: (sheetCtx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text('Theme', style: Theme.of(sheetCtx).textTheme.titleLarge),
+              const SizedBox(height: 12),
+              for (final option in const [
+                _ThemeOption(
+                  id: 'system',
+                  label: 'System',
+                  description: 'Follow this phone.',
+                  icon: Icons.brightness_auto_outlined,
+                ),
+                _ThemeOption(
+                  id: 'light',
+                  label: 'Light',
+                  description: 'Always use light mode.',
+                  icon: Icons.light_mode_outlined,
+                ),
+                _ThemeOption(
+                  id: 'dark',
+                  label: 'Dark',
+                  description: 'Always use dark mode.',
+                  icon: Icons.dark_mode_outlined,
+                ),
+              ])
+                ListTile(
+                  leading: Icon(option.icon),
+                  title: Text(option.label),
+                  subtitle: Text(option.description),
+                  trailing: current == option.id
+                      ? const Icon(Icons.check_circle)
+                      : null,
+                  onTap: () => Navigator.of(sheetCtx).pop(option.id),
+                ),
+            ],
+          ),
+        ),
       ),
     );
     if (v != null) {
@@ -402,14 +488,52 @@ class SettingsScreen extends ConsumerWidget {
     }
   }
 
+  Future<void> _exportCsv(BuildContext context, WidgetRef ref) async {
+    try {
+      final file = await ref
+          .read(backupServiceProvider)
+          .exportTransactionsCsv();
+      if (!context.mounted) return;
+      await Share.shareXFiles(
+        [XFile(file.path, mimeType: 'text/csv')],
+        subject: 'Gullak transactions CSV',
+        text: 'Gullak transactions export',
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+      showTimedSnackBar(
+        ScaffoldMessenger.of(context),
+        SnackBar(content: Text('CSV export failed: $e')),
+      );
+    }
+  }
+
   Future<void> _importBackup(BuildContext context, WidgetRef ref) async {
+    final picker = await _pickJsonFile();
+    if (picker == null || !context.mounted) return;
+    BackupPreview preview;
+    try {
+      preview = ref.read(backupServiceProvider).previewJson(picker);
+    } catch (e) {
+      showTimedSnackBar(
+        ScaffoldMessenger.of(context),
+        SnackBar(content: Text('Import preview failed: $e')),
+      );
+      return;
+    }
     final ok = await showDialog<bool>(
       context: context,
       builder: (dialogCtx) => AlertDialog(
         title: const Text('Replace all data?'),
-        content: const Text(
-          'Importing will delete every account, category, and transaction '
-          'currently in the app and restore from the file you pick.',
+        content: Text(
+          'Backup ${preview.exportedAt ?? ''}\n\n'
+          '${preview.accounts} accounts\n'
+          '${preview.transactions} transactions\n'
+          '${preview.categories} categories\n'
+          '${preview.tags} tags\n'
+          '${preview.rules} rules\n'
+          '${preview.budgets} budgets\n\n'
+          'Importing will replace the current local dataset.',
         ),
         actions: [
           TextButton(
@@ -425,9 +549,6 @@ class SettingsScreen extends ConsumerWidget {
     );
     if (ok != true) return;
 
-    // ignore: avoid_dynamic_calls
-    final picker = await _pickJsonFile();
-    if (picker == null || !context.mounted) return;
     try {
       final imported = await ref
           .read(backupServiceProvider)
@@ -605,6 +726,20 @@ class SettingsScreen extends ConsumerWidget {
           : errorSnackBar(context, msg),
     );
   }
+}
+
+class _ThemeOption {
+  const _ThemeOption({
+    required this.id,
+    required this.label,
+    required this.description,
+    required this.icon,
+  });
+
+  final String id;
+  final String label;
+  final String description;
+  final IconData icon;
 }
 
 class _SectionHeader extends StatelessWidget {

@@ -22,6 +22,8 @@ part 'database.g.dart';
     Transactions,
     Tags,
     TransactionTags,
+    Rules,
+    RuleMatches,
     Budgets,
     Recurrences,
     SmsMessages,
@@ -36,7 +38,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 5;
+  int get schemaVersion => 8;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -69,6 +71,14 @@ class AppDatabase extends _$AppDatabase {
       await customStatement(
         'CREATE INDEX IF NOT EXISTS idx_transaction_tag_tag '
         'ON transaction_tags(tag_id)',
+      );
+      await customStatement(
+        'CREATE INDEX IF NOT EXISTS idx_rules_enabled_priority '
+        'ON rules(enabled, priority)',
+      );
+      await customStatement(
+        'CREATE INDEX IF NOT EXISTS idx_rule_matches_rule '
+        'ON rule_matches(rule_id)',
       );
       await customStatement(
         'CREATE INDEX IF NOT EXISTS idx_sms_status '
@@ -122,6 +132,27 @@ class AppDatabase extends _$AppDatabase {
           'CREATE INDEX IF NOT EXISTS idx_transaction_tag_tag '
           'ON transaction_tags(tag_id)',
         );
+      }
+      if (from < 6) {
+        await m.createTable(rules);
+        await m.createTable(ruleMatches);
+        await customStatement(
+          'CREATE INDEX IF NOT EXISTS idx_rules_enabled_priority '
+          'ON rules(enabled, priority)',
+        );
+        await customStatement(
+          'CREATE INDEX IF NOT EXISTS idx_rule_matches_rule '
+          'ON rule_matches(rule_id)',
+        );
+      }
+      if (from < 7) {
+        // Schema v7 adds one-level subcategories. Existing rows have
+        // no parent, so the column starts NULL everywhere.
+        await m.addColumn(categories, categories.parentId);
+      }
+      if (from < 8) {
+        await m.addColumn(accounts, accounts.reconciledBalanceCents);
+        await m.addColumn(accounts, accounts.reconciledAt);
       }
     },
   );

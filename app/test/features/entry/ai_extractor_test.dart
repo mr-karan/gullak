@@ -9,6 +9,7 @@ import 'package:gullak/features/accounts/data/account_repository.dart';
 import 'package:gullak/features/categories/data/category_repository.dart';
 import 'package:gullak/features/entry/ai_extractor.dart';
 import 'package:gullak/features/payees/data/payee_repository.dart';
+import 'package:gullak/features/rules/data/rule_repository.dart';
 
 /// The Flutter app no longer talks to OpenRouter — it posts the
 /// QuickEntry note (and the user's library) to pi-server's
@@ -21,6 +22,7 @@ void main() {
   late AccountRepository accounts;
   late CategoryRepository categories;
   late PayeeRepository payees;
+  late RuleRepository rules;
   late HttpServer server;
   late Uri serverUri;
   Map<String, dynamic>? capturedBody;
@@ -33,6 +35,7 @@ void main() {
     accounts = AccountRepository(db);
     categories = CategoryRepository(db);
     payees = PayeeRepository(db);
+    rules = RuleRepository(db);
 
     final groupId = await categories.createGroup(name: 'Everyday');
     final incomeGroupId = await categories.createGroup(
@@ -46,24 +49,22 @@ void main() {
       ),
     };
     categoryIds = {
-      'Groceries': await categories.create(
-        name: 'Groceries',
-        groupId: groupId,
-      ),
-      'Transport': await categories.create(
-        name: 'Transport',
-        groupId: groupId,
-      ),
-      'Salary': await categories.create(
-        name: 'Salary',
-        groupId: incomeGroupId,
-      ),
+      'Groceries': await categories.create(name: 'Groceries', groupId: groupId),
+      'Transport': await categories.create(name: 'Transport', groupId: groupId),
+      'Salary': await categories.create(name: 'Salary', groupId: incomeGroupId),
     };
     payeeIds = {
       'Blinkit': await payees.create('Blinkit'),
       'Uber': await payees.create('Uber'),
       'Zomato': await payees.create('Zomato'),
     };
+    await rules.upsertRule(
+      id: payeeIds['Blinkit'],
+      name: 'Payee memory',
+      triggerType: 'payee',
+      triggerPayload: {'payeeId': payeeIds['Blinkit'], 'match': 'equals'},
+      actionPayload: {'categoryId': categoryIds['Groceries']},
+    );
 
     server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
     serverUri = Uri.parse('http://${server.address.host}:${server.port}');
@@ -98,6 +99,7 @@ void main() {
       accountRepo: accounts,
       categoryRepo: categories,
       payeeRepo: payees,
+      ruleRepo: rules,
       minorDigits: 2,
     );
 
@@ -124,6 +126,10 @@ void main() {
       (body['payees'] as List<dynamic>).map((p) => (p as Map)['name']),
       contains('Blinkit'),
     );
+    final blinkit = (body['payees'] as List<dynamic>)
+        .cast<Map<String, dynamic>>()
+        .firstWhere((p) => p['name'] == 'Blinkit');
+    expect(blinkit['categoryId'], 'Groceries');
   });
 
   test('income, dates, and notes round-trip through the server', () async {
@@ -132,6 +138,7 @@ void main() {
       accountRepo: accounts,
       categoryRepo: categories,
       payeeRepo: payees,
+      ruleRepo: rules,
       minorDigits: 2,
     );
 

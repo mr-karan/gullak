@@ -1,3 +1,4 @@
+import 'package:drift/drift.dart' show Variable;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -9,7 +10,7 @@ import '../../ui/widgets/category_swatch.dart';
 import '../../ui/widgets/empty_state.dart';
 import '../../ui/widgets/money_text.dart';
 import '../../ui/widgets/section_header.dart';
-import '../entry/quick_entry.dart';
+import '../budgets/data/budget_repository.dart';
 import '../transactions/data/transaction_repository.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
@@ -25,6 +26,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     ref.invalidate(monthIncomeProvider);
     ref.invalidate(todaySpendProvider);
     ref.invalidate(recentTransactionsProvider);
+    ref.invalidate(dailyReviewProvider);
     await Future<void>.delayed(const Duration(milliseconds: 200));
   }
 
@@ -38,6 +40,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final monthIncome = ref.watch(monthIncomeProvider);
     final todaySpend = ref.watch(todaySpendProvider);
     final recent = ref.watch(recentTransactionsProvider);
+    final review = ref.watch(dailyReviewProvider);
 
     final monthLabel = DateFormat('MMMM yyyy').format(DateTime.now());
 
@@ -73,6 +76,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               spent: todaySpend.value ?? 0,
               symbol: symbol,
               minorDigits: minorDigits,
+            ),
+            review.when(
+              data: (snapshot) => _DailyReviewCard(
+                snapshot: snapshot,
+                symbol: symbol,
+                minorDigits: minorDigits,
+              ),
+              loading: () => const _DailyReviewLoading(),
+              error: (_, _) => const SizedBox.shrink(),
             ),
             const SectionHeader('Recent'),
             recent.when(
@@ -285,6 +297,114 @@ class _TodayChip extends StatelessWidget {
   }
 }
 
+class _DailyReviewCard extends StatelessWidget {
+  const _DailyReviewCard({
+    required this.snapshot,
+    required this.symbol,
+    required this.minorDigits,
+  });
+
+  final DailyReviewSnapshot snapshot;
+  final String symbol;
+  final int minorDigits;
+
+  @override
+  Widget build(BuildContext context) {
+    final items = snapshot.items;
+    if (items.isEmpty) return const SizedBox.shrink();
+    final cs = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: cs.surfaceContainerLow,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.5)),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Daily review',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                  ),
+                  if (snapshot.todaySpendCents < 0)
+                    MoneyText(
+                      amountCents: snapshot.todaySpendCents.abs(),
+                      symbol: symbol,
+                      minorDigits: minorDigits,
+                    ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              for (final item in items) _ReviewActionRow(item: item),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ReviewActionRow extends StatelessWidget {
+  const _ReviewActionRow({required this.item});
+
+  final DailyReviewItem item;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return InkWell(
+      borderRadius: BorderRadius.circular(12),
+      onTap: item.route == null ? null : () => context.go(item.route!),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 7),
+        child: Row(
+          children: [
+            Icon(item.icon, size: 20, color: item.color.resolve(cs)),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                item.label,
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+            ),
+            if (item.route != null)
+              Icon(Icons.chevron_right, size: 20, color: cs.onSurfaceVariant),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DailyReviewLoading extends StatelessWidget {
+  const _DailyReviewLoading();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Padding(
+      padding: EdgeInsets.fromLTRB(16, 8, 16, 8),
+      child: SizedBox(
+        height: 72,
+        child: Center(
+          child: SizedBox(
+            width: 16,
+            height: 16,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _RecentRow extends ConsumerWidget {
   const _RecentRow({required this.row});
 
@@ -329,7 +449,7 @@ class _RecentRow extends ConsumerWidget {
         symbol: prefs.currencySymbol,
         color: amountColor,
       ),
-      onTap: () => openQuickEntry(context, editingTransactionId: row.id),
+      onTap: () => context.go('/transactions/${row.id}'),
     );
   }
 }
@@ -378,3 +498,158 @@ class _RecentError extends StatelessWidget {
     );
   }
 }
+
+enum ReviewColor {
+  primary,
+  error,
+  warning;
+
+  Color resolve(ColorScheme cs) {
+    return switch (this) {
+      ReviewColor.primary => cs.primary,
+      ReviewColor.error => cs.error,
+      ReviewColor.warning => cs.tertiary,
+    };
+  }
+}
+
+class DailyReviewItem {
+  const DailyReviewItem({
+    required this.icon,
+    required this.label,
+    required this.color,
+    this.route,
+  });
+
+  final IconData icon;
+  final String label;
+  final ReviewColor color;
+  final String? route;
+}
+
+class DailyReviewSnapshot {
+  const DailyReviewSnapshot({
+    required this.todaySpendCents,
+    required this.pendingSms,
+    required this.failedSms,
+    required this.uncategorizedToday,
+    required this.budgetWarnings,
+  });
+
+  final int todaySpendCents;
+  final int pendingSms;
+  final int failedSms;
+  final int uncategorizedToday;
+  final List<BudgetSummary> budgetWarnings;
+
+  List<DailyReviewItem> get items {
+    final out = <DailyReviewItem>[];
+    if (pendingSms > 0) {
+      out.add(
+        DailyReviewItem(
+          icon: Icons.sms_outlined,
+          label: '$pendingSms SMS ready to confirm',
+          color: ReviewColor.primary,
+          route: '/inbox',
+        ),
+      );
+    }
+    if (failedSms > 0) {
+      out.add(
+        DailyReviewItem(
+          icon: Icons.rule_folder_outlined,
+          label: '$failedSms SMS need review',
+          color: ReviewColor.warning,
+          route: '/inbox',
+        ),
+      );
+    }
+    if (uncategorizedToday > 0) {
+      out.add(
+        DailyReviewItem(
+          icon: Icons.label_off_outlined,
+          label:
+              '$uncategorizedToday transaction${uncategorizedToday == 1 ? '' : 's'} need category',
+          color: ReviewColor.warning,
+          route: '/transactions',
+        ),
+      );
+    }
+    for (final b in budgetWarnings.take(2)) {
+      out.add(
+        DailyReviewItem(
+          icon: b.isOverspent
+              ? Icons.warning_amber_outlined
+              : Icons.trending_up_outlined,
+          label: b.isOverspent
+              ? '${b.categoryName} is over budget'
+              : '${b.categoryName} is close to budget',
+          color: b.isOverspent ? ReviewColor.error : ReviewColor.warning,
+          route: '/budgets',
+        ),
+      );
+    }
+    if (out.isEmpty && todaySpendCents != 0) {
+      out.add(
+        const DailyReviewItem(
+          icon: Icons.check_circle_outline,
+          label: 'Today is up to date',
+          color: ReviewColor.primary,
+        ),
+      );
+    }
+    return out;
+  }
+}
+
+final dailyReviewProvider = FutureProvider<DailyReviewSnapshot>((ref) async {
+  ref.watch(recentTransactionsProvider);
+  final db = ref.watch(dbProvider);
+  final txRepo = ref.watch(transactionRepoProvider);
+  final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
+  final month = BudgetRepository.currentMonth();
+
+  final pendingRow = await db
+      .customSelect(
+        "SELECT COUNT(*) AS c FROM sms_messages WHERE candidate_status = 'inbox'",
+      )
+      .getSingle();
+  final failedRow = await db
+      .customSelect(
+        "SELECT COUNT(*) AS c FROM sms_messages WHERE candidate_status = 'error'",
+      )
+      .getSingle();
+  final uncategorizedRow = await db
+      .customSelect(
+        'SELECT COUNT(*) AS c FROM transactions '
+        'WHERE date = ? AND category_id IS NULL '
+        'AND parent_id IS NULL AND transfer_group_id IS NULL',
+        variables: [Variable.withString(today)],
+      )
+      .getSingle();
+
+  final overview = await ref.watch(budgetRepoProvider).summary(month);
+  final warnings =
+      overview.entries
+          .where(
+            (e) =>
+                e.targetCents > 0 &&
+                (-e.spentCents >= (e.targetCents * 0.8).round()),
+          )
+          .toList()
+        ..sort((a, b) {
+          if (a.isOverspent != b.isOverspent) return a.isOverspent ? -1 : 1;
+          return a.availableCents.compareTo(b.availableCents);
+        });
+
+  return DailyReviewSnapshot(
+    todaySpendCents: await txRepo.sumSpendInRange(
+      from: DateTime.now(),
+      to: DateTime.now(),
+    ),
+    pendingSms: pendingRow.read<int>('c'),
+    failedSms: failedRow.read<int>('c'),
+    uncategorizedToday: uncategorizedRow.read<int>('c'),
+    budgetWarnings: warnings,
+  );
+});

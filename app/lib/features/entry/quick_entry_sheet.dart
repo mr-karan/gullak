@@ -11,9 +11,12 @@ import '../../core/snackbars.dart';
 import '../../state/providers.dart';
 import '../../ui/theme.dart';
 import '../accounts/data/account_repository.dart';
-import '../categories/data/category_repository.dart';
+import '../categories/category_form_dialog.dart';
 import '../categories/category_visuals.dart';
+import '../categories/data/category_repository.dart';
+import '../location/location_service.dart';
 import '../payees/data/payee_repository.dart';
+import '../tags/data/tag_repository.dart';
 import '../transactions/data/transaction_repository.dart';
 import 'ai_extractor.dart';
 import 'entry_memory.dart';
@@ -400,7 +403,11 @@ class _TypeTabState extends ConsumerState<_TypeTab> {
           value.accountId ??
           ref.read(prefsProvider).defaultAccountId ??
           accounts.first.id;
-      await ref
+      final prefs = ref.read(prefsProvider);
+      final location = prefs.locationCaptureEnabled
+          ? await ref.read(locationServiceProvider).capture()
+          : null;
+      final id = await ref
           .read(transactionRepoProvider)
           .create(
             accountId: acctId,
@@ -412,9 +419,16 @@ class _TypeTabState extends ConsumerState<_TypeTab> {
                 : -value.amountCents.abs(),
             date: value.date,
             notes: value.notes,
+            latitude: location?.latitude,
+            longitude: location?.longitude,
+            locationName: location?.name,
             origin: 'ai',
             originRef: _ctrl.text,
           );
+      final activeTagId = prefs.activeTagId;
+      if (activeTagId != null) {
+        await ref.read(tagRepoProvider).setTransactionTags(id, [activeTagId]);
+      }
       if (value.payeeId != null) {
         await ref
             .read(entryMemoryProvider)
@@ -658,6 +672,7 @@ class _FormTabState extends ConsumerState<_FormTab> {
   String? _newPayeeName;
   DateTime _date = clock.today();
   final _notesCtrl = TextEditingController();
+  final Set<String> _tagIds = <String>{};
   // Notes is hidden behind a + chip until the user wants it. Most
   // entries don't carry a note; keeping the form short saves a row.
   bool _notesExpanded = false;
@@ -704,6 +719,7 @@ class _FormTabState extends ConsumerState<_FormTab> {
     if (row.payeeId != null) {
       payee = await ref.read(payeeRepoProvider).byId(row.payeeId!);
     }
+    final tags = await ref.read(tagRepoProvider).tagsForTransaction(row.id);
     if (!mounted) return;
     final minorDigits = ref.read(prefsProvider).currencyMinorDigits;
     final scale = _pow10(minorDigits);
@@ -714,6 +730,9 @@ class _FormTabState extends ConsumerState<_FormTab> {
       _category = category;
       _payee = payee;
       _newPayeeName = payee == null ? row.payeeName : null;
+      _tagIds
+        ..clear()
+        ..addAll(tags.map((t) => t.id));
       _date = DateTime.tryParse(row.date) ?? clock.today();
       _notesCtrl.text = row.notes ?? '';
       _notesExpanded = (row.notes ?? '').isNotEmpty;
@@ -748,15 +767,15 @@ class _FormTabState extends ConsumerState<_FormTab> {
     super.dispose();
   }
 
-  void _onPayeePicked({PayeeRow? payee, String? newName}) {
+  Future<void> _onPayeePicked({PayeeRow? payee, String? newName}) async {
     setState(() {
       _payee = payee;
       _newPayeeName = newName;
     });
     if (payee == null) return;
     final memory = ref.read(entryMemoryProvider);
-    final hintedAccount = memory.accountForPayee(payee.id);
-    final hintedCategory = memory.categoryForPayee(payee.id);
+    final hintedAccount = await memory.accountForPayee(payee.id);
+    final hintedCategory = await memory.categoryForPayee(payee.id);
     if (hintedAccount != null &&
         (_account == null || _account!.id != hintedAccount)) {
       ref.read(accountsListProvider.future).then((list) {
@@ -801,6 +820,10 @@ class _FormTabState extends ConsumerState<_FormTab> {
       }
 
       final repo = ref.read(transactionRepoProvider);
+      final prefs = ref.read(prefsProvider);
+      final location = !_isEditing && prefs.locationCaptureEnabled
+          ? await ref.read(locationServiceProvider).capture()
+          : null;
       if (_isEditing) {
         await repo.update(
           widget.editingTransactionId!,
@@ -812,8 +835,11 @@ class _FormTabState extends ConsumerState<_FormTab> {
           date: _date,
           notes: _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
         );
+        await ref
+            .read(tagRepoProvider)
+            .setTransactionTags(widget.editingTransactionId!, _tagIds.toList());
       } else {
-        await repo.create(
+        final id = await repo.create(
           accountId: _account!.id,
           categoryId: _category?.id,
           payeeId: payeeId,
@@ -821,8 +847,16 @@ class _FormTabState extends ConsumerState<_FormTab> {
           amountCents: amount,
           date: _date,
           notes: _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
+          latitude: location?.latitude,
+          longitude: location?.longitude,
+          locationName: location?.name,
           origin: 'manual',
         );
+        final activeTagId = prefs.activeTagId;
+        final tags = {..._tagIds, ?activeTagId};
+        if (tags.isNotEmpty) {
+          await ref.read(tagRepoProvider).setTransactionTags(id, tags.toList());
+        }
       }
 
       final memory = ref.read(entryMemoryProvider);
@@ -906,6 +940,7 @@ class _FormTabState extends ConsumerState<_FormTab> {
                       unset: _category == null,
                       onTap: _pickCategory,
                     ),
+                    _TagsRow(tagIds: _tagIds, onTap: _pickTags),
                     _DateRow(
                       date: _date,
                       onPick: _pickDate,
@@ -1097,7 +1132,7 @@ class _FormTabState extends ConsumerState<_FormTab> {
             ),
           );
       if (result != null) {
-        _onPayeePicked(payee: result.payee, newName: result.newName);
+        await _onPayeePicked(payee: result.payee, newName: result.newName);
       }
     } finally {
       input.dispose();
@@ -1180,12 +1215,24 @@ class _FormTabState extends ConsumerState<_FormTab> {
                               ListTile(
                                 leading: const Icon(Icons.add),
                                 title: Text('Add "$addName"'),
-                                subtitle: Text('Under ${defaultGroup.name}'),
+                                subtitle: const Text(
+                                  'Set emoji & parent on the next step',
+                                ),
                                 onTap: () async {
+                                  final result = await showCategoryFormDialog(
+                                    ctx,
+                                    ref,
+                                    title: 'New category',
+                                    initialName: addName,
+                                    initialGroupId: defaultGroup.id,
+                                    preferIncomeGroup: _isIncome,
+                                  );
+                                  if (result == null) return;
                                   final id = await repo.create(
-                                    name: addName,
-                                    groupId: defaultGroup.id,
-                                    icon: defaultCategoryEmoji(addName),
+                                    name: result.name,
+                                    groupId: result.groupId,
+                                    icon: result.icon,
+                                    parentId: result.parentId,
                                   );
                                   final row = await repo.byId(id);
                                   if (row != null && ctx.mounted) {
@@ -1215,11 +1262,19 @@ class _FormTabState extends ConsumerState<_FormTab> {
                                         ),
                                   ),
                                 ),
-                                for (final c in visibleByGroup[g.id]!)
+                                for (final entry in _hierarchy(
+                                  visibleByGroup[g.id]!,
+                                  q,
+                                ))
                                   ListTile(
-                                    leading: _CategoryEmoji(c),
-                                    title: Text(c.name),
-                                    onTap: () => Navigator.of(ctx).pop(c),
+                                    contentPadding: EdgeInsets.only(
+                                      left: entry.indented ? 40 : 16,
+                                      right: 16,
+                                    ),
+                                    leading: _CategoryEmoji(entry.row),
+                                    title: Text(entry.row.name),
+                                    onTap: () =>
+                                        Navigator.of(ctx).pop(entry.row),
                                   ),
                               ],
                             const SizedBox(height: 24),
@@ -1238,6 +1293,115 @@ class _FormTabState extends ConsumerState<_FormTab> {
       input.dispose();
     }
     if (picked != null) setState(() => _category = picked);
+  }
+
+  Future<void> _pickTags() async {
+    HapticFeedback.selectionClick();
+    final repo = ref.read(tagRepoProvider);
+    final tags = await repo.list();
+    if (!mounted) return;
+    final selected = Set<String>.of(_tagIds);
+    final input = TextEditingController();
+    try {
+      final result = await showModalBottomSheet<Set<String>>(
+        context: context,
+        useRootNavigator: true,
+        isScrollControlled: true,
+        showDragHandle: true,
+        builder: (ctx) => SafeArea(
+          child: Padding(
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.of(ctx).viewInsets.bottom,
+            ),
+            child: StatefulBuilder(
+              builder: (ctx, setSt) {
+                final q = input.text.trim().toLowerCase();
+                final visible = q.isEmpty
+                    ? tags
+                    : tags
+                          .where((t) => t.name.toLowerCase().contains(q))
+                          .toList(growable: false);
+                final canAdd =
+                    q.isNotEmpty && !tags.any((t) => t.name.toLowerCase() == q);
+                return SizedBox(
+                  height: MediaQuery.of(ctx).size.height * 0.7,
+                  child: Column(
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
+                        child: TextField(
+                          controller: input,
+                          autofocus: true,
+                          onChanged: (_) => setSt(() {}),
+                          decoration: const InputDecoration(
+                            hintText: 'Search or add tag',
+                            prefixIcon: Icon(Icons.search),
+                          ),
+                        ),
+                      ),
+                      Expanded(
+                        child: ListView(
+                          children: [
+                            if (canAdd)
+                              ListTile(
+                                leading: const Icon(Icons.add),
+                                title: Text('Add "${input.text.trim()}"'),
+                                onTap: () async {
+                                  final id = await repo.create(
+                                    name: input.text.trim(),
+                                  );
+                                  selected.add(id);
+                                  if (ctx.mounted) {
+                                    Navigator.of(ctx).pop(selected);
+                                  }
+                                },
+                              ),
+                            for (final tag in visible)
+                              CheckboxListTile(
+                                value: selected.contains(tag.id),
+                                title: Text(tag.name),
+                                secondary: Icon(
+                                  Icons.label,
+                                  color: tag.color == null
+                                      ? null
+                                      : Color(tag.color!),
+                                ),
+                                onChanged: (v) => setSt(() {
+                                  if (v ?? false) {
+                                    selected.add(tag.id);
+                                  } else {
+                                    selected.remove(tag.id);
+                                  }
+                                }),
+                              ),
+                          ],
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: FilledButton(
+                          onPressed: () => Navigator.of(ctx).pop(selected),
+                          child: const Text('Done'),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
+        ),
+      );
+      if (result != null) {
+        setState(() {
+          _tagIds
+            ..clear()
+            ..addAll(result);
+        });
+      }
+    } finally {
+      input.dispose();
+    }
   }
 
   Future<void> _pickDate() async {
@@ -1461,6 +1625,46 @@ class _PickerRow extends StatelessWidget {
   }
 }
 
+class _CategoryRowEntry {
+  const _CategoryRowEntry(this.row, this.indented);
+  final CategoryRow row;
+  final bool indented;
+}
+
+/// Lay out one group's categories so subcategories appear under their
+/// parent. Only one level of nesting is supported. While the user is
+/// searching, results render flat — hiding matching children under an
+/// absent parent would feel like the search is broken.
+List<_CategoryRowEntry> _hierarchy(List<CategoryRow> rows, String query) {
+  if (query.isNotEmpty) {
+    return [for (final r in rows) _CategoryRowEntry(r, false)];
+  }
+  final byParent = <String, List<CategoryRow>>{};
+  for (final r in rows) {
+    if (r.parentId != null) {
+      byParent.putIfAbsent(r.parentId!, () => []).add(r);
+    }
+  }
+  final result = <_CategoryRowEntry>[];
+  for (final r in rows) {
+    if (r.parentId == null) {
+      result.add(_CategoryRowEntry(r, false));
+      for (final k in byParent[r.id] ?? const <CategoryRow>[]) {
+        result.add(_CategoryRowEntry(k, true));
+      }
+    }
+  }
+  // Orphans (parent missing or in a different visible slice) tail the
+  // group so they don't disappear silently.
+  final present = result.map((e) => e.row.id).toSet();
+  for (final r in rows) {
+    if (!present.contains(r.id)) {
+      result.add(_CategoryRowEntry(r, r.parentId != null));
+    }
+  }
+  return result;
+}
+
 class _CategoryEmoji extends StatelessWidget {
   const _CategoryEmoji(this.category);
   final CategoryRow category;
@@ -1476,6 +1680,34 @@ class _CategoryEmoji extends StatelessWidget {
         categoryEmoji(category.icon, category.name),
         style: const TextStyle(fontSize: 16),
       ),
+    );
+  }
+}
+
+class _TagsRow extends ConsumerWidget {
+  const _TagsRow({required this.tagIds, required this.onTap});
+
+  final Set<String> tagIds;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return FutureBuilder<List<TagRow>>(
+      future: ref.read(tagRepoProvider).list(),
+      builder: (context, snap) {
+        final tags = snap.data ?? const <TagRow>[];
+        final selected = tags.where((t) => tagIds.contains(t.id)).toList();
+        final value = selected.isEmpty
+            ? 'Optional'
+            : selected.map((t) => t.name).join(', ');
+        return _PickerRow(
+          icon: Icons.sell_outlined,
+          label: 'Tags',
+          value: value,
+          unset: selected.isEmpty,
+          onTap: onTap,
+        );
+      },
     );
   }
 }

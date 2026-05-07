@@ -12,6 +12,8 @@ export const accounts = sqliteTable("accounts", {
   name: text("name").notNull(),
   kind: text("kind").notNull().default("checking"),
   openingBalanceCents: integer("opening_balance_cents").notNull().default(0),
+  reconciledBalanceCents: integer("reconciled_balance_cents"),
+  reconciledAt: integer("reconciled_at"),
   onBudget: integer("on_budget", { mode: "boolean" }).notNull().default(true),
   archived: integer("archived", { mode: "boolean" }).notNull().default(false),
   sortOrder: integer("sort_order").notNull().default(0),
@@ -30,6 +32,8 @@ export const categories = sqliteTable("categories", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
   groupId: text("group_id").notNull(),
+  // Optional one-level parent. NULL means the category is top-level.
+  parentId: text("parent_id"),
   color: integer("color"),
   icon: text("icon"),
   hidden: integer("hidden", { mode: "boolean" }).notNull().default(false),
@@ -99,6 +103,29 @@ export const transactionTags = sqliteTable(
     ),
   }),
 );
+
+export const rules = sqliteTable("rules", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
+  priority: integer("priority").notNull().default(100),
+  triggerType: text("trigger_type").notNull(),
+  triggerPayload: text("trigger_payload").notNull(),
+  actionPayload: text("action_payload").notNull(),
+  createdAt: integer("created_at").notNull().default(now),
+  updatedAt: integer("updated_at").notNull().default(now),
+});
+
+export const ruleMatches = sqliteTable("rule_matches", {
+  id: text("id").primaryKey(),
+  ruleId: text("rule_id").notNull(),
+  sourceType: text("source_type").notNull(),
+  sourceId: text("source_id").notNull(),
+  transactionId: text("transaction_id"),
+  matchedAt: integer("matched_at").notNull().default(now),
+  outcome: text("outcome").notNull(),
+  updatedAt: integer("updated_at").notNull().default(now),
+});
 
 export const budgets = sqliteTable("budgets", {
   id: text("id").primaryKey(),
@@ -196,6 +223,8 @@ export type Transaction = typeof transactions.$inferSelect;
 export type NewTransaction = typeof transactions.$inferInsert;
 export type Tag = typeof tags.$inferSelect;
 export type TransactionTag = typeof transactionTags.$inferSelect;
+export type Rule = typeof rules.$inferSelect;
+export type RuleMatch = typeof ruleMatches.$inferSelect;
 export type Budget = typeof budgets.$inferSelect;
 export type Recurrence = typeof recurrences.$inferSelect;
 export type ChangeLogEntry = typeof changeLog.$inferSelect;

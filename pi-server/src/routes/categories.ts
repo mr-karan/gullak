@@ -17,6 +17,7 @@ const categoryUpsertSchema = z.object({
   id: z.string().min(1).optional(),
   name: z.string().min(1),
   groupId: z.string().min(1),
+  parentId: z.string().nullable().optional(),
   color: z.number().int().nullable().optional(),
   icon: z.string().nullable().optional(),
   hidden: z.boolean().default(false),
@@ -112,10 +113,20 @@ cats.post("/", async (c) => {
   const db = c.get("db");
   const parsed = categoryUpsertSchema.parse(await c.req.json());
   const id = parsed.id ?? newId();
+  const parent = parsed.parentId
+    ? db.select().from(categories).where(eq(categories.id, parsed.parentId)).get()
+    : null;
+  if (parsed.parentId && !parent) {
+    return c.json({ error: "Parent category not found" }, 400);
+  }
+  if (parent?.parentId) {
+    return c.json({ error: "Only one category nesting level is supported" }, 400);
+  }
   const row = {
     id,
     name: parsed.name,
-    groupId: parsed.groupId,
+    groupId: parent?.groupId ?? parsed.groupId,
+    parentId: parsed.parentId ?? null,
     color: parsed.color ?? null,
     icon: parsed.icon ?? null,
     hidden: parsed.hidden,
@@ -143,7 +154,30 @@ cats.patch("/:id", async (c) => {
   const partial = categoryUpsertSchema.partial().parse(await c.req.json());
   const existing = db.select().from(categories).where(eq(categories.id, id)).get();
   if (!existing) return c.json({ error: "Not found" }, 404);
-  const next = { ...existing, ...partial, updatedAt: nowMs() };
+  const parentId = partial.parentId === undefined ? existing.parentId : partial.parentId;
+  const parent = parentId
+    ? db.select().from(categories).where(eq(categories.id, parentId)).get()
+    : null;
+  if (parentId && !parent) {
+    return c.json({ error: "Parent category not found" }, 400);
+  }
+  if (parent?.parentId) {
+    return c.json({ error: "Only one category nesting level is supported" }, 400);
+  }
+  if (parentId === id) {
+    return c.json({ error: "Category cannot be its own parent" }, 400);
+  }
+  const child = db.select().from(categories).where(eq(categories.parentId, id)).get();
+  if (parentId && child) {
+    return c.json({ error: "A parent category with subcategories cannot become a subcategory" }, 400);
+  }
+  const next = {
+    ...existing,
+    ...partial,
+    parentId,
+    groupId: parent?.groupId ?? partial.groupId ?? existing.groupId,
+    updatedAt: nowMs(),
+  };
   db.transaction((tx) => {
     tx.update(categories).set(next).where(eq(categories.id, id)).run();
     recordChange(tx, {
