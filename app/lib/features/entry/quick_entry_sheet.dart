@@ -14,6 +14,7 @@ import '../accounts/data/account_repository.dart';
 import '../categories/category_form_dialog.dart';
 import '../categories/category_visuals.dart';
 import '../categories/data/category_repository.dart';
+import '../inbox/data/sms_repository.dart';
 import '../location/location_service.dart';
 import '../payees/data/payee_repository.dart';
 import '../tags/data/tag_repository.dart';
@@ -26,6 +27,8 @@ class QuickEntrySheet extends ConsumerStatefulWidget {
   const QuickEntrySheet({
     this.editingTransactionId,
     this.initialNote,
+    this.smsDraft,
+    this.onCreated,
     super.key,
   });
 
@@ -40,6 +43,16 @@ class QuickEntrySheet extends ConsumerStatefulWidget {
   /// last-used tab pref.
   final String? initialNote;
 
+  /// When non-null, the Form tab opens pre-filled from an SMS-derived
+  /// draft so the user only has to fill missing metadata (typically the
+  /// category). The Type tab is suppressed in this mode.
+  final SmsTransactionDraft? smsDraft;
+
+  /// Called after a *new* transaction is saved (not on edit). The Inbox
+  /// Confirm flow uses this to mark the SMS row accepted and link it
+  /// to the freshly-created transaction id.
+  final Future<void> Function(String transactionId)? onCreated;
+
   @override
   ConsumerState<QuickEntrySheet> createState() => _QuickEntrySheetState();
 }
@@ -50,6 +63,7 @@ class _QuickEntrySheetState extends ConsumerState<QuickEntrySheet>
   TabController? _tabs;
 
   bool get _isEditing => widget.editingTransactionId != null;
+  bool get _isSmsConfirm => widget.smsDraft != null;
 
   @override
   void initState() {
@@ -59,6 +73,9 @@ class _QuickEntrySheetState extends ConsumerState<QuickEntrySheet>
     // configured (it does the parsing). The check is async so we
     // start without the tab and add it once we know.
     if (_isEditing) return;
+    // SMS confirm hydrates the form directly from the draft — there's
+    // nothing to type in natural language, so suppress the Type tab.
+    if (_isSmsConfirm) return;
     () async {
       final base = await ref.read(secureStoreProvider).readSyncBaseUrl();
       if (!mounted) return;
@@ -100,7 +117,11 @@ class _QuickEntrySheetState extends ConsumerState<QuickEntrySheet>
             mainAxisSize: MainAxisSize.max,
             children: [
               _Header(
-                title: _isEditing ? 'Edit expense' : 'New expense',
+                title: _isEditing
+                    ? 'Edit expense'
+                    : _isSmsConfirm
+                    ? 'Confirm from SMS'
+                    : 'New expense',
                 onCancel: () => Navigator.of(context).maybePop(),
                 editingTransactionId: widget.editingTransactionId,
               ),
@@ -131,12 +152,16 @@ class _QuickEntrySheetState extends ConsumerState<QuickEntrySheet>
                           ),
                           _FormTab(
                             editingTransactionId: widget.editingTransactionId,
+                            smsDraft: widget.smsDraft,
+                            onCreated: widget.onCreated,
                             keyboardOpen: keyboardOpen,
                           ),
                         ],
                       )
                     : _FormTab(
                         editingTransactionId: widget.editingTransactionId,
+                        smsDraft: widget.smsDraft,
+                        onCreated: widget.onCreated,
                         keyboardOpen: keyboardOpen,
                       ),
               ),
@@ -651,9 +676,16 @@ class _QuickEntrySkeleton extends StatelessWidget {
 }
 
 class _FormTab extends ConsumerStatefulWidget {
-  const _FormTab({this.editingTransactionId, required this.keyboardOpen});
+  const _FormTab({
+    this.editingTransactionId,
+    this.smsDraft,
+    this.onCreated,
+    required this.keyboardOpen,
+  });
 
   final String? editingTransactionId;
+  final SmsTransactionDraft? smsDraft;
+  final Future<void> Function(String transactionId)? onCreated;
   final bool keyboardOpen;
 
   @override
@@ -680,6 +712,7 @@ class _FormTabState extends ConsumerState<_FormTab> {
   bool _hydrating = false;
 
   bool get _isEditing => widget.editingTransactionId != null;
+  bool get _isSmsConfirm => widget.smsDraft != null;
 
   @override
   void initState() {
@@ -687,7 +720,47 @@ class _FormTabState extends ConsumerState<_FormTab> {
     if (_isEditing) {
       _hydrating = true;
       _hydrateFromExisting();
+    } else if (_isSmsConfirm) {
+      _hydrating = true;
+      _hydrateFromSmsDraft();
     }
+  }
+
+  Future<void> _hydrateFromSmsDraft() async {
+    final draft = widget.smsDraft!;
+    final accounts = await ref.read(accountRepoProvider).list();
+    AccountRow? account;
+    for (final a in accounts) {
+      if (a.id == draft.accountId) {
+        account = a;
+        break;
+      }
+    }
+    account ??= accounts.firstOrNull;
+    CategoryRow? category;
+    if (draft.categoryId != null) {
+      category = await ref.read(categoryRepoProvider).byId(draft.categoryId!);
+    }
+    PayeeRow? payee;
+    if (draft.payeeId != null) {
+      payee = await ref.read(payeeRepoProvider).byId(draft.payeeId!);
+    }
+    if (!mounted) return;
+    final minorDigits = ref.read(prefsProvider).currencyMinorDigits;
+    final scale = _pow10(minorDigits);
+    setState(() {
+      _amountWhole = draft.amountCentsSigned.abs() ~/ scale;
+      _isIncome = draft.isIncome;
+      _account = account;
+      _category = category;
+      _payee = payee;
+      _newPayeeName = payee == null ? draft.payeeName : null;
+      _date = draft.date;
+      _tagIds
+        ..clear()
+        ..addAll(draft.tagIds);
+      _hydrating = false;
+    });
   }
 
   Future<void> _hydrateFromExisting() async {
@@ -839,6 +912,10 @@ class _FormTabState extends ConsumerState<_FormTab> {
             .read(tagRepoProvider)
             .setTransactionTags(widget.editingTransactionId!, _tagIds.toList());
       } else {
+        final draft = widget.smsDraft;
+        final notes = _notesCtrl.text.trim().isEmpty
+            ? (draft != null ? 'SMS · ${draft.smsAddress}' : null)
+            : _notesCtrl.text.trim();
         final id = await repo.create(
           accountId: _account!.id,
           categoryId: _category?.id,
@@ -846,16 +923,20 @@ class _FormTabState extends ConsumerState<_FormTab> {
           payeeName: _newPayeeName ?? _payee?.name,
           amountCents: amount,
           date: _date,
-          notes: _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
+          notes: notes,
           latitude: location?.latitude,
           longitude: location?.longitude,
           locationName: location?.name,
-          origin: 'manual',
+          origin: draft != null ? 'sms' : 'manual',
+          originRef: draft?.smsRowId.toString(),
         );
         final activeTagId = prefs.activeTagId;
         final tags = {..._tagIds, ?activeTagId};
         if (tags.isNotEmpty) {
           await ref.read(tagRepoProvider).setTransactionTags(id, tags.toList());
+        }
+        if (widget.onCreated != null) {
+          await widget.onCreated!(id);
         }
       }
 

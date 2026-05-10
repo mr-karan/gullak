@@ -2,6 +2,45 @@
 
 All notable changes to Gullak are documented here.
 
+## [0.2.0] - 2026-05-10
+
+### Added
+
+- Inbox row amounts now show signed `+₹` for refunds, salary, cashback, and
+  other credits; expenses keep their `-₹`. Same convention applied to the
+  Activity row trailing amount.
+- Per-row Dismiss button in the Inbox Ready bucket, with an Undo snackbar that
+  reopens the SMS if pressed within 4 seconds.
+- Confirm flow for an SMS row now opens the Quick Entry sheet pre-filled
+  (amount, sign, account, category if known, payee, date, tags). The user
+  fills any missing metadata — usually the category — and Save creates the
+  transaction and links the SMS row in one step. Near-duplicate matches
+  surface as a warning before save instead of silently no-opping.
+- App-wide error screen has a Send feedback action that posts the full
+  diagnostic payload (exception, stack, context, build sha+time, platform,
+  locale) to `/v1/feedback`. Feedback events older than 7 days are pruned
+  server-side.
+- Sync server health is now actively monitored. Offline banner has a Retry
+  button, shows a spinner while checking, and the green "Sync server back
+  online" toast fires automatically once reachability returns. The monitor
+  uses exponential backoff with jitter (5s → 15s → 30s → 1m → 2m → 5m cap)
+  while offline and a 2-minute poll while healthy. Foreground-only.
+
+### Changed
+
+- Activity tab dropped the Daily mode; the new default is Week.
+
+### Fixed
+
+- Daily Review card on Home, account balances, budget overview, and tag
+  breakdowns no longer go stale after SMS arrive, transactions are
+  added/edited/deleted, budgets are edited, or categories are hidden.
+  Affected providers now watch the right Drift streams instead of a single
+  unrelated source.
+- `accountBalanceProvider` was watching the accounts list (which only changes
+  on account renames/creates) instead of the transactions stream — fixed so
+  balances refresh on every transaction mutation.
+
 ## [0.1.0] - 2026-05-06
 
 ### Added

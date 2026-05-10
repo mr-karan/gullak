@@ -90,6 +90,20 @@ class SyncService {
     }
   }
 
+  /// Cheap reachability probe using the configured server creds.
+  /// Returns ok=false with a human message when not configured or
+  /// unreachable. Used by the health monitor for the offline banner —
+  /// kept distinct from `syncOnce()` so a payload-level sync failure
+  /// doesn't masquerade as the server being down.
+  Future<({bool ok, String message})> probeHealth() async {
+    final baseUrl = (await _secure.readSyncBaseUrl())?.trim();
+    if (baseUrl == null || baseUrl.isEmpty) {
+      return (ok: false, message: 'Sync server not configured.');
+    }
+    final apiKey = (await _secure.readSyncApiKey())?.trim();
+    return testConnection(baseUrl: baseUrl, apiKey: apiKey);
+  }
+
   Future<({int pushed, int pulled, String? error})> syncOnce() async {
     if (!await isConfigured()) {
       return (pushed: 0, pulled: 0, error: 'Sync server not configured.');

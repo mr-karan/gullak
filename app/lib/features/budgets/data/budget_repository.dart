@@ -6,6 +6,7 @@ import '../../../core/clock.dart';
 import '../../../data/db/database.dart';
 import '../../../state/providers.dart';
 import '../../../sync/changelog_writer.dart';
+import '../../categories/data/category_repository.dart';
 import '../../transactions/data/transaction_repository.dart';
 
 export '../../../data/db/database.dart' show BudgetRow;
@@ -154,6 +155,11 @@ class BudgetRepository {
     return copied;
   }
 
+  /// Drift stream over the entire budgets table. Used by providers that
+  /// derive views from budgets so they re-run when any target is added,
+  /// edited, or removed.
+  Stream<List<BudgetRow>> watchAll() => _db.select(_db.budgets).watch();
+
   /// Compose a list of all categories with their budget + spend for the
   /// month. Categories without a target appear with target=0.
   Future<BudgetMonthOverview> summary(String month) async {
@@ -208,11 +214,19 @@ final Provider<BudgetRepository> budgetRepoProvider =
       ),
     );
 
+final budgetsListProvider = StreamProvider<List<BudgetRow>>(
+  (ref) => ref.watch(budgetRepoProvider).watchAll(),
+);
+
 final budgetMonthProvider = FutureProvider.family<BudgetMonthOverview, String>((
   ref,
   month,
 ) {
-  // Re-derive when transactions or categories change.
+  // Re-derive when transactions, budgets, or categories change. Without
+  // the budget/category watchers the overview stayed cached after the
+  // user edited a target or hid a category until pull-to-refresh.
   ref.watch(recentTransactionsProvider);
+  ref.watch(budgetsListProvider);
+  ref.watch(categoriesListProvider);
   return ref.watch(budgetRepoProvider).summary(month);
 });

@@ -32,7 +32,7 @@ class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
   final _searchCtrl = TextEditingController();
   Timer? _searchDebounce;
   String _query = '';
-  _ActivityMode _mode = _ActivityMode.daily;
+  _ActivityMode _mode = _ActivityMode.weekly;
   TransactionFilters _filters = const TransactionFilters();
 
   @override
@@ -108,11 +108,6 @@ class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
                   child: SegmentedButton<_ActivityMode>(
                     showSelectedIcon: false,
                     segments: const [
-                      ButtonSegment(
-                        value: _ActivityMode.daily,
-                        icon: Icon(Icons.view_day_outlined),
-                        label: Text('Daily'),
-                      ),
                       ButtonSegment(
                         value: _ActivityMode.weekly,
                         icon: Icon(Icons.calendar_view_week_outlined),
@@ -515,7 +510,6 @@ class _TransactionFilterSheetState
 }
 
 enum _ActivityMode {
-  daily,
   weekly,
   calendar,
   month,
@@ -529,7 +523,6 @@ enum _ActivityMode {
         '${d.month.toString().padLeft(2, '0')}-'
         '${d.day.toString().padLeft(2, '0')}';
     return switch (this) {
-      _ActivityMode.daily => (ymd(now), ymd(now)),
       _ActivityMode.weekly => (
         ymd(clock.today().subtract(Duration(days: clock.today().weekday - 1))),
         ymd(

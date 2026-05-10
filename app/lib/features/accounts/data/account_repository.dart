@@ -5,6 +5,7 @@ import 'package:uuid/uuid.dart';
 import '../../../data/db/database.dart';
 import '../../../state/providers.dart';
 import '../../../sync/changelog_writer.dart';
+import '../../transactions/data/transaction_repository.dart';
 
 export '../../../data/db/database.dart' show AccountRow;
 
@@ -224,7 +225,10 @@ final StreamProvider<List<AccountRow>> accountsListProvider =
     });
 
 final accountBalanceProvider = FutureProvider.family<int, String>((ref, id) {
-  // Re-read whenever transactions change, by depending on the stream.
-  ref.watch(accountsListProvider);
+  // Re-read whenever transactions change. Drift's reactive query reflects
+  // any mutation on the transactions table, so this stays in sync as the
+  // user adds/edits/deletes rows. accountsListProvider only fires on
+  // accounts-table mutations and is not enough on its own.
+  ref.watch(recentTransactionsProvider);
   return ref.watch(accountRepoProvider).balanceCents(id);
 });

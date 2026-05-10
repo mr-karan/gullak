@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/snackbars.dart';
+import '../../sync/sync_health_monitor.dart';
 import '../../sync/sync_status.dart';
 import '../../state/providers.dart';
 import '../entry/quick_entry.dart';
@@ -66,12 +68,44 @@ class HomeShell extends ConsumerWidget {
         loc == '/tags' ||
         loc == '/accounts';
     final syncStatus = ref.watch(syncStatusProvider);
+    // Surface offline → online recovery as a one-shot green toast so the
+    // user gets confirmation that the network came back, without a sticky
+    // banner sitting around once everything is healthy again.
+    ref.listen<SyncStatus>(syncStatusProvider, (prev, next) {
+      if (prev?.health == SyncHealthState.offline &&
+          next.health == SyncHealthState.online) {
+        final messenger = ScaffoldMessenger.maybeOf(context);
+        if (messenger == null) return;
+        final cs = Theme.of(context).colorScheme;
+        showTimedSnackBar(
+          messenger,
+          SnackBar(
+            backgroundColor: cs.tertiaryContainer,
+            content: Text(
+              'Sync server back online.',
+              style: TextStyle(
+                color: cs.onTertiaryContainer,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        );
+      }
+    });
+
+    final showBanner =
+        syncStatus.offline || syncStatus.checking && syncStatus.message != null;
 
     return Scaffold(
       body: Column(
         children: [
-          if (syncStatus.offline)
-            _SyncOfflineBanner(message: syncStatus.message!),
+          if (showBanner)
+            _SyncOfflineBanner(
+              message: syncStatus.message ?? 'Checking sync server…',
+              checking: syncStatus.checking,
+              onRetry: () =>
+                  ref.read(syncHealthMonitorProvider).retryNow(),
+            ),
           Expanded(child: child),
         ],
       ),
@@ -108,9 +142,15 @@ class HomeShell extends ConsumerWidget {
 }
 
 class _SyncOfflineBanner extends StatelessWidget {
-  const _SyncOfflineBanner({required this.message});
+  const _SyncOfflineBanner({
+    required this.message,
+    required this.checking,
+    required this.onRetry,
+  });
 
   final String message;
+  final bool checking;
+  final VoidCallback onRetry;
 
   @override
   Widget build(BuildContext context) {
@@ -120,19 +160,40 @@ class _SyncOfflineBanner extends StatelessWidget {
       child: Material(
         color: cs.errorContainer,
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          padding: const EdgeInsets.fromLTRB(16, 10, 8, 10),
           child: Row(
             children: [
-              Icon(Icons.cloud_off_outlined, color: cs.onErrorContainer),
+              Icon(
+                checking ? Icons.cloud_sync_outlined : Icons.cloud_off_outlined,
+                color: cs.onErrorContainer,
+              ),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
-                  message,
+                  checking ? 'Checking sync server…' : message,
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     color: cs.onErrorContainer,
                     fontWeight: FontWeight.w700,
                   ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                 ),
+              ),
+              const SizedBox(width: 8),
+              TextButton(
+                onPressed: checking ? null : onRetry,
+                style: TextButton.styleFrom(
+                  foregroundColor: cs.onErrorContainer,
+                  minimumSize: const Size(0, 36),
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                ),
+                child: checking
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Text('Retry'),
               ),
             ],
           ),

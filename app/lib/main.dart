@@ -16,6 +16,7 @@ import 'features/entry/quick_entry.dart';
 import 'features/entry/share_intake.dart';
 import 'router/router.dart';
 import 'state/providers.dart';
+import 'sync/sync_health_monitor.dart';
 import 'sync/sync_scheduler.dart';
 import 'ui/theme.dart';
 
@@ -80,11 +81,20 @@ class _GullakAppState extends ConsumerState<GullakApp> {
     _lifecycle = AppLifecycleListener(
       onResume: () {
         ref.read(syncSchedulerProvider).runNow();
+        ref.read(syncHealthMonitorProvider).start();
         if (ref.read(prefsProvider).smsEnabled) {
           unawaited(ref.read(smsPipelineProvider).catchUpRecent());
         }
       },
+      onHide: () => ref.read(syncHealthMonitorProvider).stop(),
+      onPause: () => ref.read(syncHealthMonitorProvider).stop(),
     );
+    // Initial arm on launch — AppLifecycleListener.onResume only fires on
+    // subsequent resumes, not on first start.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      ref.read(syncHealthMonitorProvider).start();
+    });
     // If the user already enabled SMS in a previous session, the
     // listener has to be re-armed each launch — the pref persists
     // but the Stream subscription doesn't.

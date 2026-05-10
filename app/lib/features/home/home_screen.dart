@@ -11,6 +11,8 @@ import '../../ui/widgets/empty_state.dart';
 import '../../ui/widgets/money_text.dart';
 import '../../ui/widgets/section_header.dart';
 import '../budgets/data/budget_repository.dart';
+import '../categories/data/category_repository.dart';
+import '../inbox/data/sms_repository.dart';
 import '../transactions/data/transaction_repository.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
@@ -604,6 +606,12 @@ class DailyReviewSnapshot {
 
 final dailyReviewProvider = FutureProvider<DailyReviewSnapshot>((ref) async {
   ref.watch(recentTransactionsProvider);
+  // Re-run when SMS arrive or move buckets (confirm/dismiss/error). Without
+  // this the pending/failed counts stayed cached until pull-to-refresh.
+  ref.watch(inboxItemsProvider);
+  // Budget warnings depend on category list and budget targets too.
+  ref.watch(budgetsListProvider);
+  ref.watch(categoriesListProvider);
   final db = ref.watch(dbProvider);
   final txRepo = ref.watch(transactionRepoProvider);
   final today = DateFormat('yyyy-MM-dd').format(DateTime.now());

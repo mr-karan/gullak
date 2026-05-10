@@ -574,8 +574,7 @@ class _InboxRow extends ConsumerWidget {
                   ),
                   const SizedBox(width: 4),
                   FilledButton.tonal(
-                    onPressed: () =>
-                        ref.read(smsRepositoryProvider).confirm(item.id),
+                    onPressed: () => _confirmWithReview(context, ref, item),
                     style: FilledButton.styleFrom(
                       minimumSize: const Size(0, 36),
                       padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -638,6 +637,48 @@ class _InboxRow extends ConsumerWidget {
         ),
       ),
       duration: const Duration(seconds: 4),
+    );
+  }
+
+  Future<void> _confirmWithReview(
+    BuildContext context,
+    WidgetRef ref,
+    InboxItem item,
+  ) async {
+    final repo = ref.read(smsRepositoryProvider);
+    final draft = await repo.buildDraft(item.id);
+    if (!context.mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    if (draft == null) {
+      showTimedSnackBar(
+        messenger,
+        const SnackBar(content: Text('Could not build a draft from this SMS.')),
+      );
+      return;
+    }
+    if (draft.duplicateOf != null) {
+      showTimedSnackBar(
+        messenger,
+        const SnackBar(
+          content: Text(
+            'A similar transaction already exists. Saving will create a second row.',
+          ),
+        ),
+        duration: const Duration(seconds: 4),
+      );
+    }
+    await openQuickEntry(
+      context,
+      smsDraft: draft,
+      onCreated: (transactionId) async {
+        await repo.confirmFromTransaction(
+          smsRowId: draft.smsRowId,
+          transactionId: transactionId,
+          accountId: draft.accountId,
+          categoryId: draft.categoryId,
+          payeeId: draft.payeeId,
+        );
+      },
     );
   }
 

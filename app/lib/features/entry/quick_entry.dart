@@ -1,14 +1,18 @@
 import 'package:flutter/material.dart';
 
+import '../inbox/data/sms_repository.dart';
 import 'quick_entry_sheet.dart';
 
 /// Single entry point for opening the Quick Entry sheet — used by the
-/// FAB to add new entries and by the activity rows to edit existing ones.
-/// Keeping this in one place means the surface is always the same form.
+/// FAB to add new entries, by the activity rows to edit existing ones,
+/// and by the Inbox Confirm flow to review-and-save an SMS-derived
+/// transaction.
 Future<void> openQuickEntry(
   BuildContext context, {
   String? editingTransactionId,
   String? initialNote,
+  SmsTransactionDraft? smsDraft,
+  Future<void> Function(String transactionId)? onCreated,
 }) {
   return showModalBottomSheet<void>(
     context: context,
@@ -20,6 +24,8 @@ Future<void> openQuickEntry(
       child: QuickEntrySheet(
         editingTransactionId: editingTransactionId,
         initialNote: initialNote,
+        smsDraft: smsDraft,
+        onCreated: onCreated,
       ),
     ),
   );

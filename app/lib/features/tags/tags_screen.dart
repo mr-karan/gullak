@@ -403,16 +403,22 @@ class _Timeline extends StatelessWidget {
 }
 
 final _tagCategoryBreakdownProvider =
-    FutureProvider.family<List<TagBreakdown>, String>(
-      (ref, id) => ref.watch(tagRepoProvider).categoryBreakdown(id),
-    );
+    FutureProvider.family<List<TagBreakdown>, String>((ref, id) {
+      ref.watch(recentTransactionsProvider);
+      ref.watch(tagAnalyticsProvider);
+      return ref.watch(tagRepoProvider).categoryBreakdown(id);
+    });
 
 final _tagAccountBreakdownProvider =
-    FutureProvider.family<List<TagBreakdown>, String>(
-      (ref, id) => ref.watch(tagRepoProvider).accountBreakdown(id),
-    );
+    FutureProvider.family<List<TagBreakdown>, String>((ref, id) {
+      ref.watch(recentTransactionsProvider);
+      ref.watch(tagAnalyticsProvider);
+      return ref.watch(tagRepoProvider).accountBreakdown(id);
+    });
 
 final _tagTimelineProvider =
-    FutureProvider.family<List<TagTimelinePoint>, String>(
-      (ref, id) => ref.watch(tagRepoProvider).monthlyTimeline(id),
-    );
+    FutureProvider.family<List<TagTimelinePoint>, String>((ref, id) {
+      ref.watch(recentTransactionsProvider);
+      ref.watch(tagAnalyticsProvider);
+      return ref.watch(tagRepoProvider).monthlyTimeline(id);
+    });
