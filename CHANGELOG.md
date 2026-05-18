@@ -2,6 +2,47 @@
 
 All notable changes to Gullak are documented here.
 
+## [0.2.1] - 2026-05-18
+
+### Added
+
+- Phosphor icon pack for categories. The Activity, Home recent, and
+  Categories admin screens render category-specific glyphs sourced from
+  a name-keyed lookup with a 64-entry memo cache. Replaces the previous
+  emoji-first rendering. Legacy `categories.icon` strings still display
+  in the form dialog's picker for back-compat.
+- SMS auto-confirm now fires a high-importance notification with an
+  inline "Add note" reply, matching the existing Inbox candidate flow.
+  Replies to the action enqueue a WorkManager job that posts to
+  `POST /v1/ai/sms/enrich` and back-fills payee + category on both the
+  SMS row and the linked transaction. Previously, auto-confirmed SMS
+  silently created uncategorised rows with no triage prompt.
+- `just install debuggable=true` (and `just apk debuggable=true`) flips
+  `android:debuggable` on the release build via the `GULLAK_DEBUGGABLE`
+  env var, so `adb shell run-as` works for ad-hoc DB pulls without
+  building a separately-signed debug variant.
+
+### Changed
+
+- `TransactionRepository.unset` is now public, so background workers
+  (the enrichment isolate) can call `update()` with the same partial-
+  update sentinel pattern instead of writing drift companions manually.
+  The enrichment worker now reuses `PayeeRepository.ensure()` and
+  `TransactionRepository.update()` end-to-end, picking up the existing
+  change_log + last-write-wins semantics for free.
+- `NotificationService`'s three SMS notification methods now share a
+  single `_showSmsPrompt` builder; the `Add note` action is a const
+  re-used across them.
+- README rewritten for the 0.2.x feature set, including the new
+  enrichment flow and the debuggable-build toggle.
+- Notification id derived from the SMS row id (`& 0x7FFFFFFF`) so
+  follow-up enrichment notifications replace the original in-place.
+
+### Removed
+
+- `app/handoff.md`, `app/plans/`, and `plans/` — stale planning docs
+  that no longer matched shipped state.
+
 ## [0.2.0] - 2026-05-10
 
 ### Added
