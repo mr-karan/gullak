@@ -30,11 +30,15 @@ gate:
 # filename, plus a `gullak-latest.apk` symlink. Prints the artifact path.
 # Stamps the build with --dart-define so Settings → About can show
 # exactly which commit you're running.
-apk:
+#
+# Pass `debuggable=true` to build a release APK with android:debuggable
+# flipped on, so `adb shell run-as dev.mrkaran.gullak` works for ad-hoc
+# database pulls without flutter run / a separate debug build.
+apk debuggable="false":
     set -eu; \
       sha="$(git rev-parse --short HEAD)"; \
       ts="$(date +%Y%m%d-%H%M%S)"; \
-      cd {{app-dir}} && flutter build apk --release \
+      cd {{app-dir}} && GULLAK_DEBUGGABLE={{debuggable}} flutter build apk --release \
         --dart-define="GULLAK_BUILD_SHA=$sha" \
         --dart-define="GULLAK_BUILD_AT=$ts"
     mkdir -p {{dist-dir}}
@@ -53,7 +57,9 @@ run:
     cd {{app-dir}} && flutter run --device-id=$(adb devices | awk 'NR>1 && $2=="device"{print $1; exit}')
 
 # Build the APK and install on the first connected Android device.
-install: apk
+# Pass `debuggable=true` to install a debuggable release build for
+# `adb shell run-as` access (see `apk` recipe).
+install debuggable="false": (apk debuggable)
     adb install -r {{dist-dir}}/gullak-latest.apk
 
 # Wipe app data on the connected device. Forces re-onboarding next launch.

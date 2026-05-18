@@ -11,6 +11,7 @@ import '../../ui/widgets/empty_state.dart';
 import '../../ui/widgets/money_text.dart';
 import '../../ui/widgets/section_header.dart';
 import '../budgets/data/budget_repository.dart';
+import '../categories/category_visuals.dart';
 import '../categories/data/category_repository.dart';
 import '../inbox/data/sms_repository.dart';
 import '../transactions/data/transaction_repository.dart';
@@ -128,38 +129,36 @@ class _MonthHeroCard extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
       child: Container(
-        padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
+        padding: const EdgeInsets.fromLTRB(24, 22, 24, 22),
         decoration: BoxDecoration(
-          color: cs.primaryContainer.withValues(alpha: 0.6),
+          color: cs.surfaceContainer,
           borderRadius: BorderRadius.circular(24),
+          border: Border.all(
+            color: cs.outlineVariant.withValues(alpha: 0.6),
+            width: 0.5,
+          ),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              monthLabel.toUpperCase(),
-              style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                color: cs.onPrimaryContainer,
-                letterSpacing: 1.2,
-              ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              'Net',
-              style: Theme.of(
-                context,
-              ).textTheme.titleMedium?.copyWith(color: cs.onPrimaryContainer),
-            ),
-            const SizedBox(height: 4),
+            Text(monthLabel.toUpperCase(), style: eyebrowStyle(context)),
+            const SizedBox(height: 14),
             Text(
               _formatNet(net, symbol: symbol, minorDigits: minorDigits),
               style: moneyStyle(
                 context,
-                size: 36,
+                size: 40,
                 weight: FontWeight.w700,
-              ).copyWith(color: cs.onPrimaryContainer),
+              ).copyWith(color: cs.onSurface, letterSpacing: -0.5),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 6),
+            Text(
+              net >= 0 ? 'net this month' : 'over budget this month',
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
+            ),
+            const SizedBox(height: 22),
             Row(
               children: [
                 Expanded(
@@ -171,14 +170,21 @@ class _MonthHeroCard extends StatelessWidget {
                     minorDigits: minorDigits,
                   ),
                 ),
-                const SizedBox(width: 12),
+                Container(
+                  width: 0.5,
+                  height: 36,
+                  color: cs.outlineVariant.withValues(alpha: 0.7),
+                ),
                 Expanded(
-                  child: _StatTile(
-                    label: 'Spent',
-                    value: -spent, // display unsigned
-                    color: cs.onPrimaryContainer,
-                    symbol: symbol,
-                    minorDigits: minorDigits,
+                  child: Padding(
+                    padding: const EdgeInsets.only(left: 16),
+                    child: _StatTile(
+                      label: 'Spent',
+                      value: -spent,
+                      color: cs.onSurface,
+                      symbol: symbol,
+                      minorDigits: minorDigits,
+                    ),
                   ),
                 ),
               ],
@@ -236,18 +242,15 @@ class _StatTile extends StatelessWidget {
       children: [
         Text(
           label.toUpperCase(),
-          style: Theme.of(context).textTheme.labelSmall?.copyWith(
-            color: color.withValues(alpha: 0.85),
-            letterSpacing: 1.2,
-          ),
+          style: eyebrowStyle(context).copyWith(color: color),
         ),
-        const SizedBox(height: 4),
+        const SizedBox(height: 6),
         MoneyText(
           amountCents: value,
           symbol: symbol,
           minorDigits: minorDigits,
           color: color,
-          size: MoneySize.large,
+          size: MoneySize.medium,
         ),
       ],
     );
@@ -428,7 +431,9 @@ class _RecentRow extends ConsumerWidget {
             ? Icons.swap_horiz
             : row.isSplit
             ? Icons.call_split
-            : null,
+            : row.categoryName == null
+            ? null
+            : categoryIconData(row.categoryName!),
       ),
       title: Text(
         row.isTransfer

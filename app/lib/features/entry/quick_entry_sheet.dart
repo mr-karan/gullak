@@ -602,10 +602,7 @@ class _Preview extends StatelessWidget {
         if (parsed.accountHint != null)
           chip(parsed.accountHint!, Icons.account_balance_outlined),
         if (parsed.categoryHint != null)
-          chip(
-            '${defaultCategoryEmoji(parsed.categoryHint!)} ${parsed.categoryHint!}',
-            Icons.label_outline,
-          ),
+          chip(parsed.categoryHint!, categoryIconData(parsed.categoryHint!)),
         chip(_dateLabel(parsed.date), Icons.calendar_today_outlined),
         if (parsed.confidence < 0.5)
           chip(
@@ -1013,11 +1010,11 @@ class _FormTabState extends ConsumerState<_FormTab> {
                       onTap: _pickPayee,
                     ),
                     _PickerRow(
-                      icon: Icons.label_outline,
+                      icon: _category == null
+                          ? Icons.label_outline
+                          : categoryIconData(_category!.name),
                       label: 'Category',
-                      value: _category == null
-                          ? 'Optional'
-                          : '${categoryEmoji(_category!.icon, _category!.name)} ${_category!.name}',
+                      value: _category?.name ?? 'Optional',
                       unset: _category == null,
                       onTap: _pickCategory,
                     ),
@@ -1752,15 +1749,12 @@ class _CategoryEmoji extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
+    final accent = categoryAccentColor(category.color, category.name);
     return CircleAvatar(
       radius: 18,
-      backgroundColor: cs.secondaryContainer,
-      foregroundColor: cs.onSecondaryContainer,
-      child: Text(
-        categoryEmoji(category.icon, category.name),
-        style: const TextStyle(fontSize: 16),
-      ),
+      backgroundColor: accent.withValues(alpha: 0.18),
+      foregroundColor: accent,
+      child: Icon(categoryIconData(category.name), size: 18, color: accent),
     );
   }
 }

@@ -1,6 +1,7 @@
 # Gullak Acceptance Checklist
 
-Use this after local development to finish the `handoff.md` done definition.
+Run before shipping a release APK. These gates exist because emulator-only or
+analyze-only smoke missed real Android pitfalls in the past.
 
 ## Local Gates
 
@@ -65,4 +66,4 @@ Expected:
 - Manual SMS pass: a real HDFC debit SMS lands in Inbox within 90 seconds; confirming it creates a transaction on the right account.
 - `/tmp/gullak-pixel.log` has no `EXCEPTION`, `Another exception`, `RenderFlex`, or `assertion`.
 
-Do not mark the handoff complete until all sections above pass on real evidence.
+Do not ship the release APK until all sections above pass on real evidence.

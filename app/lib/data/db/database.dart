@@ -38,7 +38,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 8;
+  int get schemaVersion => 9;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -153,6 +153,21 @@ class AppDatabase extends _$AppDatabase {
       if (from < 8) {
         await m.addColumn(accounts, accounts.reconciledBalanceCents);
         await m.addColumn(accounts, accounts.reconciledAt);
+      }
+      if (from < 9) {
+        // Notification quick-capture: high-signal user note at SMS-time
+        // plus best-effort cached location, plus a second-stage enrichment
+        // candidate so the original parse stays untouched for audit.
+        await m.addColumn(smsMessages, smsMessages.userNote);
+        await m.addColumn(smsMessages, smsMessages.noteCapturedAt);
+        await m.addColumn(smsMessages, smsMessages.locationLat);
+        await m.addColumn(smsMessages, smsMessages.locationLng);
+        await m.addColumn(smsMessages, smsMessages.locationAccuracyM);
+        await m.addColumn(smsMessages, smsMessages.locationCapturedAt);
+        await m.addColumn(smsMessages, smsMessages.locationPlaceName);
+        await m.addColumn(smsMessages, smsMessages.enrichmentStatus);
+        await m.addColumn(smsMessages, smsMessages.enrichedCandidateJson);
+        await m.addColumn(smsMessages, smsMessages.enrichedAt);
       }
     },
   );

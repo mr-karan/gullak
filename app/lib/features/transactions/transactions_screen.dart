@@ -964,16 +964,29 @@ class _TxRow extends ConsumerWidget {
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
           child: Row(
             children: [
+              Container(
+                width: 3,
+                height: 36,
+                margin: const EdgeInsets.only(right: 12),
+                decoration: BoxDecoration(
+                  color: row.isTransfer
+                      ? cs.outlineVariant
+                      : categoryAccentColor(
+                          row.categoryColor,
+                          row.categoryName ?? 'Uncategorised',
+                        ),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
               CategorySwatch(
                 label: swatchLabel,
-                symbol: row.categoryName == null || row.isTransfer
-                    ? null
-                    : categoryEmoji(row.categoryIcon, row.categoryName!),
                 icon: row.isTransfer
                     ? Icons.swap_horiz
                     : row.isSplit
                     ? Icons.call_split
-                    : null,
+                    : row.categoryName == null
+                    ? null
+                    : categoryIconData(row.categoryName!),
               ),
               const SizedBox(width: 12),
               Expanded(

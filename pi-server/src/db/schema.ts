@@ -170,6 +170,32 @@ export const agentTurns = sqliteTable("agent_turns", {
   at: integer("at").notNull().default(now),
 });
 
+// WhatsApp inbox candidates queued for the phone to import. The bridge
+// posts incoming messages to /v1/whatsapp/webhook; the agent parses each
+// message into N expense candidates and writes them here. The Flutter app
+// pulls + acks during sync and inserts each row into its local
+// `sms_messages` so the existing Inbox review flow applies. This is a
+// one-way delivery queue, intentionally outside `change_log` because the
+// review lifecycle (accepted/dismissed/duplicate) lives on the phone, not
+// on the server.
+export const whatsappInboxCandidates = sqliteTable(
+  "whatsapp_inbox_candidates",
+  {
+    id: text("id").primaryKey(),
+    sourceUser: text("source_user"), // phone number / chat id
+    pushName: text("push_name"),
+    chatId: text("chat_id"),
+    messageId: text("message_id"), // WhatsApp message id; same across items
+    itemIndex: integer("item_index").notNull().default(0),
+    body: text("body").notNull(), // the slice of message text this candidate represents
+    receivedAt: integer("received_at").notNull(),
+    candidateJson: text("candidate_json").notNull(), // parsed candidate fields
+    status: text("status").notNull().default("pending"), // 'pending' | 'delivered'
+    deliveredAt: integer("delivered_at"),
+    createdAt: integer("created_at").notNull().default(now),
+  },
+);
+
 // User-submitted diagnostics from the mobile app. These are intentionally
 // append-only and outside the sync changelog: feedback is for debugging the
 // parser/app, not part of the user's financial dataset.
@@ -229,3 +255,7 @@ export type Budget = typeof budgets.$inferSelect;
 export type Recurrence = typeof recurrences.$inferSelect;
 export type ChangeLogEntry = typeof changeLog.$inferSelect;
 export type FeedbackEvent = typeof feedbackEvents.$inferSelect;
+export type WhatsappInboxCandidate =
+  typeof whatsappInboxCandidates.$inferSelect;
+export type NewWhatsappInboxCandidate =
+  typeof whatsappInboxCandidates.$inferInsert;

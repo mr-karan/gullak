@@ -147,12 +147,12 @@ void main() {
     expect(salary.isIncome, isTrue);
     expect(salary.categoryId, categoryIds['Salary']);
 
-    final uber = await extractor.parse('uber 250 split with karan');
+    final uber = await extractor.parse('uber 250 split with friend');
     expect(uber.amountCents, 25000);
     expect(uber.isIncome, isFalse);
     expect(uber.payeeId, payeeIds['Uber']);
     expect(uber.categoryId, categoryIds['Transport']);
-    expect(uber.notes, 'split with karan');
+    expect(uber.notes, 'split with friend');
 
     final zomato = await extractor.parse('zomato 300 yesterday');
     expect(zomato.amountCents, 30000);
@@ -199,7 +199,7 @@ Map<String, dynamic> _responseFor(
         'date': null,
         'confidence': 0.85,
       };
-    case 'uber 250 split with karan':
+    case 'uber 250 split with friend':
       return {
         'amountCents': 25000,
         'isIncome': false,
@@ -209,7 +209,7 @@ Map<String, dynamic> _responseFor(
         'accountId': null,
         'categoryHint': 'Transport',
         'categoryId': categoryIds['Transport'],
-        'notes': 'split with karan',
+        'notes': 'split with friend',
         'date': null,
         'confidence': 0.8,
       };

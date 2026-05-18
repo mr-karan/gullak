@@ -53,6 +53,12 @@ android {
             } else {
                 signingConfigs.getByName("debug")
             }
+            // Opt-in for ad-hoc SMS-DB pulls etc.: build with the env
+            // var GULLAK_DEBUGGABLE=true (or -Pdebuggable=true on a raw
+            // gradle invocation). Flutter doesn't reliably propagate -P
+            // through `flutter build apk`, so env wins.
+            isDebuggable = (System.getenv("GULLAK_DEBUGGABLE") == "true")
+                || (project.findProperty("debuggable") as String?) == "true"
         }
     }
 }

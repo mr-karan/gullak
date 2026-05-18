@@ -63,10 +63,12 @@ class SmsPipeline {
   final SmsReader reader;
   final ParserRegistry parserRegistry;
   final NotificationService? notifications;
+  // Test seam — bypasses the real plugin in pipeline tests.
   final Future<void> Function({
+    required int smsRowId,
     required int amountCents,
     required String? payee,
-    int? notificationId,
+    String? accountHint,
   })?
   notifyInboxCandidate;
 
@@ -323,7 +325,7 @@ class SmsPipeline {
 
     String status;
     String? linkedTransactionId;
-    var notifyHighConfidence = false;
+    var notify = _NotifyKind.none;
 
     if (candidate == null) {
       status = 'error';
@@ -337,14 +339,15 @@ class SmsPipeline {
         try {
           linkedTransactionId = await _autoCreateTransaction(candidate, sms);
           status = 'accepted';
+          notify = _NotifyKind.autoConfirmed;
         } catch (e) {
           log.w('auto-confirm failed, falling back to inbox: $e');
           status = 'inbox';
-          notifyHighConfidence = true;
+          notify = _NotifyKind.highConfidence;
         }
       } else {
         status = 'inbox';
-        notifyHighConfidence = candidate.confidence >= 0.8;
+        if (candidate.confidence >= 0.8) notify = _NotifyKind.highConfidence;
       }
     }
 
@@ -369,12 +372,20 @@ class SmsPipeline {
           ),
         );
 
-    if (notifyHighConfidence && candidate != null) {
-      final notify = notifyInboxCandidate ?? notifications?.showInboxCandidate;
-      await notify?.call(
+    if (candidate != null && notify == _NotifyKind.highConfidence) {
+      final fn = notifyInboxCandidate ?? notifications?.showInboxCandidate;
+      await fn?.call(
+        smsRowId: smsRowId,
         amountCents: candidate.amountCents,
         payee: candidate.payee,
-        notificationId: _notificationIdForSmsRow(smsRowId),
+        accountHint: candidate.accountHint,
+      );
+    } else if (candidate != null && notify == _NotifyKind.autoConfirmed) {
+      await notifications?.showAutoConfirmed(
+        smsRowId: smsRowId,
+        amountCents: candidate.amountCents,
+        payee: candidate.payee,
+        accountHint: candidate.accountHint,
       );
     }
     return candidate != null;
@@ -449,10 +460,6 @@ class SmsPipeline {
       '${d.year.toString().padLeft(4, '0')}-'
       '${d.month.toString().padLeft(2, '0')}-'
       '${d.day.toString().padLeft(2, '0')}';
-
-  static int _notificationIdForSmsRow(int smsRowId) {
-    return 100000 + smsRowId.remainder(1000000000);
-  }
 
   static String _smsKey(IncomingSms sms) {
     final address = sms.address.trim().toLowerCase();
@@ -551,3 +558,5 @@ final Provider<SmsPipeline> smsPipelineProvider = Provider<SmsPipeline>((ref) {
   });
   return pipeline;
 });
+
+enum _NotifyKind { none, highConfidence, autoConfirmed }

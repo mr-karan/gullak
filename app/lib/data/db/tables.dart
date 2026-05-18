@@ -214,6 +214,26 @@ class SmsMessages extends Table {
   TextColumn get candidateStatus =>
       text().withDefault(const Constant('none'))();
   TextColumn get linkedTransactionId => text().nullable()();
+  // User-supplied note captured via the notification reply UI. High
+  // signal at SMS-time because the user still remembers the merchant
+  // and reason ("decathlon hiking shoes", "tea with priya"). Stored as
+  // a discrete column rather than buried in candidateJson so we can
+  // index by 'needs note' and apply LWW updates by [noteCapturedAt].
+  TextColumn get userNote => text().nullable()();
+  IntColumn get noteCapturedAt => integer().nullable()();
+  // Best-effort location at the moment of capture. Source: cached
+  // last-known position; we don't wake GPS in the background.
+  RealColumn get locationLat => real().nullable()();
+  RealColumn get locationLng => real().nullable()();
+  IntColumn get locationAccuracyM => integer().nullable()();
+  IntColumn get locationCapturedAt => integer().nullable()();
+  TextColumn get locationPlaceName => text().nullable()();
+  // Enrichment lifecycle: 'none' | 'pending' | 'enriched' | 'error'.
+  // Pending = note captured, awaiting server-side LLM enrichment.
+  TextColumn get enrichmentStatus =>
+      text().withDefault(const Constant('none'))();
+  TextColumn get enrichedCandidateJson => text().nullable()();
+  IntColumn get enrichedAt => integer().nullable()();
 }
 
 @DataClassName('AppKvRow')

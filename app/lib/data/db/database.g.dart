@@ -5983,6 +5983,117 @@ class $SmsMessagesTable extends SmsMessages
         type: DriftSqlType.string,
         requiredDuringInsert: false,
       );
+  static const VerificationMeta _userNoteMeta = const VerificationMeta(
+    'userNote',
+  );
+  @override
+  late final GeneratedColumn<String> userNote = GeneratedColumn<String>(
+    'user_note',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _noteCapturedAtMeta = const VerificationMeta(
+    'noteCapturedAt',
+  );
+  @override
+  late final GeneratedColumn<int> noteCapturedAt = GeneratedColumn<int>(
+    'note_captured_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _locationLatMeta = const VerificationMeta(
+    'locationLat',
+  );
+  @override
+  late final GeneratedColumn<double> locationLat = GeneratedColumn<double>(
+    'location_lat',
+    aliasedName,
+    true,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _locationLngMeta = const VerificationMeta(
+    'locationLng',
+  );
+  @override
+  late final GeneratedColumn<double> locationLng = GeneratedColumn<double>(
+    'location_lng',
+    aliasedName,
+    true,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _locationAccuracyMMeta = const VerificationMeta(
+    'locationAccuracyM',
+  );
+  @override
+  late final GeneratedColumn<int> locationAccuracyM = GeneratedColumn<int>(
+    'location_accuracy_m',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _locationCapturedAtMeta =
+      const VerificationMeta('locationCapturedAt');
+  @override
+  late final GeneratedColumn<int> locationCapturedAt = GeneratedColumn<int>(
+    'location_captured_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _locationPlaceNameMeta = const VerificationMeta(
+    'locationPlaceName',
+  );
+  @override
+  late final GeneratedColumn<String> locationPlaceName =
+      GeneratedColumn<String>(
+        'location_place_name',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _enrichmentStatusMeta = const VerificationMeta(
+    'enrichmentStatus',
+  );
+  @override
+  late final GeneratedColumn<String> enrichmentStatus = GeneratedColumn<String>(
+    'enrichment_status',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('none'),
+  );
+  static const VerificationMeta _enrichedCandidateJsonMeta =
+      const VerificationMeta('enrichedCandidateJson');
+  @override
+  late final GeneratedColumn<String> enrichedCandidateJson =
+      GeneratedColumn<String>(
+        'enriched_candidate_json',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _enrichedAtMeta = const VerificationMeta(
+    'enrichedAt',
+  );
+  @override
+  late final GeneratedColumn<int> enrichedAt = GeneratedColumn<int>(
+    'enriched_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -5995,6 +6106,16 @@ class $SmsMessagesTable extends SmsMessages
     candidateJson,
     candidateStatus,
     linkedTransactionId,
+    userNote,
+    noteCapturedAt,
+    locationLat,
+    locationLng,
+    locationAccuracyM,
+    locationCapturedAt,
+    locationPlaceName,
+    enrichmentStatus,
+    enrichedCandidateJson,
+    enrichedAt,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -6086,6 +6207,90 @@ class $SmsMessagesTable extends SmsMessages
         ),
       );
     }
+    if (data.containsKey('user_note')) {
+      context.handle(
+        _userNoteMeta,
+        userNote.isAcceptableOrUnknown(data['user_note']!, _userNoteMeta),
+      );
+    }
+    if (data.containsKey('note_captured_at')) {
+      context.handle(
+        _noteCapturedAtMeta,
+        noteCapturedAt.isAcceptableOrUnknown(
+          data['note_captured_at']!,
+          _noteCapturedAtMeta,
+        ),
+      );
+    }
+    if (data.containsKey('location_lat')) {
+      context.handle(
+        _locationLatMeta,
+        locationLat.isAcceptableOrUnknown(
+          data['location_lat']!,
+          _locationLatMeta,
+        ),
+      );
+    }
+    if (data.containsKey('location_lng')) {
+      context.handle(
+        _locationLngMeta,
+        locationLng.isAcceptableOrUnknown(
+          data['location_lng']!,
+          _locationLngMeta,
+        ),
+      );
+    }
+    if (data.containsKey('location_accuracy_m')) {
+      context.handle(
+        _locationAccuracyMMeta,
+        locationAccuracyM.isAcceptableOrUnknown(
+          data['location_accuracy_m']!,
+          _locationAccuracyMMeta,
+        ),
+      );
+    }
+    if (data.containsKey('location_captured_at')) {
+      context.handle(
+        _locationCapturedAtMeta,
+        locationCapturedAt.isAcceptableOrUnknown(
+          data['location_captured_at']!,
+          _locationCapturedAtMeta,
+        ),
+      );
+    }
+    if (data.containsKey('location_place_name')) {
+      context.handle(
+        _locationPlaceNameMeta,
+        locationPlaceName.isAcceptableOrUnknown(
+          data['location_place_name']!,
+          _locationPlaceNameMeta,
+        ),
+      );
+    }
+    if (data.containsKey('enrichment_status')) {
+      context.handle(
+        _enrichmentStatusMeta,
+        enrichmentStatus.isAcceptableOrUnknown(
+          data['enrichment_status']!,
+          _enrichmentStatusMeta,
+        ),
+      );
+    }
+    if (data.containsKey('enriched_candidate_json')) {
+      context.handle(
+        _enrichedCandidateJsonMeta,
+        enrichedCandidateJson.isAcceptableOrUnknown(
+          data['enriched_candidate_json']!,
+          _enrichedCandidateJsonMeta,
+        ),
+      );
+    }
+    if (data.containsKey('enriched_at')) {
+      context.handle(
+        _enrichedAtMeta,
+        enrichedAt.isAcceptableOrUnknown(data['enriched_at']!, _enrichedAtMeta),
+      );
+    }
     return context;
   }
 
@@ -6135,6 +6340,46 @@ class $SmsMessagesTable extends SmsMessages
         DriftSqlType.string,
         data['${effectivePrefix}linked_transaction_id'],
       ),
+      userNote: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}user_note'],
+      ),
+      noteCapturedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}note_captured_at'],
+      ),
+      locationLat: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}location_lat'],
+      ),
+      locationLng: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}location_lng'],
+      ),
+      locationAccuracyM: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}location_accuracy_m'],
+      ),
+      locationCapturedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}location_captured_at'],
+      ),
+      locationPlaceName: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}location_place_name'],
+      ),
+      enrichmentStatus: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}enrichment_status'],
+      )!,
+      enrichedCandidateJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}enriched_candidate_json'],
+      ),
+      enrichedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}enriched_at'],
+      ),
     );
   }
 
@@ -6155,6 +6400,16 @@ class SmsRow extends DataClass implements Insertable<SmsRow> {
   final String? candidateJson;
   final String candidateStatus;
   final String? linkedTransactionId;
+  final String? userNote;
+  final int? noteCapturedAt;
+  final double? locationLat;
+  final double? locationLng;
+  final int? locationAccuracyM;
+  final int? locationCapturedAt;
+  final String? locationPlaceName;
+  final String enrichmentStatus;
+  final String? enrichedCandidateJson;
+  final int? enrichedAt;
   const SmsRow({
     required this.id,
     this.androidId,
@@ -6166,6 +6421,16 @@ class SmsRow extends DataClass implements Insertable<SmsRow> {
     this.candidateJson,
     required this.candidateStatus,
     this.linkedTransactionId,
+    this.userNote,
+    this.noteCapturedAt,
+    this.locationLat,
+    this.locationLng,
+    this.locationAccuracyM,
+    this.locationCapturedAt,
+    this.locationPlaceName,
+    required this.enrichmentStatus,
+    this.enrichedCandidateJson,
+    this.enrichedAt,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -6187,6 +6452,34 @@ class SmsRow extends DataClass implements Insertable<SmsRow> {
     map['candidate_status'] = Variable<String>(candidateStatus);
     if (!nullToAbsent || linkedTransactionId != null) {
       map['linked_transaction_id'] = Variable<String>(linkedTransactionId);
+    }
+    if (!nullToAbsent || userNote != null) {
+      map['user_note'] = Variable<String>(userNote);
+    }
+    if (!nullToAbsent || noteCapturedAt != null) {
+      map['note_captured_at'] = Variable<int>(noteCapturedAt);
+    }
+    if (!nullToAbsent || locationLat != null) {
+      map['location_lat'] = Variable<double>(locationLat);
+    }
+    if (!nullToAbsent || locationLng != null) {
+      map['location_lng'] = Variable<double>(locationLng);
+    }
+    if (!nullToAbsent || locationAccuracyM != null) {
+      map['location_accuracy_m'] = Variable<int>(locationAccuracyM);
+    }
+    if (!nullToAbsent || locationCapturedAt != null) {
+      map['location_captured_at'] = Variable<int>(locationCapturedAt);
+    }
+    if (!nullToAbsent || locationPlaceName != null) {
+      map['location_place_name'] = Variable<String>(locationPlaceName);
+    }
+    map['enrichment_status'] = Variable<String>(enrichmentStatus);
+    if (!nullToAbsent || enrichedCandidateJson != null) {
+      map['enriched_candidate_json'] = Variable<String>(enrichedCandidateJson);
+    }
+    if (!nullToAbsent || enrichedAt != null) {
+      map['enriched_at'] = Variable<int>(enrichedAt);
     }
     return map;
   }
@@ -6211,6 +6504,34 @@ class SmsRow extends DataClass implements Insertable<SmsRow> {
       linkedTransactionId: linkedTransactionId == null && nullToAbsent
           ? const Value.absent()
           : Value(linkedTransactionId),
+      userNote: userNote == null && nullToAbsent
+          ? const Value.absent()
+          : Value(userNote),
+      noteCapturedAt: noteCapturedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(noteCapturedAt),
+      locationLat: locationLat == null && nullToAbsent
+          ? const Value.absent()
+          : Value(locationLat),
+      locationLng: locationLng == null && nullToAbsent
+          ? const Value.absent()
+          : Value(locationLng),
+      locationAccuracyM: locationAccuracyM == null && nullToAbsent
+          ? const Value.absent()
+          : Value(locationAccuracyM),
+      locationCapturedAt: locationCapturedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(locationCapturedAt),
+      locationPlaceName: locationPlaceName == null && nullToAbsent
+          ? const Value.absent()
+          : Value(locationPlaceName),
+      enrichmentStatus: Value(enrichmentStatus),
+      enrichedCandidateJson: enrichedCandidateJson == null && nullToAbsent
+          ? const Value.absent()
+          : Value(enrichedCandidateJson),
+      enrichedAt: enrichedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(enrichedAt),
     );
   }
 
@@ -6232,6 +6553,20 @@ class SmsRow extends DataClass implements Insertable<SmsRow> {
       linkedTransactionId: serializer.fromJson<String?>(
         json['linkedTransactionId'],
       ),
+      userNote: serializer.fromJson<String?>(json['userNote']),
+      noteCapturedAt: serializer.fromJson<int?>(json['noteCapturedAt']),
+      locationLat: serializer.fromJson<double?>(json['locationLat']),
+      locationLng: serializer.fromJson<double?>(json['locationLng']),
+      locationAccuracyM: serializer.fromJson<int?>(json['locationAccuracyM']),
+      locationCapturedAt: serializer.fromJson<int?>(json['locationCapturedAt']),
+      locationPlaceName: serializer.fromJson<String?>(
+        json['locationPlaceName'],
+      ),
+      enrichmentStatus: serializer.fromJson<String>(json['enrichmentStatus']),
+      enrichedCandidateJson: serializer.fromJson<String?>(
+        json['enrichedCandidateJson'],
+      ),
+      enrichedAt: serializer.fromJson<int?>(json['enrichedAt']),
     );
   }
   @override
@@ -6248,6 +6583,18 @@ class SmsRow extends DataClass implements Insertable<SmsRow> {
       'candidateJson': serializer.toJson<String?>(candidateJson),
       'candidateStatus': serializer.toJson<String>(candidateStatus),
       'linkedTransactionId': serializer.toJson<String?>(linkedTransactionId),
+      'userNote': serializer.toJson<String?>(userNote),
+      'noteCapturedAt': serializer.toJson<int?>(noteCapturedAt),
+      'locationLat': serializer.toJson<double?>(locationLat),
+      'locationLng': serializer.toJson<double?>(locationLng),
+      'locationAccuracyM': serializer.toJson<int?>(locationAccuracyM),
+      'locationCapturedAt': serializer.toJson<int?>(locationCapturedAt),
+      'locationPlaceName': serializer.toJson<String?>(locationPlaceName),
+      'enrichmentStatus': serializer.toJson<String>(enrichmentStatus),
+      'enrichedCandidateJson': serializer.toJson<String?>(
+        enrichedCandidateJson,
+      ),
+      'enrichedAt': serializer.toJson<int?>(enrichedAt),
     };
   }
 
@@ -6262,6 +6609,16 @@ class SmsRow extends DataClass implements Insertable<SmsRow> {
     Value<String?> candidateJson = const Value.absent(),
     String? candidateStatus,
     Value<String?> linkedTransactionId = const Value.absent(),
+    Value<String?> userNote = const Value.absent(),
+    Value<int?> noteCapturedAt = const Value.absent(),
+    Value<double?> locationLat = const Value.absent(),
+    Value<double?> locationLng = const Value.absent(),
+    Value<int?> locationAccuracyM = const Value.absent(),
+    Value<int?> locationCapturedAt = const Value.absent(),
+    Value<String?> locationPlaceName = const Value.absent(),
+    String? enrichmentStatus,
+    Value<String?> enrichedCandidateJson = const Value.absent(),
+    Value<int?> enrichedAt = const Value.absent(),
   }) => SmsRow(
     id: id ?? this.id,
     androidId: androidId.present ? androidId.value : this.androidId,
@@ -6279,6 +6636,26 @@ class SmsRow extends DataClass implements Insertable<SmsRow> {
     linkedTransactionId: linkedTransactionId.present
         ? linkedTransactionId.value
         : this.linkedTransactionId,
+    userNote: userNote.present ? userNote.value : this.userNote,
+    noteCapturedAt: noteCapturedAt.present
+        ? noteCapturedAt.value
+        : this.noteCapturedAt,
+    locationLat: locationLat.present ? locationLat.value : this.locationLat,
+    locationLng: locationLng.present ? locationLng.value : this.locationLng,
+    locationAccuracyM: locationAccuracyM.present
+        ? locationAccuracyM.value
+        : this.locationAccuracyM,
+    locationCapturedAt: locationCapturedAt.present
+        ? locationCapturedAt.value
+        : this.locationCapturedAt,
+    locationPlaceName: locationPlaceName.present
+        ? locationPlaceName.value
+        : this.locationPlaceName,
+    enrichmentStatus: enrichmentStatus ?? this.enrichmentStatus,
+    enrichedCandidateJson: enrichedCandidateJson.present
+        ? enrichedCandidateJson.value
+        : this.enrichedCandidateJson,
+    enrichedAt: enrichedAt.present ? enrichedAt.value : this.enrichedAt,
   );
   SmsRow copyWithCompanion(SmsMessagesCompanion data) {
     return SmsRow(
@@ -6304,6 +6681,34 @@ class SmsRow extends DataClass implements Insertable<SmsRow> {
       linkedTransactionId: data.linkedTransactionId.present
           ? data.linkedTransactionId.value
           : this.linkedTransactionId,
+      userNote: data.userNote.present ? data.userNote.value : this.userNote,
+      noteCapturedAt: data.noteCapturedAt.present
+          ? data.noteCapturedAt.value
+          : this.noteCapturedAt,
+      locationLat: data.locationLat.present
+          ? data.locationLat.value
+          : this.locationLat,
+      locationLng: data.locationLng.present
+          ? data.locationLng.value
+          : this.locationLng,
+      locationAccuracyM: data.locationAccuracyM.present
+          ? data.locationAccuracyM.value
+          : this.locationAccuracyM,
+      locationCapturedAt: data.locationCapturedAt.present
+          ? data.locationCapturedAt.value
+          : this.locationCapturedAt,
+      locationPlaceName: data.locationPlaceName.present
+          ? data.locationPlaceName.value
+          : this.locationPlaceName,
+      enrichmentStatus: data.enrichmentStatus.present
+          ? data.enrichmentStatus.value
+          : this.enrichmentStatus,
+      enrichedCandidateJson: data.enrichedCandidateJson.present
+          ? data.enrichedCandidateJson.value
+          : this.enrichedCandidateJson,
+      enrichedAt: data.enrichedAt.present
+          ? data.enrichedAt.value
+          : this.enrichedAt,
     );
   }
 
@@ -6319,7 +6724,17 @@ class SmsRow extends DataClass implements Insertable<SmsRow> {
           ..write('parserVersion: $parserVersion, ')
           ..write('candidateJson: $candidateJson, ')
           ..write('candidateStatus: $candidateStatus, ')
-          ..write('linkedTransactionId: $linkedTransactionId')
+          ..write('linkedTransactionId: $linkedTransactionId, ')
+          ..write('userNote: $userNote, ')
+          ..write('noteCapturedAt: $noteCapturedAt, ')
+          ..write('locationLat: $locationLat, ')
+          ..write('locationLng: $locationLng, ')
+          ..write('locationAccuracyM: $locationAccuracyM, ')
+          ..write('locationCapturedAt: $locationCapturedAt, ')
+          ..write('locationPlaceName: $locationPlaceName, ')
+          ..write('enrichmentStatus: $enrichmentStatus, ')
+          ..write('enrichedCandidateJson: $enrichedCandidateJson, ')
+          ..write('enrichedAt: $enrichedAt')
           ..write(')'))
         .toString();
   }
@@ -6336,6 +6751,16 @@ class SmsRow extends DataClass implements Insertable<SmsRow> {
     candidateJson,
     candidateStatus,
     linkedTransactionId,
+    userNote,
+    noteCapturedAt,
+    locationLat,
+    locationLng,
+    locationAccuracyM,
+    locationCapturedAt,
+    locationPlaceName,
+    enrichmentStatus,
+    enrichedCandidateJson,
+    enrichedAt,
   );
   @override
   bool operator ==(Object other) =>
@@ -6350,7 +6775,17 @@ class SmsRow extends DataClass implements Insertable<SmsRow> {
           other.parserVersion == this.parserVersion &&
           other.candidateJson == this.candidateJson &&
           other.candidateStatus == this.candidateStatus &&
-          other.linkedTransactionId == this.linkedTransactionId);
+          other.linkedTransactionId == this.linkedTransactionId &&
+          other.userNote == this.userNote &&
+          other.noteCapturedAt == this.noteCapturedAt &&
+          other.locationLat == this.locationLat &&
+          other.locationLng == this.locationLng &&
+          other.locationAccuracyM == this.locationAccuracyM &&
+          other.locationCapturedAt == this.locationCapturedAt &&
+          other.locationPlaceName == this.locationPlaceName &&
+          other.enrichmentStatus == this.enrichmentStatus &&
+          other.enrichedCandidateJson == this.enrichedCandidateJson &&
+          other.enrichedAt == this.enrichedAt);
 }
 
 class SmsMessagesCompanion extends UpdateCompanion<SmsRow> {
@@ -6364,6 +6799,16 @@ class SmsMessagesCompanion extends UpdateCompanion<SmsRow> {
   final Value<String?> candidateJson;
   final Value<String> candidateStatus;
   final Value<String?> linkedTransactionId;
+  final Value<String?> userNote;
+  final Value<int?> noteCapturedAt;
+  final Value<double?> locationLat;
+  final Value<double?> locationLng;
+  final Value<int?> locationAccuracyM;
+  final Value<int?> locationCapturedAt;
+  final Value<String?> locationPlaceName;
+  final Value<String> enrichmentStatus;
+  final Value<String?> enrichedCandidateJson;
+  final Value<int?> enrichedAt;
   const SmsMessagesCompanion({
     this.id = const Value.absent(),
     this.androidId = const Value.absent(),
@@ -6375,6 +6820,16 @@ class SmsMessagesCompanion extends UpdateCompanion<SmsRow> {
     this.candidateJson = const Value.absent(),
     this.candidateStatus = const Value.absent(),
     this.linkedTransactionId = const Value.absent(),
+    this.userNote = const Value.absent(),
+    this.noteCapturedAt = const Value.absent(),
+    this.locationLat = const Value.absent(),
+    this.locationLng = const Value.absent(),
+    this.locationAccuracyM = const Value.absent(),
+    this.locationCapturedAt = const Value.absent(),
+    this.locationPlaceName = const Value.absent(),
+    this.enrichmentStatus = const Value.absent(),
+    this.enrichedCandidateJson = const Value.absent(),
+    this.enrichedAt = const Value.absent(),
   });
   SmsMessagesCompanion.insert({
     this.id = const Value.absent(),
@@ -6387,6 +6842,16 @@ class SmsMessagesCompanion extends UpdateCompanion<SmsRow> {
     this.candidateJson = const Value.absent(),
     this.candidateStatus = const Value.absent(),
     this.linkedTransactionId = const Value.absent(),
+    this.userNote = const Value.absent(),
+    this.noteCapturedAt = const Value.absent(),
+    this.locationLat = const Value.absent(),
+    this.locationLng = const Value.absent(),
+    this.locationAccuracyM = const Value.absent(),
+    this.locationCapturedAt = const Value.absent(),
+    this.locationPlaceName = const Value.absent(),
+    this.enrichmentStatus = const Value.absent(),
+    this.enrichedCandidateJson = const Value.absent(),
+    this.enrichedAt = const Value.absent(),
   }) : address = Value(address),
        body = Value(body),
        receivedAt = Value(receivedAt);
@@ -6401,6 +6866,16 @@ class SmsMessagesCompanion extends UpdateCompanion<SmsRow> {
     Expression<String>? candidateJson,
     Expression<String>? candidateStatus,
     Expression<String>? linkedTransactionId,
+    Expression<String>? userNote,
+    Expression<int>? noteCapturedAt,
+    Expression<double>? locationLat,
+    Expression<double>? locationLng,
+    Expression<int>? locationAccuracyM,
+    Expression<int>? locationCapturedAt,
+    Expression<String>? locationPlaceName,
+    Expression<String>? enrichmentStatus,
+    Expression<String>? enrichedCandidateJson,
+    Expression<int>? enrichedAt,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -6414,6 +6889,18 @@ class SmsMessagesCompanion extends UpdateCompanion<SmsRow> {
       if (candidateStatus != null) 'candidate_status': candidateStatus,
       if (linkedTransactionId != null)
         'linked_transaction_id': linkedTransactionId,
+      if (userNote != null) 'user_note': userNote,
+      if (noteCapturedAt != null) 'note_captured_at': noteCapturedAt,
+      if (locationLat != null) 'location_lat': locationLat,
+      if (locationLng != null) 'location_lng': locationLng,
+      if (locationAccuracyM != null) 'location_accuracy_m': locationAccuracyM,
+      if (locationCapturedAt != null)
+        'location_captured_at': locationCapturedAt,
+      if (locationPlaceName != null) 'location_place_name': locationPlaceName,
+      if (enrichmentStatus != null) 'enrichment_status': enrichmentStatus,
+      if (enrichedCandidateJson != null)
+        'enriched_candidate_json': enrichedCandidateJson,
+      if (enrichedAt != null) 'enriched_at': enrichedAt,
     });
   }
 
@@ -6428,6 +6915,16 @@ class SmsMessagesCompanion extends UpdateCompanion<SmsRow> {
     Value<String?>? candidateJson,
     Value<String>? candidateStatus,
     Value<String?>? linkedTransactionId,
+    Value<String?>? userNote,
+    Value<int?>? noteCapturedAt,
+    Value<double?>? locationLat,
+    Value<double?>? locationLng,
+    Value<int?>? locationAccuracyM,
+    Value<int?>? locationCapturedAt,
+    Value<String?>? locationPlaceName,
+    Value<String>? enrichmentStatus,
+    Value<String?>? enrichedCandidateJson,
+    Value<int?>? enrichedAt,
   }) {
     return SmsMessagesCompanion(
       id: id ?? this.id,
@@ -6440,6 +6937,17 @@ class SmsMessagesCompanion extends UpdateCompanion<SmsRow> {
       candidateJson: candidateJson ?? this.candidateJson,
       candidateStatus: candidateStatus ?? this.candidateStatus,
       linkedTransactionId: linkedTransactionId ?? this.linkedTransactionId,
+      userNote: userNote ?? this.userNote,
+      noteCapturedAt: noteCapturedAt ?? this.noteCapturedAt,
+      locationLat: locationLat ?? this.locationLat,
+      locationLng: locationLng ?? this.locationLng,
+      locationAccuracyM: locationAccuracyM ?? this.locationAccuracyM,
+      locationCapturedAt: locationCapturedAt ?? this.locationCapturedAt,
+      locationPlaceName: locationPlaceName ?? this.locationPlaceName,
+      enrichmentStatus: enrichmentStatus ?? this.enrichmentStatus,
+      enrichedCandidateJson:
+          enrichedCandidateJson ?? this.enrichedCandidateJson,
+      enrichedAt: enrichedAt ?? this.enrichedAt,
     );
   }
 
@@ -6478,6 +6986,38 @@ class SmsMessagesCompanion extends UpdateCompanion<SmsRow> {
         linkedTransactionId.value,
       );
     }
+    if (userNote.present) {
+      map['user_note'] = Variable<String>(userNote.value);
+    }
+    if (noteCapturedAt.present) {
+      map['note_captured_at'] = Variable<int>(noteCapturedAt.value);
+    }
+    if (locationLat.present) {
+      map['location_lat'] = Variable<double>(locationLat.value);
+    }
+    if (locationLng.present) {
+      map['location_lng'] = Variable<double>(locationLng.value);
+    }
+    if (locationAccuracyM.present) {
+      map['location_accuracy_m'] = Variable<int>(locationAccuracyM.value);
+    }
+    if (locationCapturedAt.present) {
+      map['location_captured_at'] = Variable<int>(locationCapturedAt.value);
+    }
+    if (locationPlaceName.present) {
+      map['location_place_name'] = Variable<String>(locationPlaceName.value);
+    }
+    if (enrichmentStatus.present) {
+      map['enrichment_status'] = Variable<String>(enrichmentStatus.value);
+    }
+    if (enrichedCandidateJson.present) {
+      map['enriched_candidate_json'] = Variable<String>(
+        enrichedCandidateJson.value,
+      );
+    }
+    if (enrichedAt.present) {
+      map['enriched_at'] = Variable<int>(enrichedAt.value);
+    }
     return map;
   }
 
@@ -6493,7 +7033,17 @@ class SmsMessagesCompanion extends UpdateCompanion<SmsRow> {
           ..write('parserVersion: $parserVersion, ')
           ..write('candidateJson: $candidateJson, ')
           ..write('candidateStatus: $candidateStatus, ')
-          ..write('linkedTransactionId: $linkedTransactionId')
+          ..write('linkedTransactionId: $linkedTransactionId, ')
+          ..write('userNote: $userNote, ')
+          ..write('noteCapturedAt: $noteCapturedAt, ')
+          ..write('locationLat: $locationLat, ')
+          ..write('locationLng: $locationLng, ')
+          ..write('locationAccuracyM: $locationAccuracyM, ')
+          ..write('locationCapturedAt: $locationCapturedAt, ')
+          ..write('locationPlaceName: $locationPlaceName, ')
+          ..write('enrichmentStatus: $enrichmentStatus, ')
+          ..write('enrichedCandidateJson: $enrichedCandidateJson, ')
+          ..write('enrichedAt: $enrichedAt')
           ..write(')'))
         .toString();
   }
@@ -11015,6 +11565,16 @@ typedef $$SmsMessagesTableCreateCompanionBuilder =
       Value<String?> candidateJson,
       Value<String> candidateStatus,
       Value<String?> linkedTransactionId,
+      Value<String?> userNote,
+      Value<int?> noteCapturedAt,
+      Value<double?> locationLat,
+      Value<double?> locationLng,
+      Value<int?> locationAccuracyM,
+      Value<int?> locationCapturedAt,
+      Value<String?> locationPlaceName,
+      Value<String> enrichmentStatus,
+      Value<String?> enrichedCandidateJson,
+      Value<int?> enrichedAt,
     });
 typedef $$SmsMessagesTableUpdateCompanionBuilder =
     SmsMessagesCompanion Function({
@@ -11028,6 +11588,16 @@ typedef $$SmsMessagesTableUpdateCompanionBuilder =
       Value<String?> candidateJson,
       Value<String> candidateStatus,
       Value<String?> linkedTransactionId,
+      Value<String?> userNote,
+      Value<int?> noteCapturedAt,
+      Value<double?> locationLat,
+      Value<double?> locationLng,
+      Value<int?> locationAccuracyM,
+      Value<int?> locationCapturedAt,
+      Value<String?> locationPlaceName,
+      Value<String> enrichmentStatus,
+      Value<String?> enrichedCandidateJson,
+      Value<int?> enrichedAt,
     });
 
 class $$SmsMessagesTableFilterComposer
@@ -11086,6 +11656,56 @@ class $$SmsMessagesTableFilterComposer
 
   ColumnFilters<String> get linkedTransactionId => $composableBuilder(
     column: $table.linkedTransactionId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get userNote => $composableBuilder(
+    column: $table.userNote,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get noteCapturedAt => $composableBuilder(
+    column: $table.noteCapturedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get locationLat => $composableBuilder(
+    column: $table.locationLat,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get locationLng => $composableBuilder(
+    column: $table.locationLng,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get locationAccuracyM => $composableBuilder(
+    column: $table.locationAccuracyM,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get locationCapturedAt => $composableBuilder(
+    column: $table.locationCapturedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get locationPlaceName => $composableBuilder(
+    column: $table.locationPlaceName,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get enrichmentStatus => $composableBuilder(
+    column: $table.enrichmentStatus,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get enrichedCandidateJson => $composableBuilder(
+    column: $table.enrichedCandidateJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get enrichedAt => $composableBuilder(
+    column: $table.enrichedAt,
     builder: (column) => ColumnFilters(column),
   );
 }
@@ -11148,6 +11768,56 @@ class $$SmsMessagesTableOrderingComposer
     column: $table.linkedTransactionId,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<String> get userNote => $composableBuilder(
+    column: $table.userNote,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get noteCapturedAt => $composableBuilder(
+    column: $table.noteCapturedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get locationLat => $composableBuilder(
+    column: $table.locationLat,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get locationLng => $composableBuilder(
+    column: $table.locationLng,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get locationAccuracyM => $composableBuilder(
+    column: $table.locationAccuracyM,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get locationCapturedAt => $composableBuilder(
+    column: $table.locationCapturedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get locationPlaceName => $composableBuilder(
+    column: $table.locationPlaceName,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get enrichmentStatus => $composableBuilder(
+    column: $table.enrichmentStatus,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get enrichedCandidateJson => $composableBuilder(
+    column: $table.enrichedCandidateJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get enrichedAt => $composableBuilder(
+    column: $table.enrichedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$SmsMessagesTableAnnotationComposer
@@ -11200,6 +11870,54 @@ class $$SmsMessagesTableAnnotationComposer
     column: $table.linkedTransactionId,
     builder: (column) => column,
   );
+
+  GeneratedColumn<String> get userNote =>
+      $composableBuilder(column: $table.userNote, builder: (column) => column);
+
+  GeneratedColumn<int> get noteCapturedAt => $composableBuilder(
+    column: $table.noteCapturedAt,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<double> get locationLat => $composableBuilder(
+    column: $table.locationLat,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<double> get locationLng => $composableBuilder(
+    column: $table.locationLng,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get locationAccuracyM => $composableBuilder(
+    column: $table.locationAccuracyM,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get locationCapturedAt => $composableBuilder(
+    column: $table.locationCapturedAt,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get locationPlaceName => $composableBuilder(
+    column: $table.locationPlaceName,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get enrichmentStatus => $composableBuilder(
+    column: $table.enrichmentStatus,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get enrichedCandidateJson => $composableBuilder(
+    column: $table.enrichedCandidateJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get enrichedAt => $composableBuilder(
+    column: $table.enrichedAt,
+    builder: (column) => column,
+  );
 }
 
 class $$SmsMessagesTableTableManager
@@ -11240,6 +11958,16 @@ class $$SmsMessagesTableTableManager
                 Value<String?> candidateJson = const Value.absent(),
                 Value<String> candidateStatus = const Value.absent(),
                 Value<String?> linkedTransactionId = const Value.absent(),
+                Value<String?> userNote = const Value.absent(),
+                Value<int?> noteCapturedAt = const Value.absent(),
+                Value<double?> locationLat = const Value.absent(),
+                Value<double?> locationLng = const Value.absent(),
+                Value<int?> locationAccuracyM = const Value.absent(),
+                Value<int?> locationCapturedAt = const Value.absent(),
+                Value<String?> locationPlaceName = const Value.absent(),
+                Value<String> enrichmentStatus = const Value.absent(),
+                Value<String?> enrichedCandidateJson = const Value.absent(),
+                Value<int?> enrichedAt = const Value.absent(),
               }) => SmsMessagesCompanion(
                 id: id,
                 androidId: androidId,
@@ -11251,6 +11979,16 @@ class $$SmsMessagesTableTableManager
                 candidateJson: candidateJson,
                 candidateStatus: candidateStatus,
                 linkedTransactionId: linkedTransactionId,
+                userNote: userNote,
+                noteCapturedAt: noteCapturedAt,
+                locationLat: locationLat,
+                locationLng: locationLng,
+                locationAccuracyM: locationAccuracyM,
+                locationCapturedAt: locationCapturedAt,
+                locationPlaceName: locationPlaceName,
+                enrichmentStatus: enrichmentStatus,
+                enrichedCandidateJson: enrichedCandidateJson,
+                enrichedAt: enrichedAt,
               ),
           createCompanionCallback:
               ({
@@ -11264,6 +12002,16 @@ class $$SmsMessagesTableTableManager
                 Value<String?> candidateJson = const Value.absent(),
                 Value<String> candidateStatus = const Value.absent(),
                 Value<String?> linkedTransactionId = const Value.absent(),
+                Value<String?> userNote = const Value.absent(),
+                Value<int?> noteCapturedAt = const Value.absent(),
+                Value<double?> locationLat = const Value.absent(),
+                Value<double?> locationLng = const Value.absent(),
+                Value<int?> locationAccuracyM = const Value.absent(),
+                Value<int?> locationCapturedAt = const Value.absent(),
+                Value<String?> locationPlaceName = const Value.absent(),
+                Value<String> enrichmentStatus = const Value.absent(),
+                Value<String?> enrichedCandidateJson = const Value.absent(),
+                Value<int?> enrichedAt = const Value.absent(),
               }) => SmsMessagesCompanion.insert(
                 id: id,
                 androidId: androidId,
@@ -11275,6 +12023,16 @@ class $$SmsMessagesTableTableManager
                 candidateJson: candidateJson,
                 candidateStatus: candidateStatus,
                 linkedTransactionId: linkedTransactionId,
+                userNote: userNote,
+                noteCapturedAt: noteCapturedAt,
+                locationLat: locationLat,
+                locationLng: locationLng,
+                locationAccuracyM: locationAccuracyM,
+                locationCapturedAt: locationCapturedAt,
+                locationPlaceName: locationPlaceName,
+                enrichmentStatus: enrichmentStatus,
+                enrichedCandidateJson: enrichedCandidateJson,
+                enrichedAt: enrichedAt,
               ),
           withReferenceMapper: (p0) => p0
               .map((e) => (e.readTable(table), BaseReferences(db, table, e)))

@@ -60,6 +60,13 @@
                 <action android:name="android.provider.Telephony.SMS_RECEIVED"/>
             </intent-filter>
         </receiver>
+        <!-- Delivery target for the "Add note" RemoteInput on the SMS
+             candidate notification. flutter_local_notifications bundles
+             this receiver; it deserialises the inline reply and dispatches
+             our background notification handler. -->
+        <receiver
+            android:name="com.dexterous.flutterlocalnotifications.ActionBroadcastReceiver"
+            android:exported="false" />
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and

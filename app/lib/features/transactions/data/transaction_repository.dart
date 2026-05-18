@@ -23,6 +23,7 @@ class TransactionListItem {
     this.payeeName,
     this.categoryName,
     this.categoryIcon,
+    this.categoryColor,
     this.transferAccountName,
     this.notes,
     this.origin,
@@ -40,6 +41,7 @@ class TransactionListItem {
   final String? payeeName;
   final String? categoryName;
   final String? categoryIcon;
+  final int? categoryColor;
   final String? transferAccountName;
   final String? notes;
   final String? origin;
@@ -647,6 +649,7 @@ class TransactionRepository {
       payeeName: p?.name ?? t.payeeName,
       categoryName: c?.name,
       categoryIcon: c?.icon,
+      categoryColor: c?.color,
       transferAccountName: tA?.name,
       notes: t.notes,
       origin: t.origin,
@@ -705,6 +708,10 @@ class TransactionRepository {
 
   static Value<T?> _v<T>(Object? v) =>
       identical(v, _Sentinel.value) ? const Value.absent() : Value(v as T?);
+
+  /// Sentinel for partial-update arguments: pass this to leave a field
+  /// unchanged; pass `null` to set it to null; pass a value to set it.
+  static const Object unset = _Sentinel.value;
 }
 
 enum _Sentinel { value }

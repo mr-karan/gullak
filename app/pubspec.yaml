@@ -55,9 +55,17 @@ dependencies:
   # UX
   flutter_slidable: ^4.0.0
   flutter_local_notifications: ^21.0.0
+  phosphor_flutter: ^2.1.0
+  # Runs the SMS enrichment HTTP call after a notification reply when
+  # the app process may be dead — receivers can't block on network.
+  workmanager: ^0.9.0+3
   geolocator: ^14.0.2
   url_launcher: ^6.3.2
   webview_flutter: ^4.13.1
+
+  # Typography — editorial style: Fraunces for headings, Inter for UI,
+  # JetBrains Mono for amounts. Loaded at build time via google_fonts.
+  google_fonts: ^6.2.1
 
 dev_dependencies:
   flutter_test:

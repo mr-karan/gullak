@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import type { AppConfig } from "../config.ts";
 import { chatJson } from "../llm/client.ts";
+import { staticCategoryForPayee } from "./payee_rules.ts";
 
 const SYSTEM = `You convert a one-line expense note into a structured
 expense draft. Output ONLY a single JSON object — no prose.
@@ -107,7 +108,14 @@ export async function parseQuickEntry(
   const parsed = llmResponse.parse(raw);
   const amount = Math.trunc(parsed.amount_minor ?? 0);
   const date = isYmd(parsed.date) ? parsed.date! : null;
-  const categoryHint = trimOrNull(parsed.category_hint) ?? categoryForPayee(parsed.payee, req.payees, req.categories);
+  // Order: LLM hint > user's learned payee→category mapping > static
+  // built-in rules ("uber" → Transport, "zomato" → Eating Out, etc.).
+  // The static fallback only sticks when the user's category list
+  // contains a name that matches — matchByName below is responsible.
+  const categoryHint =
+    trimOrNull(parsed.category_hint) ??
+    categoryForPayee(parsed.payee, req.payees, req.categories) ??
+    staticCategoryForPayee(parsed.payee);
   return {
     amountCents: amount,
     isIncome: parsed.is_income === true,

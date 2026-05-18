@@ -337,8 +337,12 @@ class _CategoryParentBlock extends StatelessWidget {
             children: [
               ListTile(
                 contentPadding: const EdgeInsets.only(left: 4, right: 4),
-                leading: _EmojiBadge(
-                  categoryEmoji(node.parent.icon, node.parent.name),
+                leading: _CategoryBadge(
+                  iconData: categoryIconData(node.parent.name),
+                  accent: categoryAccentColor(
+                    node.parent.color,
+                    node.parent.name,
+                  ),
                 ),
                 title: Text(
                   node.parent.name,
@@ -407,9 +411,10 @@ class _SubcategoryRow extends StatelessWidget {
       child: ListTile(
         dense: true,
         contentPadding: EdgeInsets.zero,
-        leading: Text(
-          categoryEmoji(row.icon, row.name),
-          style: const TextStyle(fontSize: 18),
+        leading: Icon(
+          categoryIconData(row.name),
+          size: 20,
+          color: categoryAccentColor(row.color, row.name),
         ),
         title: Text(row.name),
         onTap: onEdit,
@@ -423,17 +428,17 @@ class _SubcategoryRow extends StatelessWidget {
   }
 }
 
-class _EmojiBadge extends StatelessWidget {
-  const _EmojiBadge(this.emoji);
-  final String emoji;
+class _CategoryBadge extends StatelessWidget {
+  const _CategoryBadge({required this.iconData, required this.accent});
+  final IconData iconData;
+  final Color accent;
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
     return CircleAvatar(
-      backgroundColor: cs.secondaryContainer,
-      foregroundColor: cs.onSecondaryContainer,
-      child: Text(emoji, style: const TextStyle(fontSize: 18)),
+      backgroundColor: accent.withValues(alpha: 0.18),
+      foregroundColor: accent,
+      child: Icon(iconData, size: 20, color: accent),
     );
   }
 }

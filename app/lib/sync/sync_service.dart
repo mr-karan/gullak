@@ -111,6 +111,15 @@ class SyncService {
     try {
       final pushed = await pushPending();
       final pulled = await pullChanges();
+      // WhatsApp-derived inbox candidates land on the server queue;
+      // import them into the local SMS Inbox so the existing review
+      // surface handles them. Failures here don't block the sync —
+      // we'll retry on the next round.
+      try {
+        await pullWhatsappCandidates();
+      } catch (e) {
+        log.w('whatsapp candidate import failed: $e');
+      }
       await _prefs.setSyncLastAt(DateTime.now().millisecondsSinceEpoch);
       await pruneSynced();
       return (pushed: pushed, pulled: pulled, error: null);
@@ -118,6 +127,113 @@ class SyncService {
       log.w('sync failed: $e');
       return (pushed: 0, pulled: 0, error: networkErrorMessage(e));
     }
+  }
+
+  /// Fetch any pending WhatsApp-derived expense candidates from the
+  /// server, insert one local `sms_messages` row each (the Inbox UI
+  /// already reads from there), and ack the server so it stops sending
+  /// them. Idempotent — repeated calls won't double-insert because each
+  /// row carries `androidId = 'whatsapp:<server id>'` and the same id
+  /// is checked before insert. The phone is the source of truth for
+  /// the review lifecycle (accepted / dismissed / duplicate); the
+  /// server only owns delivery.
+  Future<int> pullWhatsappCandidates() async {
+    final baseUrl = (await _secure.readSyncBaseUrl())?.trim();
+    final apiKey = (await _secure.readSyncApiKey())?.trim();
+    if (baseUrl == null || baseUrl.isEmpty) return 0;
+    final r = await _dio.get<dynamic>(
+      _join(baseUrl, '/v1/whatsapp/inbox-candidates'),
+      queryParameters: {'limit': 100},
+      options: Options(
+        headers: {
+          if (apiKey != null && apiKey.isNotEmpty) 'x-api-key': apiKey,
+          'accept': 'application/json',
+          'connection': 'close',
+        },
+        connectTimeout: const Duration(seconds: 5),
+        receiveTimeout: const Duration(seconds: 15),
+      ),
+    );
+    final data = r.data;
+    if (data is! Map) return 0;
+    final items = data['items'];
+    if (items is! List || items.isEmpty) return 0;
+
+    final ackIds = <String>[];
+    for (final raw in items) {
+      if (raw is! Map<String, dynamic>) continue;
+      final id = raw['id'] as String?;
+      if (id == null || id.isEmpty) continue;
+      final androidId = 'whatsapp:$id';
+
+      // Idempotency: skip if we've already imported this exact row.
+      final existing =
+          await (_db.select(_db.smsMessages)
+                ..where((t) => t.androidId.equals(androidId))
+                ..limit(1))
+              .get();
+      if (existing.isNotEmpty) {
+        ackIds.add(id);
+        continue;
+      }
+
+      final body = (raw['body'] as String?)?.trim() ?? '';
+      if (body.isEmpty) {
+        ackIds.add(id);
+        continue;
+      }
+      final receivedAt =
+          (raw['receivedAt'] as num?)?.toInt() ??
+          DateTime.now().millisecondsSinceEpoch;
+      final candidateJson = raw['candidateJson'] as String?;
+      final pushName = (raw['pushName'] as String?)?.trim();
+      final sourceUser = (raw['sourceUser'] as String?)?.trim();
+      final address = (pushName != null && pushName.isNotEmpty)
+          ? 'WhatsApp · $pushName'
+          : (sourceUser != null && sourceUser.isNotEmpty)
+          ? 'WhatsApp · $sourceUser'
+          : 'WhatsApp';
+
+      await _db
+          .into(_db.smsMessages)
+          .insert(
+            SmsMessagesCompanion.insert(
+              androidId: Value(androidId),
+              address: address,
+              body: body,
+              receivedAt: receivedAt,
+              classifiedAs: const Value('transactional'),
+              parserVersion: const Value(1),
+              candidateJson: Value(candidateJson),
+              candidateStatus: const Value('inbox'),
+            ),
+          );
+      ackIds.add(id);
+    }
+
+    if (ackIds.isNotEmpty) {
+      try {
+        await _dio.post<dynamic>(
+          _join(baseUrl, '/v1/whatsapp/inbox-candidates/ack'),
+          data: {'ids': ackIds},
+          options: Options(
+            headers: {
+              if (apiKey != null && apiKey.isNotEmpty) 'x-api-key': apiKey,
+              'content-type': 'application/json',
+              'accept': 'application/json',
+              'connection': 'close',
+            },
+            connectTimeout: const Duration(seconds: 5),
+            receiveTimeout: const Duration(seconds: 10),
+          ),
+        );
+      } catch (e) {
+        // If the ack fails we'll get the same rows again next sync —
+        // the local idempotency check will skip the re-imports.
+        log.w('whatsapp candidate ack failed: $e');
+      }
+    }
+    return ackIds.length;
   }
 
   Future<int> pullChanges() async {

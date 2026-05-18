@@ -289,9 +289,14 @@ class SmsRepository {
     String? accountHint;
     String? categoryId;
     String? categoryHint;
-    if (r.candidateJson != null && r.candidateJson!.isNotEmpty) {
+    // Prefer the enriched candidate (user-note-enhanced) over the raw
+    // SMS parse. Falls back to the original when enrichment hasn't run.
+    final source = (r.enrichedCandidateJson?.isNotEmpty ?? false)
+        ? r.enrichedCandidateJson
+        : r.candidateJson;
+    if (source != null && source.isNotEmpty) {
       try {
-        final j = jsonDecode(r.candidateJson!) as Map<String, dynamic>;
+        final j = jsonDecode(source) as Map<String, dynamic>;
         payeeText = j['payee'] as String?;
         amount = (j['amount_cents'] as num?)?.toInt();
         isIncome = j['is_income'] == true;
@@ -496,10 +501,16 @@ class SmsRepository {
     final row = await (_db.select(
       _db.smsMessages,
     )..where((t) => t.id.equals(rowId))).getSingleOrNull();
-    if (row == null || row.candidateJson == null) return null;
+    if (row == null) return null;
+    // Confirm flow uses the same enrichment-preferred fallback so the
+    // user's note-derived merchant/category seeds the Quick Entry sheet.
+    final source = (row.enrichedCandidateJson?.isNotEmpty ?? false)
+        ? row.enrichedCandidateJson
+        : row.candidateJson;
+    if (source == null) return null;
     Map<String, dynamic> j;
     try {
-      j = jsonDecode(row.candidateJson!) as Map<String, dynamic>;
+      j = jsonDecode(source) as Map<String, dynamic>;
     } catch (_) {
       return null;
     }

@@ -10,7 +10,7 @@ void main() {
           id: '1',
           address: 'AD-ICICIT-S',
           body:
-              'ICICI Bank Credit Card XX6001 Statement is sent to ka********95@gmail.com. Total of Rs 1,91,014.31 or minimum due.',
+              'ICICI Bank Credit Card XX9999 Statement is sent to ex********pl@example.com. Total of Rs 1,000.00 or minimum due.',
           receivedAt: DateTime(2026, 5, 6),
         ),
       ),

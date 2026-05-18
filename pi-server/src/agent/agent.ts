@@ -1,5 +1,11 @@
-import { and, desc, eq, gt } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
+import { z } from "zod";
 
+import {
+  candidateJson,
+  parseWhatsappExpenses,
+  type WhatsappCandidate,
+} from "../ai/whatsapp_parser.ts";
 import type { AppConfig } from "../config.ts";
 import type { Db } from "../db/index.ts";
 import {
@@ -7,94 +13,132 @@ import {
   agentTurns,
   categories,
   payees,
-  transactions,
+  whatsappInboxCandidates,
 } from "../db/schema.ts";
-import { newId, nowMs, recordChange } from "../repos/changelog.ts";
+import { chatJson } from "../llm/client.ts";
+import { newId, nowMs } from "../repos/changelog.ts";
+import { runAskTool, type AskToolCall, type AskToolName } from "./ask_tools.ts";
+
+/// Conversational entry point used by /v1/messages and the WhatsApp
+/// webhook. Splits into two paths:
+///   - log: parse N expenses, write each to `whatsapp_inbox_candidates`
+///     for the phone to pull and review. No transaction is auto-booked.
+///   - ask: pick one pre-canned aggregation tool and answer with concrete
+///     numbers from the server DB.
+///
+/// Auto-write of transactions and edit/delete via WhatsApp are gone — both
+/// were dangerous now that the phone owns the review UX. Edit/delete copy
+/// nudges the user back into the app.
 
 export interface AgentRequest {
   text: string;
   threadId?: string;
   source?: string;
   sourceUser?: string;
+  pushName?: string;
+  chatId?: string;
+  messageId?: string;
+  receivedAtMs?: number;
 }
 
 export interface AgentResponse {
   threadId: string;
   reply: string;
-  action?:
-    | {
-        kind: "record_expense" | "record_income" | "edit_last" | "delete_last";
-        transactionId: string;
-        amountCents?: number;
-        date?: string;
-      }
-    | { kind: "list_recent"; transactions: { id: string; payee: string | null; amountCents: number; date: string }[] }
-    | { kind: "noop" };
+  queued?: number; // count of inbox candidates queued (log path)
+  tool?: AskToolName; // tool that answered (ask path)
 }
 
-type ActionKind =
-  | "record_expense"
-  | "record_income"
-  | "edit_last"
-  | "delete_last"
-  | "list_recent"
-  | "noop";
+const HISTORY_LIMIT = 6;
 
-interface AgentDecision {
-  reply: string;
-  action?: {
-    kind: ActionKind;
-    amountCents?: number;
-    payee?: string | null;
-    accountHint?: string | null;
-    categoryHint?: string | null;
-    date?: string | null;
-    notes?: string | null;
-    limit?: number;
-  };
-}
+const classifierSchema = z.object({
+  mode: z.enum(["log", "ask", "edit_or_delete", "noop"]),
+  confidence: z.number().nullish(),
+});
 
-const SYSTEM = `You are Gullak, a personal expense-tracking assistant.
+const askToolSchema = z.object({
+  tool: z.enum([
+    "month_spend",
+    "category_spend",
+    "recent_transactions",
+    "budget_status",
+    "account_balances",
+  ]),
+  params: z
+    .object({
+      month: z.string().nullish(),
+      startDate: z.string().nullish(),
+      endDate: z.string().nullish(),
+      accountId: z.string().nullish(),
+      accountName: z.string().nullish(),
+      categoryId: z.string().nullish(),
+      categoryName: z.string().nullish(),
+      payee: z.string().nullish(),
+      limit: z.number().nullish(),
+    })
+    .nullish(),
+});
 
-You may run a tool by setting "action.kind" to one of:
-- "record_expense": user describes a spend (negative on account)
-- "record_income": user got money (positive on account)
-- "edit_last": amend the most recent transaction (only fields the
-  user asked you to change; omit the rest)
-- "delete_last": remove the most recent transaction
-- "list_recent": user is asking what they spent recently
-- "noop": small talk, clarification, or anything that isn't a clear
-  transaction. Put your message in "reply".
+const CLASSIFIER_SYSTEM = `You classify a personal-finance message into
+ONE of these modes:
 
-Output ONLY a single JSON object:
+- "log": the user is recording a spend, refund, salary, transfer, or
+  any other transaction. Multiple expenses in one message still count
+  as "log".
+- "ask": the user is asking a question about their finances — totals,
+  category spend, budget status, recent transactions, account balances.
+- "edit_or_delete": the user wants to change or remove a previously
+  logged transaction.
+- "noop": greetings, thanks, small talk, anything that isn't a clear
+  log/ask/edit.
+
+Output ONLY a single JSON object: {"mode": "<one of the above>", "confidence": 0.0–1.0}.
+No prose.`;
+
+const ASK_TOOL_SYSTEM = `You are picking ONE database tool to answer a
+finance question. Output ONLY a single JSON object:
 
 {
-  "reply": "<short natural reply, max 1 sentence>",
-  "action": {
-    "kind": "record_expense" | "record_income" | "edit_last" | "delete_last" | "list_recent" | "noop",
-    "amountCents": integer,
+  "tool": "month_spend" | "category_spend" | "recent_transactions" | "budget_status" | "account_balances",
+  "params": {
+    "month": "YYYY-MM"|null,
+    "startDate": "YYYY-MM-DD"|null,
+    "endDate": "YYYY-MM-DD"|null,
+    "accountId": string|null,
+    "accountName": string|null,
+    "categoryId": string|null,
+    "categoryName": string|null,
     "payee": string|null,
-    "accountHint": string|null,
-    "categoryHint": string|null,
-    "date": string|null (YYYY-MM-DD),
-    "notes": string|null,
-    "limit": integer (only for list_recent, default 5)
+    "limit": integer|null
   }
 }
 
-Rules:
-- Money is integer minor units. "450" with 2 minor digits → 45000.
-- Do NOT invent payees, accounts, or amounts. If the user is
-  ambiguous, ask in "reply" and use kind "noop".
-- "yes/yeah/sure" by itself confirms whatever you proposed last
-  turn. Re-emit the action you previously proposed.
-- "no/cancel" cancels — kind "noop" with a short ack.
-- The conversation history is provided so you can resolve "this",
-  "that", "the last one" relative to prior turns.
-- Reply must be short. "Logged ₹450 at Blinkit." or
-  "Which card — HDFC or Axis?"`;
+Tool guide:
+- month_spend: total spent + earned in a month. Use for "how much did
+  I spend this month", "spending in April", "income this month".
+- category_spend: total in a category over a range. Use for "how much
+  did I spend on groceries", "food spending this month", or general
+  category breakdowns when no specific category is named (returns top 5).
+- recent_transactions: most recent transactions (optionally filtered).
+  Use for "show last 5 expenses", "what were my recent groceries".
+- budget_status: how much budget is left in a category or all.
+  Use for "budget left for food", "how am I doing on budget".
+- account_balances: balance per account.
 
-const HISTORY_LIMIT = 10;
+Notes:
+- Today's date is supplied in <today>. If the user says "this month",
+  use today's YYYY-MM as the month.
+- Resolve category/account by name when the user names them — pass it
+  in categoryName or accountName.
+- limit defaults to 5 for recent_transactions; cap by 15.
+- Output ONLY the JSON. No prose.`;
+
+const REPLY_SYSTEM = `You write a SHORT, friendly WhatsApp reply
+combining the supplied facts. Plain text only — no JSON, no markdown
+tables, no code fences. Use the symbol ₹ for rupees. Keep it under 2
+short sentences unless the facts have a bulleted breakdown — then
+output the breakdown verbatim and one wrapping line.
+
+Output ONLY the reply text. No prose framing like "Here you go:".`;
 
 export async function handleMessage(
   db: Db,
@@ -103,297 +147,254 @@ export async function handleMessage(
 ): Promise<AgentResponse> {
   const text = request.text.trim();
   if (!text) {
-    return { threadId: request.threadId ?? "", reply: "Send me an expense and I'll log it." };
+    return {
+      threadId: request.threadId ?? "",
+      reply: "Send me an expense or ask a question — I can help with both.",
+    };
   }
-  const threadId = request.threadId ?? `${request.source ?? "http"}:${newId().slice(0, 8)}`;
+  const threadId =
+    request.threadId ??
+    `${request.source ?? "http"}:${newId().slice(0, 8)}`;
 
-  const accountList = db.select().from(accounts).all();
-  const categoryList = db.select().from(categories).all();
-  const payeeList = db.select().from(payees).all();
-  const history = db
-    .select()
+  appendTurn(db, threadId, "user", text);
+
+  try {
+    const mode = await classify(config, text);
+    if (mode === "log") {
+      return await handleLog(db, config, request, threadId, text);
+    }
+    if (mode === "ask") {
+      return await handleAsk(db, config, threadId, text);
+    }
+    if (mode === "edit_or_delete") {
+      const msg =
+        "Edits live in the Gullak app for now — open the transaction there and tweak it.";
+      appendTurn(db, threadId, "assistant", msg);
+      return { threadId, reply: msg };
+    }
+    // noop
+    const ack =
+      "Got it. Send an amount like \"480 groceries\" to log, or ask \"how much have I spent this month?\".";
+    appendTurn(db, threadId, "assistant", ack);
+    return { threadId, reply: ack };
+  } catch (err) {
+    const fallback =
+      "I didn't quite get that. Send the amount and what it was for, like \"480 groceries\".";
+    appendTurn(db, threadId, "assistant", fallback);
+    // Keep the original error visible in pi-server logs without leaking
+    // model internals back to the user.
+    // eslint-disable-next-line no-console
+    console.warn(
+      `agent failed: ${err instanceof Error ? err.message : String(err)}`,
+    );
+    return { threadId, reply: fallback };
+  }
+}
+
+async function classify(
+  config: AppConfig,
+  text: string,
+): Promise<"log" | "ask" | "edit_or_delete" | "noop"> {
+  // Cheap deterministic shortcuts before paying for a model call.
+  const lower = text.toLowerCase().trim();
+  if (/^(yes|yeah|sure|ok|nope|no|thanks|thank you|hi|hello|hey)\b/.test(lower)) {
+    return "noop";
+  }
+  if (
+    /(how much|how many|show|what.*spend|spent|balance|budget left|recent|last \d|this month|last month)/.test(
+      lower,
+    ) &&
+    !/^\d/.test(lower) // questions usually don't start with a digit
+  ) {
+    return "ask";
+  }
+  if (/^(\d|rs\.?|inr|₹|spent|paid|got|received|refund|salary)/.test(lower)) {
+    return "log";
+  }
+  if (/(edit|change|update|delete|remove|undo|cancel)/.test(lower)) {
+    return "edit_or_delete";
+  }
+  // Fall back to the model for the ambiguous middle.
+  try {
+    const raw = await chatJson<unknown>(config, {
+      system: CLASSIFIER_SYSTEM,
+      user: text,
+      temperature: 0,
+    });
+    return classifierSchema.parse(raw).mode;
+  } catch {
+    return "noop";
+  }
+}
+
+async function handleLog(
+  db: Db,
+  config: AppConfig,
+  request: AgentRequest,
+  threadId: string,
+  text: string,
+): Promise<AgentResponse> {
+  const accountList = db
+    .select({ id: accounts.id, name: accounts.name })
+    .from(accounts)
+    .where(eq(accounts.archived, false))
+    .all();
+  const categoryList = db
+    .select({ id: categories.id, name: categories.name })
+    .from(categories)
+    .where(eq(categories.hidden, false))
+    .all();
+
+  const items = await parseWhatsappExpenses(config, {
+    body: text,
+    receivedAt: request.receivedAtMs ?? Date.now(),
+    categories: categoryList,
+    accounts: accountList,
+  });
+
+  if (items.length === 0) {
+    const reply =
+      "I didn't catch an amount in that. Try \"480 groceries\" or \"2,800 home decor on hdfc\".";
+    appendTurn(db, threadId, "assistant", reply);
+    return { threadId, reply };
+  }
+
+  const at = nowMs();
+  const messageId = request.messageId ?? newId();
+  db.transaction((tx) => {
+    items.forEach((item, idx) => {
+      tx.insert(whatsappInboxCandidates)
+        .values({
+          id: newId(),
+          sourceUser: request.sourceUser ?? null,
+          pushName: request.pushName ?? null,
+          chatId: request.chatId ?? null,
+          messageId,
+          itemIndex: idx,
+          body: item.text,
+          receivedAt: request.receivedAtMs ?? at,
+          candidateJson: candidateJson(item),
+          status: "pending",
+          deliveredAt: null,
+          createdAt: at,
+        })
+        .run();
+    });
+  });
+
+  const reply = composeLogReply(items);
+  appendTurn(db, threadId, "assistant", reply);
+  return { threadId, reply, queued: items.length };
+}
+
+async function handleAsk(
+  db: Db,
+  config: AppConfig,
+  threadId: string,
+  text: string,
+): Promise<AgentResponse> {
+  const today = todayIso();
+  const history = recentHistory(db, threadId);
+  const categoryList = db.select({ id: categories.id, name: categories.name }).from(categories).all();
+  const accountList = db.select({ id: accounts.id, name: accounts.name }).from(accounts).all();
+  const toolUser = [
+    `<today>: ${today}`,
+    `<accounts>: ${accountList.map((a) => a.name).join(", ") || "(none)"}`,
+    `<categories>: ${categoryList.map((c) => c.name).join(", ") || "(none)"}`,
+    "",
+    `Question: ${text}`,
+  ].join("\n");
+
+  let toolCall: AskToolCall;
+  try {
+    const raw = await chatJson<unknown>(config, {
+      system: ASK_TOOL_SYSTEM,
+      user: toolUser,
+      history,
+      temperature: 0,
+    });
+    const parsed = askToolSchema.parse(raw);
+    toolCall = {
+      tool: parsed.tool,
+      params: parsed.params
+        ? {
+            month: toStr(parsed.params.month),
+            startDate: toStr(parsed.params.startDate),
+            endDate: toStr(parsed.params.endDate),
+            accountId: toStr(parsed.params.accountId),
+            accountName: toStr(parsed.params.accountName),
+            categoryId: toStr(parsed.params.categoryId),
+            categoryName: toStr(parsed.params.categoryName),
+            payee: toStr(parsed.params.payee),
+            limit: toNum(parsed.params.limit),
+          }
+        : undefined,
+    };
+  } catch {
+    const reply =
+      "I couldn't figure out which numbers you wanted. Try \"how much did I spend this month?\" or \"recent groceries\".";
+    appendTurn(db, threadId, "assistant", reply);
+    return { threadId, reply };
+  }
+
+  const result = runAskTool(db, toolCall);
+  // For tools that already produce a complete, formatted answer we send
+  // the facts as-is. We don't run a second LLM pass for the bulleted
+  // tools — keeps things fast and never re-introduces JSON leakage.
+  const formatted = result.formatted.trim();
+  const reply = sanitizeReply(formatted);
+  appendTurn(db, threadId, "assistant", reply);
+  return { threadId, reply, tool: toolCall.tool };
+}
+
+function composeLogReply(items: WhatsappCandidate[]): string {
+  if (items.length === 1) {
+    const it = items[0]!;
+    const what = it.payee ?? it.categoryHint ?? it.notes ?? "expense";
+    return `Got it — ${formatMoney(it.amountCents)} for ${what}. It's waiting in the Gullak Inbox for review.`;
+  }
+  const list = items
+    .map((it) => {
+      const what = it.payee ?? it.categoryHint ?? it.notes ?? "expense";
+      return `${formatMoney(it.amountCents)} ${what}`;
+    })
+    .join(", ");
+  return `Got ${items.length} expenses: ${list}. They're waiting in the Gullak Inbox for review.`;
+}
+
+/// Final defense before any string leaves the agent: strip control
+/// chars, refuse output that looks like leaked JSON, cap length, and
+/// substitute a clarification message instead. Invariant: LLM-derived
+/// strings only reach the user *through* this sanitizer.
+export function sanitizeReply(reply: string): string {
+  const fallback =
+    "I didn't quite get that. Send the amount and what it was for, like \"480 groceries\".";
+  if (!reply || typeof reply !== "string") return fallback;
+  const cleaned = reply
+    // eslint-disable-next-line no-control-regex
+    .replace(/[ --]/g, "")
+    .trim();
+  if (!cleaned) return fallback;
+  // Refuse outputs that look like raw JSON or model internals.
+  if (
+    /^[\[\{]/.test(cleaned) &&
+    /\b(action|amountCents|reply|kind)\b/.test(cleaned)
+  ) {
+    return fallback;
+  }
+  if (cleaned.length > 1500) return cleaned.slice(0, 1500).trimEnd() + "…";
+  return cleaned;
+}
+
+function recentHistory(db: Db, threadId: string) {
+  return db
+    .select({ role: agentTurns.role, content: agentTurns.content })
     .from(agentTurns)
     .where(eq(agentTurns.threadId, threadId))
     .orderBy(desc(agentTurns.id))
     .limit(HISTORY_LIMIT)
     .all()
     .reverse();
-
-  const lastTxn = lastTransactionFor(db, threadId);
-
-  const today = todayIso();
-  const userPrompt = [
-    `<today>: ${today}`,
-    `<accounts>: ${accountList.map((a) => a.name).join(", ") || "(none)"}`,
-    `<categories>: ${categoryList.map((c) => c.name).join(", ") || "(none)"}`,
-    `<payees>: ${payeeList.map((p) => p.name).slice(0, 80).join(", ")}`,
-    lastTxn
-      ? `<last_recorded>: id=${lastTxn.id} amount_cents=${lastTxn.amountCents} payee=${lastTxn.payeeName ?? "(unknown)"} date=${lastTxn.date}`
-      : `<last_recorded>: none`,
-    "",
-    `Message: ${text}`,
-  ].join("\n");
-
-  const decision = await askModel(config, SYSTEM, userPrompt, history);
-
-  const action = decision.action;
-  const reply = decision.reply || "Got it.";
-
-  // Persist the user turn first regardless of outcome.
-  appendTurn(db, threadId, "user", text);
-
-  if (!action || action.kind === "noop") {
-    appendTurn(db, threadId, "assistant", reply);
-    return { threadId, reply, action: { kind: "noop" } };
-  }
-
-  switch (action.kind) {
-    case "record_expense":
-    case "record_income":
-      return recordTransaction(db, threadId, request, action, reply, accountList, categoryList, payeeList);
-    case "edit_last":
-      return editLast(db, threadId, action, reply, accountList, categoryList, payeeList);
-    case "delete_last":
-      return deleteLast(db, threadId, reply);
-    case "list_recent":
-      return listRecent(db, threadId, action.limit ?? 5, reply);
-    default:
-      appendTurn(db, threadId, "assistant", reply);
-      return { threadId, reply, action: { kind: "noop" } };
-  }
-}
-
-function recordTransaction(
-  db: Db,
-  threadId: string,
-  request: AgentRequest,
-  action: NonNullable<AgentDecision["action"]>,
-  reply: string,
-  accountList: { id: string; name: string }[],
-  categoryList: { id: string; name: string }[],
-  payeeList: { id: string; name: string }[],
-): AgentResponse {
-  if (
-    typeof action.amountCents !== "number" ||
-    action.amountCents <= 0 ||
-    !Number.isFinite(action.amountCents)
-  ) {
-    appendTurn(db, threadId, "assistant", reply);
-    return { threadId, reply, action: { kind: "noop" } };
-  }
-  const accountId =
-    matchByName(action.accountHint, accountList, (a) => a.name, (a) => a.id) ??
-    accountList[0]?.id;
-  if (!accountId) {
-    const msg = "Add an account in Gullak first — I'll start logging once it's there.";
-    appendTurn(db, threadId, "assistant", msg);
-    return { threadId, reply: msg, action: { kind: "noop" } };
-  }
-  const categoryId = matchByName(
-    action.categoryHint,
-    categoryList,
-    (c) => c.name,
-    (c) => c.id,
-  );
-  const payeeId = action.payee ? upsertPayee(db, action.payee, payeeList) : null;
-
-  const isIncome = action.kind === "record_income";
-  const signed = isIncome
-    ? Math.abs(action.amountCents)
-    : -Math.abs(action.amountCents);
-  const date = isYmd(action.date) ? action.date! : todayIso();
-  const id = newId();
-  const at = nowMs();
-
-  const row = {
-    id,
-    accountId,
-    categoryId: categoryId ?? null,
-    payeeId,
-    payeeName: action.payee ?? null,
-    amountCents: signed,
-    date,
-    notes: action.notes ?? null,
-    cleared: false,
-    origin: request.source ?? "agent",
-    originRef: request.sourceUser ?? null,
-    transferAccountId: null,
-    transferGroupId: null,
-    parentId: null,
-    splitTotalCents: null,
-    createdAt: at,
-    updatedAt: at,
-  };
-
-  db.transaction((tx) => {
-    tx.insert(transactions).values(row).run();
-    recordChange(tx, {
-      resource: "transactions",
-      resourceId: id,
-      op: "upsert",
-      payload: row,
-    });
-    if (payeeId) bumpPayeeUseCount(tx, payeeId);
-  });
-
-  appendTurn(db, threadId, "assistant", reply, id);
-
-  return {
-    threadId,
-    reply,
-    action: {
-      kind: action.kind as "record_expense" | "record_income",
-      transactionId: id,
-      amountCents: signed,
-      date,
-    },
-  };
-}
-
-function editLast(
-  db: Db,
-  threadId: string,
-  action: NonNullable<AgentDecision["action"]>,
-  reply: string,
-  accountList: { id: string; name: string }[],
-  categoryList: { id: string; name: string }[],
-  payeeList: { id: string; name: string }[],
-): AgentResponse {
-  const target = lastTransactionFor(db, threadId);
-  if (!target) {
-    const msg = "Nothing to edit yet on this thread.";
-    appendTurn(db, threadId, "assistant", msg);
-    return { threadId, reply: msg, action: { kind: "noop" } };
-  }
-  const next: typeof target = { ...target, updatedAt: nowMs() };
-  if (typeof action.amountCents === "number" && action.amountCents > 0) {
-    const sign = next.amountCents < 0 ? -1 : 1;
-    next.amountCents = sign * Math.abs(action.amountCents);
-  }
-  if (action.payee != null) {
-    next.payeeName = action.payee;
-    next.payeeId = upsertPayee(db, action.payee, payeeList);
-  }
-  if (action.accountHint != null) {
-    const matched = matchByName(action.accountHint, accountList, (a) => a.name, (a) => a.id);
-    if (matched) next.accountId = matched;
-  }
-  if (action.categoryHint != null) {
-    next.categoryId = matchByName(
-      action.categoryHint,
-      categoryList,
-      (c) => c.name,
-      (c) => c.id,
-    );
-  }
-  if (isYmd(action.date)) next.date = action.date!;
-  if (action.notes != null) next.notes = action.notes;
-
-  db.transaction((tx) => {
-    tx.update(transactions).set(next).where(eq(transactions.id, target.id)).run();
-    recordChange(tx, {
-      resource: "transactions",
-      resourceId: target.id,
-      op: "upsert",
-      payload: next,
-    });
-  });
-
-  appendTurn(db, threadId, "assistant", reply, target.id);
-  return {
-    threadId,
-    reply,
-    action: {
-      kind: "edit_last",
-      transactionId: target.id,
-      amountCents: next.amountCents,
-      date: next.date,
-    },
-  };
-}
-
-function deleteLast(db: Db, threadId: string, reply: string): AgentResponse {
-  const target = lastTransactionFor(db, threadId);
-  if (!target) {
-    const msg = "Nothing to delete yet on this thread.";
-    appendTurn(db, threadId, "assistant", msg);
-    return { threadId, reply: msg, action: { kind: "noop" } };
-  }
-  db.transaction((tx) => {
-    tx.delete(transactions).where(eq(transactions.id, target.id)).run();
-    recordChange(tx, {
-      resource: "transactions",
-      resourceId: target.id,
-      op: "delete",
-    });
-  });
-  appendTurn(db, threadId, "assistant", reply);
-  return {
-    threadId,
-    reply,
-    action: { kind: "delete_last", transactionId: target.id },
-  };
-}
-
-function listRecent(
-  db: Db,
-  threadId: string,
-  limit: number,
-  reply: string,
-): AgentResponse {
-  const cap = Math.min(Math.max(limit, 1), 20);
-  const rows = db
-    .select({
-      id: transactions.id,
-      payeeName: transactions.payeeName,
-      amountCents: transactions.amountCents,
-      date: transactions.date,
-    })
-    .from(transactions)
-    .orderBy(desc(transactions.date), desc(transactions.createdAt))
-    .limit(cap)
-    .all();
-  appendTurn(db, threadId, "assistant", reply);
-  return {
-    threadId,
-    reply,
-    action: {
-      kind: "list_recent",
-      transactions: rows.map((r) => ({
-        id: r.id,
-        payee: r.payeeName,
-        amountCents: r.amountCents,
-        date: r.date,
-      })),
-    },
-  };
-}
-
-function lastTransactionFor(db: Db, threadId: string) {
-  // Prefer the most recent assistant turn that touched a transaction
-  // on this thread. Falls back to the global most-recent if none.
-  const ourLast = db
-    .select()
-    .from(agentTurns)
-    .where(and(eq(agentTurns.threadId, threadId), gt(agentTurns.id, 0)))
-    .orderBy(desc(agentTurns.id))
-    .limit(20)
-    .all()
-    .find((t) => t.role === "assistant" && t.transactionId);
-  if (ourLast?.transactionId) {
-    const row = db
-      .select()
-      .from(transactions)
-      .where(eq(transactions.id, ourLast.transactionId))
-      .get();
-    if (row) return row;
-  }
-  return db
-    .select()
-    .from(transactions)
-    .orderBy(desc(transactions.createdAt))
-    .limit(1)
-    .get();
 }
 
 function appendTurn(
@@ -401,166 +402,21 @@ function appendTurn(
   threadId: string,
   role: "user" | "assistant",
   content: string,
-  transactionId?: string,
 ) {
   db.insert(agentTurns)
-    .values({
-      threadId,
-      role,
-      content,
-      transactionId: transactionId ?? null,
-    })
+    .values({ threadId, role, content, transactionId: null })
     .run();
 }
 
-async function askModel(
-  config: AppConfig,
-  system: string,
-  user: string,
-  history: { role: string; content: string }[],
-): Promise<AgentDecision> {
-  const url = `${stripTrailingSlash(config.modelBaseUrl)}/chat/completions`;
-  const messages: { role: string; content: string }[] = [
-    { role: "system", content: system },
-    ...history.map((h) => ({ role: h.role, content: h.content })),
-    { role: "user", content: user },
-  ];
-  const r = await fetch(url, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      authorization: `Bearer ${config.modelApiKey}`,
-      accept: "application/json",
-    },
-    body: JSON.stringify({
-      model: config.modelId,
-      temperature: 0.1,
-      response_format: { type: "json_object" },
-      messages,
-    }),
-  });
-  if (!r.ok) {
-    const body = await r.text();
-    throw new Error(`LLM ${r.status}: ${body.slice(0, 200)}`);
-  }
-  const json = (await r.json()) as {
-    choices?: { message?: { content?: string } }[];
-  };
-  const raw = json.choices?.[0]?.message?.content ?? "";
-  return parseDecision(raw);
+function toStr(v: unknown): string | undefined {
+  if (typeof v !== "string") return undefined;
+  const t = v.trim();
+  return t.length === 0 ? undefined : t;
 }
 
-function parseDecision(raw: string): AgentDecision {
-  const text = raw.trim();
-  const start = text.indexOf("{");
-  const end = text.lastIndexOf("}");
-  if (start < 0 || end <= start) {
-    return { reply: text || "I couldn't parse that." };
-  }
-  try {
-    const parsed = JSON.parse(text.slice(start, end + 1)) as AgentDecision;
-    return parsed;
-  } catch {
-    return { reply: text };
-  }
-}
-
-function matchByName<T>(
-  hint: string | null | undefined,
-  rows: T[],
-  nameOf: (row: T) => string,
-  idOf: (row: T) => string,
-): string | null {
-  if (!hint || rows.length === 0) return null;
-  const h = hint.trim().toLowerCase();
-  if (!h) return null;
-  for (const row of rows) {
-    if (nameOf(row).toLowerCase() === h) return idOf(row);
-  }
-  for (const row of rows) {
-    const n = nameOf(row).toLowerCase();
-    if (n.includes(h) || h.includes(n)) return idOf(row);
-  }
-  let best: T | null = null;
-  let bestDist = 3;
-  for (const row of rows) {
-    const dist = levenshtein(h, nameOf(row).toLowerCase());
-    if (dist < bestDist) {
-      best = row;
-      bestDist = dist;
-    }
-  }
-  return best ? idOf(best) : null;
-}
-
-function upsertPayee(
-  db: Db,
-  name: string,
-  existing: { id: string; name: string }[],
-): string {
-  const lower = name.trim().toLowerCase();
-  const found = existing.find((p) => p.name.toLowerCase() === lower);
-  if (found) return found.id;
-  const id = newId();
-  const at = nowMs();
-  db.transaction((tx) => {
-    const row = { id, name: name.trim(), useCount: 0, updatedAt: at };
-    tx.insert(payees).values(row).run();
-    recordChange(tx, {
-      resource: "payees",
-      resourceId: id,
-      op: "upsert",
-      payload: row,
-    });
-  });
-  return id;
-}
-
-function bumpPayeeUseCount(
-  tx: Parameters<Parameters<Db["transaction"]>[0]>[0],
-  payeeId: string,
-) {
-  const existing = tx.select().from(payees).where(eq(payees.id, payeeId)).get();
-  if (!existing) return;
-  const next = {
-    ...existing,
-    useCount: existing.useCount + 1,
-    updatedAt: nowMs(),
-  };
-  tx.update(payees).set(next).where(eq(payees.id, payeeId)).run();
-  recordChange(tx, {
-    resource: "payees",
-    resourceId: payeeId,
-    op: "upsert",
-    payload: next,
-  });
-}
-
-function levenshtein(a: string, b: string): number {
-  if (a === b) return 0;
-  if (!a.length) return b.length;
-  if (!b.length) return a.length;
-  const v0 = new Array<number>(b.length + 1);
-  const v1 = new Array<number>(b.length + 1);
-  for (let i = 0; i <= b.length; i++) v0[i] = i;
-  for (let i = 0; i < a.length; i++) {
-    v1[0] = i + 1;
-    for (let j = 0; j < b.length; j++) {
-      const cost = a.charCodeAt(i) === b.charCodeAt(j) ? 0 : 1;
-      v1[j + 1] = Math.min(
-        (v1[j] ?? 0) + 1,
-        (v0[j + 1] ?? 0) + 1,
-        (v0[j] ?? 0) + cost,
-      );
-    }
-    for (let j = 0; j <= b.length; j++) v0[j] = v1[j] ?? 0;
-  }
-  return v0[b.length] ?? 0;
-}
-
-function isYmd(s: string | null | undefined): boolean {
-  if (!s) return false;
-  return /^\d{4}-\d{2}-\d{2}$/.test(s);
+function toNum(v: unknown): number | undefined {
+  if (typeof v !== "number" || !Number.isFinite(v)) return undefined;
+  return v;
 }
 
 function todayIso(): string {
@@ -571,6 +427,17 @@ function todayIso(): string {
   return `${y}-${m}-${day}`;
 }
 
-function stripTrailingSlash(s: string): string {
-  return s.endsWith("/") ? s.slice(0, -1) : s;
+function formatMoney(minorCents: number): string {
+  const abs = Math.abs(minorCents);
+  const whole = Math.floor(abs / 100);
+  const frac = abs % 100;
+  const formatted = whole.toLocaleString("en-IN");
+  return frac === 0 ? `₹${formatted}` : `₹${formatted}.${String(frac).padStart(2, "0")}`;
 }
+
+// Re-export shapes used by routes that previously consumed AgentResponse.
+export type { Db };
+
+// Silence unused-import warnings — payees may be reintroduced once we
+// wire payee-resolution shortcuts in the log branch.
+void payees;

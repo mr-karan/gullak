@@ -16,8 +16,10 @@ import 'features/entry/quick_entry.dart';
 import 'features/entry/share_intake.dart';
 import 'router/router.dart';
 import 'state/providers.dart';
+import 'data/sms/sms_enrichment_worker.dart';
 import 'sync/sync_health_monitor.dart';
 import 'sync/sync_scheduler.dart';
+import 'package:workmanager/workmanager.dart';
 import 'ui/theme.dart';
 
 const String _buildSha = String.fromEnvironment('GULLAK_BUILD_SHA');
@@ -50,6 +52,11 @@ Future<void> main() async {
   final db = AppDatabase();
   final prefs = await Prefs.load();
   await NotificationService.instance.init();
+  // WorkManager dispatcher needs to be initialised every cold start so
+  // background-enqueued enrichment jobs (from notification replies the
+  // user typed while the app was dead) can fire on the next launch and
+  // on their own schedule.
+  await Workmanager().initialize(smsEnrichmentDispatcher);
 
   runApp(
     ProviderScope(
@@ -90,9 +97,13 @@ class _GullakAppState extends ConsumerState<GullakApp> {
       onPause: () => ref.read(syncHealthMonitorProvider).stop(),
     );
     // Initial arm on launch — AppLifecycleListener.onResume only fires on
-    // subsequent resumes, not on first start.
+    // subsequent resumes (background→foreground), not on first start.
+    // We have to manually pull server changes here too, otherwise a fresh
+    // open shows stale local data when the server has new mutations from
+    // another device or a server-side edit.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
+      ref.read(syncSchedulerProvider).runNow();
       ref.read(syncHealthMonitorProvider).start();
     });
     // If the user already enabled SMS in a previous session, the

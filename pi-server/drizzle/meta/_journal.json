@@ -57,6 +57,13 @@
       "when": 1778156730065,
       "tag": "0007_certain_nuke",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1778473453972,
+      "tag": "0008_solid_tusk",
+      "breakpoints": true
     }
   ]
 }

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../theme.dart';
+
 class SectionHeader extends StatelessWidget {
   const SectionHeader(this.text, {this.trailing, super.key});
 
@@ -8,19 +10,12 @@ class SectionHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 20, 16, 8),
+      padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),
       child: Row(
         children: [
           Expanded(
-            child: Text(
-              text.toUpperCase(),
-              style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                color: cs.onSurfaceVariant,
-                letterSpacing: 1.2,
-              ),
-            ),
+            child: Text(text.toUpperCase(), style: eyebrowStyle(context)),
           ),
           ?trailing,
         ],

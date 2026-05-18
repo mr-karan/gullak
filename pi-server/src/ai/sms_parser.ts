@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import type { AppConfig } from "../config.ts";
 import { chatJson } from "../llm/client.ts";
+import { staticCategoryForPayee } from "./payee_rules.ts";
 
 const SYSTEM = `You parse a single SMS into structured expense data.
 Output ONLY a single JSON object.
@@ -287,26 +288,17 @@ function inferCategoryHint(
   rawPayee: unknown,
   categories: { id: string; name: string }[] | undefined,
 ): string | null {
-  if (typeof rawPayee !== "string") return null;
-  const payee = rawPayee.trim().toLowerCase();
-  if (!payee) return null;
-  const rules: [RegExp, string[]][] = [
-    [/(blinkit|bigbasket|zepto|dmart|grocer|supermarket)/, ["groceries", "grocery"]],
-    [/(zomato|swiggy|restaurant|cafe|coffee|pizza|burger|food)/, ["eating out", "food"]],
-    [/(uber|ola|rapido|metro|fuel|petrol|diesel|parking|toll)/, ["travel", "transport"]],
-    [/(amazon|flipkart|myntra|nykaa|shopping|paytm)/, ["shopping"]],
-    [/(netflix|spotify|prime|hotstar|bookmyshow|movie)/, ["entertainment"]],
-    [/(salary|interest|dividend)/, ["salary", "income"]],
-  ];
+  // Delegates to the shared static rules table. Returns the raw rule
+  // name ("Eating Out") only when the user has a matching category in
+  // their list — otherwise null so the inbox row shows uncategorised.
+  const ruleHint = staticCategoryForPayee(rawPayee);
+  if (!ruleHint) return null;
   const names = (categories ?? []).map((c) => c.name);
-  for (const [re, wanted] of rules) {
-    if (!re.test(payee)) continue;
-    for (const w of wanted) {
-      const match = names.find((n) => n.toLowerCase() === w || n.toLowerCase().includes(w));
-      if (match) return match;
-    }
-  }
-  return null;
+  const lowerHint = ruleHint.toLowerCase();
+  const match = names.find(
+    (n) => n.toLowerCase() === lowerHint || n.toLowerCase().includes(lowerHint),
+  );
+  return match ?? null;
 }
 
 function matchByName(
