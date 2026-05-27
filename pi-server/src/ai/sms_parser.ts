@@ -2,13 +2,33 @@ import { z } from "zod";
 
 import type { AppConfig } from "../config.ts";
 import { chatJson } from "../llm/client.ts";
-import { staticCategoryForPayee } from "./payee_rules.ts";
 
-const SYSTEM = `You parse a single SMS into structured expense data.
-Output ONLY a single JSON object.
+/// SMS → structured expense parser.
+///
+/// LLM-only. The previous deterministic regex path was deleted after it
+/// silently corrupted payee names whenever an issuer used a date/footer
+/// format the regex didn't anticipate (HDFC card SMS in particular). The
+/// failure mode there was unrecoverable garbage in the financial dataset.
+///
+/// Trade-off: every parse is now an LLM call. At ~100 transactional SMS/
+/// month the cost and latency are immaterial. The Inbox preview still
+/// runs this per-row at SMS arrival, and Confirm All uses the cached
+/// candidate written at that time — so the model is not on the user-
+/// facing confirm path.
+///
+/// Validation: we still don't trust the model blindly. The output runs
+/// through `validateCandidate()` which rejects obvious leakage (bank
+/// disclaimer footers, time suffixes, leading underscores from card SMS
+/// formats). On rejection we retry the call once with a corrective hint
+/// before giving up.
 
-The SMS may come from a bank, card issuer, payment processor
-(Stripe/Razorpay), or a merchant SMS gateway.
+const SYSTEM = `You parse a single Indian bank/card/UPI SMS into structured expense data.
+Output ONLY a single JSON object — no prose, no markdown fence.
+
+The SMS may come from a bank, card issuer, payment processor (Stripe/Razorpay),
+or a merchant SMS gateway. The body often contains a bank disclaimer footer
+("Not You? To Block...", "Call 1800...", "SMS BLOCK CC XXXX to ..."). NEVER
+include footer text in the payee.
 
 Schema:
 {
@@ -19,38 +39,62 @@ Schema:
   "payee": string|null,
   "account_hint": string|null,
   "category_hint": string|null,
-  "date": string|null,
+  "date": "YYYY-MM-DD"|null,
   "bank_ref": string|null,
   "confidence": number
 }
 
-Rules:
-- is_transaction=false ONLY when the SMS is purely an OTP, marketing, a
-  balance/limit reminder with no spend, a declined-transaction
-  notification, or a statement reminder. All other fields can be null/0
-  in that case.
-- A real spend or credit always wins. If the SMS contains "Spent",
-  "Debited", "Credited", "Paid", "Received", "Withdrawn", "Sent",
-  "Refunded", or a similar verb attached to an amount, treat it as
-  is_transaction=true even when the message also includes an "Avl Limit",
-  "Bal", "Available Balance", or a "Not you? SMS BLOCK" footer. Those
-  ancillary lines describe the same spend; do not let them downgrade
-  the message to a non-transaction.
-- amount_cents is integer minor units. Reject negative amounts;
-  use is_income=true for credits, false for debits.
-- Direction is literal from the SMS: credited/received/deposited/refund/cashback/salary
-  means is_income=true; debited/spent/paid/sent/withdrawn/charged/purchase
-  means is_income=false. Do not mark credits as expenses.
-- payee: extract the merchant name only, not the bank.
-- category_hint: choose one of the supplied categories when it clearly fits.
-  Use prior payee-category mappings when present. Otherwise choose a supplied
-  category when the SMS/merchant makes it unambiguous. Return null when unsure;
-  the app will show it as Unknown/uncategorised.
-- account_hint: include the bank name AND last-4 of the card if
-  present, e.g. "HDFC Card xx1234".
-- confidence: 0.9+ when transactional and unambiguous; 0.7 when
-  one field had to be guessed; <=0.5 when fields are unclear.
-- Output ONLY the JSON object. No prose.`;
+Direction rules:
+- "credited", "received", "deposited", "refund", "cashback", "salary",
+  "interest paid/credited" → is_income=true.
+- "debited", "spent", "paid", "sent", "withdrawn", "charged", "purchase",
+  "used at" → is_income=false.
+- amount_cents is positive integer minor units. Direction is carried in
+  is_income; never negate amount_cents.
+
+is_transaction:
+- false ONLY for pure OTPs, marketing, balance/limit reminders with no spend,
+  declined-transaction notifications, or statement reminders.
+- true otherwise. A real spend or credit always wins even when the SMS also
+  contains an "Avl Limit", "Bal", "Available Balance", or a "Not You? SMS
+  BLOCK" footer — those describe the same transaction, do not downgrade it.
+
+Payee extraction — the part the regex parser kept getting wrong:
+- Extract the MERCHANT name only. Never include the bank name, the card last-4,
+  any timestamp, or any disclaimer footer.
+- Output payee in Title Case. Examples: "Taco Bell", "Apple Services", "Blinkit",
+  "Keya Spring Electricity", "Goibibo".
+- Strip:
+    - leading underscores (HDFC card SMS prepends "_" like "_TACO BELL..")
+    - trailing punctuation (".", "..", ",")
+    - the time-suffix some banks attach to the merchant ("On 2026-05-24:19:24:04")
+    - any "Not You", "SMS BLOCK", "Call 1800", "Block+Reissue", "To Block",
+      "/SMS BLOCK", or similar bank disclaimer tail
+- If the merchant cannot be identified, return payee=null. Better null than
+  garbage.
+- Examples (body → payee):
+    "Spent Rs.352 On HDFC Bank Card 4904 At _TACO BELL.. On 2026-05-24:19:24:04.Not You? To Block+Reissue..."
+      → "Taco Bell"
+    "INR 4299.00 spent on HDFC Bank Card 4904 at billdeskpg.appleservices@hdfcbank on 2026-05-26..."
+      → "Apple Services"
+    "Sent Rs.146.00 from Kotak Bank AC X9876 to friend@example on 06-05-26.UPI Ref ..."
+      → "friend@example"
+    "Rs 2030 reversed/refunded by PPSL TRANSPO on 26-05-26"
+      → "Paytm Transport"
+
+category_hint:
+- Choose from supplied <categories> when it clearly fits.
+- Prefer the prior-mapping in <known_payees> when the merchant matches there.
+- Otherwise pick a category from the supplied list when the merchant is
+  unambiguous (e.g. a known QSR brand → "Eating Out").
+- Return null when unsure — the app shows it as Uncategorised, which is better
+  than a confident wrong guess.
+
+account_hint: bank name + last-4 if present, e.g. "HDFC Card x4904".
+date: YYYY-MM-DD. If the SMS has only a time or no date at all, return null.
+bank_ref: UPI Ref / Reference No / RRN style identifier when present.
+confidence: 0.9+ when unambiguous; 0.7 when one field had to be guessed; <=0.5
+  when fields are unclear.`;
 
 const llmResponse = z.object({
   is_transaction: z.boolean().optional(),
@@ -92,163 +136,122 @@ export interface SmsParseRequest {
   payees?: { id: string; name: string; categoryId?: string | null }[];
 }
 
+const PARSER_VERSION = 4;
+
 export async function parseSms(
   config: AppConfig,
   req: SmsParseRequest,
 ): Promise<SmsParseResult> {
-  const deterministic = parseDeterministicBankSms(req);
-  if (deterministic) return deterministic;
+  const first = await callModel(config, req, null);
+  const firstIssue = first ? validateCandidate(first.payee) : null;
+  if (!firstIssue || !first) {
+    return first ? finalize(first, req) : { isTransaction: false, candidate: null };
+  }
+  // One retry with a corrective hint when payee leakage is detected.
+  const retry = await callModel(config, req, firstIssue);
+  if (!retry) return { isTransaction: false, candidate: null };
+  const retryIssue = validateCandidate(retry.payee);
+  if (retryIssue) {
+    // Second pass still leaked — give up on the merchant string but keep
+    // the rest of the fields. Better an uncategorised txn than a wrong one.
+    retry.payee = null;
+  }
+  return finalize(retry, req);
+}
 
+interface RawCandidate {
+  amountCents: number;
+  isIncome: boolean;
+  currency: string | null;
+  payee: string | null;
+  accountHint: string | null;
+  categoryHint: string | null;
+  date: string;
+  bankRef: string | null;
+  confidence: number;
+}
+
+async function callModel(
+  config: AppConfig,
+  req: SmsParseRequest,
+  correctiveHint: string | null,
+): Promise<RawCandidate | null> {
   const receivedDate = new Date(req.receivedAt).toISOString();
-  const user = [
+  const userLines = [
     `<sender>: ${req.sender}`,
     `<received_at>: ${receivedDate}`,
     `<categories>: ${formatNamedRows(req.categories)}`,
     `<known_payees>: ${formatPayees(req.payees, req.categories)}`,
     `<body>: ${req.body}`,
-  ].join("\n");
-
+  ];
+  if (correctiveHint) {
+    userLines.push(
+      `<reminder>: your previous answer for this SMS failed validation — ${correctiveHint}. Reread the payee extraction rules and respond again.`,
+    );
+  }
   const raw = await chatJson<unknown>(config, {
     system: SYSTEM,
-    user,
+    user: userLines.join("\n"),
   });
   const parsed = llmResponse.parse(raw);
-  if (parsed.is_transaction !== true) {
-    return { isTransaction: false, candidate: null };
-  }
+  if (parsed.is_transaction !== true) return null;
   const amountCents = Math.trunc(parsed.amount_cents ?? 0);
-  if (amountCents <= 0) {
-    return { isTransaction: false, candidate: null };
-  }
+  if (amountCents <= 0) return null;
   const dateStr = isYmd(parsed.date) ? parsed.date! : ymd(new Date(req.receivedAt));
-  const inferredIncome = inferIncomeFromBody(req.body) ?? (parsed.is_income === true);
-  const categoryHint = knownPayeeCategory(parsed.payee, req.categories, req.payees) ?? trimOrNull(parsed.category_hint) ?? inferCategoryHint(parsed.payee, req.categories);
-  const categoryId = matchByName(categoryHint, req.categories ?? []);
+  return {
+    amountCents,
+    isIncome: parsed.is_income === true,
+    currency: parsed.currency ?? null,
+    payee: trimOrNull(parsed.payee),
+    accountHint: trimOrNull(parsed.account_hint),
+    categoryHint: trimOrNull(parsed.category_hint),
+    date: dateStr,
+    bankRef: trimOrNull(parsed.bank_ref),
+    confidence: clampConfidence(parsed.confidence),
+  };
+}
+
+function finalize(c: RawCandidate, req: SmsParseRequest): SmsParseResult {
+  const categoryId = matchByName(c.categoryHint, req.categories ?? []);
   return {
     isTransaction: true,
     candidate: {
-      amountCents,
-      isIncome: inferredIncome,
-      currency: parsed.currency ?? null,
-      payee: trimOrNull(parsed.payee),
-      accountHint: trimOrNull(parsed.account_hint),
-      categoryHint,
+      amountCents: c.amountCents,
+      isIncome: c.isIncome,
+      currency: c.currency,
+      payee: c.payee,
+      accountHint: c.accountHint,
+      categoryHint: c.categoryHint,
       categoryId,
-      date: dateStr,
-      bankRef: trimOrNull(parsed.bank_ref),
-      confidence: clampConfidence(parsed.confidence),
-      parserVersion: 2,
+      date: c.date,
+      bankRef: c.bankRef,
+      confidence: c.confidence,
+      parserVersion: PARSER_VERSION,
     },
   };
 }
 
-function parseDeterministicBankSms(req: SmsParseRequest): SmsParseResult | null {
-  const body = req.body.replace(/\s+/g, " ").trim();
-  const isIncome = inferIncomeFromBody(body);
-  if (isIncome == null) return null;
-  const amountCents = extractAmountCents(body);
-  if (amountCents == null || amountCents <= 0) return null;
-
-  const payee = extractPayee(body);
-  const categoryHint =
-    knownPayeeCategory(payee, req.categories, req.payees) ??
-    inferCategoryHint(payee, req.categories);
-  const categoryId = matchByName(categoryHint, req.categories ?? []);
-  return {
-    isTransaction: true,
-    candidate: {
-      amountCents,
-      isIncome,
-      currency: "INR",
-      payee,
-      accountHint: extractAccountHint(body, req.sender),
-      categoryHint,
-      categoryId,
-      date: extractSmsDate(body) ?? ymd(new Date(req.receivedAt)),
-      bankRef: extractBankRef(body),
-      confidence: 0.9,
-      parserVersion: 3,
-    },
-  };
-}
-
-function extractAmountCents(body: string): number | null {
-  const amountPatterns = [
-    /\b(?:rs\.?|inr|₹)\s*([0-9][0-9,]*(?:\.[0-9]{1,2})?)/i,
-    /\b([0-9][0-9,]*(?:\.[0-9]{1,2})?)\s*(?:rs\.?|inr)\b/i,
-  ];
-  for (const re of amountPatterns) {
-    const match = body.match(re);
-    const raw = match?.[1];
-    if (!raw) continue;
-    const n = Number.parseFloat(raw.replace(/,/g, ""));
-    if (Number.isFinite(n) && n > 0) return Math.round(n * 100);
-  }
+/// Deterministic post-validator. The model can still leak footer text or a
+/// time-suffix into the payee on edge cases; reject those so we either retry
+/// or null the payee out instead of writing garbage to the database.
+///
+/// Returns a short corrective hint when the payee looks wrong, or null when
+/// it looks clean.
+export function validateCandidate(payee: string | null): string | null {
+  if (payee == null) return null;
+  const trimmed = payee.trim();
+  if (trimmed.length === 0) return null;
+  const lower = trimmed.toLowerCase();
+  if (trimmed.length > 60) return "the payee was too long — extract only the merchant name";
+  if (trimmed.startsWith("_")) return 'the payee started with "_" — strip the underscore that some card SMS prepend';
+  if (/[.]{2,}$/.test(trimmed)) return 'the payee ended with "..", strip trailing punctuation';
+  if (/\d{1,2}:\d{2}(:\d{2})?$/.test(trimmed)) return "the payee included a time suffix, strip it";
+  if (/\b\d{4}-\d{2}-\d{2}\b/.test(trimmed)) return "the payee included a YYYY-MM-DD date fragment, strip it";
+  if (lower.includes("not you")) return 'the payee contained "Not You" — that\'s the bank disclaimer footer, exclude it';
+  if (lower.includes("sms block")) return 'the payee contained "SMS BLOCK", that\'s the bank disclaimer footer, exclude it';
+  if (lower.includes("call 1800") || lower.includes("call 1-800")) return "the payee contained a customer-care phone number, exclude it";
+  if (lower.includes("block+reissue") || lower.includes("to block")) return "the payee contained a card-block instruction, exclude it";
   return null;
-}
-
-function extractPayee(body: string): string | null {
-  const patterns = [
-    /\bto\s+(.+?)\s+on\s+\d{1,2}[-/]\d{1,2}[-/]\d{2,4}\b/i,
-    /\bto\s+(.+?)\s*(?:\.|,)?\s*(?:upi\s+ref|ref(?:erence)?\b)/i,
-    /\bat\s+(.+?)\s*(?:\.|,)?\s*(?:upi\s+ref|ref(?:erence)?\b|on\s+\d{1,2}[-/]\d{1,2}[-/]\d{2,4}\b|$)/i,
-    /\bfrom\s+(.+?)\s+on\s+\d{1,2}[-/]\d{1,2}[-/]\d{2,4}\b/i,
-  ];
-  for (const re of patterns) {
-    const match = body.match(re);
-    const cleaned = cleanPayee(match?.[1]);
-    if (cleaned) return cleaned;
-  }
-  return null;
-}
-
-function cleanPayee(raw: string | undefined): string | null {
-  if (!raw) return null;
-  const cleaned = raw
-    .replace(/\b(?:UPI|NEFT|IMPS|RTGS)\b\s*$/i, "")
-    .replace(/\s+/g, " ")
-    .trim()
-    .replace(/[.,;:-]+$/g, "")
-    .trim();
-  if (!cleaned) return null;
-  if (/^(?:kotak|hdfc|axis|icici|sbi|yes|idfc|bank|a\/?c|ac)\b/i.test(cleaned)) {
-    return null;
-  }
-  return cleaned.slice(0, 120);
-}
-
-function extractAccountHint(body: string, sender: string): string | null {
-  const account = body.match(/\b(?:a\/c|ac|account|card)\s*(?:no\.?)?\s*(?:x+|xx|ending\s*)?([0-9]{3,6})\b/i);
-  const bank =
-    body.match(/\b(Kotak|HDFC|Axis|ICICI|SBI|Yes|IDFC|Federal|IndusInd|Canara|PNB)\b/i)?.[1] ??
-    sender.match(/-?([A-Z]{3,8})/i)?.[1];
-  if (!account && !bank) return null;
-  const suffix = account?.[1];
-  return [bank ? titleCase(bank) : null, suffix ? `AC X${suffix}` : null]
-    .filter(Boolean)
-    .join(" ");
-}
-
-function extractSmsDate(body: string): string | null {
-  const match = body.match(/\b(\d{1,2})[-/](\d{1,2})[-/](\d{2,4})\b/);
-  const [, rawDay, rawMonth, rawYear] = match ?? [];
-  if (!rawDay || !rawMonth || !rawYear) return null;
-  const day = Number.parseInt(rawDay, 10);
-  const month = Number.parseInt(rawMonth, 10);
-  let year = Number.parseInt(rawYear, 10);
-  if (year < 100) year += 2000;
-  if (month < 1 || month > 12 || day < 1 || day > 31) return null;
-  return `${year.toString().padStart(4, "0")}-${month.toString().padStart(2, "0")}-${day.toString().padStart(2, "0")}`;
-}
-
-function extractBankRef(body: string): string | null {
-  const match = body.match(/\b(?:UPI\s+Ref|UPI\s+Reference|Ref(?:erence)?(?:\s+No\.?)?)\s*[:#-]?\s*([A-Z0-9]{6,})\b/i);
-  return match?.[1] ?? null;
-}
-
-function titleCase(s: string): string {
-  const lower = s.toLowerCase();
-  return lower.charAt(0).toUpperCase() + lower.slice(1);
 }
 
 function formatNamedRows(rows: { name: string }[] | undefined): string {
@@ -267,40 +270,6 @@ function formatPayees(
     .join(", ");
 }
 
-function knownPayeeCategory(
-  rawPayee: unknown,
-  categories: { id: string; name: string }[] | undefined,
-  payees: { name: string; categoryId?: string | null }[] | undefined,
-): string | null {
-  if (typeof rawPayee !== "string") return null;
-  const payee = rawPayee.trim().toLowerCase();
-  if (!payee) return null;
-  for (const p of payees ?? []) {
-    const n = p.name.toLowerCase();
-    if ((n === payee || n.includes(payee) || payee.includes(n)) && p.categoryId) {
-      return categories?.find((c) => c.id === p.categoryId)?.name ?? null;
-    }
-  }
-  return null;
-}
-
-function inferCategoryHint(
-  rawPayee: unknown,
-  categories: { id: string; name: string }[] | undefined,
-): string | null {
-  // Delegates to the shared static rules table. Returns the raw rule
-  // name ("Eating Out") only when the user has a matching category in
-  // their list — otherwise null so the inbox row shows uncategorised.
-  const ruleHint = staticCategoryForPayee(rawPayee);
-  if (!ruleHint) return null;
-  const names = (categories ?? []).map((c) => c.name);
-  const lowerHint = ruleHint.toLowerCase();
-  const match = names.find(
-    (n) => n.toLowerCase() === lowerHint || n.toLowerCase().includes(lowerHint),
-  );
-  return match ?? null;
-}
-
 function matchByName(
   raw: unknown,
   rows: { id: string; name: string }[],
@@ -315,41 +284,6 @@ function matchByName(
     const n = r.name.toLowerCase();
     if (n.includes(hint) || hint.includes(n)) return r.id;
   }
-  return null;
-}
-
-function inferIncomeFromBody(body: string): boolean | null {
-  const s = body.toLowerCase();
-
-  // Prefer explicit bank/card direction over model judgment. These are the
-  // words that decide sign in Indian bank SMS; LLMs occasionally parse a
-  // credited/received amount correctly but still mark it as an expense.
-  const incomePatterns = [
-    /\bcredited\b/,
-    /\bcredit(?:ed)?\s+to\b/,
-    /\breceived\b/,
-    /\brecvd\b/,
-    /\bdeposited\b/,
-    /\brefund(?:ed)?\b/,
-    /\bcashback\b/,
-    /\bsalary\b/,
-    /\binterest\s+(?:paid|credited)\b/,
-  ];
-  if (incomePatterns.some((re) => re.test(s))) return true;
-
-  const expensePatterns = [
-    /\bdebited\b/,
-    /\bdebit\b/,
-    /\bspent\b/,
-    /\bpaid\b/,
-    /\bsent\b/,
-    /\bwithdrawn\b/,
-    /\bcharged\b/,
-    /\bpurchase(?:d)?\b/,
-    /\bused\s+at\b/,
-  ];
-  if (expensePatterns.some((re) => re.test(s))) return false;
-
   return null;
 }
 

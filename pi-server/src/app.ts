@@ -17,6 +17,7 @@ import {
 } from "./routes/messages.ts";
 import { payeesRouter } from "./routes/payees.ts";
 import { recurrencesRouter } from "./routes/recurrences.ts";
+import { smsRouter } from "./routes/sms.ts";
 import { summaryRouter } from "./routes/summary.ts";
 import { syncRouter } from "./routes/sync.ts";
 import { transactionsRouter } from "./routes/transactions.ts";
@@ -76,6 +77,7 @@ export function createApp(ctx: AppContext) {
   app.route("/v1/whatsapp/inbox-candidates", whatsappInboxRouter);
   app.route("/v1/whatsapp", whatsappRouter);
   app.route("/v1/ai", aiRouter);
+  app.route("/v1/sms", smsRouter);
   app.route("/v1/feedback", feedbackRouter);
 
   app.onError((error, c) => {

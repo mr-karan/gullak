@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { integer, real, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { index, integer, real, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 // Mirrors the Flutter app's Drift tables. Money is stored as integer
 // minor units throughout, dates as YYYY-MM-DD text, timestamps as ms
@@ -240,6 +240,58 @@ export const changeLog = sqliteTable(
   }),
 );
 
+// Server-side mirror of SMS bodies for the transactions the user has
+// confirmed. Lets the pi-server re-run the LLM parser against the raw
+// body whenever the prompt or model improves, and propagate fixes back
+// to the phone via change_log on `transactions`.
+//
+// Stored separately from `transactions` because the SMS body is bulky,
+// privacy-sensitive, and not part of the financial dataset; it's
+// operational data for the parser, similar in spirit to
+// `whatsapp_inbox_candidates`. Goes outside change_log for the same
+// reason — bodies are never edited on the phone.
+//
+// Bodies are only written for transactional SMS the user actually
+// confirmed; rejected/ignored inbox rows never reach the server.
+export const smsMessages = sqliteTable(
+  "sms_messages",
+  {
+    // Same id the phone uses for its local `sms_messages` row, so an
+    // upsert from the device is idempotent across retries.
+    id: text("id").primaryKey(),
+    sender: text("sender").notNull(),
+    body: text("body").notNull(),
+    receivedAt: integer("received_at").notNull(),
+    // The transaction this SMS produced when the user confirmed it.
+    // Nullable so re-uploads from older app builds (which may have
+    // dropped the link) still land.
+    linkedTransactionId: text("linked_transaction_id"),
+    // Snapshot of `transactions.updated_at` at the moment the device
+    // confirmed this SMS. The reprocess job refuses to overwrite a txn
+    // whose updated_at has moved past this — that's how we respect the
+    // user's manual edits between confirm and re-enrichment.
+    baseTransactionUpdatedAt: integer("base_transaction_updated_at"),
+    // The candidate the phone wrote into the txn at confirm time
+    // (initial LLM parse). Useful for debugging "why did the merchant
+    // change?" after a reparse.
+    candidateJson: text("candidate_json"),
+    // The result of the most recent server-side re-enrichment pass.
+    enrichedJson: text("enriched_json"),
+    // 'pending'        — uploaded, not yet re-enriched
+    // 'enriched'       — reparsed, txn PATCH applied
+    // 'stale_skipped'  — reparsed, but txn was edited after confirm; PATCH skipped
+    // 'failed'         — LLM call or validation kept failing; left as-is
+    status: text("status").notNull().default("pending"),
+    enrichedAt: integer("enriched_at"),
+    createdAt: integer("created_at").notNull().default(now),
+    updatedAt: integer("updated_at").notNull().default(now),
+  },
+  (t) => ({
+    byStatus: index("sms_messages_status_idx").on(t.status),
+    byLinkedTxn: index("sms_messages_linked_txn_idx").on(t.linkedTransactionId),
+  }),
+);
+
 export type Account = typeof accounts.$inferSelect;
 export type NewAccount = typeof accounts.$inferInsert;
 export type CategoryGroup = typeof categoryGroups.$inferSelect;
@@ -259,3 +311,5 @@ export type WhatsappInboxCandidate =
   typeof whatsappInboxCandidates.$inferSelect;
 export type NewWhatsappInboxCandidate =
   typeof whatsappInboxCandidates.$inferInsert;
+export type SmsMessage = typeof smsMessages.$inferSelect;
+export type NewSmsMessage = typeof smsMessages.$inferInsert;

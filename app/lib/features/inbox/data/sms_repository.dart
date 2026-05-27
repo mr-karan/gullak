@@ -1,8 +1,10 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:drift/drift.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../data/ai/pi_ai_client.dart';
 import '../../../data/db/database.dart';
 import '../../../state/providers.dart';
 import '../../accounts/data/account_repository.dart';
@@ -428,13 +430,14 @@ class SmsRepository {
     String? categoryId,
     String? payeeId,
   }) async {
-    await (_db.update(_db.smsMessages)..where((t) => t.id.equals(smsRowId)))
-        .write(
-          SmsMessagesCompanion(
-            candidateStatus: const Value('accepted'),
-            linkedTransactionId: Value(transactionId),
-          ),
-        );
+    await (_db.update(
+      _db.smsMessages,
+    )..where((t) => t.id.equals(smsRowId))).write(
+      SmsMessagesCompanion(
+        candidateStatus: const Value('accepted'),
+        linkedTransactionId: Value(transactionId),
+      ),
+    );
     if (payeeId != null && accountId != null) {
       await ref
           .read(entryMemoryProvider)
@@ -490,6 +493,24 @@ class SmsRepository {
       categoryId: resolved.categoryId,
       payeeId: resolved.payeeId,
     );
+    // Push the raw SMS body to pi-server so the server-side LLM
+    // re-enrichment pass can fix payee/category metadata after Confirm
+    // All. Fire-and-forget — the server is allowed to be offline and a
+    // later [enqueueHistoricalSmsBackfill] can always catch missed rows.
+    // We pass the txn's updated_at as a fence; the reprocess endpoint
+    // skips rows whose linked txn has moved past that snapshot.
+    unawaited(
+      _uploadSmsBody(
+        smsRowId: id,
+        transactionId: transactionId,
+        address: resolved.row.address,
+        body: resolved.row.body,
+        receivedAt: resolved.row.receivedAt,
+        candidateJsonStr: resolved.row.enrichedCandidateJson?.isNotEmpty == true
+            ? resolved.row.enrichedCandidateJson
+            : resolved.row.candidateJson,
+      ),
+    );
     return true;
   }
 
@@ -540,10 +561,11 @@ class SmsRepository {
           amountCents: amount,
         );
     if (ruleAction.ignore == true) {
-      await (_db.update(_db.smsMessages)..where((t) => t.id.equals(rowId)))
-          .write(
-            const SmsMessagesCompanion(candidateStatus: Value('dismissed')),
-          );
+      await (_db.update(
+        _db.smsMessages,
+      )..where((t) => t.id.equals(rowId))).write(
+        const SmsMessagesCompanion(candidateStatus: Value('dismissed')),
+      );
       return _ResolvedSms.ignored(row);
     }
     payee = ruleAction.payeeName ?? payee;
@@ -609,6 +631,11 @@ class SmsRepository {
 
   /// Returns (ok, failed) counts. Invalidates the inbox once at the end so
   /// the list rebuilds a single time, not per-row.
+  ///
+  /// After the loop, fires a fire-and-forget [/v1/sms/reprocess] call so the
+  /// pi-server can re-run its (LLM-only) parser over every body that was
+  /// just uploaded by [_uploadSmsBody]. Any cleanups it produces flow back
+  /// to the phone via the normal sync pull — no second user interaction.
   Future<({int ok, int failed})> confirmAll() async {
     final rows = (await listInbox()).where((r) => r.hasCandidate);
     var ok = 0;
@@ -625,7 +652,107 @@ class SmsRepository {
       }
     }
     ref.invalidate(inboxItemsProvider);
+    unawaited(_triggerServerReprocess());
     return (ok: ok, failed: failed);
+  }
+
+  /// Push the raw body of one confirmed SMS to the pi-server. Best-effort:
+  /// silently swallows network failures since the server can always be
+  /// caught up later via [backfillSmsBodies].
+  Future<void> _uploadSmsBody({
+    required int smsRowId,
+    required String transactionId,
+    required String address,
+    required String body,
+    required int receivedAt,
+    String? candidateJsonStr,
+  }) async {
+    try {
+      final client = await ref.read(piAiClientProvider.future);
+      if (client == null) return; // no sync server configured
+      // Capture the txn's actual updatedAt — the server fences the
+      // reprocess pass against it so user edits made after confirm aren't
+      // clobbered. Falls back to "right now" if the row vanished.
+      final txRow = await ref
+          .read(transactionRepoProvider)
+          .byRow(transactionId);
+      final baseUpdatedAt =
+          txRow?.updatedAt ?? DateTime.now().millisecondsSinceEpoch;
+      await client.bulkIngestSms(
+        items: [
+          SmsIngestItem(
+            id: 'sms-$smsRowId',
+            sender: address,
+            body: body,
+            receivedAt: receivedAt,
+            linkedTransactionId: transactionId,
+            baseTransactionUpdatedAt: baseUpdatedAt,
+            candidateJson: candidateJsonStr,
+          ),
+        ],
+      );
+    } catch (_) {
+      // best-effort
+    }
+  }
+
+  Future<void> _triggerServerReprocess() async {
+    try {
+      final client = await ref.read(piAiClientProvider.future);
+      if (client == null) return;
+      await client.reprocessSms(limit: 200);
+    } catch (_) {
+      // best-effort
+    }
+  }
+
+  /// One-shot backfill for historical confirmed SMS that predate the
+  /// upload hook in [_confirmOne]. Walks every locally-stored SMS whose
+  /// review status is `accepted` (i.e. the user has confirmed it into a
+  /// transaction) and ships the body to the server in 50-row batches.
+  /// Fires reprocess at the end. Returns the number of bodies uploaded.
+  Future<int> backfillSmsBodies({int batchSize = 50}) async {
+    final client = await ref.read(piAiClientProvider.future);
+    if (client == null) return 0;
+    final rows =
+        await (_db.select(_db.smsMessages)
+              ..where((t) => t.candidateStatus.equals('accepted'))
+              ..where((t) => t.linkedTransactionId.isNotNull()))
+            .get();
+    if (rows.isEmpty) return 0;
+    final txRepo = ref.read(transactionRepoProvider);
+    var uploaded = 0;
+    for (var i = 0; i < rows.length; i += batchSize) {
+      final slice = rows.skip(i).take(batchSize);
+      final items = <SmsIngestItem>[];
+      for (final row in slice) {
+        final txnId = row.linkedTransactionId;
+        if (txnId == null) continue;
+        final txn = await txRepo.byRow(txnId);
+        items.add(
+          SmsIngestItem(
+            id: 'sms-${row.id}',
+            sender: row.address,
+            body: row.body,
+            receivedAt: row.receivedAt,
+            linkedTransactionId: txnId,
+            baseTransactionUpdatedAt: txn?.updatedAt,
+            candidateJson: row.enrichedCandidateJson?.isNotEmpty == true
+                ? row.enrichedCandidateJson
+                : row.candidateJson,
+          ),
+        );
+      }
+      if (items.isEmpty) continue;
+      try {
+        await client.bulkIngestSms(items: items);
+        uploaded += items.length;
+      } catch (_) {
+        // skip this batch; partial progress is fine
+      }
+    }
+    if (uploaded > 0) await _triggerServerReprocess();
+    return uploaded;
   }
 }
 

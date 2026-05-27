@@ -143,6 +143,61 @@ class PiAiClient {
     }
   }
 
+  /// Upload one or more confirmed SMS bodies to the pi-server. Idempotent
+  /// on `id` — safe to retry, safe to re-upload an existing row to refresh
+  /// its `linkedTransactionId` snapshot.
+  ///
+  /// Server uses these bodies for the LLM cleanup pass that fixes payee /
+  /// category metadata after Confirm All. The body never leaves the user's
+  /// own infrastructure — it goes to the homelab pi-server and stays there.
+  Future<({int inserted, int updated, int total})> bulkIngestSms({
+    required List<SmsIngestItem> items,
+  }) async {
+    if (items.isEmpty) return (inserted: 0, updated: 0, total: 0);
+    try {
+      final json = await _post('/v1/sms/bulk-ingest', {
+        'items': items.map((i) => i.toJson()).toList(),
+      });
+      return (
+        inserted: (json['inserted'] as num?)?.toInt() ?? 0,
+        updated: (json['updated'] as num?)?.toInt() ?? 0,
+        total: (json['total'] as num?)?.toInt() ?? items.length,
+      );
+    } on DioException catch (e) {
+      throw PiAiException('sms ingest failed: ${networkErrorMessage(e)}');
+    }
+  }
+
+  /// Trigger the server-side LLM cleanup pass. Idempotent — safe to call
+  /// after every Confirm All; rows already enriched are skipped unless
+  /// `force=true`. Server PATCHes the linked transactions and the change
+  /// flows back to the phone via the normal sync pull.
+  Future<({int processed, int enriched, int staleSkipped, int failed})>
+  reprocessSms({
+    int? limit,
+    List<String>? smsIds,
+    bool force = false,
+    int? batchSize,
+  }) async {
+    try {
+      final body = <String, dynamic>{
+        if (limit != null) 'limit': limit,
+        if (smsIds != null && smsIds.isNotEmpty) 'smsIds': smsIds,
+        if (force) 'force': true,
+        if (batchSize != null) 'batchSize': batchSize,
+      };
+      final json = await _post('/v1/sms/reprocess', body);
+      return (
+        processed: (json['processed'] as num?)?.toInt() ?? 0,
+        enriched: (json['enriched'] as num?)?.toInt() ?? 0,
+        staleSkipped: (json['staleSkipped'] as num?)?.toInt() ?? 0,
+        failed: (json['failed'] as num?)?.toInt() ?? 0,
+      );
+    } on DioException catch (e) {
+      throw PiAiException('sms reprocess failed: ${networkErrorMessage(e)}');
+    }
+  }
+
   Future<int?> sendFeedback({
     required String kind,
     String? message,
@@ -169,6 +224,41 @@ class NamedRow {
   final String id;
   final String name;
   Map<String, dynamic> toJson() => {'id': id, 'name': name};
+}
+
+/// One row in a bulk SMS ingest call. `id` is a stable client identifier
+/// — pass the Android SMS id when available so re-uploads idempotently
+/// hit the same server-side row. `baseTransactionUpdatedAt` is the
+/// `transactions.updated_at` snapshot at confirm time; the server uses
+/// it as a fence so the reprocess pass doesn't clobber later user edits.
+class SmsIngestItem {
+  const SmsIngestItem({
+    required this.id,
+    required this.sender,
+    required this.body,
+    required this.receivedAt,
+    this.linkedTransactionId,
+    this.baseTransactionUpdatedAt,
+    this.candidateJson,
+  });
+
+  final String id;
+  final String sender;
+  final String body;
+  final int receivedAt;
+  final String? linkedTransactionId;
+  final int? baseTransactionUpdatedAt;
+  final String? candidateJson;
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'sender': sender,
+    'body': body,
+    'receivedAt': receivedAt,
+    if (linkedTransactionId case final v?) 'linkedTransactionId': v,
+    if (baseTransactionUpdatedAt case final v?) 'baseTransactionUpdatedAt': v,
+    if (candidateJson case final v?) 'candidateJson': v,
+  };
 }
 
 class PayeeCategoryRow extends NamedRow {

@@ -64,6 +64,13 @@
       "when": 1778473453972,
       "tag": "0008_solid_tusk",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1779796748668,
+      "tag": "0009_sms_messages",
+      "breakpoints": true
     }
   ]
 }

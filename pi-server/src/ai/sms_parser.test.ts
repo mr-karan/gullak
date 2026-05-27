@@ -1,44 +1,69 @@
 import { expect, test } from "bun:test";
 
-import type { AppConfig } from "../config.ts";
-import { parseSms } from "./sms_parser.ts";
+import { validateCandidate } from "./sms_parser.ts";
 
-const config = {
-  modelBaseUrl: "http://127.0.0.1:9",
-  modelId: "unused",
-  modelApiKey: "unused",
-} as AppConfig;
+// The full parse path is LLM-only as of parserVersion 4 — see sms_parser.ts
+// for the rationale. Integration tests for parseSms() would need a mocked
+// chatJson; those live in the e2e harness, not here. What we DO cover here
+// is the deterministic post-validator that runs over every model response,
+// because that's the safety net protecting the financial dataset from
+// payee-name leakage.
 
-test("deterministically parses Kotak sent UPI SMS without LLM", async () => {
-  const result = await parseSms(config, {
-    sender: "JX-KOTAKB-S",
-    body:
-      "Sent Rs.146.00 from Kotak Bank AC X9876 to friend@example on 06-05-26.UPI Ref 111111111111. Not you? SMS BLOCK",
-    receivedAt: Date.UTC(2026, 4, 6, 12),
-    categories: [{ id: "transfer", name: "Transfers" }],
-  });
-
-  expect(result.isTransaction).toBe(true);
-  expect(result.candidate?.amountCents).toBe(14600);
-  expect(result.candidate?.isIncome).toBe(false);
-  expect(result.candidate?.payee).toBe("friend@example");
-  expect(result.candidate?.accountHint).toBe("Kotak AC X9876");
-  expect(result.candidate?.date).toBe("2026-05-06");
-  expect(result.candidate?.bankRef).toBe("111111111111");
-  expect(result.candidate?.parserVersion).toBe(3);
+test("validateCandidate accepts a clean Title Case merchant", () => {
+  expect(validateCandidate("Taco Bell")).toBeNull();
+  expect(validateCandidate("Apple Services")).toBeNull();
+  expect(validateCandidate("Keya Spring Electricity")).toBeNull();
+  expect(validateCandidate("Goibibo")).toBeNull();
 });
 
-test("deterministically parses credited SMS as income", async () => {
-  const result = await parseSms(config, {
-    sender: "VK-HDFCBK",
-    body:
-      "INR 1,250.50 credited to HDFC Bank A/C xx1234 from RAZORPAY on 06/05/2026 Ref 99887766.",
-    receivedAt: Date.UTC(2026, 4, 6, 12),
-  });
+test("validateCandidate accepts a UPI VPA payee (no merchant decode)", () => {
+  // VPAs survive — they're legitimate identifiers when the merchant name
+  // didn't appear in the SMS at all.
+  expect(validateCandidate("friend@okaxis")).toBeNull();
+  expect(validateCandidate("paytmqr583e1y@paytm")).toBeNull();
+});
 
-  expect(result.isTransaction).toBe(true);
-  expect(result.candidate?.amountCents).toBe(125050);
-  expect(result.candidate?.isIncome).toBe(true);
-  expect(result.candidate?.payee).toBe("RAZORPAY");
-  expect(result.candidate?.accountHint).toBe("Hdfc AC X1234");
+test("validateCandidate flags a leading underscore from HDFC card format", () => {
+  const issue = validateCandidate("_TACO BELL");
+  expect(issue).toContain("underscore");
+});
+
+test("validateCandidate flags trailing double-dots", () => {
+  const issue = validateCandidate("Taco Bell..");
+  expect(issue).toContain("..");
+});
+
+test("validateCandidate flags a time suffix glued to the merchant", () => {
+  expect(validateCandidate("Taco Bell 19:24:04")).toContain("time");
+});
+
+test("validateCandidate flags an ISO date fragment in the merchant", () => {
+  expect(validateCandidate("Happenstance 2026-05-25")).toContain("date");
+});
+
+test("validateCandidate catches the Not-You bank disclaimer leak", () => {
+  expect(
+    validateCandidate(
+      "_TACO BELL.. On 2026-05-24:19:24:04.Not You? To Block+Reissue Call 18002586161/SMS BLOCK CC 4904 to 7308080808",
+    ),
+  ).not.toBeNull();
+});
+
+test("validateCandidate catches SMS BLOCK footer fragment", () => {
+  expect(validateCandidate("Happenstance SMS BLOCK")).toContain("SMS BLOCK");
+});
+
+test("validateCandidate catches a customer-care phone number", () => {
+  expect(validateCandidate("Some Merchant Call 18001234567")).toContain("phone");
+});
+
+test("validateCandidate rejects unreasonably long payees", () => {
+  const long = "X".repeat(80);
+  expect(validateCandidate(long)).toContain("long");
+});
+
+test("validateCandidate treats null/empty as clean", () => {
+  expect(validateCandidate(null)).toBeNull();
+  expect(validateCandidate("")).toBeNull();
+  expect(validateCandidate("   ")).toBeNull();
 });
