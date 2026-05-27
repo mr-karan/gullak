@@ -46,11 +46,25 @@ class _InboxScreenState extends ConsumerState<InboxScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Watch all three buckets, not just the selected one. Counts must stay
+    // live and consistent across tabs — deriving every tab's count from a
+    // single active stream made them jump when switching buckets, and made
+    // a just-confirmed row look like it lingered because the count never
+    // moved. Subscribing to all three keeps Drift pushing fresh rows to each.
+    final pendingAsync = ref.watch(inboxItemsProvider);
+    final matchedAsync = ref.watch(matchedInboxItemsProvider);
+    final ignoredAsync = ref.watch(ignoredInboxItemsProvider);
     final asyncRows = switch (_bucket) {
-      _InboxBucket.ignored => ref.watch(ignoredInboxItemsProvider),
-      _InboxBucket.matched => ref.watch(matchedInboxItemsProvider),
-      _InboxBucket.ready ||
-      _InboxBucket.review => ref.watch(inboxItemsProvider),
+      _InboxBucket.ignored => ignoredAsync,
+      _InboxBucket.matched => matchedAsync,
+      _InboxBucket.ready || _InboxBucket.review => pendingAsync,
+    };
+    final pendingRows = pendingAsync.asData?.value ?? const <InboxItem>[];
+    final counts = <_InboxBucket, int>{
+      _InboxBucket.ready: pendingRows.where((r) => r.hasCandidate).length,
+      _InboxBucket.review: pendingRows.where((r) => !r.hasCandidate).length,
+      _InboxBucket.matched: matchedAsync.asData?.value.length ?? 0,
+      _InboxBucket.ignored: ignoredAsync.asData?.value.length ?? 0,
     };
     final prefs = watchPrefs(ref);
     final pipeline = ref.watch(smsPipelineProvider);
@@ -119,17 +133,10 @@ class _InboxScreenState extends ConsumerState<InboxScreen> {
             valueListenable: pipeline.scanState,
             builder: (context, scan, _) => _SmsScanBanner(scan: scan),
           ),
-          asyncRows.maybeWhen(
-            data: (rows) => _InboxBucketTabs(
-              selected: _bucket,
-              rows: rows,
-              onChanged: (bucket) => setState(() => _bucket = bucket),
-            ),
-            orElse: () => _InboxBucketTabs(
-              selected: _bucket,
-              rows: const [],
-              onChanged: (bucket) => setState(() => _bucket = bucket),
-            ),
+          _InboxBucketTabs(
+            selected: _bucket,
+            counts: counts,
+            onChanged: (bucket) => setState(() => _bucket = bucket),
           ),
           if (_bucket == _InboxBucket.ready)
             asyncRows.maybeWhen(
@@ -399,12 +406,12 @@ class _InboxBulkActions extends StatelessWidget {
 class _InboxBucketTabs extends StatelessWidget {
   const _InboxBucketTabs({
     required this.selected,
-    required this.rows,
+    required this.counts,
     required this.onChanged,
   });
 
   final _InboxBucket selected;
-  final List<InboxItem> rows;
+  final Map<_InboxBucket, int> counts;
   final ValueChanged<_InboxBucket> onChanged;
 
   @override
@@ -421,7 +428,7 @@ class _InboxBucketTabs extends StatelessWidget {
               ButtonSegment(
                 value: bucket,
                 icon: Icon(bucket.icon, size: 18),
-                label: Text('${bucket.label} (${_count(bucket)})'),
+                label: Text('${bucket.label} (${counts[bucket] ?? 0})'),
               ),
           ],
           selected: {selected},
@@ -430,12 +437,6 @@ class _InboxBucketTabs extends StatelessWidget {
       ),
     );
   }
-
-  int _count(_InboxBucket bucket) => switch (bucket) {
-    _InboxBucket.ready => rows.where((r) => r.hasCandidate).length,
-    _InboxBucket.review => rows.where((r) => !r.hasCandidate).length,
-    _InboxBucket.matched || _InboxBucket.ignored => rows.length,
-  };
 }
 
 class _InboxRow extends ConsumerWidget {
