@@ -18,6 +18,7 @@ import '../../sync/sync_service.dart';
 import '../../sync/sync_status.dart';
 import '../backup/backup_service.dart';
 import '../backup/file_pick.dart';
+import '../inbox/data/sms_repository.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -117,6 +118,17 @@ class SettingsScreen extends ConsumerWidget {
                 'rows already accepted as transactions are unaffected.',
               ),
               onTap: () => _rescanSms(context, ref),
+            ),
+            ListTile(
+              leading: const Icon(Icons.auto_fix_high_outlined),
+              title: const Text('Re-enrich past SMS'),
+              subtitle: const Text(
+                'Uploads the bodies of already-confirmed SMS to the sync '
+                'server and re-runs the parser to clean up payee/category '
+                'metadata. Fixes old transactions with garbled merchant '
+                'names. Needs the sync server configured.',
+              ),
+              onTap: () => _reenrichSms(context, ref),
             ),
           ],
           const _SectionHeader('Sync'),
@@ -310,6 +322,33 @@ class SettingsScreen extends ConsumerWidget {
       const SnackBar(
         content: Text('Re-scanning — Inbox updates as messages parse.'),
       ),
+    );
+  }
+
+  void _reenrichSms(BuildContext context, WidgetRef ref) {
+    final messenger = ScaffoldMessenger.of(context);
+    unawaited(() async {
+      try {
+        final uploaded = await ref
+            .read(smsRepositoryProvider)
+            .backfillSmsBodies();
+        if (!context.mounted) return;
+        final msg = uploaded == 0
+            ? 'No confirmed SMS to re-enrich (or sync server not set).'
+            : 'Uploaded $uploaded SMS — server is re-enriching; '
+                  'cleaned rows sync back shortly.';
+        showTimedSnackBar(messenger, SnackBar(content: Text(msg)));
+      } catch (e) {
+        if (!context.mounted) return;
+        showTimedSnackBar(
+          messenger,
+          SnackBar(content: Text('Re-enrich failed: $e')),
+        );
+      }
+    }());
+    showTimedSnackBar(
+      messenger,
+      const SnackBar(content: Text('Re-enriching past SMS…')),
     );
   }
 
