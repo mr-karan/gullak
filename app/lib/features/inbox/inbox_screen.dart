@@ -560,12 +560,21 @@ class _InboxRow extends ConsumerWidget {
                     child: const Text('Dismiss'),
                   ),
                   const SizedBox(width: 4),
-                  if (!item.hasCandidate)
+                  if (!item.hasCandidate) ...[
                     IconButton(
                       tooltip: 'Parse debug',
                       icon: const Icon(Icons.smart_toy_outlined, size: 20),
                       onPressed: () => _showParseDebug(context, ref, item),
                     ),
+                    FilledButton.tonal(
+                      onPressed: () => _logFromReview(context, ref, item),
+                      style: FilledButton.styleFrom(
+                        minimumSize: const Size(0, 36),
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                      ),
+                      child: const Text('Log manually'),
+                    ),
+                  ],
                 ],
                 if (bucket == _InboxBucket.ready && item.hasCandidate) ...[
                   TextButton(
@@ -682,6 +691,31 @@ class _InboxRow extends ConsumerWidget {
     );
   }
 
+  /// Review-bucket equivalent of [_confirmWithReview] for rows the parser
+  /// couldn't structure (no candidate). The classifier was confident this
+  /// SMS is a real transaction, so let the user fill in the metadata in
+  /// Quick Entry — prefilled with the SMS body — then link the created
+  /// transaction back to the SMS row. That moves it out of review into
+  /// "matched", the same terminal state as a normal confirm, just with
+  /// hand-entered details. Without the link the row would linger in review.
+  Future<void> _logFromReview(
+    BuildContext context,
+    WidgetRef ref,
+    InboxItem item,
+  ) async {
+    final repo = ref.read(smsRepositoryProvider);
+    await openQuickEntry(
+      context,
+      initialNote: item.body,
+      onCreated: (transactionId) async {
+        await repo.confirmFromTransaction(
+          smsRowId: item.id,
+          transactionId: transactionId,
+        );
+      },
+    );
+  }
+
   Future<void> _logManually(
     BuildContext context,
     WidgetRef ref,
@@ -696,11 +730,21 @@ class _InboxRow extends ConsumerWidget {
     await openQuickEntry(context, initialNote: item.body);
   }
 
-  void _showParseDebug(BuildContext context, WidgetRef ref, InboxItem item) {
-    showDialog<void>(
+  Future<void> _showParseDebug(
+    BuildContext context,
+    WidgetRef ref,
+    InboxItem item,
+  ) async {
+    // The dialog pops 'log' when the user decides it's a real transaction.
+    // We open Quick Entry from here (the parent) so the dialog's own
+    // context being torn down on pop doesn't break the sheet.
+    final action = await showDialog<String>(
       context: context,
       builder: (dialogCtx) => _ParseDebugDialog(item: item),
     );
+    if (action == 'log' && context.mounted) {
+      await _logFromReview(context, ref, item);
+    }
   }
 }
 
@@ -787,6 +831,10 @@ class _ParseDebugDialogState extends ConsumerState<_ParseDebugDialog> {
                 )
               : const Icon(Icons.bug_report_outlined, size: 18),
           label: Text(_sending ? 'Sending…' : 'Send feedback'),
+        ),
+        FilledButton.tonal(
+          onPressed: _sending ? null : () => Navigator.of(context).pop('log'),
+          child: const Text('Log manually'),
         ),
         TextButton(
           onPressed: _sending ? null : () => Navigator.of(context).maybePop(),
