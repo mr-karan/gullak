@@ -14,6 +14,7 @@ import '../../features/payees/data/payee_repository.dart';
 import '../../features/transactions/data/transaction_repository.dart';
 import '../../sync/changelog_writer.dart';
 import '../db/database.dart';
+import 'sms_background_parse_worker.dart';
 
 const String enrichmentTaskName = 'gullak.sms.enrich';
 
@@ -22,6 +23,16 @@ const String enrichmentTaskName = 'gullak.sms.enrich';
 @pragma('vm:entry-point')
 void smsEnrichmentDispatcher() {
   Workmanager().executeTask((task, inputData) async {
+    // Periodic background SMS parse pass (drains the broadcast-receiver
+    // queue). Distinct task name, routed to its own worker.
+    if (task == backgroundParseTaskName) {
+      try {
+        return await SmsBackgroundParseWorker.run();
+      } catch (e, st) {
+        log.w('background parse dispatcher crashed: $e\n$st');
+        return false;
+      }
+    }
     if (task != enrichmentTaskName) return true;
     final smsId = (inputData?['smsId'] as num?)?.toInt();
     if (smsId == null) return true;

@@ -266,12 +266,22 @@ class SyncService {
         if (nextCursor != cursor) await _prefs.setSyncCursor(nextCursor);
         break;
       }
+      var allApplied = true;
       for (final change in changes) {
         if (change is Map<String, dynamic>) {
-          await _applier.apply(change);
+          final ok = await _applier.apply(change);
+          if (!ok) allApplied = false;
         }
       }
       pulled += changes.length;
+      // Only advance the cursor when every change in the page applied. A
+      // failed (transient) change leaves the cursor in place so the page is
+      // retried next sync; re-applying the succeeded changes is safe because
+      // applies are idempotent (last-write-wins / upsert by id).
+      if (!allApplied) {
+        log.w('sync: page had apply failures; holding cursor for retry');
+        break;
+      }
       await _prefs.setSyncCursor(nextCursor);
       if (changes.length < 500) break;
     }

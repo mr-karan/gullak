@@ -29,7 +29,7 @@ void main() {
   test(
     'ingests high-confidence bank SMS into Inbox and notifies once',
     () async {
-      final receivedAt = DateTime(2026, 5, 2, 10, 30);
+      final receivedAt = DateTime.now().subtract(const Duration(hours: 2));
       final sms = IncomingSms(
         id: 'hdfc-1',
         address: 'VK-HDFCBK',
@@ -83,7 +83,7 @@ void main() {
   );
 
   test('collapses same sender/body even when Android ids differ', () async {
-    final receivedAt = DateTime(2026, 5, 2, 10, 30);
+    final receivedAt = DateTime.now().subtract(const Duration(hours: 2));
     const body = 'Rs.450.00 debited from HDFC Bank card xx1234 at BLINKIT.';
     final sms1 = IncomingSms(
       id: 'hdfc-1',
@@ -126,7 +126,7 @@ void main() {
   test(
     'collapses same parsed candidate when SMS body differs slightly',
     () async {
-      final receivedAt = DateTime(2026, 5, 2, 10, 30);
+      final receivedAt = DateTime.now().subtract(const Duration(hours: 2));
       const body1 = 'Rs.450.00 debited from HDFC Bank card xx1234 at BLINKIT.';
       const body2 = 'Rs.450.00 debited from HDFC Bank card xx1234 at BLINKIT. ';
       final sms1 = IncomingSms(
@@ -176,7 +176,7 @@ void main() {
           id: 'otp-1',
           address: 'VM-HDFCBK',
           body: 'OTP 123456 for HDFC Bank login. Do not share it.',
-          receivedAt: DateTime(2026, 5, 2, 10),
+          receivedAt: DateTime.now().subtract(const Duration(hours: 3)),
         ),
       ];
       final pipeline = SmsPipeline(
@@ -209,7 +209,7 @@ void main() {
   );
 
   test('drains queued background SMS before normal backfill', () async {
-    final queuedAt = DateTime(2026, 5, 2, 9);
+    final queuedAt = DateTime.now().subtract(const Duration(days: 1));
     reader
       ..queuedMessages = [
         IncomingSms(
@@ -256,7 +256,7 @@ void main() {
   test(
     'live listener and catch-up do not double-ingest the same SMS',
     () async {
-      final receivedAt = DateTime(2026, 5, 2, 10, 30);
+      final receivedAt = DateTime.now().subtract(const Duration(hours: 2));
       final sms = IncomingSms(
         id: 'race-1',
         address: 'VK-HDFCBK',

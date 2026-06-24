@@ -13,53 +13,55 @@ class RemoteApplier {
   RemoteApplier(this._db);
   final AppDatabase _db;
 
-  Future<void> apply(Map<String, dynamic> change) async {
+  /// Applies one remote change. Returns `true` when the change was applied
+  /// or is permanently unprocessable (malformed / unknown resource — safe to
+  /// skip), and `false` only on an unexpected exception (likely transient).
+  /// The caller must NOT advance the sync cursor past a `false`, or the
+  /// change is lost forever.
+  Future<bool> apply(Map<String, dynamic> change) async {
     final resource = change['resource'] as String?;
     final id = change['resourceId'] as String?;
     final op = change['op'] as String?;
     final payload = change['payload'];
-    if (resource == null || id == null || op == null) return;
+    // Server timestamp of this change-log row; used as the delete tombstone
+    // time for last-write-wins on deletes.
+    final at = (change['at'] as num?)?.toInt();
+    if (resource == null || id == null || op == null) {
+      log.w('sync: malformed change (missing resource/id/op) — skipping');
+      return true; // unprocessable; skipping it must not stall the cursor
+    }
 
     try {
       switch (resource) {
         case 'accounts':
-          await _applyAccount(id, op, payload);
-          return;
+          await _applyAccount(id, op, payload, at);
         case 'category_groups':
           await _applyCategoryGroup(id, op, payload);
-          return;
         case 'categories':
-          await _applyCategory(id, op, payload);
-          return;
+          await _applyCategory(id, op, payload, at);
         case 'payees':
-          await _applyPayee(id, op, payload);
-          return;
+          await _applyPayee(id, op, payload, at);
         case 'transactions':
-          await _applyTransaction(id, op, payload);
-          return;
+          await _applyTransaction(id, op, payload, at);
         case 'tags':
           await _applyTag(id, op, payload);
-          return;
         case 'transaction_tags':
           await _applyTransactionTag(id, op, payload);
-          return;
         case 'rules':
           await _applyRule(id, op, payload);
-          return;
         case 'rule_matches':
           await _applyRuleMatch(id, op, payload);
-          return;
         case 'budgets':
-          await _applyBudget(id, op, payload);
-          return;
+          await _applyBudget(id, op, payload, at);
         case 'recurrences':
-          await _applyRecurrence(id, op, payload);
-          return;
+          await _applyRecurrence(id, op, payload, at);
         default:
           log.w('sync: unknown resource $resource — skipping');
       }
+      return true;
     } catch (e) {
       log.w('sync: failed to apply $resource/$id: $e');
+      return false;
     }
   }
 
@@ -69,8 +71,23 @@ class RemoteApplier {
     return remoteUpdatedAt.toInt() >= localUpdatedAt;
   }
 
-  Future<void> _applyAccount(String id, String op, dynamic payload) async {
+  /// Last-write-wins for deletes: a remote delete stamped [at] should be
+  /// applied unless the local row was updated more recently. Missing
+  /// timestamps fall back to applying the delete (legacy behaviour).
+  bool _deleteWins(int? localUpdatedAt, int? at) =>
+      localUpdatedAt == null || at == null || at >= localUpdatedAt;
+
+  Future<void> _applyAccount(
+    String id,
+    String op,
+    dynamic payload,
+    int? at,
+  ) async {
     if (op == 'delete') {
+      final local = await (_db.select(
+        _db.accounts,
+      )..where((t) => t.id.equals(id))).getSingleOrNull();
+      if (local != null && !_deleteWins(local.updatedAt, at)) return;
       await (_db.delete(_db.accounts)..where((t) => t.id.equals(id))).go();
       return;
     }
@@ -131,8 +148,17 @@ class RemoteApplier {
         );
   }
 
-  Future<void> _applyCategory(String id, String op, dynamic payload) async {
+  Future<void> _applyCategory(
+    String id,
+    String op,
+    dynamic payload,
+    int? at,
+  ) async {
     if (op == 'delete') {
+      final local = await (_db.select(
+        _db.categories,
+      )..where((t) => t.id.equals(id))).getSingleOrNull();
+      if (local != null && !_deleteWins(local.updatedAt, at)) return;
       await (_db.delete(_db.categories)..where((t) => t.id.equals(id))).go();
       return;
     }
@@ -158,8 +184,17 @@ class RemoteApplier {
         );
   }
 
-  Future<void> _applyPayee(String id, String op, dynamic payload) async {
+  Future<void> _applyPayee(
+    String id,
+    String op,
+    dynamic payload,
+    int? at,
+  ) async {
     if (op == 'delete') {
+      final local = await (_db.select(
+        _db.payees,
+      )..where((t) => t.id.equals(id))).getSingleOrNull();
+      if (local != null && !_deleteWins(local.updatedAt, at)) return;
       await (_db.delete(_db.payees)..where((t) => t.id.equals(id))).go();
       return;
     }
@@ -180,8 +215,17 @@ class RemoteApplier {
         );
   }
 
-  Future<void> _applyTransaction(String id, String op, dynamic payload) async {
+  Future<void> _applyTransaction(
+    String id,
+    String op,
+    dynamic payload,
+    int? at,
+  ) async {
     if (op == 'delete') {
+      final local = await (_db.select(
+        _db.transactions,
+      )..where((t) => t.id.equals(id))).getSingleOrNull();
+      if (local != null && !_deleteWins(local.updatedAt, at)) return;
       await (_db.delete(_db.transactions)..where((t) => t.id.equals(id))).go();
       return;
     }
@@ -280,8 +324,17 @@ class RemoteApplier {
         );
   }
 
-  Future<void> _applyBudget(String id, String op, dynamic payload) async {
+  Future<void> _applyBudget(
+    String id,
+    String op,
+    dynamic payload,
+    int? at,
+  ) async {
     if (op == 'delete') {
+      final local = await (_db.select(
+        _db.budgets,
+      )..where((b) => b.id.equals(id))).getSingleOrNull();
+      if (local != null && !_deleteWins(local.updatedAt, at)) return;
       await (_db.delete(_db.budgets)..where((t) => t.id.equals(id))).go();
       return;
     }
@@ -366,8 +419,17 @@ class RemoteApplier {
         );
   }
 
-  Future<void> _applyRecurrence(String id, String op, dynamic payload) async {
+  Future<void> _applyRecurrence(
+    String id,
+    String op,
+    dynamic payload,
+    int? at,
+  ) async {
     if (op == 'delete') {
+      final local = await (_db.select(
+        _db.recurrences,
+      )..where((t) => t.id.equals(id))).getSingleOrNull();
+      if (local != null && !_deleteWins(local.updatedAt, at)) return;
       await (_db.delete(_db.recurrences)..where((t) => t.id.equals(id))).go();
       return;
     }

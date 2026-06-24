@@ -16,6 +16,7 @@ import 'features/entry/quick_entry.dart';
 import 'features/entry/share_intake.dart';
 import 'router/router.dart';
 import 'state/providers.dart';
+import 'data/sms/sms_background_parse_worker.dart';
 import 'data/sms/sms_enrichment_worker.dart';
 import 'sync/sync_health_monitor.dart';
 import 'sync/sync_scheduler.dart';
@@ -57,6 +58,18 @@ Future<void> main() async {
   // user typed while the app was dead) can fire on the next launch and
   // on their own schedule.
   await Workmanager().initialize(smsEnrichmentDispatcher);
+  // Periodic safety-net so SMS that arrive while the app is closed get
+  // parsed without waiting for the next foreground open. The broadcast
+  // receiver queues them; this drains the queue on a schedule. Android's
+  // minimum periodic interval is 15 minutes. The worker itself no-ops when
+  // SMS capture is disabled.
+  await Workmanager().registerPeriodicTask(
+    'gullak.sms.parse.periodic',
+    backgroundParseTaskName,
+    frequency: const Duration(minutes: 15),
+    existingWorkPolicy: ExistingPeriodicWorkPolicy.keep,
+    constraints: Constraints(networkType: NetworkType.connected),
+  );
 
   runApp(
     ProviderScope(

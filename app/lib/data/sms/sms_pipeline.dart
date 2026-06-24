@@ -5,6 +5,7 @@ import 'package:drift/drift.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'account_matcher.dart';
 import '../../core/logger.dart';
 import '../../core/notification_service.dart';
 import '../../core/prefs.dart';
@@ -158,6 +159,24 @@ class SmsPipeline {
       _scanRunning = false;
       if (showProgress) _updateScanState(const SmsScanState.idle());
     }
+  }
+
+  /// Background-isolate entry point: drains only the broadcast-receiver
+  /// queue (SharedPreferences-backed, populated by [gullakBackgroundSmsHandler])
+  /// and ingests those SMS. Deliberately does NOT query the telephony plugin,
+  /// which isn't reliable off the main isolate — the periodic WorkManager
+  /// task uses this so SMS received while the app is closed get parsed
+  /// without waiting for the next foreground open. Returns the count ingested.
+  Future<int> ingestBackgroundQueue() async {
+    final queued = await reader.drainBackgroundQueue();
+    var added = 0;
+    for (final m in queued) {
+      if (await _safeIngest(m)) added += 1;
+    }
+    if (queued.isNotEmpty) {
+      log.i('sms bg-queue ingested $added/${queued.length}');
+    }
+    return added;
   }
 
   Future<int> catchUpRecent({
@@ -430,18 +449,21 @@ class SmsPipeline {
     if (accounts.isEmpty) {
       throw StateError('no accounts available for auto-confirm');
     }
-    String? acctId;
-    final hint = candidate.accountHint?.toLowerCase();
-    if (hint != null && hint.isNotEmpty) {
-      for (final a in accounts) {
-        final n = a.name.toLowerCase();
-        if (n == hint || n.contains(hint) || hint.contains(n)) {
-          acctId = a.id;
-          break;
-        }
-      }
+    final matchedAcct = matchAccountHint(
+      candidate.accountHint,
+      accounts.map((a) => (id: a.id, name: a.name, kind: a.kind)).toList(),
+    );
+    // Never silently auto-confirm onto a guessed account. If the bank can't
+    // be identified (and there's more than one account to choose from), throw
+    // so the caller leaves this SMS in the Inbox for manual account selection.
+    final acctId =
+        matchedAcct ?? (accounts.length == 1 ? accounts.first.id : null);
+    if (acctId == null) {
+      throw StateError(
+        'ambiguous account for SMS (hint="${candidate.accountHint}"); '
+        'routing to inbox for review',
+      );
     }
-    acctId ??= accounts.first.id;
     final signed = candidate.isIncome
         ? candidate.amountCents.abs()
         : -candidate.amountCents.abs();

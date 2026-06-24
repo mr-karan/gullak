@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/logger.dart';
 import '../../state/providers.dart';
 import '../db/database.dart';
 import 'deterministic_sms_parser.dart';
@@ -29,11 +30,20 @@ class ParserRegistry {
   final SmsParser _deterministicParser = const DeterministicSmsParser();
 
   Future<SmsCandidate?> tryParse(IncomingSms sms) async {
-    final local = await _deterministicParser.parse(sms);
-    if (local != null) return local;
-    final p = await _parserLoader();
-    if (p == null) return null;
-    return p.parse(sms);
+    // Parser boundary: never let a parse/schema/transport exception escape.
+    // A classifier-positive SMS that fails here must still get an `error`
+    // sms_messages row (visible + retryable) rather than being silently
+    // dropped before the row is written.
+    try {
+      final local = await _deterministicParser.parse(sms);
+      if (local != null) return local;
+      final p = await _parserLoader();
+      if (p == null) return null;
+      return await p.parse(sms);
+    } catch (e, st) {
+      log.w('sms parse failed; treating as error row', error: e, stackTrace: st);
+      return null;
+    }
   }
 }
 

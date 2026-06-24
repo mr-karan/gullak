@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../data/ai/pi_ai_client.dart';
 import '../../../data/db/database.dart';
+import '../../../data/sms/account_matcher.dart';
 import '../../../state/providers.dart';
 import '../../accounts/data/account_repository.dart';
 import '../../categories/data/category_repository.dart';
@@ -455,63 +456,100 @@ class SmsRepository {
   /// it writes the transaction and bookkeeping in one go, with no user
   /// review.
   Future<bool> _confirmOne(int id) async {
-    final resolved = await _resolveRow(id);
-    if (resolved == null) return false;
-    if (resolved.ignored) return true;
+    // Atomically claim the row before doing any work. Two concurrent
+    // confirmAll passes (or a double-tap) would otherwise both clear
+    // _resolveRow and each create a transaction for the same SMS. The
+    // conditional update only succeeds for the first caller; the second
+    // sees 0 rows changed and bails. A `finally` releases the claim if we
+    // don't reach a terminal status, so a failed row stays actionable.
+    final claimed =
+        await (_db.update(_db.smsMessages)..where(
+              (t) => t.id.equals(id) & t.candidateStatus.equals('inbox'),
+            ))
+            .write(
+              const SmsMessagesCompanion(candidateStatus: Value('processing')),
+            );
+    if (claimed == 0) return false;
+    var settled = false;
+    try {
+      final resolved = await _resolveRow(id);
+      if (resolved == null) return false;
+      if (resolved.ignored) {
+        settled = true; // _resolveRow already marked the row 'dismissed'
+        return true;
+      }
 
-    if (resolved.duplicateOf != null) {
-      await (_db.update(_db.smsMessages)..where((t) => t.id.equals(id))).write(
-        SmsMessagesCompanion(
-          candidateStatus: const Value('duplicate'),
-          linkedTransactionId: Value(resolved.duplicateOf),
+      if (resolved.duplicateOf != null) {
+        await (_db.update(_db.smsMessages)..where((t) => t.id.equals(id)))
+            .write(
+              SmsMessagesCompanion(
+                candidateStatus: const Value('duplicate'),
+                linkedTransactionId: Value(resolved.duplicateOf),
+              ),
+            );
+        settled = true;
+        return true;
+      }
+
+      final txRepo = ref.read(transactionRepoProvider);
+      final transactionId = await txRepo.create(
+        accountId: resolved.accountId,
+        categoryId: resolved.categoryId,
+        payeeId: resolved.payeeId,
+        payeeName: resolved.payeeName,
+        amountCents: resolved.signed,
+        date: resolved.date,
+        notes: 'SMS · ${resolved.row.address}',
+        origin: 'sms',
+        originRef: resolved.row.id.toString(),
+      );
+      if (resolved.tagIds.isNotEmpty) {
+        await ref
+            .read(tagRepoProvider)
+            .setTransactionTags(transactionId, resolved.tagIds);
+      }
+      await confirmFromTransaction(
+        smsRowId: id,
+        transactionId: transactionId,
+        accountId: resolved.accountId,
+        categoryId: resolved.categoryId,
+        payeeId: resolved.payeeId,
+      );
+      settled = true; // confirmFromTransaction set the row 'accepted'
+      // Push the raw SMS body to pi-server so the server-side LLM
+      // re-enrichment pass can fix payee/category metadata after Confirm
+      // All. Fire-and-forget — the server is allowed to be offline and a
+      // later [enqueueHistoricalSmsBackfill] can always catch missed rows.
+      // We pass the txn's updated_at as a fence; the reprocess endpoint
+      // skips rows whose linked txn has moved past that snapshot.
+      unawaited(
+        _uploadSmsBody(
+          smsRowId: id,
+          transactionId: transactionId,
+          address: resolved.row.address,
+          body: resolved.row.body,
+          receivedAt: resolved.row.receivedAt,
+          candidateJsonStr:
+              resolved.row.enrichedCandidateJson?.isNotEmpty == true
+              ? resolved.row.enrichedCandidateJson
+              : resolved.row.candidateJson,
         ),
       );
       return true;
+    } finally {
+      // Release the claim if we didn't reach a terminal status (parse
+      // failure, exception) so the row returns to the inbox instead of
+      // being stranded in 'processing'.
+      if (!settled) {
+        await (_db.update(_db.smsMessages)..where(
+              (t) =>
+                  t.id.equals(id) & t.candidateStatus.equals('processing'),
+            ))
+            .write(
+              const SmsMessagesCompanion(candidateStatus: Value('inbox')),
+            );
+      }
     }
-
-    final txRepo = ref.read(transactionRepoProvider);
-    final transactionId = await txRepo.create(
-      accountId: resolved.accountId,
-      categoryId: resolved.categoryId,
-      payeeId: resolved.payeeId,
-      payeeName: resolved.payeeName,
-      amountCents: resolved.signed,
-      date: resolved.date,
-      notes: 'SMS · ${resolved.row.address}',
-      origin: 'sms',
-      originRef: resolved.row.id.toString(),
-    );
-    if (resolved.tagIds.isNotEmpty) {
-      await ref
-          .read(tagRepoProvider)
-          .setTransactionTags(transactionId, resolved.tagIds);
-    }
-    await confirmFromTransaction(
-      smsRowId: id,
-      transactionId: transactionId,
-      accountId: resolved.accountId,
-      categoryId: resolved.categoryId,
-      payeeId: resolved.payeeId,
-    );
-    // Push the raw SMS body to pi-server so the server-side LLM
-    // re-enrichment pass can fix payee/category metadata after Confirm
-    // All. Fire-and-forget — the server is allowed to be offline and a
-    // later [enqueueHistoricalSmsBackfill] can always catch missed rows.
-    // We pass the txn's updated_at as a fence; the reprocess endpoint
-    // skips rows whose linked txn has moved past that snapshot.
-    unawaited(
-      _uploadSmsBody(
-        smsRowId: id,
-        transactionId: transactionId,
-        address: resolved.row.address,
-        body: resolved.row.body,
-        receivedAt: resolved.row.receivedAt,
-        candidateJsonStr: resolved.row.enrichedCandidateJson?.isNotEmpty == true
-            ? resolved.row.enrichedCandidateJson
-            : resolved.row.candidateJson,
-      ),
-    );
-    return true;
   }
 
   /// Shared parse + resolve pipeline used by [buildDraft] and the bulk
@@ -576,15 +614,10 @@ class SmsRepository {
         accounts.any((a) => a.id == ruleAction.accountId)) {
       acctId = ruleAction.accountId;
     }
-    if (acctId == null && accountHint != null) {
-      for (final a in accounts) {
-        if (accountHint.contains(a.name.toLowerCase()) ||
-            a.name.toLowerCase().contains(accountHint)) {
-          acctId = a.id;
-          break;
-        }
-      }
-    }
+    acctId ??= matchAccountHint(
+      accountHint,
+      accounts.map((a) => (id: a.id, name: a.name, kind: a.kind)).toList(),
+    );
     acctId ??= accounts.firstOrNull?.id;
     if (acctId == null) return null;
 
