@@ -4,6 +4,7 @@ app-dir := "app"
 dist-dir := "app/dist"
 package := "dev.mrkaran.gullak"
 apk-out := "app/build/app/outputs/flutter-apk/app-release.apk"
+aab-out := "app/build/app/outputs/bundle/release/app-release.aab"
 ipa-out := "app/build/ios/ipa"
 
 # Default: list recipes.
@@ -61,6 +62,25 @@ run:
 # `adb shell run-as` access (see `apk` recipe).
 install debuggable="false": (apk debuggable)
     adb install -r {{dist-dir}}/gullak-latest.apk
+
+# Build a release AAB (Android App Bundle) for Play Console uploads —
+# Internal App Sharing, Internal Testing, or eventual Production. Same
+# signing key as `apk`; same dart-define stamps.
+aab:
+    set -eu; \
+      sha="$(git rev-parse --short HEAD)"; \
+      ts="$(date +%Y%m%d-%H%M%S)"; \
+      cd {{app-dir}} && flutter build appbundle --release \
+        --dart-define="GULLAK_BUILD_SHA=$sha" \
+        --dart-define="GULLAK_BUILD_AT=$ts"
+    mkdir -p {{dist-dir}}
+    set -eu; \
+      sha="$(git rev-parse --short HEAD)"; \
+      ts="$(date +%Y%m%d-%H%M%S)"; \
+      out="{{dist-dir}}/gullak-${sha}-${ts}.aab"; \
+      cp {{aab-out}} "$out"; \
+      ln -sfn "$(basename "$out")" {{dist-dir}}/gullak-latest.aab; \
+      ls -lh "$out" {{dist-dir}}/gullak-latest.aab
 
 # Wipe app data on the connected device. Forces re-onboarding next launch.
 clear-data:
