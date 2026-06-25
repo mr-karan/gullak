@@ -181,10 +181,10 @@ class PiAiClient {
   }) async {
     try {
       final body = <String, dynamic>{
-        if (limit != null) 'limit': limit,
+        'limit': ?limit,
         if (smsIds != null && smsIds.isNotEmpty) 'smsIds': smsIds,
         if (force) 'force': true,
-        if (batchSize != null) 'batchSize': batchSize,
+        'batchSize': ?batchSize,
       };
       final json = await _post('/v1/sms/reprocess', body);
       return (
@@ -255,9 +255,9 @@ class SmsIngestItem {
     'sender': sender,
     'body': body,
     'receivedAt': receivedAt,
-    if (linkedTransactionId case final v?) 'linkedTransactionId': v,
-    if (baseTransactionUpdatedAt case final v?) 'baseTransactionUpdatedAt': v,
-    if (candidateJson case final v?) 'candidateJson': v,
+    'linkedTransactionId': ?linkedTransactionId,
+    'baseTransactionUpdatedAt': ?baseTransactionUpdatedAt,
+    'candidateJson': ?candidateJson,
   };
 }
 
