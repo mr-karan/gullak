@@ -1,4 +1,4 @@
-import type { ExtractTablesWithRelations } from "drizzle-orm";
+import { and, eq, type ExtractTablesWithRelations } from "drizzle-orm";
 import type { SQLiteTransaction } from "drizzle-orm/sqlite-core";
 
 import type { Db } from "../db/index.ts";
@@ -48,6 +48,29 @@ export function recordChange(db: DbOrTx, args: RecordChangeArgs): boolean {
     .returning({ id: changeLog.id })
     .all();
   return inserted.length > 0;
+}
+
+/// Idempotency probe: has this (clientId, clientChangeId) tuple already been
+/// applied? Lets the push handler dedup retries BEFORE touching data tables,
+/// so it can separate "already processed" from "new but stale/no-op" and only
+/// record a change_log row when the data mutation actually wins.
+export function isChangeRecorded(
+  db: DbOrTx,
+  clientId: string,
+  clientChangeId: string,
+): boolean {
+  const found = db
+    .select({ id: changeLog.id })
+    .from(changeLog)
+    .where(
+      and(
+        eq(changeLog.clientId, clientId),
+        eq(changeLog.clientChangeId, clientChangeId),
+      ),
+    )
+    .limit(1)
+    .all();
+  return found.length > 0;
 }
 
 export function nowMs(): number {

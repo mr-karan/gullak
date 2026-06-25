@@ -208,6 +208,23 @@ export const feedbackEvents = sqliteTable("feedback_events", {
   createdAt: integer("created_at").notNull().default(now),
 });
 
+// Single-row durable state for the Apps Script sheet push. Server-only — NOT
+// part of financial sync (no change_log rows). `cursor` is the high-water
+// transactions.updatedAt that has been confirmed pushed to the sheet, so each
+// run only re-sends rows changed since then (incremental). It only advances on
+// a successful POST, so a failed push is retried on the next push/interval —
+// nothing is dropped on restart. The error/attempt fields give visibility via
+// GET /v1/sheets/status.
+export const sheetsSyncState = sqliteTable("sheets_sync_state", {
+  id: integer("id").primaryKey(), // always 1; single-row table
+  cursor: integer("cursor").notNull().default(0),
+  lastAttemptAt: integer("last_attempt_at"),
+  lastSuccessAt: integer("last_success_at"),
+  lastError: text("last_error"),
+  consecutiveFailures: integer("consecutive_failures").notNull().default(0),
+  updatedAt: integer("updated_at").notNull().default(now),
+});
+
 // Append-only mutation log for sync clients. Each row is a single
 // row-level upsert/delete from any client. Clients pull rows after a
 // cursor (id) and apply LWW per-row by updatedAt.
@@ -307,6 +324,7 @@ export type Budget = typeof budgets.$inferSelect;
 export type Recurrence = typeof recurrences.$inferSelect;
 export type ChangeLogEntry = typeof changeLog.$inferSelect;
 export type FeedbackEvent = typeof feedbackEvents.$inferSelect;
+export type SheetsSyncState = typeof sheetsSyncState.$inferSelect;
 export type WhatsappInboxCandidate =
   typeof whatsappInboxCandidates.$inferSelect;
 export type NewWhatsappInboxCandidate =

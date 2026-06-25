@@ -19,7 +19,7 @@ import {
   transactions,
   transactionTags,
 } from "../db/schema.ts";
-import { recordChange } from "../repos/changelog.ts";
+import { isChangeRecorded, recordChange } from "../repos/changelog.ts";
 
 export const syncRouter = new Hono<AppEnv>();
 
@@ -87,53 +87,66 @@ type Resource =
 // an upsert only overwrites when the incoming row is newer-or-equal, and a
 // delete only fires when the client's tombstone time is >= the stored row.
 // Single statement, no read — stale offline pushes can no longer clobber.
-function lwwApplier(table: any) {
+//
+// Each method returns whether the data table actually changed: RETURNING emits
+// a row only for an applied insert/update/delete, so a stale no-op (setWhere
+// false, or a guarded delete that matched nothing) returns false. The push
+// handler uses this to record a change_log row ONLY for mutations that won.
+type Applier = {
+  upsert: (tx: DbOrTx, payload: unknown) => boolean;
+  remove: (tx: DbOrTx, id: string, payload?: unknown) => boolean;
+};
+
+function lwwApplier(table: any): Applier {
   return {
-    upsert: (tx: DbOrTx, payload: unknown) => {
+    upsert: (tx, payload) => {
       const row = payload as Record<string, unknown>;
-      tx
-        .insert(table)
-        .values(row)
-        .onConflictDoUpdate({
-          target: table.id,
-          set: row,
-          setWhere: sql`excluded.updated_at >= ${table.updatedAt}`,
-        })
-        .run();
+      return (
+        tx
+          .insert(table)
+          .values(row)
+          .onConflictDoUpdate({
+            target: table.id,
+            set: row,
+            setWhere: sql`excluded.updated_at >= ${table.updatedAt}`,
+          })
+          .returning({ id: table.id })
+          .all().length > 0
+      );
     },
-    remove: (tx: DbOrTx, id: string, payload?: unknown) => {
+    remove: (tx, id, payload) => {
       const ts = (payload as { updatedAt?: unknown } | null | undefined)
         ?.updatedAt;
-      tx
-        .delete(table)
-        .where(
-          typeof ts === "number"
-            ? and(eq(table.id, id), lte(table.updatedAt, ts))
-            : eq(table.id, id),
-        )
-        .run();
+      return (
+        tx
+          .delete(table)
+          .where(
+            typeof ts === "number"
+              ? and(eq(table.id, id), lte(table.updatedAt, ts))
+              : eq(table.id, id),
+          )
+          .returning({ id: table.id })
+          .all().length > 0
+      );
     },
   };
 }
 
-const APPLIERS: Record<
-  Resource,
-  {
-    upsert: (tx: DbOrTx, payload: unknown) => void;
-    remove: (tx: DbOrTx, id: string, payload?: unknown) => void;
-  }
-> = {
+const APPLIERS: Record<Resource, Applier> = {
   accounts: lwwApplier(accounts),
   category_groups: {
+    // Category groups carry no updated_at, so they always apply unconditionally.
     upsert: (tx, payload) => {
       const row = payload as typeof categoryGroups.$inferInsert;
       tx.insert(categoryGroups).values(row).onConflictDoUpdate({
         target: categoryGroups.id,
         set: row,
       }).run();
+      return true;
     },
     remove: (tx, id) => {
       tx.delete(categoryGroups).where(eq(categoryGroups.id, id)).run();
+      return true;
     },
   },
   categories: lwwApplier(categories),
@@ -166,22 +179,50 @@ const pushBodySchema = z.object({
 
 // POST /v1/sync/push
 //
-// Apply each change to its data table AND append to change_log, all
-// inside one transaction. Idempotent: a retried batch with the same
-// clientId+clientChangeId tuple will be silently skipped by the
-// unique index on change_log.
+// For each change: dedup retries, apply the data mutation (conditional LWW),
+// and append change_log ONLY when the mutation actually won — all inside one
+// transaction. Idempotent: a retried batch with the same clientId+
+// clientChangeId tuple is skipped before touching data tables. A new-but-stale
+// write (older updatedAt than the server row) applies nothing and emits no
+// change_log row, so losing writes don't propagate to other clients.
 syncRouter.post("/push", async (c) => {
   const db = c.get("db");
   const config = c.get("config");
   const parsed = pushBodySchema.parse(await c.req.json());
   let appliedCount = 0;
   let dedupedCount = 0;
+  let staleCount = 0;
 
   db.transaction((tx) => {
     for (const change of parsed.changes) {
-      // Dedup gate first: if we've already seen this (clientId,
-      // clientChangeId), skip both the apply and the log re-insert.
-      const recorded = recordChange(tx, {
+      // 1. Idempotency gate: already-processed retry → skip entirely.
+      if (isChangeRecorded(tx, parsed.clientId, change.clientChangeId)) {
+        dedupedCount += 1;
+        continue;
+      }
+
+      // 2. Apply the data mutation. `changed` is false for a stale no-op.
+      const applier = APPLIERS[change.resource];
+      let changed: boolean;
+      if (change.op === "upsert") {
+        if (change.payload == null) {
+          throw new Error(
+            `Missing payload for upsert ${change.resource}/${change.resourceId}`,
+          );
+        }
+        changed = applier.upsert(tx, change.payload);
+      } else {
+        changed = applier.remove(tx, change.resourceId, change.payload);
+      }
+
+      // 3. Record the change only when it actually mutated server state, so a
+      //    losing stale write neither advances the changelog nor echoes to
+      //    other clients as a (stale) change.
+      if (!changed) {
+        staleCount += 1;
+        continue;
+      }
+      recordChange(tx, {
         resource: change.resource,
         resourceId: change.resourceId,
         op: change.op,
@@ -189,21 +230,6 @@ syncRouter.post("/push", async (c) => {
         clientId: parsed.clientId,
         clientChangeId: change.clientChangeId,
       });
-      if (!recorded) {
-        dedupedCount += 1;
-        continue;
-      }
-      const applier = APPLIERS[change.resource];
-      if (change.op === "upsert") {
-        if (change.payload == null) {
-          throw new Error(
-            `Missing payload for upsert ${change.resource}/${change.resourceId}`,
-          );
-        }
-        applier.upsert(tx, change.payload);
-      } else {
-        applier.remove(tx, change.resourceId, change.payload);
-      }
       appliedCount += 1;
     }
   });
@@ -221,5 +247,6 @@ syncRouter.post("/push", async (c) => {
     accepted: parsed.changes.length,
     applied: appliedCount,
     deduped: dedupedCount,
+    stale: staleCount,
   });
 });

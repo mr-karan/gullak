@@ -1,9 +1,22 @@
 import { Hono } from "hono";
 
 import type { AppEnv } from "../app.ts";
-import { sheetsEnabled, syncExpensesToSheet } from "../sheets/sync.ts";
+import {
+  sheetsEnabled,
+  sheetsSyncStatus,
+  syncExpensesToSheet,
+} from "../sheets/sync.ts";
 
 export const sheetsRouter = new Hono<AppEnv>();
+
+// GET /v1/sheets/status — durable push state: high-water cursor, last
+// attempt/success times, last error, and the consecutive-failure count. Lets
+// you see at a glance whether the sheet is current or wedged on an error.
+sheetsRouter.get("/status", (c) => {
+  const db = c.get("db");
+  const config = c.get("config");
+  return c.json(sheetsSyncStatus(db, config));
+});
 
 // POST /v1/sheets/sync — push categorised expenses to the Apps Script web app.
 // Manual trigger / one-time migration. `?replace=true` clears the sheet's data
