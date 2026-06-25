@@ -71,6 +71,16 @@ export interface AppConfig {
   whatsappApiKey?: string;
   whatsappAllowedNumbers: string[];
   whatsappGroupRequireMention: boolean;
+  sheets: {
+    /** Target spreadsheet id; when unset the whole feature is a no-op. */
+    spreadsheetId?: string;
+    /** Tab to write expenses into. */
+    tab: string;
+    /** Service-account JSON: inline (starts with "{") or a file path. */
+    serviceAccountKey?: string;
+    /** Periodic auto-push cadence in minutes; 0 disables the interval. */
+    syncIntervalMinutes: number;
+  };
 }
 
 export function loadConfig(): AppConfig {
@@ -144,5 +154,17 @@ export function loadConfig(): AppConfig {
       "GULLAK_WHATSAPP_GROUP_REQUIRE_MENTION",
       false,
     ),
+    sheets: {
+      spreadsheetId: getOptionalEnv("GULLAK_SHEETS_ID"),
+      tab: getEnv("GULLAK_SHEETS_TAB", "Daily Expense Tracker"),
+      serviceAccountKey: getFirstOptionalEnv(
+        "GULLAK_SHEETS_SA_KEY",
+        "GULLAK_SHEETS_SA_KEY_PATH",
+      ),
+      syncIntervalMinutes: Number.parseInt(
+        getEnv("GULLAK_SHEETS_SYNC_INTERVAL_MIN", "0"),
+        10,
+      ),
+    },
   };
 }
