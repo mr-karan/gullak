@@ -2,6 +2,21 @@
 <Workspace
    version = "1.0">
    <FileRef
+      location = "group:../../../../bangalore.gpx">
+   </FileRef>
+   <FileRef
+      location = "group:../../../../chandigarh.gpx">
+   </FileRef>
+   <FileRef
+      location = "group:../../../../../../private/tmp/gurgaon.gpx">
+   </FileRef>
+   <FileRef
+      location = "group:../../../../../../private/tmp/blr.gpx">
+   </FileRef>
+   <FileRef
+      location = "group:../../../../london.gpx">
+   </FileRef>
+   <FileRef
       location = "group:Runner.xcodeproj">
    </FileRef>
    <FileRef
