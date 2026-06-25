@@ -433,6 +433,12 @@ function doPost(e) {
     const sheet = ss.getSheetByName(SHEETS.TRACKER);
     if (!sheet) return gullakJson({ error: 'tab not found' });
 
+    // Migration: clear existing data rows first for a clean, dup-free ingest.
+    if (body.replace === true) {
+      const lr = sheet.getLastRow();
+      if (lr > 1) sheet.getRange(2, 1, lr - 1, sheet.getLastColumn()).clearContent();
+    }
+
     const lastRow = sheet.getLastRow();
     const seen = {};
     if (lastRow > 1) {

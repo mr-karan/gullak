@@ -26,6 +26,7 @@ export function sheetsEnabled(config: AppConfig): boolean {
 export async function syncExpensesToSheet(
   db: Db,
   config: AppConfig,
+  opts: { replace?: boolean } = {},
 ): Promise<SheetsSyncResult> {
   const { webAppUrl, secret } = config.sheets;
   if (!webAppUrl || !secret) {
@@ -72,7 +73,7 @@ export async function syncExpensesToSheet(
   const res = await fetch(webAppUrl, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ secret, rows: out }),
+    body: JSON.stringify({ secret, rows: out, replace: opts.replace === true }),
   });
   if (!res.ok) {
     throw new Error(`sheets POST ${res.status}: ${await res.text()}`);
