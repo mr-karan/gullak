@@ -492,6 +492,7 @@ class SmsRepository {
       }
 
       final txRepo = ref.read(transactionRepoProvider);
+      final userNote = resolved.row.userNote?.trim();
       final transactionId = await txRepo.create(
         accountId: resolved.accountId,
         categoryId: resolved.categoryId,
@@ -499,7 +500,9 @@ class SmsRepository {
         payeeName: resolved.payeeName,
         amountCents: resolved.signed,
         date: resolved.date,
-        notes: 'SMS · ${resolved.row.address}',
+        notes: (userNote != null && userNote.isNotEmpty)
+            ? userNote
+            : 'SMS · ${resolved.row.address}',
         origin: 'sms',
         originRef: resolved.row.id.toString(),
       );

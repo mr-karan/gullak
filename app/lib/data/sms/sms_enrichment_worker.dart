@@ -169,6 +169,7 @@ class SmsEnrichmentWorker {
             db: db,
             transactionId: row.linkedTransactionId!,
             candidate: candidate,
+            note: note,
           ),
         NotificationService.instance.showEnrichedSummary(
           smsRowId: smsId,
@@ -188,14 +189,16 @@ class SmsEnrichmentWorker {
     }
   }
 
-  /// Push the enriched payee/category onto the SMS-origin transaction so
-  /// the device's Activity row shows it (and the homelab gets it on the
-  /// next sync push). Only fills fields that are still empty — never
-  /// overrides a user-set category.
+  /// Push the enriched payee/category/note onto the SMS-origin transaction so
+  /// the device's Activity row shows it (and the homelab gets it on the next
+  /// sync push). Category/payee only fill when empty (never override a set
+  /// category), but the user's note is the whole point of the reply — it's
+  /// always written to the transaction's notes.
   static Future<void> _propagateToTransaction({
     required AppDatabase db,
     required String transactionId,
     required Map<String, dynamic> candidate,
+    String? note,
   }) async {
     final txn = await (db.select(
       db.transactions,
@@ -204,6 +207,11 @@ class SmsEnrichmentWorker {
 
     final categoryId = (candidate['category_id'] as String?)?.trim();
     final payeeName = (candidate['payee'] as String?)?.trim();
+    // The server returns a cleaned `notes`; fall back to the raw user note.
+    final serverNote = (candidate['notes'] as String?)?.trim();
+    final noteText = (serverNote != null && serverNote.isNotEmpty)
+        ? serverNote
+        : note?.trim();
 
     final wantsCategory =
         categoryId != null &&
@@ -214,8 +222,9 @@ class SmsEnrichmentWorker {
         payeeName.isNotEmpty &&
         txn.payeeId == null &&
         (txn.payeeName == null || txn.payeeName!.isEmpty);
+    final wantsNote = noteText != null && noteText.isNotEmpty;
 
-    if (!wantsCategory && !wantsPayee) return;
+    if (!wantsCategory && !wantsPayee && !wantsNote) return;
 
     final changes = ChangeLogWriter(db);
     String? resolvedPayeeId;
@@ -231,6 +240,7 @@ class SmsEnrichmentWorker {
       categoryId: wantsCategory ? categoryId : TransactionRepository.unset,
       payeeId: resolvedPayeeId ?? TransactionRepository.unset,
       payeeName: wantsPayee ? payeeName : TransactionRepository.unset,
+      notes: wantsNote ? noteText : TransactionRepository.unset,
     );
   }
 
