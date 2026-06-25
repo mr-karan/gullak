@@ -44,13 +44,13 @@ class RemoteApplier {
         case 'transactions':
           await _applyTransaction(id, op, payload, at);
         case 'tags':
-          await _applyTag(id, op, payload);
+          await _applyTag(id, op, payload, at);
         case 'transaction_tags':
-          await _applyTransactionTag(id, op, payload);
+          await _applyTransactionTag(id, op, payload, at);
         case 'rules':
-          await _applyRule(id, op, payload);
+          await _applyRule(id, op, payload, at);
         case 'rule_matches':
-          await _applyRuleMatch(id, op, payload);
+          await _applyRuleMatch(id, op, payload, at);
         case 'budgets':
           await _applyBudget(id, op, payload, at);
         case 'recurrences':
@@ -268,8 +268,12 @@ class RemoteApplier {
         );
   }
 
-  Future<void> _applyTag(String id, String op, dynamic payload) async {
+  Future<void> _applyTag(String id, String op, dynamic payload, int? at) async {
     if (op == 'delete') {
+      final local = await (_db.select(
+        _db.tags,
+      )..where((t) => t.id.equals(id))).getSingleOrNull();
+      if (local != null && !_deleteWins(local.updatedAt, at)) return;
       await (_db.delete(_db.tags)..where((t) => t.id.equals(id))).go();
       return;
     }
@@ -300,8 +304,13 @@ class RemoteApplier {
     String id,
     String op,
     dynamic payload,
+    int? at,
   ) async {
     if (op == 'delete') {
+      final local = await (_db.select(
+        _db.transactionTags,
+      )..where((t) => t.id.equals(id))).getSingleOrNull();
+      if (local != null && !_deleteWins(local.updatedAt, at)) return;
       await (_db.delete(
         _db.transactionTags,
       )..where((t) => t.id.equals(id))).go();
@@ -359,8 +368,12 @@ class RemoteApplier {
         );
   }
 
-  Future<void> _applyRule(String id, String op, dynamic payload) async {
+  Future<void> _applyRule(String id, String op, dynamic payload, int? at) async {
     if (op == 'delete') {
+      final local = await (_db.select(
+        _db.rules,
+      )..where((t) => t.id.equals(id))).getSingleOrNull();
+      if (local != null && !_deleteWins(local.updatedAt, at)) return;
       await (_db.delete(_db.rules)..where((t) => t.id.equals(id))).go();
       return;
     }
@@ -390,8 +403,17 @@ class RemoteApplier {
         );
   }
 
-  Future<void> _applyRuleMatch(String id, String op, dynamic payload) async {
+  Future<void> _applyRuleMatch(
+    String id,
+    String op,
+    dynamic payload,
+    int? at,
+  ) async {
     if (op == 'delete') {
+      final local = await (_db.select(
+        _db.ruleMatches,
+      )..where((t) => t.id.equals(id))).getSingleOrNull();
+      if (local != null && !_deleteWins(local.updatedAt, at)) return;
       await (_db.delete(_db.ruleMatches)..where((t) => t.id.equals(id))).go();
       return;
     }

@@ -1,4 +1,4 @@
-import { and, eq, gt, isNull, ne, or } from "drizzle-orm";
+import { and, eq, gt, lte, sql } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
 
@@ -83,25 +83,47 @@ type Resource =
   | "budgets"
   | "recurrences";
 
+// SQL-level last-write-wins for the synced resources that carry updated_at:
+// an upsert only overwrites when the incoming row is newer-or-equal, and a
+// delete only fires when the client's tombstone time is >= the stored row.
+// Single statement, no read — stale offline pushes can no longer clobber.
+function lwwApplier(table: any) {
+  return {
+    upsert: (tx: DbOrTx, payload: unknown) => {
+      const row = payload as Record<string, unknown>;
+      tx
+        .insert(table)
+        .values(row)
+        .onConflictDoUpdate({
+          target: table.id,
+          set: row,
+          setWhere: sql`excluded.updated_at >= ${table.updatedAt}`,
+        })
+        .run();
+    },
+    remove: (tx: DbOrTx, id: string, payload?: unknown) => {
+      const ts = (payload as { updatedAt?: unknown } | null | undefined)
+        ?.updatedAt;
+      tx
+        .delete(table)
+        .where(
+          typeof ts === "number"
+            ? and(eq(table.id, id), lte(table.updatedAt, ts))
+            : eq(table.id, id),
+        )
+        .run();
+    },
+  };
+}
+
 const APPLIERS: Record<
   Resource,
   {
     upsert: (tx: DbOrTx, payload: unknown) => void;
-    remove: (tx: DbOrTx, id: string) => void;
+    remove: (tx: DbOrTx, id: string, payload?: unknown) => void;
   }
 > = {
-  accounts: {
-    upsert: (tx, payload) => {
-      const row = payload as typeof accounts.$inferInsert;
-      tx.insert(accounts).values(row).onConflictDoUpdate({
-        target: accounts.id,
-        set: row,
-      }).run();
-    },
-    remove: (tx, id) => {
-      tx.delete(accounts).where(eq(accounts.id, id)).run();
-    },
-  },
+  accounts: lwwApplier(accounts),
   category_groups: {
     upsert: (tx, payload) => {
       const row = payload as typeof categoryGroups.$inferInsert;
@@ -114,114 +136,15 @@ const APPLIERS: Record<
       tx.delete(categoryGroups).where(eq(categoryGroups.id, id)).run();
     },
   },
-  categories: {
-    upsert: (tx, payload) => {
-      const row = payload as typeof categories.$inferInsert;
-      tx.insert(categories).values(row).onConflictDoUpdate({
-        target: categories.id,
-        set: row,
-      }).run();
-    },
-    remove: (tx, id) => {
-      tx.delete(categories).where(eq(categories.id, id)).run();
-    },
-  },
-  payees: {
-    upsert: (tx, payload) => {
-      const row = payload as typeof payees.$inferInsert;
-      tx.insert(payees).values(row).onConflictDoUpdate({
-        target: payees.id,
-        set: row,
-      }).run();
-    },
-    remove: (tx, id) => {
-      tx.delete(payees).where(eq(payees.id, id)).run();
-    },
-  },
-  transactions: {
-    upsert: (tx, payload) => {
-      const row = payload as typeof transactions.$inferInsert;
-      tx.insert(transactions).values(row).onConflictDoUpdate({
-        target: transactions.id,
-        set: row,
-      }).run();
-    },
-    remove: (tx, id) => {
-      tx.delete(transactions).where(eq(transactions.id, id)).run();
-    },
-  },
-  tags: {
-    upsert: (tx, payload) => {
-      const row = payload as typeof tags.$inferInsert;
-      tx.insert(tags).values(row).onConflictDoUpdate({
-        target: tags.id,
-        set: row,
-      }).run();
-    },
-    remove: (tx, id) => {
-      tx.delete(tags).where(eq(tags.id, id)).run();
-    },
-  },
-  transaction_tags: {
-    upsert: (tx, payload) => {
-      const row = payload as typeof transactionTags.$inferInsert;
-      tx.insert(transactionTags).values(row).onConflictDoUpdate({
-        target: transactionTags.id,
-        set: row,
-      }).run();
-    },
-    remove: (tx, id) => {
-      tx.delete(transactionTags).where(eq(transactionTags.id, id)).run();
-    },
-  },
-  rules: {
-    upsert: (tx, payload) => {
-      const row = payload as typeof rules.$inferInsert;
-      tx.insert(rules).values(row).onConflictDoUpdate({
-        target: rules.id,
-        set: row,
-      }).run();
-    },
-    remove: (tx, id) => {
-      tx.delete(rules).where(eq(rules.id, id)).run();
-    },
-  },
-  rule_matches: {
-    upsert: (tx, payload) => {
-      const row = payload as typeof ruleMatches.$inferInsert;
-      tx.insert(ruleMatches).values(row).onConflictDoUpdate({
-        target: ruleMatches.id,
-        set: row,
-      }).run();
-    },
-    remove: (tx, id) => {
-      tx.delete(ruleMatches).where(eq(ruleMatches.id, id)).run();
-    },
-  },
-  budgets: {
-    upsert: (tx, payload) => {
-      const row = payload as typeof budgets.$inferInsert;
-      tx.insert(budgets).values(row).onConflictDoUpdate({
-        target: budgets.id,
-        set: row,
-      }).run();
-    },
-    remove: (tx, id) => {
-      tx.delete(budgets).where(eq(budgets.id, id)).run();
-    },
-  },
-  recurrences: {
-    upsert: (tx, payload) => {
-      const row = payload as typeof recurrences.$inferInsert;
-      tx.insert(recurrences).values(row).onConflictDoUpdate({
-        target: recurrences.id,
-        set: row,
-      }).run();
-    },
-    remove: (tx, id) => {
-      tx.delete(recurrences).where(eq(recurrences.id, id)).run();
-    },
-  },
+  categories: lwwApplier(categories),
+  payees: lwwApplier(payees),
+  transactions: lwwApplier(transactions),
+  tags: lwwApplier(tags),
+  transaction_tags: lwwApplier(transactionTags),
+  rules: lwwApplier(rules),
+  rule_matches: lwwApplier(ruleMatches),
+  budgets: lwwApplier(budgets),
+  recurrences: lwwApplier(recurrences),
 };
 
 const RESOURCES = Object.keys(APPLIERS) as Resource[];
@@ -279,7 +202,7 @@ syncRouter.post("/push", async (c) => {
         }
         applier.upsert(tx, change.payload);
       } else {
-        applier.remove(tx, change.resourceId);
+        applier.remove(tx, change.resourceId, change.payload);
       }
       appliedCount += 1;
     }

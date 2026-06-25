@@ -43,15 +43,19 @@ class ChangeLogWriter {
   }
 
   Future<void> delete(String resource, String id) async {
+    final now = DateTime.now().millisecondsSinceEpoch;
     await _db
         .into(_db.changeLog)
         .insert(
           ChangeLogCompanion.insert(
-            at: DateTime.now().millisecondsSinceEpoch,
+            at: now,
             clientChangeId: Value(_uuid.v4()),
             resource: resource,
             resourceId: id,
             op: 'delete',
+            // Tombstone time so the server applies last-write-wins on deletes —
+            // a stale delete arriving after a newer edit won't clobber it.
+            payload: Value(jsonEncode({'updatedAt': now})),
           ),
         );
     _scheduler?.schedule();
