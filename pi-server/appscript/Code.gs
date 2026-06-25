@@ -439,11 +439,15 @@ function doPost(e) {
       if (lr > 1) sheet.getRange(2, 1, lr - 1, sheet.getLastColumn()).clearContent();
     }
 
+    // Map existing gullak_id -> sheet row so we UPSERT: update an existing
+    // row in place (so edits/recategorisations reflect), else append.
     const lastRow = sheet.getLastRow();
-    const seen = {};
+    const idToRow = {};
     if (lastRow > 1) {
-      sheet.getRange(2, GULLAK_ID_COL, lastRow - 1, 1).getValues()
-        .forEach(function (r) { if (r[0]) seen[r[0]] = true; });
+      const ids = sheet.getRange(2, GULLAK_ID_COL, lastRow - 1, 1).getValues();
+      for (let i = 0; i < ids.length; i++) {
+        if (ids[i][0]) idToRow[ids[i][0]] = i + 2;
+      }
     }
 
     const typeMap = {};
@@ -455,23 +459,31 @@ function doPost(e) {
     }
 
     const toAppend = [];
+    let updated = 0;
     (body.rows || []).forEach(function (r) {
-      const id = r[GULLAK_ID_COL - 1];
-      if (id && seen[id]) return;
-      if (id) seen[id] = true;
       r[3] = Number(r[3]) || r[3];
       if (!r[5]) r[5] = typeMap[String(r[2]).trim()] || '';
-      toAppend.push(r);
+      const id = r[GULLAK_ID_COL - 1];
+      const rowNum = id ? idToRow[id] : null;
+      if (rowNum && rowNum > 0) {
+        sheet.getRange(rowNum, 1, 1, r.length).setValues([r]); // update in place
+        updated += 1;
+      } else if (rowNum !== -1) {
+        toAppend.push(r);
+        if (id) idToRow[id] = -1; // guard against a dup id within this batch
+      }
     });
 
     if (toAppend.length > 0) {
       sheet.getRange(sheet.getLastRow() + 1, 1, toAppend.length, toAppend[0].length).setValues(toAppend);
+    }
+    if (toAppend.length > 0 || updated > 0) {
       // onEdit doesn't fire on programmatic writes — refresh views directly.
       try { buildYearlyCalendar(); } catch (_) {}
       try { calculateMonthlyScore(); } catch (_) {}
       try { buildWeeklyAnalysis(); } catch (_) {}
     }
-    return gullakJson({ appended: toAppend.length });
+    return gullakJson({ appended: toAppend.length, updated: updated });
   } catch (err) {
     return gullakJson({ error: String(err) });
   }

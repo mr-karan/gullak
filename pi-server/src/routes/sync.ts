@@ -36,28 +36,34 @@ syncRouter.get("/changes", (c) => {
   const cursor = Number.isFinite(since) ? since : 0;
 
   const baseFilter = gt(changeLog.id, cursor);
-  const filter = callerId
-    ? and(
-        baseFilter,
-        or(isNull(changeLog.clientId), ne(changeLog.clientId, callerId)),
-      )
-    : baseFilter;
 
-  const rows = db
+  // Scan the window by id (INCLUDING the caller's own rows) so the cursor can
+  // advance past self-originated rows. Self rows are filtered from `changes`
+  // below, but the cursor moves to the last scanned id — otherwise a page that
+  // is entirely self-originated returns empty and the cursor never advances,
+  // forcing endless re-scans from the same point.
+  const windowRows = db
     .select()
     .from(changeLog)
-    .where(filter)
+    .where(baseFilter)
     .orderBy(changeLog.id)
     .limit(limit)
     .all();
 
+  const visible = callerId
+    ? windowRows.filter(
+        (row) => row.clientId === null || row.clientId !== callerId,
+      )
+    : windowRows;
+
   // Parse payload server-side so clients don't have to JSON.parse a
   // string nested in a JSON response.
-  const changes = rows.map((row) => ({
+  const changes = visible.map((row) => ({
     ...row,
     payload: row.payload === null ? null : JSON.parse(row.payload),
   }));
-  const newCursor = changes.length > 0 ? changes[changes.length - 1]!.id : cursor;
+  const newCursor =
+    windowRows.length > 0 ? windowRows[windowRows.length - 1]!.id : cursor;
   return c.json({ changes, cursor: newCursor });
 });
 

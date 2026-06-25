@@ -58,7 +58,8 @@ export async function syncExpensesToSheet(
       t.date,
       description,
       mapped.category,
-      Math.round(Math.abs(t.amountCents) / 100),
+      // minor units → rupees, preserving paise (e.g. 298713 → 2987.13)
+      Number((Math.abs(t.amountCents) / 100).toFixed(2)),
       paymentModeForKind(r.accounts?.kind),
       mapped.type,
       t.notes ?? "",
