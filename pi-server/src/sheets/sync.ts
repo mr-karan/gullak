@@ -3,49 +3,36 @@ import { eq, lt } from "drizzle-orm";
 import type { AppConfig } from "../config.ts";
 import type { Db } from "../db/index.ts";
 import { accounts, categories, payees, transactions } from "../db/schema.ts";
-import { getAccessToken, loadServiceAccount } from "./auth.ts";
-import {
-  appendValues,
-  getValues,
-  SHEETS_SCOPE,
-  updateValues,
-} from "./client.ts";
 import { mapCategory, paymentModeForKind } from "./mapping.ts";
 
 export interface SheetsSyncResult {
   total: number; // expense (debit) txns considered
-  pushed: number; // appended as new rows
-  updated: number; // existing rows refreshed
+  sent: number; // rows POSTed
   skipped: number; // uncategorised / excluded / transfers
 }
 
-/** True when the feature is configured enough to run. */
+/** True when the Apps Script endpoint is configured. */
 export function sheetsEnabled(config: AppConfig): boolean {
-  return Boolean(
-    config.sheets.spreadsheetId && config.sheets.serviceAccountKey,
-  );
+  return Boolean(config.sheets.webAppUrl && config.sheets.secret);
 }
 
 /**
- * Push categorised expenses into the Finance Tracker's Daily Expense Tracker
- * tab. Idempotent: the Gullak transaction id is written into a hidden column
- * (H) and used as the upsert key, so re-runs update the same row instead of
- * duplicating. Only debit transactions that map to a sheet category are
- * pushed (see mapping.ts) — uncategorised, transfers, splits, income, tax,
- * card-bill fees and cash withdrawals are skipped.
+ * POSTs categorised expenses to the sheet's Apps Script web app (no service
+ * account, no Sheets API). The Apps Script dedupes by the gullak_id column, so
+ * sending the full set is idempotent — re-runs never duplicate. Only debit
+ * transactions that map to a sheet category are sent; uncategorised, transfers,
+ * splits, income, tax, card-bill fees and cash withdrawals are skipped.
  */
 export async function syncExpensesToSheet(
   db: Db,
   config: AppConfig,
 ): Promise<SheetsSyncResult> {
-  const { spreadsheetId, serviceAccountKey, tab } = config.sheets;
-  if (!spreadsheetId || !serviceAccountKey) {
+  const { webAppUrl, secret } = config.sheets;
+  if (!webAppUrl || !secret) {
     throw new Error(
-      "sheets sync not configured (set GULLAK_SHEETS_ID + GULLAK_SHEETS_SA_KEY)",
+      "sheets sync not configured (GULLAK_SHEETS_WEBAPP_URL + GULLAK_SHEETS_SECRET)",
     );
   }
-  const sa = loadServiceAccount(serviceAccountKey);
-  const token = await getAccessToken(sa, SHEETS_SCOPE);
 
   const rows = db
     .select()
@@ -56,9 +43,8 @@ export async function syncExpensesToSheet(
     .where(lt(transactions.amountCents, 0))
     .all();
 
-  // Build sheet rows (cols A:H = Date, Description, Category, Amount,
-  // Payment Mode, Type, Notes, tid), skipping anything that shouldn't land.
-  const out: { tid: string; values: (string | number)[] }[] = [];
+  // A:H = Date, Description, Category, Amount, Payment Mode, Type, Notes, tid
+  const out: (string | number)[][] = [];
   for (const r of rows) {
     const t = r.transactions;
     if (t.transferAccountId || t.parentId) continue; // transfer / split parent
@@ -67,54 +53,29 @@ export async function syncExpensesToSheet(
     const description =
       (r.payees?.name ?? t.payeeName ?? r.categories?.name ?? "").trim() ||
       mapped.category;
-    const amount = Math.round(Math.abs(t.amountCents) / 100);
-    out.push({
-      tid: t.id,
-      values: [
-        t.date,
-        description,
-        mapped.category,
-        amount,
-        paymentModeForKind(r.accounts?.kind),
-        mapped.type,
-        t.notes ?? "",
-        t.id,
-      ],
-    });
+    out.push([
+      t.date,
+      description,
+      mapped.category,
+      Math.round(Math.abs(t.amountCents) / 100),
+      paymentModeForKind(r.accounts?.kind),
+      mapped.type,
+      t.notes ?? "",
+      t.id,
+    ]);
   }
 
-  // Map existing tid → sheet row number (H2 = row 2) for upsert.
-  const existing = await getValues(token, spreadsheetId, `${tab}!H2:H`);
-  const tidToRow = new Map<string, number>();
-  existing.forEach((row, i) => {
-    const tid = row[0];
-    if (tid) tidToRow.set(tid, i + 2);
+  if (out.length === 0) {
+    return { total: rows.length, sent: 0, skipped: rows.length };
+  }
+
+  const res = await fetch(webAppUrl, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ secret, rows: out }),
   });
-
-  let updated = 0;
-  const toAppend: (string | number)[][] = [];
-  for (const o of out) {
-    const rowNum = tidToRow.get(o.tid);
-    if (rowNum) {
-      await updateValues(
-        token,
-        spreadsheetId,
-        `${tab}!A${rowNum}:H${rowNum}`,
-        [o.values],
-      );
-      updated += 1;
-    } else {
-      toAppend.push(o.values);
-    }
+  if (!res.ok) {
+    throw new Error(`sheets POST ${res.status}: ${await res.text()}`);
   }
-  if (toAppend.length > 0) {
-    await appendValues(token, spreadsheetId, `${tab}!A2:H`, toAppend);
-  }
-
-  return {
-    total: rows.length,
-    pushed: toAppend.length,
-    updated,
-    skipped: rows.length - out.length,
-  };
+  return { total: rows.length, sent: out.length, skipped: rows.length - out.length };
 }

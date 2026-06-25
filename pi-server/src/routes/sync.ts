@@ -4,6 +4,7 @@ import { z } from "zod";
 
 import type { AppEnv } from "../app.ts";
 import type { DbOrTx } from "../repos/changelog.ts";
+import { sheetsEnabled, syncExpensesToSheet } from "../sheets/sync.ts";
 import {
   accounts,
   budgets,
@@ -242,6 +243,7 @@ const pushBodySchema = z.object({
 // unique index on change_log.
 syncRouter.post("/push", async (c) => {
   const db = c.get("db");
+  const config = c.get("config");
   const parsed = pushBodySchema.parse(await c.req.json());
   let appliedCount = 0;
   let dedupedCount = 0;
@@ -276,6 +278,15 @@ syncRouter.post("/push", async (c) => {
       appliedCount += 1;
     }
   });
+
+  // Fan out to the Google Sheet after a successful sync. Fire-and-forget so
+  // the client's push isn't blocked on the Google round-trip; the Apps Script
+  // dedupes, so an occasional extra run is harmless.
+  if (appliedCount > 0 && sheetsEnabled(config)) {
+    void syncExpensesToSheet(db, config).catch((e) =>
+      console.warn(`sheets push failed: ${e}`),
+    );
+  }
 
   return c.json({
     accepted: parsed.changes.length,
