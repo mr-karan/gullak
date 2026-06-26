@@ -1,8 +1,9 @@
 // Maps Gullak's category taxonomy onto the Finance Tracker sheet's 9
-// categories (+ Need/Want/Saving type). Anything not in the map — including
-// uncategorised transactions and the EXCLUDE set (transfers, tax, card-bill
-// fees, cash withdrawals, all income) — is intentionally NOT pushed, so the
-// sheet only ever contains real, categorised expenses.
+// categories (+ Need/Want/Saving type). The EXCLUDE set (transfers, tax,
+// card-bill fees, cash withdrawals, all income) is dropped via
+// isExcludedCategory(). NOTE: uncategorised/unmapped expenses are NOT dropped —
+// sync.ts pushes them with a blank Category for the user to fill in-sheet
+// (mapCategory returns null for those; the caller treats null as "blank").
 
 export type SheetType = "Need" | "Want" | "Saving";
 

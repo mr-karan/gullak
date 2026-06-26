@@ -200,9 +200,22 @@ export async function syncExpensesToSheet(
     ]);
   }
 
-  // Nothing changed since the last run — no POST, no state churn.
+  // Nothing to POST this run. If we still scanned rows (all excluded/transfers),
+  // advance the cursor anyway so the same window isn't rescanned forever —
+  // otherwise a window that's entirely excluded rows pins the cursor in place.
   if (out.length === 0 && !replace) {
-    return { total: rows.length, sent: 0, skipped: rows.length, cursor: state.cursor };
+    if (rows.length > 0 && maxUpdatedAt > state.cursor) {
+      db.update(sheetsSyncState)
+        .set({ cursor: maxUpdatedAt, updatedAt: Date.now() })
+        .where(eq(sheetsSyncState.id, STATE_ID))
+        .run();
+    }
+    return {
+      total: rows.length,
+      sent: 0,
+      skipped: rows.length,
+      cursor: maxUpdatedAt,
+    };
   }
 
   const attemptAt = Date.now();
@@ -212,8 +225,22 @@ export async function syncExpensesToSheet(
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ secret, rows: out, replace }),
     });
+    const text = await res.text();
     if (!res.ok) {
-      throw new Error(`sheets POST ${res.status}: ${await res.text()}`);
+      throw new Error(`sheets POST ${res.status}: ${text}`);
+    }
+    // Apps Script signals failures (bad secret, missing tab, script throw) with
+    // an {error} body on HTTP 200 — so a status check alone would treat a
+    // rejected payload as success and wrongly advance the cursor. Inspect the
+    // body and fail loudly so the cursor stays put and the error is recorded.
+    let parsed: { error?: unknown } | null = null;
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      throw new Error(`sheets POST returned non-JSON: ${text.slice(0, 200)}`);
+    }
+    if (parsed?.error) {
+      throw new Error(`sheets script error: ${String(parsed.error)}`);
     }
     // Success: advance the high-water cursor and clear the error state.
     db.update(sheetsSyncState)
