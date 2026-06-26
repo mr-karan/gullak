@@ -681,6 +681,13 @@ function doPost(e) {
         .setValues(toAppend);
     }
     if (toAppend.length > 0 || updated > 0) {
+      // Keep the tracker chronological: sort all data rows by Date (col A) so
+      // newly-appended rows don't pile up out of order at the bottom.
+      const sortRows = sheet.getLastRow() - 1;
+      if (sortRows > 1)
+        sheet
+          .getRange(2, 1, sortRows, sheet.getLastColumn())
+          .sort({ column: 1, ascending: true });
       // onEdit doesn't fire on programmatic writes — refresh views directly.
       try {
         buildYearlyCalendar();
