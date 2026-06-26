@@ -273,14 +273,25 @@ class PayeeCategoryRow extends NamedRow {
 }
 
 class SmsParseResponse {
-  const SmsParseResponse({required this.isTransaction, this.candidate});
+  const SmsParseResponse({
+    required this.status,
+    required this.isTransaction,
+    this.candidate,
+  });
+  // 'transaction' | 'not_a_txn' | 'parse_failed'. Lets the parse queue route
+  // terminal outcomes (not_a_txn / parse_failed are never retried) apart from
+  // a successful candidate. Network failure throws before we ever get here, so
+  // those SMS stay queued for retry.
+  final String status;
   final bool isTransaction;
   final SmsCandidatePayload? candidate;
 
   factory SmsParseResponse.fromJson(Map<String, dynamic> j) {
     final candidate = j['candidate'];
+    final isTxn = j['isTransaction'] == true;
     return SmsParseResponse(
-      isTransaction: j['isTransaction'] == true,
+      status: j['status'] as String? ?? (isTxn ? 'transaction' : 'not_a_txn'),
+      isTransaction: isTxn,
       candidate: candidate is Map<String, dynamic>
           ? SmsCandidatePayload.fromJson(candidate)
           : null,
