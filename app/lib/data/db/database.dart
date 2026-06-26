@@ -38,7 +38,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 9;
+  int get schemaVersion => 10;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -83,6 +83,14 @@ class AppDatabase extends _$AppDatabase {
       await customStatement(
         'CREATE INDEX IF NOT EXISTS idx_sms_status '
         'ON sms_messages(candidate_status)',
+      );
+      await customStatement(
+        'CREATE INDEX IF NOT EXISTS idx_sms_stable '
+        'ON sms_messages(stable_sms_id)',
+      );
+      await customStatement(
+        'CREATE INDEX IF NOT EXISTS idx_sms_next_parse '
+        'ON sms_messages(candidate_status, next_parse_after)',
       );
       await customStatement(
         'CREATE INDEX IF NOT EXISTS idx_change_log_synced '
@@ -168,6 +176,36 @@ class AppDatabase extends _$AppDatabase {
         await m.addColumn(smsMessages, smsMessages.enrichmentStatus);
         await m.addColumn(smsMessages, smsMessages.enrichedCandidateJson);
         await m.addColumn(smsMessages, smsMessages.enrichedAt);
+      }
+      if (from < 10) {
+        // Server-parse queue. Every captured SMS is parsed by the pi-server;
+        // these columns hold the queue state + backoff + idempotency key.
+        await m.addColumn(smsMessages, smsMessages.stableSmsId);
+        await m.addColumn(smsMessages, smsMessages.parseAttemptCount);
+        await m.addColumn(smsMessages, smsMessages.nextParseAfter);
+        await m.addColumn(smsMessages, smsMessages.lastParseError);
+        await m.addColumn(smsMessages, smsMessages.parsedAt);
+        // Backfill the idempotency key for existing rows: prefer the Android
+        // SMS id, else fall back to the local row id. (Android ids can collide
+        // due to the platform dedupe quirk, so the index is intentionally
+        // NON-unique; idempotency is enforced in code by lookup-before-insert.)
+        await customStatement(
+          "UPDATE sms_messages SET stable_sms_id = 'android:' || android_id "
+          'WHERE android_id IS NOT NULL AND stable_sms_id IS NULL',
+        );
+        await customStatement(
+          "UPDATE sms_messages SET stable_sms_id = 'row:' || id "
+          'WHERE stable_sms_id IS NULL',
+        );
+        await customStatement(
+          'CREATE INDEX IF NOT EXISTS idx_sms_stable '
+          'ON sms_messages(stable_sms_id)',
+        );
+        // Speeds the queue drainer's "due for parse" scan.
+        await customStatement(
+          'CREATE INDEX IF NOT EXISTS idx_sms_next_parse '
+          'ON sms_messages(candidate_status, next_parse_after)',
+        );
       }
     },
   );

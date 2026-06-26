@@ -234,6 +234,18 @@ class SmsMessages extends Table {
       text().withDefault(const Constant('none'))();
   TextColumn get enrichedCandidateJson => text().nullable()();
   IntColumn get enrichedAt => integer().nullable()();
+  // Server-parse queue (v10). Every captured SMS is parsed by the pi-server —
+  // there is no on-device parsing. [stableSmsId] is the idempotency key
+  // ('android:<id>' when the platform gives one, else a body hash) and is also
+  // used as the created transaction's originRef so retries never double-create.
+  // [candidateStatus] doubles as the queue state: pending_parse → parsing →
+  // parsed | not_a_txn | parse_failed, then parsed → accepted | duplicate |
+  // dismissed. Backoff metadata governs retries when the server is unreachable.
+  TextColumn get stableSmsId => text().nullable()();
+  IntColumn get parseAttemptCount => integer().withDefault(const Constant(0))();
+  IntColumn get nextParseAfter => integer().nullable()();
+  TextColumn get lastParseError => text().nullable()();
+  IntColumn get parsedAt => integer().nullable()();
 }
 
 @DataClassName('AppKvRow')

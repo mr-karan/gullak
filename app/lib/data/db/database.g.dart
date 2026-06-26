@@ -6094,6 +6094,62 @@ class $SmsMessagesTable extends SmsMessages
     type: DriftSqlType.int,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _stableSmsIdMeta = const VerificationMeta(
+    'stableSmsId',
+  );
+  @override
+  late final GeneratedColumn<String> stableSmsId = GeneratedColumn<String>(
+    'stable_sms_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _parseAttemptCountMeta = const VerificationMeta(
+    'parseAttemptCount',
+  );
+  @override
+  late final GeneratedColumn<int> parseAttemptCount = GeneratedColumn<int>(
+    'parse_attempt_count',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _nextParseAfterMeta = const VerificationMeta(
+    'nextParseAfter',
+  );
+  @override
+  late final GeneratedColumn<int> nextParseAfter = GeneratedColumn<int>(
+    'next_parse_after',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _lastParseErrorMeta = const VerificationMeta(
+    'lastParseError',
+  );
+  @override
+  late final GeneratedColumn<String> lastParseError = GeneratedColumn<String>(
+    'last_parse_error',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _parsedAtMeta = const VerificationMeta(
+    'parsedAt',
+  );
+  @override
+  late final GeneratedColumn<int> parsedAt = GeneratedColumn<int>(
+    'parsed_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -6116,6 +6172,11 @@ class $SmsMessagesTable extends SmsMessages
     enrichmentStatus,
     enrichedCandidateJson,
     enrichedAt,
+    stableSmsId,
+    parseAttemptCount,
+    nextParseAfter,
+    lastParseError,
+    parsedAt,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -6291,6 +6352,48 @@ class $SmsMessagesTable extends SmsMessages
         enrichedAt.isAcceptableOrUnknown(data['enriched_at']!, _enrichedAtMeta),
       );
     }
+    if (data.containsKey('stable_sms_id')) {
+      context.handle(
+        _stableSmsIdMeta,
+        stableSmsId.isAcceptableOrUnknown(
+          data['stable_sms_id']!,
+          _stableSmsIdMeta,
+        ),
+      );
+    }
+    if (data.containsKey('parse_attempt_count')) {
+      context.handle(
+        _parseAttemptCountMeta,
+        parseAttemptCount.isAcceptableOrUnknown(
+          data['parse_attempt_count']!,
+          _parseAttemptCountMeta,
+        ),
+      );
+    }
+    if (data.containsKey('next_parse_after')) {
+      context.handle(
+        _nextParseAfterMeta,
+        nextParseAfter.isAcceptableOrUnknown(
+          data['next_parse_after']!,
+          _nextParseAfterMeta,
+        ),
+      );
+    }
+    if (data.containsKey('last_parse_error')) {
+      context.handle(
+        _lastParseErrorMeta,
+        lastParseError.isAcceptableOrUnknown(
+          data['last_parse_error']!,
+          _lastParseErrorMeta,
+        ),
+      );
+    }
+    if (data.containsKey('parsed_at')) {
+      context.handle(
+        _parsedAtMeta,
+        parsedAt.isAcceptableOrUnknown(data['parsed_at']!, _parsedAtMeta),
+      );
+    }
     return context;
   }
 
@@ -6380,6 +6483,26 @@ class $SmsMessagesTable extends SmsMessages
         DriftSqlType.int,
         data['${effectivePrefix}enriched_at'],
       ),
+      stableSmsId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}stable_sms_id'],
+      ),
+      parseAttemptCount: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}parse_attempt_count'],
+      )!,
+      nextParseAfter: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}next_parse_after'],
+      ),
+      lastParseError: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}last_parse_error'],
+      ),
+      parsedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}parsed_at'],
+      ),
     );
   }
 
@@ -6410,6 +6533,11 @@ class SmsRow extends DataClass implements Insertable<SmsRow> {
   final String enrichmentStatus;
   final String? enrichedCandidateJson;
   final int? enrichedAt;
+  final String? stableSmsId;
+  final int parseAttemptCount;
+  final int? nextParseAfter;
+  final String? lastParseError;
+  final int? parsedAt;
   const SmsRow({
     required this.id,
     this.androidId,
@@ -6431,6 +6559,11 @@ class SmsRow extends DataClass implements Insertable<SmsRow> {
     required this.enrichmentStatus,
     this.enrichedCandidateJson,
     this.enrichedAt,
+    this.stableSmsId,
+    required this.parseAttemptCount,
+    this.nextParseAfter,
+    this.lastParseError,
+    this.parsedAt,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -6480,6 +6613,19 @@ class SmsRow extends DataClass implements Insertable<SmsRow> {
     }
     if (!nullToAbsent || enrichedAt != null) {
       map['enriched_at'] = Variable<int>(enrichedAt);
+    }
+    if (!nullToAbsent || stableSmsId != null) {
+      map['stable_sms_id'] = Variable<String>(stableSmsId);
+    }
+    map['parse_attempt_count'] = Variable<int>(parseAttemptCount);
+    if (!nullToAbsent || nextParseAfter != null) {
+      map['next_parse_after'] = Variable<int>(nextParseAfter);
+    }
+    if (!nullToAbsent || lastParseError != null) {
+      map['last_parse_error'] = Variable<String>(lastParseError);
+    }
+    if (!nullToAbsent || parsedAt != null) {
+      map['parsed_at'] = Variable<int>(parsedAt);
     }
     return map;
   }
@@ -6532,6 +6678,19 @@ class SmsRow extends DataClass implements Insertable<SmsRow> {
       enrichedAt: enrichedAt == null && nullToAbsent
           ? const Value.absent()
           : Value(enrichedAt),
+      stableSmsId: stableSmsId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(stableSmsId),
+      parseAttemptCount: Value(parseAttemptCount),
+      nextParseAfter: nextParseAfter == null && nullToAbsent
+          ? const Value.absent()
+          : Value(nextParseAfter),
+      lastParseError: lastParseError == null && nullToAbsent
+          ? const Value.absent()
+          : Value(lastParseError),
+      parsedAt: parsedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(parsedAt),
     );
   }
 
@@ -6567,6 +6726,11 @@ class SmsRow extends DataClass implements Insertable<SmsRow> {
         json['enrichedCandidateJson'],
       ),
       enrichedAt: serializer.fromJson<int?>(json['enrichedAt']),
+      stableSmsId: serializer.fromJson<String?>(json['stableSmsId']),
+      parseAttemptCount: serializer.fromJson<int>(json['parseAttemptCount']),
+      nextParseAfter: serializer.fromJson<int?>(json['nextParseAfter']),
+      lastParseError: serializer.fromJson<String?>(json['lastParseError']),
+      parsedAt: serializer.fromJson<int?>(json['parsedAt']),
     );
   }
   @override
@@ -6595,6 +6759,11 @@ class SmsRow extends DataClass implements Insertable<SmsRow> {
         enrichedCandidateJson,
       ),
       'enrichedAt': serializer.toJson<int?>(enrichedAt),
+      'stableSmsId': serializer.toJson<String?>(stableSmsId),
+      'parseAttemptCount': serializer.toJson<int>(parseAttemptCount),
+      'nextParseAfter': serializer.toJson<int?>(nextParseAfter),
+      'lastParseError': serializer.toJson<String?>(lastParseError),
+      'parsedAt': serializer.toJson<int?>(parsedAt),
     };
   }
 
@@ -6619,6 +6788,11 @@ class SmsRow extends DataClass implements Insertable<SmsRow> {
     String? enrichmentStatus,
     Value<String?> enrichedCandidateJson = const Value.absent(),
     Value<int?> enrichedAt = const Value.absent(),
+    Value<String?> stableSmsId = const Value.absent(),
+    int? parseAttemptCount,
+    Value<int?> nextParseAfter = const Value.absent(),
+    Value<String?> lastParseError = const Value.absent(),
+    Value<int?> parsedAt = const Value.absent(),
   }) => SmsRow(
     id: id ?? this.id,
     androidId: androidId.present ? androidId.value : this.androidId,
@@ -6656,6 +6830,15 @@ class SmsRow extends DataClass implements Insertable<SmsRow> {
         ? enrichedCandidateJson.value
         : this.enrichedCandidateJson,
     enrichedAt: enrichedAt.present ? enrichedAt.value : this.enrichedAt,
+    stableSmsId: stableSmsId.present ? stableSmsId.value : this.stableSmsId,
+    parseAttemptCount: parseAttemptCount ?? this.parseAttemptCount,
+    nextParseAfter: nextParseAfter.present
+        ? nextParseAfter.value
+        : this.nextParseAfter,
+    lastParseError: lastParseError.present
+        ? lastParseError.value
+        : this.lastParseError,
+    parsedAt: parsedAt.present ? parsedAt.value : this.parsedAt,
   );
   SmsRow copyWithCompanion(SmsMessagesCompanion data) {
     return SmsRow(
@@ -6709,6 +6892,19 @@ class SmsRow extends DataClass implements Insertable<SmsRow> {
       enrichedAt: data.enrichedAt.present
           ? data.enrichedAt.value
           : this.enrichedAt,
+      stableSmsId: data.stableSmsId.present
+          ? data.stableSmsId.value
+          : this.stableSmsId,
+      parseAttemptCount: data.parseAttemptCount.present
+          ? data.parseAttemptCount.value
+          : this.parseAttemptCount,
+      nextParseAfter: data.nextParseAfter.present
+          ? data.nextParseAfter.value
+          : this.nextParseAfter,
+      lastParseError: data.lastParseError.present
+          ? data.lastParseError.value
+          : this.lastParseError,
+      parsedAt: data.parsedAt.present ? data.parsedAt.value : this.parsedAt,
     );
   }
 
@@ -6734,13 +6930,18 @@ class SmsRow extends DataClass implements Insertable<SmsRow> {
           ..write('locationPlaceName: $locationPlaceName, ')
           ..write('enrichmentStatus: $enrichmentStatus, ')
           ..write('enrichedCandidateJson: $enrichedCandidateJson, ')
-          ..write('enrichedAt: $enrichedAt')
+          ..write('enrichedAt: $enrichedAt, ')
+          ..write('stableSmsId: $stableSmsId, ')
+          ..write('parseAttemptCount: $parseAttemptCount, ')
+          ..write('nextParseAfter: $nextParseAfter, ')
+          ..write('lastParseError: $lastParseError, ')
+          ..write('parsedAt: $parsedAt')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode => Object.hash(
+  int get hashCode => Object.hashAll([
     id,
     androidId,
     address,
@@ -6761,7 +6962,12 @@ class SmsRow extends DataClass implements Insertable<SmsRow> {
     enrichmentStatus,
     enrichedCandidateJson,
     enrichedAt,
-  );
+    stableSmsId,
+    parseAttemptCount,
+    nextParseAfter,
+    lastParseError,
+    parsedAt,
+  ]);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -6785,7 +6991,12 @@ class SmsRow extends DataClass implements Insertable<SmsRow> {
           other.locationPlaceName == this.locationPlaceName &&
           other.enrichmentStatus == this.enrichmentStatus &&
           other.enrichedCandidateJson == this.enrichedCandidateJson &&
-          other.enrichedAt == this.enrichedAt);
+          other.enrichedAt == this.enrichedAt &&
+          other.stableSmsId == this.stableSmsId &&
+          other.parseAttemptCount == this.parseAttemptCount &&
+          other.nextParseAfter == this.nextParseAfter &&
+          other.lastParseError == this.lastParseError &&
+          other.parsedAt == this.parsedAt);
 }
 
 class SmsMessagesCompanion extends UpdateCompanion<SmsRow> {
@@ -6809,6 +7020,11 @@ class SmsMessagesCompanion extends UpdateCompanion<SmsRow> {
   final Value<String> enrichmentStatus;
   final Value<String?> enrichedCandidateJson;
   final Value<int?> enrichedAt;
+  final Value<String?> stableSmsId;
+  final Value<int> parseAttemptCount;
+  final Value<int?> nextParseAfter;
+  final Value<String?> lastParseError;
+  final Value<int?> parsedAt;
   const SmsMessagesCompanion({
     this.id = const Value.absent(),
     this.androidId = const Value.absent(),
@@ -6830,6 +7046,11 @@ class SmsMessagesCompanion extends UpdateCompanion<SmsRow> {
     this.enrichmentStatus = const Value.absent(),
     this.enrichedCandidateJson = const Value.absent(),
     this.enrichedAt = const Value.absent(),
+    this.stableSmsId = const Value.absent(),
+    this.parseAttemptCount = const Value.absent(),
+    this.nextParseAfter = const Value.absent(),
+    this.lastParseError = const Value.absent(),
+    this.parsedAt = const Value.absent(),
   });
   SmsMessagesCompanion.insert({
     this.id = const Value.absent(),
@@ -6852,6 +7073,11 @@ class SmsMessagesCompanion extends UpdateCompanion<SmsRow> {
     this.enrichmentStatus = const Value.absent(),
     this.enrichedCandidateJson = const Value.absent(),
     this.enrichedAt = const Value.absent(),
+    this.stableSmsId = const Value.absent(),
+    this.parseAttemptCount = const Value.absent(),
+    this.nextParseAfter = const Value.absent(),
+    this.lastParseError = const Value.absent(),
+    this.parsedAt = const Value.absent(),
   }) : address = Value(address),
        body = Value(body),
        receivedAt = Value(receivedAt);
@@ -6876,6 +7102,11 @@ class SmsMessagesCompanion extends UpdateCompanion<SmsRow> {
     Expression<String>? enrichmentStatus,
     Expression<String>? enrichedCandidateJson,
     Expression<int>? enrichedAt,
+    Expression<String>? stableSmsId,
+    Expression<int>? parseAttemptCount,
+    Expression<int>? nextParseAfter,
+    Expression<String>? lastParseError,
+    Expression<int>? parsedAt,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -6901,6 +7132,11 @@ class SmsMessagesCompanion extends UpdateCompanion<SmsRow> {
       if (enrichedCandidateJson != null)
         'enriched_candidate_json': enrichedCandidateJson,
       if (enrichedAt != null) 'enriched_at': enrichedAt,
+      if (stableSmsId != null) 'stable_sms_id': stableSmsId,
+      if (parseAttemptCount != null) 'parse_attempt_count': parseAttemptCount,
+      if (nextParseAfter != null) 'next_parse_after': nextParseAfter,
+      if (lastParseError != null) 'last_parse_error': lastParseError,
+      if (parsedAt != null) 'parsed_at': parsedAt,
     });
   }
 
@@ -6925,6 +7161,11 @@ class SmsMessagesCompanion extends UpdateCompanion<SmsRow> {
     Value<String>? enrichmentStatus,
     Value<String?>? enrichedCandidateJson,
     Value<int?>? enrichedAt,
+    Value<String?>? stableSmsId,
+    Value<int>? parseAttemptCount,
+    Value<int?>? nextParseAfter,
+    Value<String?>? lastParseError,
+    Value<int?>? parsedAt,
   }) {
     return SmsMessagesCompanion(
       id: id ?? this.id,
@@ -6948,6 +7189,11 @@ class SmsMessagesCompanion extends UpdateCompanion<SmsRow> {
       enrichedCandidateJson:
           enrichedCandidateJson ?? this.enrichedCandidateJson,
       enrichedAt: enrichedAt ?? this.enrichedAt,
+      stableSmsId: stableSmsId ?? this.stableSmsId,
+      parseAttemptCount: parseAttemptCount ?? this.parseAttemptCount,
+      nextParseAfter: nextParseAfter ?? this.nextParseAfter,
+      lastParseError: lastParseError ?? this.lastParseError,
+      parsedAt: parsedAt ?? this.parsedAt,
     );
   }
 
@@ -7018,6 +7264,21 @@ class SmsMessagesCompanion extends UpdateCompanion<SmsRow> {
     if (enrichedAt.present) {
       map['enriched_at'] = Variable<int>(enrichedAt.value);
     }
+    if (stableSmsId.present) {
+      map['stable_sms_id'] = Variable<String>(stableSmsId.value);
+    }
+    if (parseAttemptCount.present) {
+      map['parse_attempt_count'] = Variable<int>(parseAttemptCount.value);
+    }
+    if (nextParseAfter.present) {
+      map['next_parse_after'] = Variable<int>(nextParseAfter.value);
+    }
+    if (lastParseError.present) {
+      map['last_parse_error'] = Variable<String>(lastParseError.value);
+    }
+    if (parsedAt.present) {
+      map['parsed_at'] = Variable<int>(parsedAt.value);
+    }
     return map;
   }
 
@@ -7043,7 +7304,12 @@ class SmsMessagesCompanion extends UpdateCompanion<SmsRow> {
           ..write('locationPlaceName: $locationPlaceName, ')
           ..write('enrichmentStatus: $enrichmentStatus, ')
           ..write('enrichedCandidateJson: $enrichedCandidateJson, ')
-          ..write('enrichedAt: $enrichedAt')
+          ..write('enrichedAt: $enrichedAt, ')
+          ..write('stableSmsId: $stableSmsId, ')
+          ..write('parseAttemptCount: $parseAttemptCount, ')
+          ..write('nextParseAfter: $nextParseAfter, ')
+          ..write('lastParseError: $lastParseError, ')
+          ..write('parsedAt: $parsedAt')
           ..write(')'))
         .toString();
   }
@@ -11575,6 +11841,11 @@ typedef $$SmsMessagesTableCreateCompanionBuilder =
       Value<String> enrichmentStatus,
       Value<String?> enrichedCandidateJson,
       Value<int?> enrichedAt,
+      Value<String?> stableSmsId,
+      Value<int> parseAttemptCount,
+      Value<int?> nextParseAfter,
+      Value<String?> lastParseError,
+      Value<int?> parsedAt,
     });
 typedef $$SmsMessagesTableUpdateCompanionBuilder =
     SmsMessagesCompanion Function({
@@ -11598,6 +11869,11 @@ typedef $$SmsMessagesTableUpdateCompanionBuilder =
       Value<String> enrichmentStatus,
       Value<String?> enrichedCandidateJson,
       Value<int?> enrichedAt,
+      Value<String?> stableSmsId,
+      Value<int> parseAttemptCount,
+      Value<int?> nextParseAfter,
+      Value<String?> lastParseError,
+      Value<int?> parsedAt,
     });
 
 class $$SmsMessagesTableFilterComposer
@@ -11706,6 +11982,31 @@ class $$SmsMessagesTableFilterComposer
 
   ColumnFilters<int> get enrichedAt => $composableBuilder(
     column: $table.enrichedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get stableSmsId => $composableBuilder(
+    column: $table.stableSmsId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get parseAttemptCount => $composableBuilder(
+    column: $table.parseAttemptCount,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get nextParseAfter => $composableBuilder(
+    column: $table.nextParseAfter,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get lastParseError => $composableBuilder(
+    column: $table.lastParseError,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get parsedAt => $composableBuilder(
+    column: $table.parsedAt,
     builder: (column) => ColumnFilters(column),
   );
 }
@@ -11818,6 +12119,31 @@ class $$SmsMessagesTableOrderingComposer
     column: $table.enrichedAt,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<String> get stableSmsId => $composableBuilder(
+    column: $table.stableSmsId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get parseAttemptCount => $composableBuilder(
+    column: $table.parseAttemptCount,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get nextParseAfter => $composableBuilder(
+    column: $table.nextParseAfter,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get lastParseError => $composableBuilder(
+    column: $table.lastParseError,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get parsedAt => $composableBuilder(
+    column: $table.parsedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$SmsMessagesTableAnnotationComposer
@@ -11918,6 +12244,29 @@ class $$SmsMessagesTableAnnotationComposer
     column: $table.enrichedAt,
     builder: (column) => column,
   );
+
+  GeneratedColumn<String> get stableSmsId => $composableBuilder(
+    column: $table.stableSmsId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get parseAttemptCount => $composableBuilder(
+    column: $table.parseAttemptCount,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get nextParseAfter => $composableBuilder(
+    column: $table.nextParseAfter,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get lastParseError => $composableBuilder(
+    column: $table.lastParseError,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get parsedAt =>
+      $composableBuilder(column: $table.parsedAt, builder: (column) => column);
 }
 
 class $$SmsMessagesTableTableManager
@@ -11968,6 +12317,11 @@ class $$SmsMessagesTableTableManager
                 Value<String> enrichmentStatus = const Value.absent(),
                 Value<String?> enrichedCandidateJson = const Value.absent(),
                 Value<int?> enrichedAt = const Value.absent(),
+                Value<String?> stableSmsId = const Value.absent(),
+                Value<int> parseAttemptCount = const Value.absent(),
+                Value<int?> nextParseAfter = const Value.absent(),
+                Value<String?> lastParseError = const Value.absent(),
+                Value<int?> parsedAt = const Value.absent(),
               }) => SmsMessagesCompanion(
                 id: id,
                 androidId: androidId,
@@ -11989,6 +12343,11 @@ class $$SmsMessagesTableTableManager
                 enrichmentStatus: enrichmentStatus,
                 enrichedCandidateJson: enrichedCandidateJson,
                 enrichedAt: enrichedAt,
+                stableSmsId: stableSmsId,
+                parseAttemptCount: parseAttemptCount,
+                nextParseAfter: nextParseAfter,
+                lastParseError: lastParseError,
+                parsedAt: parsedAt,
               ),
           createCompanionCallback:
               ({
@@ -12012,6 +12371,11 @@ class $$SmsMessagesTableTableManager
                 Value<String> enrichmentStatus = const Value.absent(),
                 Value<String?> enrichedCandidateJson = const Value.absent(),
                 Value<int?> enrichedAt = const Value.absent(),
+                Value<String?> stableSmsId = const Value.absent(),
+                Value<int> parseAttemptCount = const Value.absent(),
+                Value<int?> nextParseAfter = const Value.absent(),
+                Value<String?> lastParseError = const Value.absent(),
+                Value<int?> parsedAt = const Value.absent(),
               }) => SmsMessagesCompanion.insert(
                 id: id,
                 androidId: androidId,
@@ -12033,6 +12397,11 @@ class $$SmsMessagesTableTableManager
                 enrichmentStatus: enrichmentStatus,
                 enrichedCandidateJson: enrichedCandidateJson,
                 enrichedAt: enrichedAt,
+                stableSmsId: stableSmsId,
+                parseAttemptCount: parseAttemptCount,
+                nextParseAfter: nextParseAfter,
+                lastParseError: lastParseError,
+                parsedAt: parsedAt,
               ),
           withReferenceMapper: (p0) => p0
               .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
