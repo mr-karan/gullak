@@ -13,6 +13,20 @@ class IncomingSms {
   final DateTime receivedAt;
 }
 
+/// Terminal outcome of a server parse. A transport/network failure is NOT one
+/// of these — it throws so the caller keeps the SMS queued for retry. These
+/// three are the cases where the server actually answered:
+///   transaction  → a candidate to create/queue
+///   notATxn      → confidently not a spend (OTP/marketing/…); never retried
+///   parseFailed  → the model/validation failed; surfaced for review, not looped
+enum SmsParseStatus { transaction, notATxn, parseFailed }
+
+class SmsParseOutcome {
+  const SmsParseOutcome(this.status, [this.candidate]);
+  final SmsParseStatus status;
+  final SmsCandidate? candidate;
+}
+
 /// The structured candidate a parser produces from a transactional SMS.
 class SmsCandidate {
   const SmsCandidate({

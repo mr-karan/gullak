@@ -154,6 +154,8 @@ class SmsPipeline {
         }
       }
       log.i('sms backfill ingested $added/${messages.length}');
+      // Parse everything we just queued via the server.
+      if (generation == _generation) await drainPendingParses(limit: 200);
       return added;
     } finally {
       _scanRunning = false;
@@ -176,6 +178,9 @@ class SmsPipeline {
     if (queued.isNotEmpty) {
       log.i('sms bg-queue ingested $added/${queued.length}');
     }
+    // Send everything we just captured (and any earlier stragglers) to the
+    // server. Safe to call even when nothing was queued — it just no-ops.
+    await drainPendingParses(limit: 200);
     return added;
   }
 
@@ -203,7 +208,11 @@ class SmsPipeline {
       });
     }
     _sub = reader.listen().listen((m) async {
-      await _safeIngest(m, generation: generation);
+      final queued = await _safeIngest(m, generation: generation);
+      // A live SMS is captured then immediately sent to the server.
+      if (queued && generation == _generation) {
+        await drainPendingParses(limit: 10);
+      }
     });
     unawaited(catchUpRecent());
   }
@@ -246,61 +255,47 @@ class SmsPipeline {
     await db.customStatement('DELETE FROM sms_messages');
   }
 
+  /// Re-queue parses that previously failed (no row deletion — the old code
+  /// deleted rows, which lost the captured SMS). Resets parse_failed/legacy
+  /// error rows back to `pending_parse`, clears backoff, rescans recent SMS to
+  /// capture any missed, then drains the queue against the server.
   Future<int> retryFailedBackfill({
     Duration window = const Duration(days: 14),
   }) async {
-    final cutoff = DateTime.now().subtract(window).millisecondsSinceEpoch;
-    await db.customStatement('DELETE FROM sms_parse_cache');
     await db.customStatement(
-      "DELETE FROM sms_messages WHERE candidate_status IN ('error', 'none', 'duplicate') AND received_at >= ?",
-      [cutoff],
+      "UPDATE sms_messages SET candidate_status = 'pending_parse', "
+      'parse_attempt_count = 0, next_parse_after = NULL, last_parse_error = NULL '
+      "WHERE candidate_status IN ('parse_failed', 'error')",
     );
-    return backfill(window: window, label: 'Refreshing SMS');
+    final added = await backfill(window: window, label: 'Refreshing SMS');
+    await drainPendingParses(limit: 500);
+    return added;
   }
 
+  /// Alias retained for existing callers — same reset-and-drain behaviour.
   Future<int> retryFailuresAndRescan({
     Duration minimumWindow = const Duration(days: 7),
-  }) async {
-    final oldest =
-        await (db.select(db.smsMessages)
-              ..where((t) => t.candidateStatus.equals('error'))
-              ..orderBy([(t) => OrderingTerm.asc(t.receivedAt)])
-              ..limit(1))
-            .getSingleOrNull();
-    if (oldest == null) {
-      return retryFailedBackfill(window: minimumWindow);
-    }
+  }) => retryFailedBackfill(window: minimumWindow);
 
-    final oldestAt = DateTime.fromMillisecondsSinceEpoch(oldest.receivedAt);
-    final failureWindow =
-        DateTime.now().difference(oldestAt) + const Duration(days: 1);
-    final window = failureWindow > minimumWindow
-        ? failureWindow
-        : minimumWindow;
-    final cutoff = DateTime.now().subtract(window).millisecondsSinceEpoch;
-
-    await db.customStatement('DELETE FROM sms_parse_cache');
-    await db.customStatement(
-      "DELETE FROM sms_messages WHERE candidate_status IN ('error', 'none', 'duplicate') AND received_at >= ?",
-      [cutoff],
-    );
-    return backfill(window: window, label: 'Retrying failed SMS');
-  }
-
+  /// Capture-only. Classifies the SMS and, if it looks transactional, queues
+  /// it as `pending_parse` for the server-parse drainer. There is NO on-device
+  /// parsing or transaction creation here — that all happens in
+  /// [drainPendingParses] after the pi-server answers. Returns true when a row
+  /// was queued for parsing.
   Future<bool> _ingest(IncomingSms sms, {int? generation}) async {
     if (generation != null && generation != _generation) return false;
-    final existingQuery = db.select(db.smsMessages)
-      ..where(
-        (t) =>
-            (sms.id == null
-                ? const Constant(false)
-                : t.androidId.equals(sms.id!)) |
-            (t.address.equals(sms.address) & t.body.equals(sms.body)) |
-            (t.address.equals(sms.address) &
-                t.body.equals(sms.body) &
-                t.receivedAt.equals(sms.receivedAt.millisecondsSinceEpoch)),
-      );
-    if (await existingQuery.getSingleOrNull() != null) return false;
+    final stableId = stableSmsId(sms);
+    final existing =
+        await (db.select(db.smsMessages)..where(
+              (t) =>
+                  t.stableSmsId.equals(stableId) |
+                  (sms.id == null
+                      ? const Constant(false)
+                      : t.androidId.equals(sms.id!)) |
+                  (t.address.equals(sms.address) & t.body.equals(sms.body)),
+            ))
+            .getSingleOrNull();
+    if (existing != null) return false;
     final cls = SmsClassifier.classify(sms);
     if (cls == SmsClassification.nonTransactional) {
       await db
@@ -312,66 +307,15 @@ class SmsPipeline {
               body: sms.body,
               receivedAt: sms.receivedAt.millisecondsSinceEpoch,
               classifiedAs: const Value('non_transactional'),
+              stableSmsId: Value(stableId),
             ),
           );
-      // Let the event loop drain so Drift's watch fires and the
-      // Inbox UI updates before the next SMS is ingested. Without
-      // this, non-transactional SMS process in a tight synchronous
-      // loop and all batched rows surface at once.
+      // Let the event loop drain so Drift's watch fires and the Inbox UI
+      // updates before the next SMS is ingested.
       await Future<void>.delayed(Duration.zero);
       return false;
     }
-
-    final candidate = await parserRegistry.tryParse(sms);
-    if (generation != null && generation != _generation) return false;
-    final candidateJson = candidate == null
-        ? null
-        : jsonEncode({
-            'amount_cents': candidate.amountCents,
-            'is_income': candidate.isIncome,
-            'date': candidate.date.toIso8601String(),
-            'payee': candidate.payee,
-            'account_hint': candidate.accountHint,
-            'category_hint': candidate.categoryHint,
-            'category_id': candidate.categoryId,
-            'bank_ref': candidate.bankRef,
-            'confidence': candidate.confidence,
-          });
-    if (candidate != null &&
-        await _hasDuplicateSmsCandidate(sms, candidate, candidateJson!)) {
-      return false;
-    }
-
-    String status;
-    String? linkedTransactionId;
-    var notify = _NotifyKind.none;
-
-    if (candidate == null) {
-      status = 'error';
-    } else {
-      final dupId = await _findDuplicateTransaction(candidate);
-      if (dupId != null) {
-        status = 'duplicate';
-        linkedTransactionId = dupId;
-      } else if (await _shouldAutoConfirm(candidate)) {
-        if (generation != null && generation != _generation) return false;
-        try {
-          linkedTransactionId = await _autoCreateTransaction(candidate, sms);
-          status = 'accepted';
-          notify = _NotifyKind.autoConfirmed;
-        } catch (e) {
-          log.w('auto-confirm failed, falling back to inbox: $e');
-          status = 'inbox';
-          notify = _NotifyKind.highConfidence;
-        }
-      } else {
-        status = 'inbox';
-        if (candidate.confidence >= 0.8) notify = _NotifyKind.highConfidence;
-      }
-    }
-
-    if (generation != null && generation != _generation) return false;
-    final smsRowId = await db
+    await db
         .into(db.smsMessages)
         .insert(
           SmsMessagesCompanion.insert(
@@ -379,41 +323,227 @@ class SmsPipeline {
             address: sms.address,
             body: sms.body,
             receivedAt: sms.receivedAt.millisecondsSinceEpoch,
-            classifiedAs: Value(
-              cls == SmsClassification.transactionalHigh
-                  ? 'transactional'
-                  : 'transactional',
-            ),
-            parserVersion: Value(candidate?.parserVersion),
-            candidateJson: Value(candidateJson),
-            candidateStatus: Value(status),
-            linkedTransactionId: Value(linkedTransactionId),
+            classifiedAs: const Value('transactional'),
+            candidateStatus: const Value('pending_parse'),
+            stableSmsId: Value(stableId),
           ),
         );
+    return true;
+  }
 
-    if (candidate != null && notify == _NotifyKind.highConfidence) {
-      final fn = notifyInboxCandidate ?? notifications?.showInboxCandidate;
-      await fn?.call(
-        smsRowId: smsRowId,
+  /// Stable idempotency key for an SMS — also the created transaction's
+  /// originRef, so a retried parse can never double-create. Prefers the
+  /// platform SMS id; falls back to a deterministic content hash.
+  static String stableSmsId(IncomingSms sms) {
+    if (sms.id != null && sms.id!.isNotEmpty) return 'android:${sms.id}';
+    final material =
+        '${sms.address}|${sms.receivedAt.millisecondsSinceEpoch}|${sms.body}';
+    return 'body:${_fnv1a(material)}';
+  }
+
+  // FNV-1a 64-bit (hex). Deterministic across runs/isolates — unlike
+  // String.hashCode — so it's safe to persist as an idempotency key.
+  static String _fnv1a(String s) {
+    var hash = 0xcbf29ce484222325;
+    const prime = 0x100000001b3;
+    for (final b in s.codeUnits) {
+      hash ^= b & 0xff;
+      hash = (hash * prime) & 0xFFFFFFFFFFFFFFFF;
+    }
+    return hash.toUnsigned(64).toRadixString(16).padLeft(16, '0');
+  }
+
+  /// Drains the server-parse queue. For each due `pending_parse` SMS, send it
+  /// to the pi-server. A network failure requeues it with exponential backoff
+  /// (never lost); a server answer routes to a terminal state. On a clean parse
+  /// with a resolvable account + category the transaction is auto-created;
+  /// otherwise it lands in the Inbox for one-tap review.
+  Future<int> drainPendingParses({int limit = 25}) async {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final due =
+        await (db.select(db.smsMessages)
+              ..where(
+                (t) =>
+                    t.candidateStatus.equals('pending_parse') &
+                    (t.nextParseAfter.isNull() |
+                        t.nextParseAfter.isSmallerOrEqualValue(now)),
+              )
+              ..orderBy([(t) => OrderingTerm.asc(t.receivedAt)])
+              ..limit(limit))
+            .get();
+    var processed = 0;
+    for (final row in due) {
+      // Claim the row so a concurrent drain can't double-send it.
+      final claimed =
+          await (db.update(db.smsMessages)..where(
+                (t) =>
+                    t.id.equals(row.id) &
+                    t.candidateStatus.equals('pending_parse'),
+              ))
+              .write(
+                const SmsMessagesCompanion(
+                  candidateStatus: Value('parsing'),
+                ),
+              );
+      if (claimed == 0) continue;
+      final sms = IncomingSms(
+        id: row.androidId,
+        address: row.address,
+        body: row.body,
+        receivedAt: DateTime.fromMillisecondsSinceEpoch(row.receivedAt),
+      );
+      try {
+        final outcome = await parserRegistry.parse(sms);
+        switch (outcome.status) {
+          case SmsParseStatus.transaction:
+            await _applyParsed(row, sms, outcome.candidate!);
+          case SmsParseStatus.notATxn:
+            await _markParsedStatus(row.id, 'not_a_txn');
+          case SmsParseStatus.parseFailed:
+            await _markParsedStatus(
+              row.id,
+              'parse_failed',
+              error: 'server could not parse this SMS',
+            );
+        }
+        processed += 1;
+      } catch (e) {
+        // Transport failure: server unreachable / not configured yet. Keep the
+        // SMS queued and back off so it parses once the server is reachable.
+        final attempt = row.parseAttemptCount + 1;
+        await (db.update(db.smsMessages)..where((t) => t.id.equals(row.id)))
+            .write(
+              SmsMessagesCompanion(
+                candidateStatus: const Value('pending_parse'),
+                parseAttemptCount: Value(attempt),
+                nextParseAfter: Value(now + _backoffMs(attempt)),
+                lastParseError: Value(e.toString()),
+              ),
+            );
+      }
+    }
+    return processed;
+  }
+
+  // min(6h, 2^attempt · 5min) + small deterministic jitter (no RNG so tests
+  // stay reproducible).
+  static int _backoffMs(int attempt) {
+    const fiveMin = 5 * 60 * 1000;
+    const sixHours = 6 * 60 * 60 * 1000;
+    final base = fiveMin * (1 << attempt.clamp(0, 10));
+    final capped = base > sixHours ? sixHours : base;
+    return capped + (attempt * 9973) % 30000;
+  }
+
+  Future<void> _markParsedStatus(
+    int rowId,
+    String status, {
+    String? error,
+  }) async {
+    await (db.update(db.smsMessages)..where((t) => t.id.equals(rowId))).write(
+      SmsMessagesCompanion(
+        candidateStatus: Value(status),
+        parsedAt: Value(DateTime.now().millisecondsSinceEpoch),
+        lastParseError: Value(error),
+      ),
+    );
+  }
+
+  /// Applies a successful server parse: dedupes, then either auto-creates the
+  /// transaction (Option A: amount + account + category all resolved) or routes
+  /// to the Inbox as `parsed` for one-tap review.
+  Future<void> _applyParsed(
+    SmsRow row,
+    IncomingSms sms,
+    SmsCandidate candidate,
+  ) async {
+    final candidateJson = jsonEncode({
+      'amount_cents': candidate.amountCents,
+      'is_income': candidate.isIncome,
+      'date': candidate.date.toIso8601String(),
+      'payee': candidate.payee,
+      'account_hint': candidate.accountHint,
+      'category_hint': candidate.categoryHint,
+      'category_id': candidate.categoryId,
+      'bank_ref': candidate.bankRef,
+      'confidence': candidate.confidence,
+    });
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final stableId = row.stableSmsId ?? stableSmsId(sms);
+
+    // Idempotency: if a transaction already exists for this exact SMS (a prior
+    // run created it before we recorded the status), link to it, never recreate.
+    final existingTxn =
+        await (db.select(db.transactions)..where(
+              (t) => t.origin.equals('sms') & t.originRef.equals(stableId),
+            ))
+            .getSingleOrNull();
+    String status;
+    String? linkedTxnId = existingTxn?.id;
+    var autoCreated = false;
+    if (existingTxn != null) {
+      status = 'accepted';
+    } else {
+      // Link (don't double-count) if a non-SMS txn, or a recently-parsed sibling
+      // SMS (bank + card double-alert), already covers this spend.
+      final dupId = await _findDuplicateTransaction(candidate);
+      final siblingDup = await _hasDuplicateSmsCandidate(
+        sms,
+        candidate,
+        candidateJson,
+      );
+      if (dupId != null || siblingDup) {
+        status = 'duplicate';
+        linkedTxnId = dupId;
+      } else if (candidate.categoryId != null &&
+          candidate.categoryId!.isNotEmpty) {
+        // Try to auto-create. _autoCreateTransaction throws when the account is
+        // ambiguous, which falls through to the Inbox (never a guessed account).
+        try {
+          linkedTxnId = await _autoCreateTransaction(
+            candidate,
+            stableId,
+            sms.address,
+          );
+          status = 'accepted';
+          autoCreated = true;
+        } catch (e) {
+          log.i('sms auto-create deferred to inbox: $e');
+          status = 'parsed';
+        }
+      } else {
+        // No category resolved → Inbox for review.
+        status = 'parsed';
+      }
+    }
+
+    await (db.update(db.smsMessages)..where((t) => t.id.equals(row.id))).write(
+      SmsMessagesCompanion(
+        candidateStatus: Value(status),
+        candidateJson: Value(candidateJson),
+        parserVersion: Value(candidate.parserVersion),
+        linkedTransactionId: Value(linkedTxnId),
+        parsedAt: Value(now),
+      ),
+    );
+
+    // Notify either way so nothing is logged invisibly.
+    if (autoCreated) {
+      await notifications?.showAutoConfirmed(
+        smsRowId: row.id,
         amountCents: candidate.amountCents,
         payee: candidate.payee,
         accountHint: candidate.accountHint,
       );
-    } else if (candidate != null && notify == _NotifyKind.autoConfirmed) {
-      await notifications?.showAutoConfirmed(
-        smsRowId: smsRowId,
+    } else if (status == 'parsed') {
+      final fn = notifyInboxCandidate ?? notifications?.showInboxCandidate;
+      await fn?.call(
+        smsRowId: row.id,
         amountCents: candidate.amountCents,
         payee: candidate.payee,
         accountHint: candidate.accountHint,
       );
     }
-    return candidate != null;
-  }
-
-  Future<bool> _shouldAutoConfirm(SmsCandidate candidate) async {
-    if (transactionRepo == null || prefs == null) return false;
-    if (!prefs!.smsAutoConfirm) return false;
-    return candidate.confidence >= prefs!.smsAutoConfirmThreshold;
   }
 
   /// Look for an existing non-SMS transaction matching this candidate
@@ -441,7 +571,8 @@ class SmsPipeline {
 
   Future<String> _autoCreateTransaction(
     SmsCandidate candidate,
-    IncomingSms sms,
+    String originRef,
+    String address,
   ) async {
     final accounts = await (db.select(
       db.accounts,
@@ -472,9 +603,9 @@ class SmsPipeline {
       payeeName: candidate.payee,
       amountCents: signed,
       date: candidate.date,
-      notes: 'SMS · ${sms.address}',
+      notes: 'SMS · $address',
       origin: 'sms',
-      originRef: sms.id,
+      originRef: originRef,
     );
   }
 
@@ -581,4 +712,3 @@ final Provider<SmsPipeline> smsPipelineProvider = Provider<SmsPipeline>((ref) {
   return pipeline;
 });
 
-enum _NotifyKind { none, highConfidence, autoConfirmed }

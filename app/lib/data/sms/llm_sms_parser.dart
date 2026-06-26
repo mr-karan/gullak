@@ -1,6 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../core/logger.dart';
 import '../../features/categories/data/category_repository.dart';
 import '../../features/payees/data/payee_repository.dart';
 import '../../features/rules/data/rule_repository.dart';
@@ -25,46 +24,53 @@ class LlmSmsParser implements SmsParser {
   final RuleRepository _ruleRepo;
 
   @override
-  Future<SmsCandidate?> parse(IncomingSms sms) async {
-    final SmsParseResponse response;
-    try {
-      final categories = await _categoryRepo.list();
-      final payees = await _payeeRepo.list();
-      final categoryById = {for (final c in categories) c.id: c.name};
-      final payeeCategoryHintIds = await _ruleRepo.payeeCategoryHintIds();
-      response = await _client.parseSms(
-        sender: sms.address,
-        body: sms.body,
-        receivedAt: sms.receivedAt,
-        categories: categories.map((c) => NamedRow(c.id, c.name)).toList(),
-        payees: payees
-            .map(
-              (p) => PayeeCategoryRow(
-                p.id,
-                p.name,
-                categoryById[payeeCategoryHintIds[p.id]],
-              ),
-            )
-            .toList(),
-      );
-    } on PiAiException catch (e) {
-      log.w('pi-server sms parse failed: ${e.message}');
-      return null;
-    }
-    if (!response.isTransaction || response.candidate == null) return null;
-    final c = response.candidate!;
-    return SmsCandidate(
-      amountCents: c.amountCents,
-      isIncome: c.isIncome,
-      date: DateTime.tryParse(c.date) ?? sms.receivedAt,
-      confidence: c.confidence,
-      payee: c.payee,
-      accountHint: c.accountHint,
-      bankRef: c.bankRef,
-      categoryHint: c.categoryHint,
-      categoryId: c.categoryId,
-      parserVersion: c.parserVersion,
+  Future<SmsParseOutcome> parse(IncomingSms sms) async {
+    // Transport failures (PiAiException) deliberately propagate — the caller
+    // keeps the SMS queued and retries. We must NOT turn an unreachable server
+    // into a "not a transaction" result.
+    final categories = await _categoryRepo.list();
+    final payees = await _payeeRepo.list();
+    final categoryById = {for (final c in categories) c.id: c.name};
+    final payeeCategoryHintIds = await _ruleRepo.payeeCategoryHintIds();
+    final response = await _client.parseSms(
+      sender: sms.address,
+      body: sms.body,
+      receivedAt: sms.receivedAt,
+      categories: categories.map((c) => NamedRow(c.id, c.name)).toList(),
+      payees: payees
+          .map(
+            (p) => PayeeCategoryRow(
+              p.id,
+              p.name,
+              categoryById[payeeCategoryHintIds[p.id]],
+            ),
+          )
+          .toList(),
     );
+    switch (response.status) {
+      case 'transaction':
+        final c = response.candidate;
+        if (c == null) return const SmsParseOutcome(SmsParseStatus.parseFailed);
+        return SmsParseOutcome(
+          SmsParseStatus.transaction,
+          SmsCandidate(
+            amountCents: c.amountCents,
+            isIncome: c.isIncome,
+            date: DateTime.tryParse(c.date) ?? sms.receivedAt,
+            confidence: c.confidence,
+            payee: c.payee,
+            accountHint: c.accountHint,
+            bankRef: c.bankRef,
+            categoryHint: c.categoryHint,
+            categoryId: c.categoryId,
+            parserVersion: c.parserVersion,
+          ),
+        );
+      case 'parse_failed':
+        return const SmsParseOutcome(SmsParseStatus.parseFailed);
+      default: // 'not_a_txn'
+        return const SmsParseOutcome(SmsParseStatus.notATxn);
+    }
   }
 }
 
