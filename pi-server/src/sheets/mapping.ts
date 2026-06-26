@@ -30,7 +30,7 @@ const MAP: Record<string, SheetCategory> = {
   lifestyle: { category: "Shopping & Lifestyle", type: "Want" },
   entertainment: { category: "Shopping & Lifestyle", type: "Want" },
   subscriptions: { category: "Shopping & Lifestyle", type: "Want" },
-  travel: { category: "Shopping & Lifestyle", type: "Want" },
+  travel: { category: "Travel & Trips", type: "Want" },
   "personal care": { category: "Shopping & Lifestyle", type: "Want" },
   alcohol: { category: "Shopping & Lifestyle", type: "Want" },
   gifts: { category: "Shopping & Lifestyle", type: "Want" },

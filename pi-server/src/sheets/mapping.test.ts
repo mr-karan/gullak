@@ -27,6 +27,7 @@ const SHEET_CATEGORY_TYPES: Record<string, SheetType> = {
   "Health & Insurance": "Need",
   "Dining & Delivery": "Want",
   "Shopping & Lifestyle": "Want",
+  "Travel & Trips": "Want",
   "Investments & Savings": "Saving",
 };
 
@@ -47,7 +48,7 @@ const SPENDING_LEAF_EXPECTATIONS: Record<
   Insurance: { category: "Health & Insurance", type: "Need" },
   Shopping: { category: "Shopping & Lifestyle", type: "Want" },
   Entertainment: { category: "Shopping & Lifestyle", type: "Want" },
-  Travel: { category: "Shopping & Lifestyle", type: "Want" },
+  Travel: { category: "Travel & Trips", type: "Want" },
   "Personal Care": { category: "Shopping & Lifestyle", type: "Want" },
   "Emergency Fund": { category: "Investments & Savings", type: "Saving" },
   Investments: { category: "Investments & Savings", type: "Saving" },
