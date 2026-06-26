@@ -77,38 +77,6 @@ class SettingsScreen extends ConsumerWidget {
               onTap: () => _clearSmsState(context, ref),
             ),
           if (prefs.smsEnabled && Platform.isAndroid) ...[
-            SwitchListTile(
-              secondary: const Icon(Icons.bolt_outlined),
-              title: const Text('Auto-confirm high-confidence SMS'),
-              subtitle: Text(
-                prefs.smsAutoConfirm
-                    ? 'Skip the Inbox when a parser is at least '
-                          '${(prefs.smsAutoConfirmThreshold * 100).round()}% '
-                          'confident and no matching transaction exists yet.'
-                    : 'Off — every parsed SMS lands in the Inbox for review.',
-              ),
-              value: prefs.smsAutoConfirm,
-              onChanged: (v) async {
-                await prefs.setSmsAutoConfirm(v);
-                bumpPrefs(ref);
-              },
-            ),
-            if (prefs.smsAutoConfirm)
-              ListTile(
-                leading: const Icon(Icons.tune),
-                title: const Text('Auto-confirm threshold'),
-                subtitle: Slider(
-                  value: prefs.smsAutoConfirmThreshold,
-                  min: 0.5,
-                  max: 1.0,
-                  divisions: 10,
-                  label: '${(prefs.smsAutoConfirmThreshold * 100).round()}%',
-                  onChanged: (v) async {
-                    await prefs.setSmsAutoConfirmThreshold(v);
-                    bumpPrefs(ref);
-                  },
-                ),
-              ),
             ListTile(
               leading: const Icon(Icons.refresh),
               title: const Text('Re-scan SMS inbox'),

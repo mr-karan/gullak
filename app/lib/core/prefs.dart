@@ -56,20 +56,6 @@ class Prefs {
   bool get smsEnabled => _inner.getBool(_kSmsEnabled) ?? false;
   Future<void> setSmsEnabled(bool v) => _inner.setBool(_kSmsEnabled, v);
 
-  static const _kSmsAutoConfirm = 'gullak.sms.autoConfirm';
-  static const _kSmsAutoConfirmThreshold = 'gullak.sms.autoConfirmThreshold';
-
-  /// Default off — auto-confirm writes a financial row without a user
-  /// gesture, so the user has to explicitly opt in.
-  bool get smsAutoConfirm => _inner.getBool(_kSmsAutoConfirm) ?? false;
-  Future<void> setSmsAutoConfirm(bool v) => _inner.setBool(_kSmsAutoConfirm, v);
-
-  /// Below this confidence, a candidate stays in Inbox for review.
-  /// Default 0.9 — only the cleanest parser hits clear it.
-  double get smsAutoConfirmThreshold =>
-      _inner.getDouble(_kSmsAutoConfirmThreshold) ?? 0.9;
-  Future<void> setSmsAutoConfirmThreshold(double v) =>
-      _inner.setDouble(_kSmsAutoConfirmThreshold, v);
 
   static const _kSyncCursor = 'gullak.sync.cursor';
   static const _kSyncLastAt = 'gullak.sync.lastAt';
