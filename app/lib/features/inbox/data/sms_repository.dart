@@ -35,12 +35,12 @@ class InboxItem {
   final String body;
   final int receivedAt;
 
-  /// Underlying [SmsMessages.candidateStatus]. 'inbox' means the parser
-  /// produced a candidate the user can confirm. 'error' means the
-  /// classifier was confident the SMS is transactional but no parsed
-  /// candidate is available — the row still shows up so the user can
-  /// open it in QuickEntry manually instead of it disappearing into
-  /// the void.
+  /// Underlying [SmsMessages.candidateStatus]. 'parsed' means the server
+  /// produced a candidate the user can confirm (the auto-create gate didn't
+  /// fire — e.g. no category resolved). 'parse_failed' means the server
+  /// couldn't structure the SMS — the row still shows so the user can open it
+  /// in QuickEntry manually. ('inbox'/'error' are the legacy equivalents kept
+  /// for rows captured before the server-queue refactor.)
   final String status;
   final String? suggestedPayee;
   final int? suggestedAmountCents;
@@ -48,7 +48,9 @@ class InboxItem {
   final String? suggestedAccountName;
   final String? suggestedCategoryName;
 
-  bool get hasCandidate => status == 'inbox' && suggestedAmountCents != null;
+  bool get hasCandidate =>
+      (status == 'parsed' || status == 'inbox') &&
+      suggestedAmountCents != null;
 }
 
 /// A parsed SMS row resolved into the fields a transaction needs.
@@ -126,21 +128,24 @@ class SmsRepository {
     _payeeCategoryHints = null;
   }
 
-  /// Pending review: classifier-positive SMS that either parsed into a
-  /// candidate (status='inbox') or that the parser couldn't structure
-  /// (status='error'). The latter still belongs in the user's view —
-  /// silently dropping classifier-positive SMS made the Inbox look
-  /// permanently empty when the LLM was misconfigured or the parse
-  /// cache was poisoned.
-  static const _pendingStatuses = ['inbox', 'error'];
+  /// Pending review: server-parsed SMS that needs the user (status='parsed',
+  /// e.g. no category resolved so the auto-create gate didn't fire) or that the
+  /// server couldn't structure (status='parse_failed'). 'inbox'/'error' are the
+  /// legacy equivalents for rows captured before the server-queue refactor.
+  /// `pending_parse`/`parsing` are intentionally excluded — they're in-flight,
+  /// not yet reviewable.
+  static const _pendingStatuses = ['parsed', 'parse_failed', 'inbox', 'error'];
 
-  /// Everything we ingested but didn't pin to the pending bucket: the
-  /// classifier-rejected SMS (`none`), duplicates of an existing
-  /// transaction (`duplicate`), and rows the user explicitly
-  /// dismissed (`dismissed`). Surfaced via the Inbox "Ignored" toggle
-  /// so a user can still log one of these manually if the classifier
-  /// was wrong about it.
-  static const _ignoredStatuses = ['none', 'duplicate', 'dismissed'];
+  /// Ingested but not pending review: classifier-rejected (`none`), server said
+  /// not-a-transaction (`not_a_txn`), duplicates (`duplicate`), and
+  /// user-dismissed (`dismissed`). Surfaced via the Inbox "Ignored" toggle so a
+  /// user can still log one manually if the classification was wrong.
+  static const _ignoredStatuses = [
+    'none',
+    'not_a_txn',
+    'duplicate',
+    'dismissed',
+  ];
   static const _matchedStatuses = ['accepted', 'duplicate'];
 
   Future<List<InboxItem>> listInbox() async {
@@ -269,13 +274,18 @@ class SmsRepository {
     });
   }
 
-  /// Force a row back into the pending Inbox bucket, e.g. when the
-  /// user disagrees with the classifier's "non-transactional" call.
-  /// Status flips to `inbox`; the parser cache is dropped so the next
-  /// re-scan reparses this template.
+  /// Re-queue a row for server parsing, e.g. when the user disagrees with the
+  /// classifier's "non-transactional" call or wants a failed parse retried.
+  /// Status flips to `pending_parse` with backoff cleared so the next drain
+  /// sends it to the server.
   Future<void> reopen(int id) async {
     await (_db.update(_db.smsMessages)..where((t) => t.id.equals(id))).write(
-      const SmsMessagesCompanion(candidateStatus: Value('inbox')),
+      const SmsMessagesCompanion(
+        candidateStatus: Value('pending_parse'),
+        parseAttemptCount: Value(0),
+        nextParseAfter: Value(null),
+        lastParseError: Value(null),
+      ),
     );
   }
 
@@ -464,7 +474,9 @@ class SmsRepository {
     // don't reach a terminal status, so a failed row stays actionable.
     final claimed =
         await (_db.update(_db.smsMessages)..where(
-              (t) => t.id.equals(id) & t.candidateStatus.equals('inbox'),
+              (t) =>
+                  t.id.equals(id) &
+                  t.candidateStatus.isIn(const ['parsed', 'inbox']),
             ))
             .write(
               const SmsMessagesCompanion(candidateStatus: Value('processing')),
@@ -540,16 +552,16 @@ class SmsRepository {
       );
       return true;
     } finally {
-      // Release the claim if we didn't reach a terminal status (parse
-      // failure, exception) so the row returns to the inbox instead of
-      // being stranded in 'processing'.
+      // Release the claim if we didn't reach a terminal status (exception
+      // mid-confirm) so the row returns to the Inbox instead of being stranded
+      // in 'processing'.
       if (!settled) {
         await (_db.update(_db.smsMessages)..where(
               (t) =>
                   t.id.equals(id) & t.candidateStatus.equals('processing'),
             ))
             .write(
-              const SmsMessagesCompanion(candidateStatus: Value('inbox')),
+              const SmsMessagesCompanion(candidateStatus: Value('parsed')),
             );
       }
     }

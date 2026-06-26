@@ -624,12 +624,14 @@ final dailyReviewProvider = FutureProvider<DailyReviewSnapshot>((ref) async {
 
   final pendingRow = await db
       .customSelect(
-        "SELECT COUNT(*) AS c FROM sms_messages WHERE candidate_status = 'inbox'",
+        'SELECT COUNT(*) AS c FROM sms_messages '
+        "WHERE candidate_status IN ('parsed', 'inbox')",
       )
       .getSingle();
   final failedRow = await db
       .customSelect(
-        "SELECT COUNT(*) AS c FROM sms_messages WHERE candidate_status = 'error'",
+        'SELECT COUNT(*) AS c FROM sms_messages '
+        "WHERE candidate_status IN ('parse_failed', 'error')",
       )
       .getSingle();
   final uncategorizedRow = await db

@@ -74,7 +74,9 @@ class _InboxScreenState extends ConsumerState<InboxScreen> {
         actions: [
           asyncRows.maybeWhen(
             data: (rows) {
-              final failed = rows.where((r) => r.status == 'error').length;
+              final failed = rows
+                  .where((r) => r.status == 'parse_failed' || r.status == 'error')
+                  .length;
               return PopupMenuButton<_InboxAction>(
                 tooltip: 'Inbox actions',
                 onSelected: (action) {
@@ -613,10 +615,13 @@ class _InboxRow extends ConsumerWidget {
 
   static String _statusReason(String status) => switch (status) {
     'accepted' => 'Already matched — transaction was created from this SMS.',
-    'none' => 'Ignored — classifier marked as non-transactional.',
+    'none' || 'not_a_txn' =>
+      'Ignored — classified as non-transactional.',
     'duplicate' =>
       'Ignored — looked like a duplicate of an existing transaction.',
     'dismissed' => 'Dismissed by you.',
+    'pending_parse' || 'parsing' => 'Waiting to be parsed by the server.',
+    'parse_failed' => 'The server could not parse this SMS — tap to log it manually.',
     _ => 'Ignored.',
   };
 
