@@ -123,9 +123,21 @@ export interface SmsCandidate {
   parserVersion: number;
 }
 
+// Machine-readable outcome so the app's parse queue can route precisely:
+//  - "transaction"  → candidate present, create/queue it
+//  - "not_a_txn"    → model is confident this isn't a spend (OTP/marketing/…);
+//                     terminal, never retried
+//  - "parse_failed" → the model call/validation failed (bad JSON, exception);
+//                     terminal-ish, surfaced for review, NOT hot-looped
+// Transport failures (phone can't reach the server) never produce a result at
+// all — the app sees a network error and keeps the SMS queued for retry.
+export type SmsParseStatus = "transaction" | "not_a_txn" | "parse_failed";
+
 export interface SmsParseResult {
-  isTransaction: boolean;
+  status: SmsParseStatus;
+  isTransaction: boolean; // kept for backward-compat with older clients
   candidate: SmsCandidate | null;
+  error?: string;
 }
 
 export interface SmsParseRequest {
@@ -142,21 +154,38 @@ export async function parseSms(
   config: AppConfig,
   req: SmsParseRequest,
 ): Promise<SmsParseResult> {
-  const first = await callModel(config, req, null);
-  const firstIssue = first ? validateCandidate(first.payee) : null;
-  if (!firstIssue || !first) {
-    return first ? finalize(first, req) : { isTransaction: false, candidate: null };
+  try {
+    const first = await callModel(config, req, null);
+    const firstIssue = first ? validateCandidate(first.payee) : null;
+    if (!firstIssue || !first) {
+      return first ? finalize(first, req) : notATxn();
+    }
+    // One retry with a corrective hint when payee leakage is detected.
+    const retry = await callModel(config, req, firstIssue);
+    if (!retry) return notATxn();
+    const retryIssue = validateCandidate(retry.payee);
+    if (retryIssue) {
+      // Second pass still leaked — give up on the merchant string but keep
+      // the rest of the fields. Better an uncategorised txn than a wrong one.
+      retry.payee = null;
+    }
+    return finalize(retry, req);
+  } catch (e) {
+    // Model/transport/validation blew up. Return a terminal parse_failed so the
+    // app surfaces it for review rather than hot-looping retries on an SMS the
+    // model can't handle. (A true network failure happens app-side, before
+    // this ever runs, and keeps the SMS queued.)
+    return {
+      status: "parse_failed",
+      isTransaction: false,
+      candidate: null,
+      error: e instanceof Error ? e.message : String(e),
+    };
   }
-  // One retry with a corrective hint when payee leakage is detected.
-  const retry = await callModel(config, req, firstIssue);
-  if (!retry) return { isTransaction: false, candidate: null };
-  const retryIssue = validateCandidate(retry.payee);
-  if (retryIssue) {
-    // Second pass still leaked — give up on the merchant string but keep
-    // the rest of the fields. Better an uncategorised txn than a wrong one.
-    retry.payee = null;
-  }
-  return finalize(retry, req);
+}
+
+function notATxn(): SmsParseResult {
+  return { status: "not_a_txn", isTransaction: false, candidate: null };
 }
 
 interface RawCandidate {
@@ -214,6 +243,7 @@ async function callModel(
 function finalize(c: RawCandidate, req: SmsParseRequest): SmsParseResult {
   const categoryId = matchByName(c.categoryHint, req.categories ?? []);
   return {
+    status: "transaction",
     isTransaction: true,
     candidate: {
       amountCents: c.amountCents,
