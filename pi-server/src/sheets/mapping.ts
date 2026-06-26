@@ -64,6 +64,20 @@ export function mapCategory(gullakCategory: string | null): SheetCategory | null
   return MAP[key] ?? null; // unknown category → skip rather than mis-bucket
 }
 
+/**
+ * True for categories that must NOT appear in the sheet at all (cash
+ * withdrawals, fees, taxes, giving, and every income bucket). This is distinct
+ * from "uncategorised": an uncategorised expense IS pushed (with a blank
+ * Category for the user to fill in-sheet), but an *explicitly excluded* one is
+ * dropped so it can't distort the spend/budget math. Unknown/uncategorised →
+ * false (i.e. push it blank), so the caller can rely on this only to drop the
+ * deliberately-non-spend buckets.
+ */
+export function isExcludedCategory(gullakCategory: string | null): boolean {
+  if (!gullakCategory) return false; // uncategorised is pushed blank, not dropped
+  return EXCLUDE.has(gullakCategory.trim().toLowerCase());
+}
+
 /** Map a Gullak account kind onto the sheet's Payment Mode column. */
 export function paymentModeForKind(kind: string | null | undefined): string {
   switch (kind) {

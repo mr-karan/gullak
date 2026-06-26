@@ -9,7 +9,24 @@ import {
   sheetsSyncState,
   transactions,
 } from "../db/schema.ts";
-import { mapCategory, paymentModeForKind } from "./mapping.ts";
+import {
+  isExcludedCategory,
+  mapCategory,
+  paymentModeForKind,
+} from "./mapping.ts";
+
+/**
+ * Bank card-alert SMS often leak boilerplate into the stored payee name, e.g.
+ * "BOOZE BOUTIQUE On 2026-06-20:17:07:04.Not You? To Block..." or
+ * "+SECTOR 21 C On 2026-05-28:14:11:13 Bal Rs.326989". Keep just the merchant
+ * by cutting at the " On <date>" marker so the sheet's Description column is
+ * human-readable rather than a wall of fraud-warning text.
+ */
+function cleanMerchant(raw: string | null | undefined): string {
+  if (!raw) return "";
+  const cut = raw.split(/\s+On\s+\d{4}-\d{2}-\d{2}/)[0] ?? raw;
+  return cut.trim();
+}
 
 export interface SheetsSyncResult {
   total: number; // expense (debit) txns in the scanned window
@@ -127,19 +144,25 @@ export async function syncExpensesToSheet(
     const t = r.transactions;
     if (t.updatedAt > maxUpdatedAt) maxUpdatedAt = t.updatedAt;
     if (t.transferAccountId || t.parentId) continue; // transfer / split parent
-    const mapped = mapCategory(r.categories?.name ?? null);
-    if (!mapped) continue;
+    const catName = r.categories?.name ?? null;
+    // Drop only the deliberately-non-spend buckets (cash withdrawal, fees,
+    // taxes, giving, income). Uncategorised expenses are NOT dropped — they go
+    // up with a blank Category/Type so the user can fill them in the sheet.
+    if (isExcludedCategory(catName)) continue;
+    const mapped = mapCategory(catName);
     const description =
-      (r.payees?.name ?? t.payeeName ?? r.categories?.name ?? "").trim() ||
-      mapped.category;
+      cleanMerchant(r.payees?.name) ||
+      cleanMerchant(t.payeeName) ||
+      catName ||
+      "Uncategorised";
     out.push([
       t.date,
       description,
-      mapped.category,
+      mapped?.category ?? "", // blank when uncategorised/unmapped — user fills it
       // minor units → rupees, preserving paise (e.g. 298713 → 2987.13)
       Number((Math.abs(t.amountCents) / 100).toFixed(2)),
       paymentModeForKind(r.accounts?.kind),
-      mapped.type,
+      mapped?.type ?? "",
       t.notes ?? "",
       t.id,
     ]);

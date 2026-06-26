@@ -1,6 +1,11 @@
 import { expect, test } from "bun:test";
 
-import { mapCategory, paymentModeForKind, type SheetType } from "./mapping.ts";
+import {
+  isExcludedCategory,
+  mapCategory,
+  paymentModeForKind,
+  type SheetType,
+} from "./mapping.ts";
 
 // These tests pin the sheet category mapping against two fixed contracts:
 //   1. The app's DEFAULT category tree (app/lib/features/categories/data/
@@ -139,6 +144,31 @@ test("excluded non-expense buckets never export", () => {
   expect(mapCategory("Cash Withdrawal")).toBeNull();
   expect(mapCategory("Fees & Charges")).toBeNull();
   expect(mapCategory("Taxes")).toBeNull();
+});
+
+test("isExcludedCategory drops non-spend buckets but NOT uncategorised", () => {
+  // The export pushes uncategorised expenses (blank category) but must drop the
+  // deliberately-non-spend buckets so they can't distort the sheet's totals.
+  // This is the contract the sheet sync loop relies on.
+  for (const dropped of [
+    "Cash Withdrawal",
+    "Fees & Charges",
+    "Taxes",
+    "Giving",
+    "Salary",
+    "Income",
+    "Refunds",
+  ]) {
+    expect(isExcludedCategory(dropped), `${dropped} must be dropped`).toBe(true);
+  }
+  // Uncategorised (null/empty) is NOT "excluded" — it's pushed blank, so this
+  // must be false or those rows would silently vanish instead of going up for
+  // the user to categorise in-sheet.
+  expect(isExcludedCategory(null)).toBe(false);
+  expect(isExcludedCategory("")).toBe(false);
+  // A real, mappable expense category is obviously not excluded.
+  expect(isExcludedCategory("Groceries")).toBe(false);
+  expect(isExcludedCategory("Eating Out")).toBe(false);
 });
 
 test("paymentModeForKind maps account kinds to sheet payment modes", () => {
