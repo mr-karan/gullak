@@ -7,7 +7,9 @@ import {
   categories,
   payees,
   sheetsSyncState,
+  tags,
   transactions,
+  transactionTags,
 } from "../db/schema.ts";
 import {
   isExcludedCategory,
@@ -26,6 +28,19 @@ function cleanMerchant(raw: string | null | undefined): string {
   if (!raw) return "";
   const cut = raw.split(/\s+On\s+\d{4}-\d{2}-\d{2}/)[0] ?? raw;
   return cut.trim();
+}
+
+/**
+ * The SMS pipeline stores a placeholder note like "SMS · JM-IDFCFB-S" (just the
+ * bank sender id) which is noise in the sheet — the merchant is already in the
+ * Description and the source is implied by Payment Mode. Drop those so the Notes
+ * column only carries a real, human-written note when one exists.
+ */
+function cleanNote(raw: string | null | undefined): string {
+  if (!raw) return "";
+  const n = raw.trim();
+  if (/^SMS\s*[·.]/.test(n)) return ""; // "SMS · <sender>" placeholder
+  return n;
 }
 
 export interface SheetsSyncResult {
@@ -137,7 +152,23 @@ export async function syncExpensesToSheet(
     )
     .all();
 
-  // A:H = Date, Description, Category, Amount, Payment Mode, Type, Notes, tid
+  // Tag names per txn. Gullak rows are mostly untagged today, but this populates
+  // the sheet's Tags column (col I) for any that are — and keeps the column in
+  // step with the manual rows the user tags directly (e.g. "Ladakh Trip").
+  const tagsByTxn = new Map<string, string[]>();
+  for (const tr of db
+    .select({ txnId: transactionTags.transactionId, name: tags.name })
+    .from(transactionTags)
+    .innerJoin(tags, eq(tags.id, transactionTags.tagId))
+    .all()) {
+    const list = tagsByTxn.get(tr.txnId);
+    if (list) list.push(tr.name);
+    else tagsByTxn.set(tr.txnId, [tr.name]);
+  }
+
+  // Columns: A Date, B Description, C Category, D Amount, E Payment Mode,
+  // F Type, G Notes, H gullak_id (hidden — Apps Script keys upserts off it),
+  // I Tags. Keeping the id at H means the existing Code.gs needs no change.
   const out: (string | number)[][] = [];
   let maxUpdatedAt = state.cursor;
   for (const r of rows) {
@@ -163,8 +194,9 @@ export async function syncExpensesToSheet(
       Number((Math.abs(t.amountCents) / 100).toFixed(2)),
       paymentModeForKind(r.accounts?.kind),
       mapped?.type ?? "",
-      t.notes ?? "",
+      cleanNote(t.notes),
       t.id,
+      (tagsByTxn.get(t.id) ?? []).join(", "),
     ]);
   }
 
