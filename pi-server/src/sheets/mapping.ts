@@ -57,7 +57,7 @@ const MAP: Record<string, SheetCategory> = {
   "personal care": { category: "Shopping & Lifestyle", type: WANT },
   gifts: { category: "Shopping & Lifestyle", type: WANT },
   donations: { category: "Shopping & Lifestyle", type: WANT },
-  family: { category: "Shopping & Lifestyle", type: WANT },
+  family: { category: "Family", type: NEED },
   travel: { category: "Travel & Trips", type: WANT },
   investments: { category: "Investments & Savings", type: SAVING },
   "savings & goals": { category: "Investments & Savings", type: SAVING },
@@ -69,6 +69,7 @@ const EXCLUDE = new Set([
   "cash withdrawal",
   "fees & charges",
   "money",
+  "self transfer",
   "taxes",
   "giving",
   // income group

@@ -32,6 +32,7 @@ const SHEET_CATEGORY_TYPES: Record<string, SheetType> = {
   Alcohol: "Want",
   "Travel & Trips": "Want",
   Subscriptions: "Want",
+  Family: "Need",
   "Investments & Savings": "Saving",
 };
 
@@ -158,6 +159,7 @@ test("isExcludedCategory drops non-spend buckets but NOT uncategorised", () => {
   for (const dropped of [
     "Cash Withdrawal",
     "Fees & Charges",
+    "Self Transfer",
     "Taxes",
     "Giving",
     "Salary",
