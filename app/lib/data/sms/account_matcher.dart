@@ -58,6 +58,11 @@ String? matchAccountHint(String? hint, List<AccountLite> accounts) {
     if (score > 0) {
       if (looksCard && isCard) score += 1;
       if (looksBank && !isCard) score += 1;
+      // A UPI/bank-only hint (e.g. "Axis Bank UPI") with no card wording must
+      // NOT land on a credit-card account — a UPI debit isn't a card spend.
+      // Penalise unless a last-4 in the hint actually matches that card (the
+      // +3 digit-match above would keep it positive in that legitimate case).
+      if (looksBank && !looksCard && isCard) score -= 2;
     }
 
     if (score > bestScore) {

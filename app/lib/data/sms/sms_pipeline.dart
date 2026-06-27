@@ -600,6 +600,7 @@ class SmsPipeline {
         : -candidate.amountCents.abs();
     return transactionRepo!.create(
       accountId: acctId,
+      categoryId: candidate.categoryId,
       payeeName: candidate.payee,
       amountCents: signed,
       date: candidate.date,
