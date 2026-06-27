@@ -26,10 +26,12 @@ const SHEET_CATEGORY_TYPES: Record<string, SheetType> = {
   "Household Help": "Need",
   "Transport & Fuel": "Need",
   "Health & Insurance": "Need",
+  "Car Maintenance": "Need",
   "Dining & Delivery": "Want",
   "Shopping & Lifestyle": "Want",
   Alcohol: "Want",
   "Travel & Trips": "Want",
+  Subscriptions: "Want",
   "Investments & Savings": "Saving",
 };
 
