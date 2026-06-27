@@ -20,6 +20,7 @@ import {
 // has no default category mapping onto it yet — that's intentional.
 const SHEET_CATEGORY_TYPES: Record<string, SheetType> = {
   "House Loan EMI": "Need",
+  Rent: "Need",
   Groceries: "Need",
   "Utilities & Bills": "Need",
   "Household Help": "Need",
@@ -27,6 +28,7 @@ const SHEET_CATEGORY_TYPES: Record<string, SheetType> = {
   "Health & Insurance": "Need",
   "Dining & Delivery": "Want",
   "Shopping & Lifestyle": "Want",
+  Alcohol: "Want",
   "Travel & Trips": "Want",
   "Investments & Savings": "Saving",
 };
@@ -42,7 +44,7 @@ const SPENDING_LEAF_EXPECTATIONS: Record<
   "Eating Out": { category: "Dining & Delivery", type: "Want" },
   Transport: { category: "Transport & Fuel", type: "Need" },
   Health: { category: "Health & Insurance", type: "Need" },
-  Rent: { category: "House Loan EMI", type: "Need" },
+  Rent: { category: "Rent", type: "Need" },
   Utilities: { category: "Utilities & Bills", type: "Need" },
   "Phone & Internet": { category: "Utilities & Bills", type: "Need" },
   Insurance: { category: "Health & Insurance", type: "Need" },
