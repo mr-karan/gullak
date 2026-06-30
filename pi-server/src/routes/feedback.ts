@@ -9,7 +9,7 @@ const feedbackBody = z.object({
   kind: z.string().min(1).max(80),
   message: z.string().max(1000).nullish(),
   clientId: z.string().max(120).nullish(),
-  payload: z.record(z.unknown()).default({}),
+  payload: z.record(z.string(), z.unknown()).default({}),
 });
 
 const feedbackRetentionMs = 7 * 24 * 60 * 60 * 1000;
