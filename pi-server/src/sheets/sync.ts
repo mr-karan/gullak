@@ -1,47 +1,10 @@
-import { and, eq, gte, lt, sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 
 import type { AppConfig } from "../config.ts";
 import type { Db } from "../db/index.ts";
-import {
-  accounts,
-  categories,
-  payees,
-  sheetsSyncState,
-  tags,
-  transactions,
-  transactionTags,
-} from "../db/schema.ts";
-import {
-  isExcludedCategory,
-  mapCategory,
-  paymentModeForKind,
-} from "./mapping.ts";
-
-/**
- * Bank card-alert SMS often leak boilerplate into the stored payee name, e.g.
- * "BOOZE BOUTIQUE On 2026-06-20:17:07:04.Not You? To Block..." or
- * "+SECTOR 21 C On 2026-05-28:14:11:13 Bal Rs.326989". Keep just the merchant
- * by cutting at the " On <date>" marker so the sheet's Description column is
- * human-readable rather than a wall of fraud-warning text.
- */
-function cleanMerchant(raw: string | null | undefined): string {
-  if (!raw) return "";
-  const cut = raw.split(/\s+On\s+\d{4}-\d{2}-\d{2}/)[0] ?? raw;
-  return cut.trim();
-}
-
-/**
- * The SMS pipeline stores a placeholder note like "SMS · JM-IDFCFB-S" (just the
- * bank sender id) which is noise in the sheet — the merchant is already in the
- * Description and the source is implied by Payment Mode. Drop those so the Notes
- * column only carries a real, human-written note when one exists.
- */
-function cleanNote(raw: string | null | undefined): string {
-  if (!raw) return "";
-  const n = raw.trim();
-  if (/^SMS\s*[·.]/.test(n)) return ""; // "SMS · <sender>" placeholder
-  return n;
-}
+import { sheetsSyncState } from "../db/schema.ts";
+import { collectExpenses } from "../destinations/collect.ts";
+import { SheetsDestination } from "../destinations/sheets.ts";
 
 export interface SheetsSyncResult {
   total: number; // expense (debit) txns in the scanned window
@@ -125,8 +88,8 @@ export async function syncExpensesToSheet(
   config: AppConfig,
   opts: { replace?: boolean } = {},
 ): Promise<SheetsSyncResult> {
-  const { webAppUrl, secret } = config.sheets;
-  if (!webAppUrl || !secret) {
+  const dest = new SheetsDestination(config);
+  if (!dest.isEnabled()) {
     throw new Error(
       "sheets sync not configured (GULLAK_SHEETS_WEBAPP_URL + GULLAK_SHEETS_SECRET)",
     );
@@ -137,111 +100,28 @@ export async function syncExpensesToSheet(
   // A full replace re-exports the whole table; an incremental run only scans
   // rows changed at or after the last confirmed high-water mark.
   const since = replace ? 0 : state.cursor;
+  const { rows, scanned, maxUpdatedAt } = collectExpenses(
+    db,
+    since,
+    state.cursor,
+  );
 
-  const rows = db
-    .select()
-    .from(transactions)
-    .leftJoin(categories, eq(categories.id, transactions.categoryId))
-    .leftJoin(payees, eq(payees.id, transactions.payeeId))
-    .leftJoin(accounts, eq(accounts.id, transactions.accountId))
-    .where(
-      and(
-        lt(transactions.amountCents, 0),
-        gte(transactions.updatedAt, since),
-      ),
-    )
-    .all();
-
-  // Tag names per txn. Gullak rows are mostly untagged today, but this populates
-  // the sheet's Tags column (col I) for any that are — and keeps the column in
-  // step with the manual rows the user tags directly (e.g. "Ladakh Trip").
-  const tagsByTxn = new Map<string, string[]>();
-  for (const tr of db
-    .select({ txnId: transactionTags.transactionId, name: tags.name })
-    .from(transactionTags)
-    .innerJoin(tags, eq(tags.id, transactionTags.tagId))
-    .all()) {
-    const list = tagsByTxn.get(tr.txnId);
-    if (list) list.push(tr.name);
-    else tagsByTxn.set(tr.txnId, [tr.name]);
-  }
-
-  // Columns: A Date, B Description, C Category, D Amount, E Payment Mode,
-  // F Type, G Notes, H gullak_id (hidden — Apps Script keys upserts off it),
-  // I Tags. Keeping the id at H means the existing Code.gs needs no change.
-  const out: (string | number)[][] = [];
-  let maxUpdatedAt = state.cursor;
-  for (const r of rows) {
-    const t = r.transactions;
-    if (t.updatedAt > maxUpdatedAt) maxUpdatedAt = t.updatedAt;
-    if (t.transferAccountId || t.parentId) continue; // transfer / split parent
-    const catName = r.categories?.name ?? null;
-    // Drop only the deliberately-non-spend buckets (cash withdrawal, fees,
-    // taxes, giving, income). Uncategorised expenses are NOT dropped — they go
-    // up with a blank Category/Type so the user can fill them in the sheet.
-    if (isExcludedCategory(catName)) continue;
-    const mapped = mapCategory(catName);
-    const description =
-      cleanMerchant(r.payees?.name) ||
-      cleanMerchant(t.payeeName) ||
-      catName ||
-      "Uncategorised";
-    out.push([
-      t.date,
-      description,
-      mapped?.category ?? "", // blank when uncategorised/unmapped — user fills it
-      // minor units → rupees, preserving paise (e.g. 298713 → 2987.13)
-      Number((Math.abs(t.amountCents) / 100).toFixed(2)),
-      paymentModeForKind(r.accounts?.kind),
-      mapped?.type ?? "",
-      cleanNote(t.notes),
-      t.id,
-      (tagsByTxn.get(t.id) ?? []).join(", "),
-    ]);
-  }
-
-  // Nothing to POST this run. If we still scanned rows (all excluded/transfers),
+  // Nothing to POST this run. If we still scanned rows (all transfers/splits),
   // advance the cursor anyway so the same window isn't rescanned forever —
-  // otherwise a window that's entirely excluded rows pins the cursor in place.
-  if (out.length === 0 && !replace) {
-    if (rows.length > 0 && maxUpdatedAt > state.cursor) {
+  // otherwise a window that's entirely skipped rows pins the cursor in place.
+  if (rows.length === 0 && !replace) {
+    if (scanned > 0 && maxUpdatedAt > state.cursor) {
       db.update(sheetsSyncState)
         .set({ cursor: maxUpdatedAt, updatedAt: Date.now() })
         .where(eq(sheetsSyncState.id, STATE_ID))
         .run();
     }
-    return {
-      total: rows.length,
-      sent: 0,
-      skipped: rows.length,
-      cursor: maxUpdatedAt,
-    };
+    return { total: scanned, sent: 0, skipped: scanned, cursor: maxUpdatedAt };
   }
 
   const attemptAt = Date.now();
   try {
-    const res = await fetch(webAppUrl, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ secret, rows: out, replace }),
-    });
-    const text = await res.text();
-    if (!res.ok) {
-      throw new Error(`sheets POST ${res.status}: ${text}`);
-    }
-    // Apps Script signals failures (bad secret, missing tab, script throw) with
-    // an {error} body on HTTP 200 — so a status check alone would treat a
-    // rejected payload as success and wrongly advance the cursor. Inspect the
-    // body and fail loudly so the cursor stays put and the error is recorded.
-    let parsed: { error?: unknown } | null = null;
-    try {
-      parsed = JSON.parse(text);
-    } catch {
-      throw new Error(`sheets POST returned non-JSON: ${text.slice(0, 200)}`);
-    }
-    if (parsed?.error) {
-      throw new Error(`sheets script error: ${String(parsed.error)}`);
-    }
+    const { sent } = await dest.export(rows, { replace });
     // Success: advance the high-water cursor and clear the error state.
     db.update(sheetsSyncState)
       .set({
@@ -254,12 +134,7 @@ export async function syncExpensesToSheet(
       })
       .where(eq(sheetsSyncState.id, STATE_ID))
       .run();
-    return {
-      total: rows.length,
-      sent: out.length,
-      skipped: rows.length - out.length,
-      cursor: maxUpdatedAt,
-    };
+    return { total: scanned, sent, skipped: scanned - sent, cursor: maxUpdatedAt };
   } catch (e) {
     // Failure: record it but DON'T advance the cursor, so the next push or
     // interval retries the same window.

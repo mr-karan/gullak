@@ -1,11 +1,15 @@
 // Bridges Gullak's category names onto the Finance Tracker sheet's canonical
 // category set (+ Need/Want/Saving type). Post-unification the two sets are the
-// SAME 12 spend categories, so most entries here are identity — the legacy
-// rows (eating out, transport, fuel, …) are aliases kept so transactions
-// captured before the category migration still map cleanly. The EXCLUDE set
-// (transfers, tax, card-bill fees, cash withdrawals, income) is dropped via
-// isExcludedCategory(). Uncategorised/unmapped expenses are NOT dropped —
-// sync.ts pushes them blank for the user to fill in-sheet.
+// SAME spend categories, so most entries here are identity — the legacy rows
+// (eating out, transport, fuel, …) are aliases kept so transactions captured
+// before the category migration still map cleanly.
+//
+// NO category is dropped: if a row exists in SQLite it must exist in the sheet
+// (the owner's rule). A category we don't recognise simply maps to null, and
+// sync.ts pushes it with a BLANK Category/Type for the user to fill in-sheet —
+// never silently swallowed. (sync.ts still skips transfer legs / split children
+// to avoid double-counting, and income/credits because the sheet's Amount
+// column is expense-only — those are structural, not category, decisions.)
 //
 // CANONICAL SET (each carries a fixed Type — single source of truth shared by
 // the LLM, the Gullak categories, and the sheet's Setup tab):
@@ -64,42 +68,16 @@ const MAP: Record<string, SheetCategory> = {
   "emergency fund": { category: "Investments & Savings", type: SAVING },
 };
 
-// Explicitly non-expense buckets — never pushed even if they carry a debit.
-const EXCLUDE = new Set([
-  "cash withdrawal",
-  "fees & charges",
-  "money",
-  "self transfer",
-  "taxes",
-  "giving",
-  // income group
-  "income",
-  "interest",
-  "other income",
-  "refunds",
-  "salary",
-]);
-
-/** Returns the sheet category/type, or null when the txn must not be pushed. */
-export function mapCategory(gullakCategory: string | null): SheetCategory | null {
-  if (!gullakCategory) return null; // uncategorised → leave in Gullak
-  const key = gullakCategory.trim().toLowerCase();
-  if (EXCLUDE.has(key)) return null;
-  return MAP[key] ?? null; // unknown category → skip rather than mis-bucket
-}
-
 /**
- * True for categories that must NOT appear in the sheet at all (cash
- * withdrawals, fees, taxes, giving, and every income bucket). This is distinct
- * from "uncategorised": an uncategorised expense IS pushed (with a blank
- * Category for the user to fill in-sheet), but an *explicitly excluded* one is
- * dropped so it can't distort the spend/budget math. Unknown/uncategorised →
- * false (i.e. push it blank), so the caller can rely on this only to drop the
- * deliberately-non-spend buckets.
+ * Map a Gullak category onto a sheet category + Need/Want/Saving type.
+ * Returns null when the category is unknown/unmapped (including null) — the
+ * caller pushes the row anyway with a BLANK Category for the user to fill.
+ * Nothing is dropped here: a real spend must never vanish just because its
+ * category isn't in the canonical set.
  */
-export function isExcludedCategory(gullakCategory: string | null): boolean {
-  if (!gullakCategory) return false; // uncategorised is pushed blank, not dropped
-  return EXCLUDE.has(gullakCategory.trim().toLowerCase());
+export function mapCategory(gullakCategory: string | null): SheetCategory | null {
+  if (!gullakCategory) return null; // uncategorised → push blank
+  return MAP[gullakCategory.trim().toLowerCase()] ?? null; // unknown → push blank
 }
 
 /** Map a Gullak account kind onto the sheet's Payment Mode column. */

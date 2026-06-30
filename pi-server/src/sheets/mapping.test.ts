@@ -1,11 +1,6 @@
 import { expect, test } from "bun:test";
 
-import {
-  isExcludedCategory,
-  mapCategory,
-  paymentModeForKind,
-  type SheetType,
-} from "./mapping.ts";
+import { mapCategory, paymentModeForKind, type SheetType } from "./mapping.ts";
 
 // These tests pin the sheet category mapping against two fixed contracts:
 //   1. The app's DEFAULT category tree (app/lib/features/categories/data/
@@ -94,9 +89,12 @@ test("every mapped category is a real sheet category with the sheet's type", () 
   }
 });
 
-test("all default income categories are excluded", () => {
+test("income categories are unmapped (sync keeps them out by amount sign)", () => {
+  // Income has no sheet spend-category, so mapCategory returns null. They stay
+  // out of the expense sheet because sync.ts only exports debits (amount < 0),
+  // NOT because the category is force-excluded.
   for (const name of INCOME_CATEGORIES) {
-    expect(mapCategory(name), `income "${name}" must not export`).toBeNull();
+    expect(mapCategory(name), `income "${name}" has no spend category`).toBeNull();
   }
 });
 
@@ -137,45 +135,27 @@ test("mapCategory is case-insensitive and trims whitespace", () => {
   });
 });
 
-test("null, empty, and unknown categories are not exported", () => {
-  expect(mapCategory(null)).toBeNull();
-  expect(mapCategory("")).toBeNull();
-  expect(mapCategory("   ")).toBeNull();
-  expect(mapCategory("Totally Made Up Category")).toBeNull();
-});
-
-test("excluded non-expense buckets never export", () => {
-  // Transfers/fees/tax/cash withdrawals can carry debits but must not pollute
-  // the sheet's spend totals.
-  expect(mapCategory("Cash Withdrawal")).toBeNull();
-  expect(mapCategory("Fees & Charges")).toBeNull();
-  expect(mapCategory("Taxes")).toBeNull();
-});
-
-test("isExcludedCategory drops non-spend buckets but NOT uncategorised", () => {
-  // The export pushes uncategorised expenses (blank category) but must drop the
-  // deliberately-non-spend buckets so they can't distort the sheet's totals.
-  // This is the contract the sheet sync loop relies on.
-  for (const dropped of [
+test("unmapped categories return null so the row is pushed BLANK, not dropped", () => {
+  // A null from mapCategory is NOT a drop — sync.ts pushes the row with a blank
+  // Category for the user to fill in-sheet. Nothing vanishes. This is the rule:
+  // if a row exists in SQLite it exists in the sheet. Covers null/empty/junk
+  // AND the non-canonical buckets that were previously force-excluded (cash
+  // withdrawal, fees, taxes, self transfer, giving, and the "Money" catch-all
+  // that used to silently swallow real P2P spends).
+  for (const c of [
+    null,
+    "",
+    "   ",
+    "Totally Made Up Category",
     "Cash Withdrawal",
     "Fees & Charges",
-    "Self Transfer",
     "Taxes",
+    "Self Transfer",
     "Giving",
-    "Salary",
-    "Income",
-    "Refunds",
+    "Money",
   ]) {
-    expect(isExcludedCategory(dropped), `${dropped} must be dropped`).toBe(true);
+    expect(mapCategory(c), `"${c}" should map to null (pushed blank)`).toBeNull();
   }
-  // Uncategorised (null/empty) is NOT "excluded" — it's pushed blank, so this
-  // must be false or those rows would silently vanish instead of going up for
-  // the user to categorise in-sheet.
-  expect(isExcludedCategory(null)).toBe(false);
-  expect(isExcludedCategory("")).toBe(false);
-  // A real, mappable expense category is obviously not excluded.
-  expect(isExcludedCategory("Groceries")).toBe(false);
-  expect(isExcludedCategory("Eating Out")).toBe(false);
 });
 
 test("paymentModeForKind maps account kinds to sheet payment modes", () => {
