@@ -225,6 +225,19 @@ export const sheetsSyncState = sqliteTable("sheets_sync_state", {
   updatedAt: integer("updated_at").notNull().default(now),
 });
 
+// Per-destination export cursor + health (one row per destination: "sheets",
+// "actual", …). Generalises sheets_sync_state so each destination advances its
+// own high-water mark independently.
+export const exportState = sqliteTable("export_state", {
+  destination: text("destination").primaryKey(),
+  cursor: integer("cursor").notNull().default(0),
+  lastAttemptAt: integer("last_attempt_at"),
+  lastSuccessAt: integer("last_success_at"),
+  lastError: text("last_error"),
+  consecutiveFailures: integer("consecutive_failures").notNull().default(0),
+  updatedAt: integer("updated_at").notNull().default(now),
+});
+
 // Append-only mutation log for sync clients. Each row is a single
 // row-level upsert/delete from any client. Clients pull rows after a
 // cursor (id) and apply LWW per-row by updatedAt.

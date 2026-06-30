@@ -10,6 +10,7 @@ import { accountsRouter } from "./routes/accounts.ts";
 import { aiRouter } from "./routes/ai.ts";
 import { budgetsRouter } from "./routes/budgets.ts";
 import { categoriesRouter } from "./routes/categories.ts";
+import { exportRouter } from "./routes/export.ts";
 import { feedbackRouter } from "./routes/feedback.ts";
 import { healthRouter } from "./routes/health.ts";
 import {
@@ -94,6 +95,7 @@ export function createApp(ctx: AppContext) {
   app.route("/v1/summary", summaryRouter);
   app.route("/v1/sync", syncRouter);
   app.route("/v1/sheets", sheetsRouter);
+  app.route("/v1/export", exportRouter);
   app.route("/v1/messages", messagesRouter);
   // More-specific route first so /webhook in whatsappRouter doesn't
   // shadow the inbox candidate queue.
