@@ -101,6 +101,18 @@ export interface AppConfig {
      *  (the push also fires after each /v1/sync/push). */
     syncIntervalMinutes: number;
   };
+  /** Actual Budget export destination (opt-in). Enabled when serverUrl +
+   *  password + syncId are all set. */
+  actual: {
+    serverUrl?: string;
+    password?: string;
+    /** The budget file's Sync ID (Actual → Settings → Advanced). */
+    syncId?: string;
+    /** Actual account id to import into; defaults to the first account. */
+    accountId?: string;
+    /** Local cache dir @actual-app/api downloads the budget into. */
+    dataDir: string;
+  };
 }
 
 // Operationally-critical scalars get a real schema so a bad value fails loudly
@@ -214,6 +226,13 @@ export function loadConfig(): AppConfig {
       webAppUrl: getOptionalEnv("GULLAK_SHEETS_WEBAPP_URL"),
       secret: getOptionalEnv("GULLAK_SHEETS_SECRET"),
       syncIntervalMinutes,
+    },
+    actual: {
+      serverUrl: getOptionalEnv("GULLAK_ACTUAL_SERVER_URL"),
+      password: getOptionalEnv("GULLAK_ACTUAL_PASSWORD"),
+      syncId: getOptionalEnv("GULLAK_ACTUAL_SYNC_ID"),
+      accountId: getOptionalEnv("GULLAK_ACTUAL_ACCOUNT_ID"),
+      dataDir: getEnv("GULLAK_ACTUAL_DATA_DIR", `${dataDir}/.actual-cache`),
     },
   };
 }

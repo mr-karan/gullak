@@ -1,6 +1,14 @@
 import type { AppConfig } from "../config.ts";
 import type { Db } from "../db/index.ts";
 import { sheetsEnabled, syncExpensesToSheet } from "../sheets/sync.ts";
+import { ActualDestination } from "./actual.ts";
+import { collectExpenses } from "./collect.ts";
+import {
+  advanceExportCursor,
+  markExportFailure,
+  markExportSuccess,
+  readExportState,
+} from "./state.ts";
 
 export interface ExportRunResult {
   destination: string;
@@ -52,7 +60,59 @@ export async function runExport(
     }
   }
 
-  // "actual" is wired in when the Actual Budget adapter ships (task 48).
+  if (wants("actual")) {
+    const dest = new ActualDestination(config);
+    if (!dest.isEnabled()) {
+      results.push({ destination: "actual", enabled: false });
+    } else {
+      const state = readExportState(db, "actual");
+      const since = replace ? 0 : state.cursor;
+      const { rows, scanned, maxUpdatedAt } = collectExpenses(
+        db,
+        since,
+        state.cursor,
+      );
+      if (rows.length === 0 && !replace) {
+        if (scanned > 0 && maxUpdatedAt > state.cursor) {
+          advanceExportCursor(db, "actual", maxUpdatedAt);
+        }
+        results.push({
+          destination: "actual",
+          enabled: true,
+          total: scanned,
+          sent: 0,
+          skipped: scanned,
+          cursor: maxUpdatedAt,
+        });
+      } else {
+        const attemptAt = Date.now();
+        try {
+          const { sent } = await dest.export(rows, { replace });
+          markExportSuccess(db, "actual", maxUpdatedAt, attemptAt);
+          results.push({
+            destination: "actual",
+            enabled: true,
+            total: scanned,
+            sent,
+            skipped: scanned - sent,
+            cursor: maxUpdatedAt,
+          });
+        } catch (e) {
+          const message = e instanceof Error ? e.message : String(e);
+          markExportFailure(db, "actual", attemptAt, message);
+          results.push({
+            destination: "actual",
+            enabled: true,
+            total: scanned,
+            sent: 0,
+            skipped: scanned,
+            cursor: state.cursor,
+            error: message,
+          });
+        }
+      }
+    }
+  }
 
   return results;
 }

@@ -67,7 +67,7 @@ hidden `gullak_id` column; `replace=true` clears + rewrites (preserving manual,
 id-less rows). Soft failures (`{error}` on HTTP 200) are detected and abort the
 cursor advance so nothing is silently lost.
 
-### Actual Budget (`src/destinations/actual.ts`) — planned
+### Actual Budget (`src/destinations/actual.ts`) — built (opt-in, gated)
 
 Adapter over the official `@actual-app/api` (init → `downloadBudget(syncId)` →
 `importTransactions` → `sync`), keyed on `imported_id = sourceId` for
@@ -84,7 +84,7 @@ Runtime note: `@actual-app/api` pulls `better-sqlite3` (native). If it doesn't
 build under the Bun image it runs as a small Node sidecar the server calls,
 rather than risking the main runtime.
 
-## Per-destination state (planned: `export_state`)
+## Per-destination state (`export_state`)
 
 Each destination keeps its own high-water cursor (`updatedAt`), so one being
 down or back-filling doesn't stall another. The generic runner
