@@ -11,19 +11,19 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@mariozechner/pi-agent-core": "^0.67.3",
-    "@mariozechner/pi-ai": "^0.67.3",
+    "@mariozechner/pi-agent-core": "^0.67.68",
+    "@mariozechner/pi-ai": "^0.67.68",
     "drizzle-orm": "^0.36.4",
     "drizzle-zod": "^0.5.1",
-    "hono": "^4.6.14",
-    "luxon": "^3.6.1",
-    "zod": "^3.24.1"
+    "hono": "^4.12.27",
+    "luxon": "^3.7.2",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
-    "@types/bun": "^1.1.15",
-    "@types/luxon": "^3.6.2",
-    "drizzle-kit": "^0.30.1",
-    "typescript": "^5.7.3"
+    "@types/bun": "^1.3.14",
+    "@types/luxon": "^3.7.2",
+    "drizzle-kit": "^0.30.6",
+    "typescript": "^5.9.3"
   },
   "engines": {
     "bun": ">=1.1.0"
