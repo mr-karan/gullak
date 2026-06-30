@@ -37,8 +37,12 @@ const COLORS = {
 const DEBOUNCE_MS = 4000;
 
 // ---- Gullak Capture endpoint ----
+// The shared secret authenticating inbound pushes from the Gullak sync server.
+// NEVER hardcode it. Set it in the Apps Script editor: Project Settings →
+// Script properties → add `GULLAK_SECRET`. It must match the server's
+// GULLAK_SHEETS_SECRET. If it ever leaks, rotate both together.
 const GULLAK_SECRET =
-  "44cd6cafed77425c9f2444d54de7d3f93932506b019261015476fcc195e23be7";
+  PropertiesService.getScriptProperties().getProperty("GULLAK_SECRET") || "";
 const GULLAK_ID_COL = 8; // hidden gullak_id column (H)
 
 // =====================================================================
