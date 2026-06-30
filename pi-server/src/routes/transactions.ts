@@ -29,12 +29,24 @@ const upsertSchema = z.object({
 
 export const transactionsRouter = new Hono<AppEnv>();
 
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
 transactionsRouter.get("/", (c) => {
   const db = c.get("db");
-  const limit = Number(c.req.query("limit") ?? "200");
+  // Clamp limit to a sane range; a NaN/huge/negative value can't blow up the query.
+  const rawLimit = Number(c.req.query("limit") ?? "200");
+  const limit = Number.isFinite(rawLimit)
+    ? Math.min(Math.max(Math.trunc(rawLimit), 1), 1000)
+    : 200;
   const startDate = c.req.query("startDate");
   const endDate = c.req.query("endDate");
   const accountId = c.req.query("accountId");
+  if (
+    (startDate && !DATE_RE.test(startDate)) ||
+    (endDate && !DATE_RE.test(endDate))
+  ) {
+    return c.json({ error: "startDate/endDate must be YYYY-MM-DD" }, 400);
+  }
   const where = [
     startDate ? gte(transactions.date, startDate) : undefined,
     endDate ? lte(transactions.date, endDate) : undefined,

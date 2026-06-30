@@ -55,8 +55,10 @@ export const quickEntryRequest = z.object({
   accounts: z.array(namedRow).max(200).default([]),
   categories: z.array(namedRow).max(500).default([]),
   payees: z.array(payeeRow).max(2000).default([]),
-  imageBase64: z.string().optional(),
-  imageMimeType: z.string().optional(),
+  // Cap the receipt image so a huge base64 blob can't exhaust memory/LLM cost.
+  // ~14M chars of base64 ≈ ~10 MB decoded — generous for a phone photo.
+  imageBase64: z.string().max(14_000_000).optional(),
+  imageMimeType: z.string().max(64).optional(),
 });
 
 export type QuickEntryRequest = z.infer<typeof quickEntryRequest>;

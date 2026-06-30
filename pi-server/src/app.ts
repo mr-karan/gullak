@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { bodyLimit } from "hono/body-limit";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
 import { ZodError } from "zod";
@@ -41,6 +42,16 @@ export function createApp(ctx: AppContext) {
 
   app.use("*", logger());
   app.use("*", cors());
+
+  // Cap request bodies so a huge payload (e.g. an oversized receipt-image
+  // base64) can't exhaust memory. 15 MB is generous for a phone photo.
+  app.use(
+    "*",
+    bodyLimit({
+      maxSize: 15 * 1024 * 1024,
+      onError: (c) => c.json({ error: "Payload too large" }, 413),
+    }),
+  );
 
   app.use("*", async (c, next) => {
     c.set("db", ctx.db);
