@@ -619,7 +619,7 @@ class SettingsScreen extends ConsumerWidget {
                       controller: base,
                       decoration: const InputDecoration(
                         labelText: 'Base URL',
-                        hintText: 'https://gullak.mrkaran.dev',
+                        hintText: 'https://your-server.example.com',
                       ),
                       autocorrect: false,
                       enableSuggestions: false,

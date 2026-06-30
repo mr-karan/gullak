@@ -59,8 +59,15 @@ class RemoteApplier {
           log.w('sync: unknown resource $resource — skipping');
       }
       return true;
+    } on TypeError catch (e) {
+      // A cast failure means the payload is structurally wrong (missing/bad
+      // field) — permanently unapplicable. Skip it (return true) so one bad
+      // row can't stall the cursor and block every change behind it.
+      log.w('sync: malformed payload for $resource/$id — skipping: $e');
+      return true;
     } catch (e) {
-      log.w('sync: failed to apply $resource/$id: $e');
+      // Transient (e.g. db busy): don't advance the cursor; retry next pull.
+      log.w('sync: failed to apply $resource/$id (will retry): $e');
       return false;
     }
   }

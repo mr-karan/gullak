@@ -429,7 +429,7 @@ class _SyncSetupState extends State<_SyncSetup> {
             keyboardType: TextInputType.url,
             decoration: const InputDecoration(
               labelText: 'Base URL',
-              hintText: 'https://gullak.mrkaran.dev',
+              hintText: 'https://your-server.example.com',
             ),
             autocorrect: false,
             enableSuggestions: false,

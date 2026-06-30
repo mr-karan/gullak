@@ -22,7 +22,7 @@ class SecureStore {
     try {
       return await _storage.read(key: key);
     } catch (e) {
-      log.w('secure read failed for $key: $e');
+      log.w('secure read failed: $e'); // omit key name — don't reveal stored secrets
       return null;
     }
   }
@@ -35,7 +35,7 @@ class SecureStore {
         await _storage.write(key: key, value: value);
       }
     } catch (e) {
-      log.w('secure write failed for $key: $e');
+      log.w('secure write failed: $e'); // omit key name
     }
   }
 

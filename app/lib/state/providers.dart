@@ -50,7 +50,11 @@ final FutureProvider<bool> onboardedProvider = FutureProvider<bool>((
 });
 
 final Provider<ThemeMode> themeModeProvider = Provider<ThemeMode>((ref) {
-  final p = ref.watch(prefsProvider);
+  // Watch the revision (like watchPrefs does for widgets) so the theme
+  // rebuilds when a Prefs setter bumps it — otherwise a theme toggle doesn't
+  // apply until the next restart.
+  ref.watch(prefsRevisionProvider);
+  final p = ref.read(prefsProvider);
   return switch (p.themeMode) {
     'light' => ThemeMode.light,
     'dark' => ThemeMode.dark,

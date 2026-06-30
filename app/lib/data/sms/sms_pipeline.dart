@@ -628,6 +628,13 @@ class SmsPipeline {
     String originRef,
     String address,
   ) async {
+    // Invariant: auto-create needs the repo. If it's absent (e.g. a
+    // capture-only pipeline), throw so the caller routes to the Inbox rather
+    // than crashing on a null force-unwrap.
+    final repo = transactionRepo;
+    if (repo == null) {
+      throw StateError('no transaction repo; routing to inbox');
+    }
     final accounts = await (db.select(
       db.accounts,
     )..where((a) => a.archived.equals(false))).get();
@@ -652,7 +659,7 @@ class SmsPipeline {
     final signed = candidate.isIncome
         ? candidate.amountCents.abs()
         : -candidate.amountCents.abs();
-    return transactionRepo!.create(
+    return repo.create(
       accountId: acctId,
       categoryId: candidate.categoryId,
       payeeName: candidate.payee,
