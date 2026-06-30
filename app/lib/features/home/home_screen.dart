@@ -456,7 +456,7 @@ class _RecentRow extends ConsumerWidget {
         symbol: prefs.currencySymbol,
         color: amountColor,
       ),
-      onTap: () => context.go('/transactions/${row.id}'),
+      onTap: () => context.push('/transactions/${row.id}'),
     );
   }
 }
@@ -515,7 +515,7 @@ enum ReviewColor {
     return switch (this) {
       ReviewColor.primary => cs.primary,
       ReviewColor.error => cs.error,
-      ReviewColor.warning => cs.tertiary,
+      ReviewColor.warning => warningColor(cs),
     };
   }
 }

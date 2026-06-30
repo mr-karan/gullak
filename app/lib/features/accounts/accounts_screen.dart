@@ -151,7 +151,7 @@ class _AccountCard extends ConsumerWidget {
         borderRadius: BorderRadius.circular(20),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
-          onTap: () => context.go('/accounts/${account.id}'),
+          onTap: () => context.push('/accounts/${account.id}'),
           child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
             child: Row(

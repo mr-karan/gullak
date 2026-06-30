@@ -608,7 +608,7 @@ class _Preview extends StatelessWidget {
           chip(
             'Low confidence — review',
             Icons.warning_amber_outlined,
-            color: cs.tertiary,
+            color: warningColor(cs),
           ),
       ],
     );

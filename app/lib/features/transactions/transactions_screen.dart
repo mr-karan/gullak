@@ -959,7 +959,7 @@ class _TxRow extends ConsumerWidget {
         ],
       ),
       child: InkWell(
-        onTap: () => context.go('/transactions/${row.id}'),
+        onTap: () => context.push('/transactions/${row.id}'),
         child: Padding(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
           child: Row(

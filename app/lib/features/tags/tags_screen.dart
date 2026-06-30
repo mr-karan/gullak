@@ -56,7 +56,7 @@ class TagsScreen extends ConsumerWidget {
                     minorDigits: prefs.currencyMinorDigits,
                   ),
                 ),
-                onTap: () => context.go('/tags/${row.tag.id}'),
+                onTap: () => context.push('/tags/${row.tag.id}'),
                 onLongPress: () async {
                   await prefs.setActiveTagId(active ? null : row.tag.id);
                   bumpPrefs(ref);
@@ -96,7 +96,7 @@ class TagsScreen extends ConsumerWidget {
       );
       if (name == null || name.isEmpty) return;
       final id = await ref.read(tagRepoProvider).create(name: name);
-      if (context.mounted) context.go('/tags/$id');
+      if (context.mounted) context.push('/tags/$id');
     } finally {
       ctrl.dispose();
     }
@@ -297,7 +297,7 @@ class TagDetailScreen extends ConsumerWidget {
                           minorDigits: prefs.currencyMinorDigits,
                         ),
                       ),
-                      onTap: () => context.go('/transactions/${item.id}'),
+                      onTap: () => context.push('/transactions/${item.id}'),
                     ),
                 ],
               );

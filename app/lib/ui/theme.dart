@@ -8,51 +8,54 @@ const Color _kSeedColor = Color(0xFF0A6E58);
 
 class _Palette {
   // Light
-  static const lightSurface = Color(0xFFFAF9F6);
-  static const lightSurfaceDim = Color(0xFFEFEDE8);
-  static const lightSurfaceContainer = Color(0xFFF2F0EB);
-  static const lightSurfaceContainerHigh = Color(0xFFEAE7E0);
-  static const lightSurfaceContainerHighest = Color(0xFFE2DED6);
-  static const lightOnSurface = Color(0xFF1A1F1C);
-  static const lightOnSurfaceVariant = Color(0xFF5A615C);
-  static const lightOutline = Color(0xFFB7B5AE);
-  static const lightOutlineVariant = Color(0xFFD4D2CB);
+  // Light — cool, crisp neutrals (Kite-like) rather than warm cream.
+  static const lightSurface = Color(0xFFFCFCFD);
+  static const lightSurfaceDim = Color(0xFFEFF1F4);
+  static const lightSurfaceContainer = Color(0xFFF4F5F7);
+  static const lightSurfaceContainerHigh = Color(0xFFEDEEF1);
+  static const lightSurfaceContainerHighest = Color(0xFFE5E7EB);
+  static const lightOnSurface = Color(0xFF1A1D22);
+  static const lightOnSurfaceVariant = Color(0xFF6B7280);
+  static const lightOutline = Color(0xFFC7CBD1);
+  static const lightOutlineVariant = Color(0xFFE5E7EB);
 
   static const lightPrimary = Color(0xFF0A6E58);
-  static const lightOnPrimary = Color(0xFFFAF9F6);
+  static const lightOnPrimary = Color(0xFFFFFFFF);
   static const lightPrimaryContainer = Color(0xFFD7EFE6);
   static const lightOnPrimaryContainer = Color(0xFF033E30);
 
-  static const lightAccent = Color(0xFFC77F3A); // burnt amber, income/+
-  static const lightOnAccent = Color(0xFFFAF9F6);
-  static const lightAccentContainer = Color(0xFFFAE7CE);
-  static const lightOnAccentContainer = Color(0xFF6B3D14);
+  // Income / positive: green (Kite sign discipline), not warm amber.
+  static const lightAccent = Color(0xFF1B8A5A);
+  static const lightOnAccent = Color(0xFFFFFFFF);
+  static const lightAccentContainer = Color(0xFFD6F0E2);
+  static const lightOnAccentContainer = Color(0xFF06402B);
 
   static const lightDanger = Color(0xFFB23A48);
   static const lightOnDanger = Color(0xFFFAF9F6);
   static const lightDangerContainer = Color(0xFFF8DBDF);
   static const lightOnDangerContainer = Color(0xFF601420);
 
-  // Dark — warmer than pure black, retains the editorial feel.
-  static const darkSurface = Color(0xFF131614);
-  static const darkSurfaceDim = Color(0xFF0E1110);
-  static const darkSurfaceContainer = Color(0xFF1B1F1D);
-  static const darkSurfaceContainerHigh = Color(0xFF222624);
-  static const darkSurfaceContainerHighest = Color(0xFF2A2F2C);
-  static const darkOnSurface = Color(0xFFE8E4DD);
-  static const darkOnSurfaceVariant = Color(0xFFA9ADA6);
-  static const darkOutline = Color(0xFF4C504C);
-  static const darkOutlineVariant = Color(0xFF31352F);
+  // Dark — cool slate (Kite-like), not warm.
+  static const darkSurface = Color(0xFF121417);
+  static const darkSurfaceDim = Color(0xFF0D0F11);
+  static const darkSurfaceContainer = Color(0xFF1A1D21);
+  static const darkSurfaceContainerHigh = Color(0xFF22262B);
+  static const darkSurfaceContainerHighest = Color(0xFF2A2F35);
+  static const darkOnSurface = Color(0xFFE6E8EC);
+  static const darkOnSurfaceVariant = Color(0xFF9AA0AA);
+  static const darkOutline = Color(0xFF4A4F57);
+  static const darkOutlineVariant = Color(0xFF2E333A);
 
   static const darkPrimary = Color(0xFF46C2A2);
   static const darkOnPrimary = Color(0xFF003225);
   static const darkPrimaryContainer = Color(0xFF0E5544);
   static const darkOnPrimaryContainer = Color(0xFFB6E8D6);
 
-  static const darkAccent = Color(0xFFE89F5C);
-  static const darkOnAccent = Color(0xFF3A1E03);
-  static const darkAccentContainer = Color(0xFF6B3D14);
-  static const darkOnAccentContainer = Color(0xFFFAE7CE);
+  // Income / positive: green (Kite sign discipline).
+  static const darkAccent = Color(0xFF46C28A);
+  static const darkOnAccent = Color(0xFF00351F);
+  static const darkAccentContainer = Color(0xFF0E5540);
+  static const darkOnAccentContainer = Color(0xFFCDEFDE);
 
   static const darkDanger = Color(0xFFF2837F);
   static const darkOnDanger = Color(0xFF44131A);
@@ -178,12 +181,11 @@ ThemeData _build(Brightness brightness) {
       elevation: 0,
       margin: EdgeInsets.zero,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(20),
-        // Hairline border replaces the missing shadow — gives surfaces
-        // a defined edge in the bright warm-cream theme without making
-        // them feel heavy.
+        // Crisper, Kite-ish radius; a hairline edge instead of shadow keeps
+        // surfaces defined on the cool near-white background without weight.
+        borderRadius: BorderRadius.circular(14),
         side: BorderSide(
-          color: scheme.outlineVariant.withValues(alpha: 0.6),
+          color: scheme.outlineVariant.withValues(alpha: 0.8),
           width: 0.5,
         ),
       ),
@@ -413,6 +415,12 @@ TextStyle moneyStyle(
     color: theme.colorScheme.onSurface,
   );
 }
+
+/// Amber reserved for warnings / low-confidence states, kept distinct from the
+/// income green so a "needs review" cue never reads as a positive/success one.
+Color warningColor(ColorScheme cs) => cs.brightness == Brightness.light
+    ? const Color(0xFFC77F3A)
+    : const Color(0xFFE89F5C);
 
 /// Used for editorial-feel section headers like "RECENT" and "BY CATEGORY".
 TextStyle eyebrowStyle(BuildContext context, {double size = 11}) {
