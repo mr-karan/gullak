@@ -44,6 +44,15 @@ const whatsappBody = z.object({
 whatsappRouter.post("/webhook", async (c) => {
   const db = c.get("db");
   const config = c.get("config");
+  // The webhook is exempt from the global x-api-key gate so the bridge can
+  // reach it — but if a WhatsApp key is configured, require the bridge to
+  // present it, so the endpoint isn't an open injection point.
+  if (
+    config.whatsappApiKey &&
+    c.req.header("x-api-key") !== config.whatsappApiKey
+  ) {
+    return c.json({ error: "Unauthorized" }, 401);
+  }
   const parsed = whatsappBody.parse(await c.req.json());
   if (parsed.event !== "message" || parsed.payload.fromMe) {
     return c.json({ ignored: true });

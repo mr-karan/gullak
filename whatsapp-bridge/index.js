@@ -19,6 +19,10 @@ import {
 
 const PORT = process.env.PORT || 3000;
 const WEBHOOK_URL = process.env.WEBHOOK_URL || "http://localhost:8787/v1/whatsapp/webhook";
+// Shared secret the server's webhook validates (when set). Same value both
+// containers get via the shared env file.
+const WEBHOOK_SECRET =
+  process.env.GULLAK_WHATSAPP_API_KEY || process.env.WEBHOOK_SECRET || "";
 // Single SQLite file owns auth state + the small caches the bridge
 // used to keep in memory. Survives restarts; no JSON files on disk.
 const STORE_DB_PATH = process.env.STORE_DB_PATH || "./data/whatsapp.db";
@@ -113,7 +117,10 @@ async function sendWebhook(event, payload) {
   try {
     const response = await fetch(WEBHOOK_URL, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        ...(WEBHOOK_SECRET ? { "x-api-key": WEBHOOK_SECRET } : {}),
+      },
       body: JSON.stringify({ event, payload }),
     });
     if (!response.ok) {
