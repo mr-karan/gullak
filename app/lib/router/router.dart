@@ -6,6 +6,7 @@ import '../features/accounts/account_detail_screen.dart';
 import '../features/accounts/accounts_screen.dart';
 import '../features/budgets/budget_screen.dart';
 import '../features/categories/categories_screen.dart';
+import '../features/categories/category_detail_screen.dart';
 import '../features/home/home_shell.dart';
 import '../features/home/home_screen.dart';
 import '../features/inbox/inbox_screen.dart';
@@ -127,6 +128,11 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/payees/:id',
             builder: (_, s) => PayeeDetailScreen(id: s.pathParameters['id']!),
+          ),
+          GoRoute(
+            path: '/categories/:id',
+            builder: (_, s) =>
+                CategoryDetailScreen(id: s.pathParameters['id']!),
           ),
         ],
       ),

@@ -1,10 +1,12 @@
 import 'package:drift/drift.dart' show Variable;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../core/money.dart';
 import '../../state/providers.dart';
+import '../../ui/widgets/category_swatch.dart';
 import '../../ui/widgets/money_text.dart';
 import '../budgets/data/budget_repository.dart';
 import '../transactions/data/transaction_repository.dart';
@@ -151,17 +153,18 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                   child: Text('No spending recorded for this month yet.'),
                 );
               }
+              final total = entries.fold<int>(0, (s, e) => s + -e.spentCents);
               return Column(
                 children: [
                   for (final e in entries)
-                    ListTile(
-                      title: Text(e.categoryName),
-                      subtitle: Text(e.groupName),
-                      trailing: MoneyText(
-                        amountCents: e.spentCents,
-                        symbol: prefs.currencySymbol,
-                        minorDigits: prefs.currencyMinorDigits,
-                      ),
+                    _CategoryRow(
+                      categoryId: e.categoryId,
+                      name: e.categoryName,
+                      group: e.groupName,
+                      spentCents: e.spentCents,
+                      total: total,
+                      symbol: prefs.currencySymbol,
+                      minorDigits: prefs.currencyMinorDigits,
                     ),
                   const SizedBox(height: 24),
                 ],
@@ -177,6 +180,90 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
     final d = DateTime.parse('$_month-01');
     final next = DateTime(d.year, d.month + by, 1);
     setState(() => _month = BudgetRepository.monthOf(next));
+  }
+}
+
+/// One row of the "By category" breakdown — tappable into the category's full
+/// history (`/categories/:id`), with a swatch and a share-of-total bar.
+class _CategoryRow extends StatelessWidget {
+  const _CategoryRow({
+    required this.categoryId,
+    required this.name,
+    required this.group,
+    required this.spentCents,
+    required this.total,
+    required this.symbol,
+    required this.minorDigits,
+  });
+
+  final String categoryId;
+  final String name;
+  final String group;
+  final int spentCents; // negative
+  final int total; // positive sum of all spend
+  final String symbol;
+  final int minorDigits;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final spent = -spentCents;
+    final share = total > 0 ? (spent / total).clamp(0.0, 1.0) : 0.0;
+    return InkWell(
+      onTap: () => context.push('/categories/$categoryId'),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
+        child: Row(
+          children: [
+            CategorySwatch(label: name, size: 36),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          name,
+                          style: Theme.of(context).textTheme.titleMedium,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      MoneyText(
+                        amountCents: spentCents,
+                        symbol: symbol,
+                        minorDigits: minorDigits,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(3),
+                    child: LinearProgressIndicator(
+                      value: share,
+                      minHeight: 4,
+                      backgroundColor: cs.surfaceContainerHighest,
+                      color: cs.primary,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '${(share * 100).round()}% · $group',
+                    style: Theme.of(
+                      context,
+                    ).textTheme.labelSmall?.copyWith(color: cs.onSurfaceVariant),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 4),
+            Icon(Icons.chevron_right, size: 18, color: cs.onSurfaceVariant),
+          ],
+        ),
+      ),
+    );
   }
 }
 

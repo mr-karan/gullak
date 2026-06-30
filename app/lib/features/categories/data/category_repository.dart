@@ -94,6 +94,11 @@ class CategoryRepository {
     _db.categories,
   )..where((t) => t.id.equals(id))).getSingleOrNull();
 
+  Stream<CategoryRow?> watchById(String id) =>
+      (_db.select(_db.categories)..where((t) => t.id.equals(id)))
+          .watch()
+          .map((rows) => rows.isEmpty ? null : rows.first);
+
   Future<String> createGroup({
     required String name,
     bool isIncome = false,
@@ -478,6 +483,10 @@ final StreamProvider<List<CategoryGroupRow>> categoryGroupsListProvider =
     StreamProvider<List<CategoryGroupRow>>(
       (ref) => ref.watch(categoryRepoProvider).watchGroups(),
     );
+
+final categoryByIdProvider = StreamProvider.family<CategoryRow?, String>(
+  (ref, id) => ref.watch(categoryRepoProvider).watchById(id),
+);
 
 enum _Sentinel { value }
 
