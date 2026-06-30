@@ -7,8 +7,9 @@ node_modules/
 bun.lockb
 *.log
 
-# Local data
-data/
+# Local data — anchored to the repo-root persistence dir only. An unanchored
+# "data/" also silently ignored test fixture dirs like app/test/data/.
+/data/
 *.db
 *.db-journal
 *.db-shm
