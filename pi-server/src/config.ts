@@ -1,4 +1,5 @@
 import type { ThinkingLevel } from "@mariozechner/pi-agent-core";
+import { z } from "zod";
 
 function getEnv(name: string, fallback: string): string {
   const value = process.env[name];
@@ -22,6 +23,22 @@ function getBooleanEnv(name: string, fallback: boolean): boolean {
   const value = process.env[name];
   if (!value) return fallback;
   return ["1", "true", "yes", "on"].includes(value.trim().toLowerCase());
+}
+
+/**
+ * Strict integer env: fail fast on a malformed value instead of silently
+ * yielding NaN (which used to slip through `Number.parseInt` into the port and
+ * sync interval). A misconfigured number should crash on boot with a clear
+ * message, not surface as a mysterious runtime bug.
+ */
+function getIntEnv(name: string, fallback: number): number {
+  const raw = getOptionalEnv(name);
+  if (raw === undefined) return fallback;
+  const n = Number(raw);
+  if (!Number.isInteger(n)) {
+    throw new Error(`config: ${name} must be an integer, got "${raw}"`);
+  }
+  return n;
 }
 
 function getListEnv(name: string): string[] {
@@ -61,12 +78,16 @@ export interface AppConfig {
   host: string;
   port: number;
   httpApiKey?: string;
+  /** When true, refuse to boot without an API key (production hardening). */
+  requireAuth: boolean;
   modelBaseUrl: string;
   modelId: string;
   modelName: string;
   modelApiKey: string;
   modelReasoning: boolean;
   modelThinkingLevel: ThinkingLevel;
+  /** True when a real model key is configured; /v1/ai/* 503s otherwise. */
+  ai: { enabled: boolean };
   whatsappBridgeUrl: string;
   whatsappApiKey?: string;
   whatsappAllowedNumbers: string[];
@@ -82,6 +103,15 @@ export interface AppConfig {
   };
 }
 
+// Operationally-critical scalars get a real schema so a bad value fails loudly
+// at boot rather than corrupting runtime behavior.
+const criticalSchema = z.object({
+  port: z.number().int().min(1).max(65535),
+  syncIntervalMinutes: z.number().int().min(0),
+  host: z.string().min(1),
+  dbPath: z.string().min(1),
+});
+
 export function loadConfig(): AppConfig {
   const dataDir = getEnv("GULLAK_DATA_DIR", "../data");
   const dbPath = getEnv("GULLAK_DB_PATH", `${dataDir}/gullak.db`);
@@ -90,23 +120,25 @@ export function loadConfig(): AppConfig {
     "GULLAK_ALLOW_AMBIENT_MODEL_KEYS",
     false,
   );
+  // Honor the ambient flag CONSISTENTLY: OPENROUTER_API_KEY / OPENAI_API_KEY
+  // are only consulted when explicitly allowed. An explicit GULLAK_MODEL_API_KEY
+  // always wins.
+  const ambientApiKey = allowAmbientModelKeys
+    ? getFirstOptionalEnv("OPENROUTER_API_KEY", "OPENAI_API_KEY")
+    : undefined;
+  const realModelApiKey =
+    getOptionalEnv("GULLAK_MODEL_API_KEY") ?? ambientApiKey;
   const openRouterApiKey = allowAmbientModelKeys
     ? getOptionalEnv("OPENROUTER_API_KEY")
     : undefined;
   const openAiApiKey = allowAmbientModelKeys
     ? getOptionalEnv("OPENAI_API_KEY")
     : undefined;
-  const modelApiKey =
-    getFirstOptionalEnv(
-      "GULLAK_MODEL_API_KEY",
-      "OPENROUTER_API_KEY",
-      "OPENAI_API_KEY",
-    ) ?? "dummy";
+
   const modelBaseUrl =
     getFirstOptionalEnv(
       "GULLAK_MODEL_BASE_URL",
-      "OPENROUTER_BASE_URL",
-      "OPENAI_BASE_URL",
+      ...(allowAmbientModelKeys ? ["OPENROUTER_BASE_URL", "OPENAI_BASE_URL"] : []),
     ) ??
     (openRouterApiKey
       ? "https://openrouter.ai/api/v1"
@@ -128,21 +160,46 @@ export function loadConfig(): AppConfig {
         ? "GPT-4.1 Mini"
         : "GPT-OSS 20B");
 
+  const port = getIntEnv("GULLAK_PORT", 8787);
+  const syncIntervalMinutes = getIntEnv("GULLAK_SHEETS_SYNC_INTERVAL_MIN", 0);
+  const host = getEnv("GULLAK_HOST", "127.0.0.1");
+  const httpApiKey = getOptionalEnv("GULLAK_HTTP_API_KEY");
+  const requireAuth = getBooleanEnv("GULLAK_REQUIRE_AUTH", false);
+
+  // Fail fast on malformed critical values.
+  const parsed = criticalSchema.safeParse({
+    port,
+    syncIntervalMinutes,
+    host,
+    dbPath,
+  });
+  if (!parsed.success) {
+    throw new Error(`config: ${parsed.error.issues.map((i) => `${i.path.join(".")} ${i.message}`).join("; ")}`);
+  }
+  if (requireAuth && !httpApiKey) {
+    throw new Error(
+      "config: GULLAK_REQUIRE_AUTH is on but GULLAK_HTTP_API_KEY is unset — refusing to start an unauthenticated server",
+    );
+  }
+
   return {
     version: "4.0.0-bun",
     dataDir,
     dbPath,
     timezone: getEnv("GULLAK_TIMEZONE", "Asia/Kolkata"),
     defaultCurrency: getEnv("GULLAK_DEFAULT_CURRENCY", "INR"),
-    host: getEnv("GULLAK_HOST", "127.0.0.1"),
-    port: Number.parseInt(getEnv("GULLAK_PORT", "8787"), 10),
-    httpApiKey: getOptionalEnv("GULLAK_HTTP_API_KEY"),
+    host,
+    port,
+    httpApiKey,
+    requireAuth,
     modelBaseUrl,
     modelId,
     modelName,
-    modelApiKey,
+    // Keep a non-empty string so the type stays simple; ai.enabled gates use.
+    modelApiKey: realModelApiKey ?? "dummy",
     modelReasoning: getBooleanEnv("GULLAK_MODEL_REASONING", true),
     modelThinkingLevel: getThinkingLevel(),
+    ai: { enabled: Boolean(realModelApiKey) },
     whatsappBridgeUrl: getEnv(
       "GULLAK_WHATSAPP_BRIDGE_URL",
       "http://localhost:3000",
@@ -156,10 +213,32 @@ export function loadConfig(): AppConfig {
     sheets: {
       webAppUrl: getOptionalEnv("GULLAK_SHEETS_WEBAPP_URL"),
       secret: getOptionalEnv("GULLAK_SHEETS_SECRET"),
-      syncIntervalMinutes: Number.parseInt(
-        getEnv("GULLAK_SHEETS_SYNC_INTERVAL_MIN", "0"),
-        10,
-      ),
+      syncIntervalMinutes,
+    },
+  };
+}
+
+/** Redacted, log-safe view of the config — never prints secrets. */
+export function summarizeConfig(config: AppConfig): Record<string, unknown> {
+  const has = (v: unknown) => (v ? "set" : "unset");
+  return {
+    version: config.version,
+    host: config.host,
+    port: config.port,
+    dbPath: config.dbPath.replace(/^.*\//, ".../"),
+    timezone: config.timezone,
+    auth: config.httpApiKey ? "required" : "OPEN (no key)",
+    ai: config.ai.enabled
+      ? { enabled: true, provider: config.modelBaseUrl, model: config.modelId }
+      : { enabled: false },
+    sheets:
+      config.sheets.webAppUrl && config.sheets.secret
+        ? { enabled: true, intervalMin: config.sheets.syncIntervalMinutes }
+        : { enabled: false },
+    whatsapp: {
+      bridge: config.whatsappBridgeUrl,
+      apiKey: has(config.whatsappApiKey),
+      allowedNumbers: config.whatsappAllowedNumbers.length,
     },
   };
 }

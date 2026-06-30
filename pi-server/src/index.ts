@@ -1,7 +1,7 @@
 import { migrate } from "drizzle-orm/bun-sqlite/migrator";
 
 import { createApp } from "./app.ts";
-import { loadConfig } from "./config.ts";
+import { loadConfig, summarizeConfig } from "./config.ts";
 import { getDb } from "./db/index.ts";
 import { sheetsEnabled, syncExpensesToSheet } from "./sheets/sync.ts";
 
@@ -19,6 +19,7 @@ const server = Bun.serve({
 });
 
 console.log(`gullak v${config.version} listening on http://${server.hostname}:${server.port}`);
+console.log("config:", JSON.stringify(summarizeConfig(config)));
 
 // Optional periodic push of categorised expenses to the Apps Script web app.
 // Disabled unless GULLAK_SHEETS_SYNC_INTERVAL_MIN > 0 and the web-app URL +

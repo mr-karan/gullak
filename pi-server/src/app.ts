@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
+import { ZodError } from "zod";
 
 import type { AppConfig } from "./config.ts";
 import type { Db } from "./db/index.ts";
@@ -62,6 +63,15 @@ export function createApp(ctx: AppContext) {
     return next();
   });
 
+  // AI is optional: refuse /v1/ai/* cleanly when no real model key is set,
+  // rather than calling a provider with a "dummy" key and failing opaquely.
+  app.use("/v1/ai/*", async (c, next) => {
+    if (!ctx.config.ai.enabled) {
+      return c.json({ error: "AI is not configured on this server" }, 503);
+    }
+    return next();
+  });
+
   app.route("/v1/health", healthRouter);
   app.route("/v1/accounts", accountsRouter);
   app.route("/v1/category-groups", categoriesRouter.groups);
@@ -83,8 +93,23 @@ export function createApp(ctx: AppContext) {
   app.route("/v1/feedback", feedbackRouter);
 
   app.onError((error, c) => {
-    const message = error instanceof Error ? error.message : "Unknown error";
-    return c.json({ error: message }, 500);
+    // Validation errors are the client's fault → 400 with safe field info.
+    if (error instanceof ZodError) {
+      return c.json(
+        {
+          error: "Invalid request",
+          issues: error.issues.map((i) => ({
+            path: i.path.join("."),
+            message: i.message,
+          })),
+        },
+        400,
+      );
+    }
+    // Everything else: log the detail server-side, return a generic message so
+    // internal errors (provider responses, stack traces, secrets) never leak.
+    console.error("unhandled error:", error);
+    return c.json({ error: "Internal server error" }, 500);
   });
 
   app.notFound((c) => c.json({ error: "Not found" }, 404));
