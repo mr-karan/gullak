@@ -31,6 +31,12 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
     final async = ref.watch(budgetMonthProvider(_month));
     final daily = ref.watch(_dailySpendProvider(_month));
     final incomeSpending = ref.watch(_incomeSpendingProvider);
+    // This month's income, from the income/spending series (0 while loading).
+    final monthIncome =
+        incomeSpending.value
+            ?.where((v) => v.month == _month)
+            .fold<int>(0, (s, v) => s + v.incomeCents) ??
+        0;
 
     return Scaffold(
       appBar: AppBar(
@@ -64,29 +70,44 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
               padding: const EdgeInsets.all(20),
               child: Text('Error: $e'),
             ),
-            data: (overview) => Padding(
-              padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: _Stat(
-                      label: 'Spent',
-                      value: -overview.totalSpent,
-                      symbol: prefs.currencySymbol,
-                      digits: prefs.currencyMinorDigits,
+            data: (overview) {
+              final spent = -overview.totalSpent; // positive magnitude
+              final net = monthIncome - spent;
+              final cs = Theme.of(context).colorScheme;
+              return Padding(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: _Stat(
+                        label: 'Spent',
+                        value: spent,
+                        symbol: prefs.currencySymbol,
+                        digits: prefs.currencyMinorDigits,
+                      ),
                     ),
-                  ),
-                  Expanded(
-                    child: _Stat(
-                      label: 'Assigned',
-                      value: overview.totalAssigned,
-                      symbol: prefs.currencySymbol,
-                      digits: prefs.currencyMinorDigits,
+                    Expanded(
+                      child: _Stat(
+                        label: 'Income',
+                        value: monthIncome,
+                        symbol: prefs.currencySymbol,
+                        digits: prefs.currencyMinorDigits,
+                        color: cs.tertiary,
+                      ),
                     ),
-                  ),
-                ],
-              ),
-            ),
+                    Expanded(
+                      child: _Stat(
+                        label: 'Net',
+                        value: net,
+                        symbol: prefs.currencySymbol,
+                        digits: prefs.currencyMinorDigits,
+                        color: net >= 0 ? cs.tertiary : cs.error,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
@@ -273,11 +294,13 @@ class _Stat extends StatelessWidget {
     required this.value,
     required this.symbol,
     required this.digits,
+    this.color,
   });
   final String label;
   final int value;
   final String symbol;
   final int digits;
+  final Color? color;
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
@@ -301,7 +324,9 @@ class _Stat extends StatelessWidget {
           const SizedBox(height: 6),
           Text(
             Money.format(value, symbol: symbol, minorDigits: digits),
-            style: Theme.of(context).textTheme.titleLarge,
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+              color: color,
+            ),
           ),
         ],
       ),
