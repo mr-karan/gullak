@@ -486,15 +486,22 @@ class SmsPipeline {
     } else {
       // Link (don't double-count) if a non-SMS txn, or a recently-parsed sibling
       // SMS (bank + card double-alert), already covers this spend.
-      final dupId = await _findDuplicateTransaction(candidate);
+      final dup = await _findDuplicateTransaction(candidate);
       final siblingDup = await _hasDuplicateSmsCandidate(
         sms,
         candidate,
         candidateJson,
       );
-      if (dupId != null || siblingDup) {
+      if (dup.linkId != null || siblingDup) {
         status = 'duplicate';
-        linkedTxnId = dupId;
+        linkedTxnId = dup.linkId;
+      } else if (dup.ambiguous) {
+        // A non-SMS row at the same amount+date exists but nothing corroborates
+        // it (account/payee differ or couldn't be resolved). It might be the
+        // same spend, or a coincidental same-amount one. Either guess is
+        // unsafe: silently linking drops a real spend; silently auto-creating
+        // double-books. Surface it for one-tap review instead.
+        status = 'parsed';
       } else if (candidate.categoryId != null &&
           candidate.categoryId!.isNotEmpty) {
         // Try to auto-create. _autoCreateTransaction throws when the account is
@@ -546,27 +553,74 @@ class SmsPipeline {
     }
   }
 
-  /// Look for an existing non-SMS transaction matching this candidate
-  /// (same signed amount, within ±1 day). Returns the transaction id
-  /// if a match is found so the SMS row can link to it instead of
-  /// double-counting.
-  Future<String?> _findDuplicateTransaction(SmsCandidate candidate) async {
+  /// Look for an existing non-SMS transaction that this SMS candidate
+  /// duplicates (the user manually logged a spend an SMS then reports).
+  ///
+  /// A bare amount+date coincidence is NOT enough to call it a duplicate —
+  /// round amounts (₹100/₹500/₹1,000) collide constantly, and treating a
+  /// coincidence as a duplicate silently drops a real spend (it's linked and
+  /// never booked, never shown). So we require a corroborating signal:
+  ///   - [linkId] is returned only when a same-amount/±1-day non-SMS row also
+  ///     resolves to the SAME account OR matches the payee → safe to link.
+  ///   - [ambiguous] is true when such a row exists but nothing corroborates
+  ///     it → the caller routes to the Inbox rather than guessing in either
+  ///     direction.
+  /// Transfer legs ([transferAccountId] set) and split children ([parentId]
+  /// set) are excluded — their amounts legitimately coincide with real spends
+  /// and must never shadow an incoming SMS.
+  Future<({String? linkId, bool ambiguous})> _findDuplicateTransaction(
+    SmsCandidate candidate,
+  ) async {
     final signed = candidate.isIncome
         ? candidate.amountCents.abs()
         : -candidate.amountCents.abs();
     final lo = _ymd(candidate.date.subtract(const Duration(days: 1)));
     final hi = _ymd(candidate.date.add(const Duration(days: 1)));
     final matches =
-        await (db.select(db.transactions)..where(
-              (t) =>
-                  t.amountCents.equals(signed) &
-                  t.date.isBiggerOrEqualValue(lo) &
-                  t.date.isSmallerOrEqualValue(hi) &
-                  t.origin.equals('sms').not(),
-            ))
+        await (db.select(db.transactions)
+              ..where(
+                (t) =>
+                    t.amountCents.equals(signed) &
+                    t.date.isBiggerOrEqualValue(lo) &
+                    t.date.isSmallerOrEqualValue(hi) &
+                    t.origin.equals('sms').not() &
+                    t.transferAccountId.isNull() &
+                    t.parentId.isNull(),
+              )
+              // Newest first so the linked row is deterministic, not arbitrary.
+              ..orderBy([(t) => OrderingTerm.desc(t.createdAt)]))
             .get();
-    if (matches.isEmpty) return null;
-    return matches.first.id;
+    if (matches.isEmpty) return (linkId: null, ambiguous: false);
+
+    // Resolve the SMS's account hint the same way auto-create does, and
+    // normalise the payee, so we can look for a second corroborating signal.
+    final accounts = await (db.select(
+      db.accounts,
+    )..where((a) => a.archived.equals(false))).get();
+    final resolvedAccountId = matchAccountHint(
+      candidate.accountHint,
+      accounts.map((a) => (id: a.id, name: a.name, kind: a.kind)).toList(),
+    );
+    final candPayee = _normalizePayee(candidate.payee);
+
+    for (final m in matches) {
+      final accountMatch =
+          resolvedAccountId != null && m.accountId == resolvedAccountId;
+      final payeeMatch =
+          candPayee != null && _normalizePayee(m.payeeName) == candPayee;
+      if (accountMatch || payeeMatch) {
+        return (linkId: m.id, ambiguous: false);
+      }
+    }
+    // Same amount+date, but neither account nor payee corroborates → don't
+    // guess. Leave it for the user to confirm or dismiss in the Inbox.
+    return (linkId: null, ambiguous: true);
+  }
+
+  static String? _normalizePayee(String? s) {
+    if (s == null) return null;
+    final n = s.trim().toLowerCase();
+    return n.isEmpty ? null : n;
   }
 
   Future<String> _autoCreateTransaction(

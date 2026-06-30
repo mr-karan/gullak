@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gullak/data/db/database.dart';
@@ -245,6 +246,153 @@ void main() {
     expect(rows, hasLength(1));
     expect(rows.single.androidId, 'queued-1');
     expect(rows.single.candidateStatus, 'parsed');
+  });
+
+  // ---- Duplicate detection: a same-amount/date coincidence must NOT be
+  // treated as a duplicate without a corroborating signal, or a real spend
+  // gets silently linked-away and never booked nor shown. ----
+
+  Future<void> insertAccount(
+    String id,
+    String name, {
+    String kind = 'checking',
+  }) => db
+      .into(db.accounts)
+      .insert(
+        AccountsCompanion.insert(
+          id: id,
+          name: name,
+          kind: Value(kind),
+          createdAt: 0,
+          updatedAt: 0,
+        ),
+      );
+
+  Future<void> insertManualTxn({
+    required String id,
+    required String accountId,
+    required int amountCents,
+    required DateTime date,
+    String? payeeName,
+    String? transferAccountId,
+    String? parentId,
+  }) => db
+      .into(db.transactions)
+      .insert(
+        TransactionsCompanion.insert(
+          id: id,
+          accountId: accountId,
+          amountCents: amountCents,
+          date:
+              '${date.year.toString().padLeft(4, '0')}-'
+              '${date.month.toString().padLeft(2, '0')}-'
+              '${date.day.toString().padLeft(2, '0')}',
+          createdAt: 0,
+          updatedAt: 0,
+          payeeName: Value(payeeName),
+          transferAccountId: Value(transferAccountId),
+          parentId: Value(parentId),
+        ),
+      );
+
+  // Drives one SMS (matching candidate()) through the pipeline and returns the
+  // resulting sms_messages row.
+  Future<SmsRow> runOneSms(DateTime receivedAt) async {
+    const body = 'Rs.450.00 debited from HDFC Bank card xx1234 at BLINKIT.';
+    fakeParser.respondTo(body, candidate(receivedAt));
+    reader.backfillMessages = [
+      IncomingSms(
+        id: 'dup-sms',
+        address: 'VK-HDFCBK',
+        body: body,
+        receivedAt: receivedAt,
+      ),
+    ];
+    await build().backfill();
+    return (await db.select(db.smsMessages).get()).single;
+  }
+
+  test('unrelated same-amount manual txn does NOT swallow the SMS', () async {
+    final receivedAt = DateTime.now().subtract(const Duration(hours: 2));
+    // candidate() is ₹450 on an "HDFC Card xx1234" hint, payee BLINKIT. This
+    // manual row is the same ₹450 on the same day but a DIFFERENT account and
+    // payee — a coincidence, not a duplicate.
+    await insertAccount('acc-icici', 'ICICI Bank');
+    await insertManualTxn(
+      id: 'm-unrelated',
+      accountId: 'acc-icici',
+      amountCents: -45000,
+      date: receivedAt,
+      payeeName: 'Grocery Store',
+    );
+
+    final row = await runOneSms(receivedAt);
+
+    // The regression: old code marked this 'duplicate' (amount+date only) and
+    // dropped it. It must now reach the Inbox for review instead.
+    expect(row.candidateStatus, 'parsed');
+    expect(row.linkedTransactionId, isNull);
+    expect(notifications, hasLength(1));
+  });
+
+  test('same-amount manual txn on the resolved account IS linked', () async {
+    final receivedAt = DateTime.now().subtract(const Duration(hours: 2));
+    // "HDFC Card xx1234" resolves to this account (brand + last-4 + card), so
+    // the same-amount/day row is corroborated → safe to link, don't re-book.
+    await insertAccount('acc-hdfc', 'HDFC Credit Card 1234', kind: 'credit_card');
+    await insertManualTxn(
+      id: 'm-hdfc',
+      accountId: 'acc-hdfc',
+      amountCents: -45000,
+      date: receivedAt,
+      payeeName: 'Some Shop',
+    );
+
+    final row = await runOneSms(receivedAt);
+
+    expect(row.candidateStatus, 'duplicate');
+    expect(row.linkedTransactionId, 'm-hdfc');
+    expect(notifications, isEmpty);
+  });
+
+  test('same-amount manual txn with matching payee IS linked', () async {
+    final receivedAt = DateTime.now().subtract(const Duration(hours: 2));
+    // Account hint won't resolve (no HDFC account), but the payee matches the
+    // candidate's "BLINKIT" → corroborated, link it.
+    await insertAccount('acc-wallet', 'Random Wallet');
+    await insertManualTxn(
+      id: 'm-payee',
+      accountId: 'acc-wallet',
+      amountCents: -45000,
+      date: receivedAt,
+      payeeName: 'blinkit',
+    );
+
+    final row = await runOneSms(receivedAt);
+
+    expect(row.candidateStatus, 'duplicate');
+    expect(row.linkedTransactionId, 'm-payee');
+  });
+
+  test('a same-amount transfer leg never shadows the SMS', () async {
+    final receivedAt = DateTime.now().subtract(const Duration(hours: 2));
+    // Even though this resolves to the HDFC account at the same amount/day, a
+    // transfer leg (transferAccountId set) must be excluded from dedupe.
+    await insertAccount('acc-hdfc', 'HDFC Credit Card 1234', kind: 'credit_card');
+    await insertAccount('acc-dest', 'Savings');
+    await insertManualTxn(
+      id: 'm-transfer',
+      accountId: 'acc-hdfc',
+      amountCents: -45000,
+      date: receivedAt,
+      transferAccountId: 'acc-dest',
+    );
+
+    final row = await runOneSms(receivedAt);
+
+    // Not a duplicate (transfer leg excluded) → no category → Inbox, unlinked.
+    expect(row.candidateStatus, 'parsed');
+    expect(row.linkedTransactionId, isNull);
   });
 
   test('live listener and catch-up do not double-ingest the same SMS', () async {

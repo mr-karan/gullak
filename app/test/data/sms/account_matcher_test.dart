@@ -60,4 +60,14 @@ void main() {
     expect(matchAccountHint('Rs 5000 credited to HDFC Bank A/C', accounts),
         'hdfc');
   });
+
+  test('UPI hint does not land on a credit card when no bank sibling exists', () {
+    // The user has "Axis Credit Card" but no Axis savings account. A UPI debit
+    // hint ("Axis Bank UPI") must NOT auto-attribute to the Axis CC — a UPI
+    // debit isn't a card spend. Returns null → the SMS goes to the Inbox for
+    // manual account pick instead of a wrong-account auto-create.
+    expect(matchAccountHint('Axis Bank UPI', accounts), isNull);
+    // But an explicit card hint with last-4 still matches the card fine.
+    expect(matchAccountHint('Axis Bank Card x1234', accounts), 'axis_cc');
+  });
 }
