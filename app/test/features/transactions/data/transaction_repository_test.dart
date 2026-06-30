@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:gullak/data/db/database.dart';
 import 'package:gullak/features/accounts/data/account_repository.dart';
 import 'package:gullak/features/categories/data/category_repository.dart';
+import 'package:gullak/features/payees/data/payee_repository.dart';
 import 'package:gullak/features/transactions/data/transaction_repository.dart';
 
 void main() {
@@ -120,6 +121,41 @@ void main() {
     final visible = await txs.watchAll().first;
     expect(visible, hasLength(1));
     expect(visible.single.isSplit, isTrue);
+  });
+
+  test('payee scope matches both FK-linked and free-text rows', () async {
+    // The payee filter must catch BOTH a row linked by payeeId AND an
+    // SMS-style row that carries only a free-text payeeName (different case),
+    // or a payee's history silently loses its SMS-captured spends.
+    final payeeRepo = PayeeRepository(db);
+    final blinkitId = await payeeRepo.create('Blinkit');
+    await txs.create(
+      accountId: checkingId,
+      categoryId: groceriesId,
+      payeeId: blinkitId,
+      payeeName: 'Blinkit',
+      amountCents: -10000,
+      date: DateTime(2026, 1, 2),
+    );
+    await txs.create(
+      accountId: walletId,
+      payeeName: 'blinkit', // free-text only, no FK, lowercased
+      amountCents: -20000,
+      date: DateTime(2026, 1, 3),
+    );
+    await txs.create(
+      accountId: checkingId,
+      payeeName: 'Zomato',
+      amountCents: -5000,
+      date: DateTime(2026, 1, 4),
+    );
+
+    final rows = await txs
+        .watchAll(payeeId: blinkitId, payeeName: 'Blinkit')
+        .first;
+
+    expect(rows.map((r) => r.amountCents).toSet(), {-10000, -20000});
+    expect(rows.any((r) => r.amountCents == -5000), isFalse);
   });
 
   test(

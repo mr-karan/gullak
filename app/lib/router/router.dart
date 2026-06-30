@@ -10,6 +10,7 @@ import '../features/home/home_shell.dart';
 import '../features/home/home_screen.dart';
 import '../features/inbox/inbox_screen.dart';
 import '../features/onboarding/onboarding_flow.dart';
+import '../features/payees/payee_detail_screen.dart';
 import '../features/recurrences/recurrences_screen.dart';
 import '../features/reports/reports_screen.dart';
 import '../features/rules/rules_screen.dart';
@@ -122,6 +123,10 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
                 builder: (_, s) => TagDetailScreen(id: s.pathParameters['id']!),
               ),
             ],
+          ),
+          GoRoute(
+            path: '/payees/:id',
+            builder: (_, s) => PayeeDetailScreen(id: s.pathParameters['id']!),
           ),
         ],
       ),

@@ -39,6 +39,11 @@ class PayeeRepository {
   Future<PayeeRow?> byId(String id) =>
       (_db.select(_db.payees)..where((t) => t.id.equals(id))).getSingleOrNull();
 
+  Stream<PayeeRow?> watchById(String id) =>
+      (_db.select(_db.payees)..where((t) => t.id.equals(id)))
+          .watch()
+          .map((rows) => rows.isEmpty ? null : rows.first);
+
   Future<PayeeRow?> byName(String name) async {
     final lower = name.trim().toLowerCase();
     if (lower.isEmpty) return null;
@@ -118,3 +123,7 @@ final StreamProvider<List<PayeeRow>> payeesListProvider =
     StreamProvider<List<PayeeRow>>(
       (ref) => ref.watch(payeeRepoProvider).watch(),
     );
+
+final payeeByIdProvider = StreamProvider.family<PayeeRow?, String>(
+  (ref, id) => ref.watch(payeeRepoProvider).watchById(id),
+);

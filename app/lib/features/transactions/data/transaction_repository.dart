@@ -409,6 +409,8 @@ class TransactionRepository {
     bool? cleared,
     int? minAmountCents,
     int? maxAmountCents,
+    String? payeeId,
+    String? payeeName,
     String? smsText,
   }) {
     final stream = _select(
@@ -421,6 +423,8 @@ class TransactionRepository {
       cleared: cleared,
       minAmountCents: minAmountCents,
       maxAmountCents: maxAmountCents,
+      payeeId: payeeId,
+      payeeName: payeeName,
       dateBetween: fromDate != null && toDate != null
           ? (fromDate, toDate)
           : null,
@@ -550,6 +554,8 @@ class TransactionRepository {
     bool? cleared,
     int? minAmountCents,
     int? maxAmountCents,
+    String? payeeId,
+    String? payeeName,
     int? limit,
   }) {
     final transferAccount = _db.alias(_db.accounts, 'transferAccount');
@@ -590,6 +596,19 @@ class TransactionRepository {
     }
     if (categoryId != null) {
       q.where(_db.transactions.categoryId.equals(categoryId));
+    }
+    // A transaction links to a payee by FK (payeeId) AND/OR free-text
+    // (payeeName). SMS-created and deleted-payee rows are name-only, so match
+    // either — filtering on payeeId alone silently drops history.
+    final pn = payeeName?.trim().toLowerCase();
+    if (payeeId != null || (pn != null && pn.isNotEmpty)) {
+      Expression<bool>? pred;
+      if (payeeId != null) pred = _db.transactions.payeeId.equals(payeeId);
+      if (pn != null && pn.isNotEmpty) {
+        final byName = _db.transactions.payeeName.lower().equals(pn);
+        pred = pred == null ? byName : pred | byName;
+      }
+      if (pred != null) q.where(pred);
     }
     if (amountEquals != null) {
       q.where(_db.transactions.amountCents.equals(amountEquals));
@@ -767,6 +786,8 @@ class TransactionListQuery {
     this.cleared,
     this.minAmountCents,
     this.maxAmountCents,
+    this.payeeId,
+    this.payeeName,
     this.smsText,
   });
   final String? accountId;
@@ -779,6 +800,8 @@ class TransactionListQuery {
   final bool? cleared;
   final int? minAmountCents;
   final int? maxAmountCents;
+  final String? payeeId;
+  final String? payeeName;
   final String? smsText;
 
   @override
@@ -794,6 +817,8 @@ class TransactionListQuery {
       other.cleared == cleared &&
       other.minAmountCents == minAmountCents &&
       other.maxAmountCents == maxAmountCents &&
+      other.payeeId == payeeId &&
+      other.payeeName == payeeName &&
       other.smsText == smsText;
 
   @override
@@ -808,6 +833,8 @@ class TransactionListQuery {
     cleared,
     minAmountCents,
     maxAmountCents,
+    payeeId,
+    payeeName,
     smsText,
   );
 }
@@ -827,6 +854,8 @@ final transactionsListProvider =
             cleared: q.cleared,
             minAmountCents: q.minAmountCents,
             maxAmountCents: q.maxAmountCents,
+            payeeId: q.payeeId,
+            payeeName: q.payeeName,
             smsText: q.smsText,
           ),
     );

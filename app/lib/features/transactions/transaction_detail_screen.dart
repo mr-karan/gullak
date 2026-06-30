@@ -6,6 +6,7 @@ import 'package:webview_flutter/webview_flutter.dart';
 import '../../core/money.dart';
 import '../../state/providers.dart';
 import '../entry/quick_entry.dart';
+import '../payees/data/payee_repository.dart';
 import '../tags/data/tag_repository.dart';
 import 'data/transaction_repository.dart';
 
@@ -40,9 +41,10 @@ class TransactionDetailScreen extends ConsumerWidget {
           return ListView(
             padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
             children: [
-              Text(
-                tx.payeeName ?? tx.categoryName ?? 'Transaction',
-                style: Theme.of(context).textTheme.headlineSmall,
+              _PayeeTitle(
+                payeeName: tx.payeeName,
+                fallback: tx.categoryName ?? 'Transaction',
+                payeeId: raw?.payeeId,
               ),
               const SizedBox(height: 8),
               Text(
@@ -78,7 +80,7 @@ class TransactionDetailScreen extends ConsumerWidget {
                       ActionChip(
                         avatar: const Icon(Icons.label_outline, size: 16),
                         label: Text(tag.name),
-                        onPressed: () => context.go('/tags/${tag.id}'),
+                        onPressed: () => context.push('/tags/${tag.id}'),
                       ),
                   ],
                 ),
@@ -107,6 +109,51 @@ class TransactionDetailScreen extends ConsumerWidget {
             ],
           );
         },
+      ),
+    );
+  }
+}
+
+/// The transaction's headline. When there's a payee it's tappable and opens
+/// that payee's history (`/payees/:id`). Rows captured from SMS carry a
+/// free-text [payeeName] but no [payeeId] — in that case we find-or-create a
+/// canonical payee on tap so the route (and the payee screen's name match)
+/// resolves.
+class _PayeeTitle extends ConsumerWidget {
+  const _PayeeTitle({
+    required this.payeeName,
+    required this.fallback,
+    required this.payeeId,
+  });
+
+  final String? payeeName;
+  final String fallback;
+  final String? payeeId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final name = payeeName?.trim();
+    final style = Theme.of(context).textTheme.headlineSmall;
+    if (name == null || name.isEmpty) {
+      return Text(fallback, style: style);
+    }
+    return InkWell(
+      borderRadius: BorderRadius.circular(8),
+      onTap: () async {
+        var id = payeeId;
+        id ??= await ref.read(payeeRepoProvider).ensure(name);
+        if (context.mounted) context.push('/payees/$id');
+      },
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Flexible(child: Text(name, style: style)),
+          const SizedBox(width: 4),
+          Icon(
+            Icons.chevron_right,
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
+        ],
       ),
     );
   }
