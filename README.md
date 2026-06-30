@@ -118,7 +118,7 @@ all AI calls round-trip through the pi-server.
 
 `Settings → Sync server`:
 
-- Base URL (e.g. `https://gullak.mrkaran.dev`)
+- Base URL (e.g. `https://your-server.example.com`)
 - API key matching `GULLAK_HTTP_API_KEY`
 
 ## pi-server HTTP API
@@ -199,12 +199,12 @@ exact commit on-device.
 
 ## Resetting
 
-Homelab DB reset, with a backup:
+Server DB reset, with a backup (run wherever the DB volume lives):
 
 ```bash
-ssh floyd-homelab-1 'cd /mnt/storage/gullak && \
+cd "$GULLAK_DATA_DIR" && \
   cp gullak.db gullak.db.backup-$(date +%Y%m%d-%H%M%S) && \
-  rm -f gullak.db gullak.db-wal gullak.db-shm'
+  rm -f gullak.db gullak.db-wal gullak.db-shm
 ```
 
 Then restart the stack so migrations recreate an empty DB.
