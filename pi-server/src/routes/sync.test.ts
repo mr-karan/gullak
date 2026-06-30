@@ -8,6 +8,13 @@ import { createApp } from "../app.ts";
 import type { AppConfig } from "../config.ts";
 import * as schema from "../db/schema.ts";
 
+type PushResult = {
+  accepted: number;
+  applied: number;
+  deduped: number;
+  stale: number;
+};
+
 function makeApp(apiKey?: string) {
   const sqlite = new Database(":memory:");
   const db = drizzle(sqlite, { schema });
@@ -46,7 +53,7 @@ test("push applies an upsert and persists it", async () => {
   const { app, db } = makeApp();
   const res = await push(app, "phone", [txn()]);
   expect(res.status).toBe(200);
-  expect((await res.json()).applied).toBe(1);
+  expect(((await res.json()) as PushResult).applied).toBe(1);
   const row = db
     .select()
     .from(schema.transactions)
@@ -59,7 +66,7 @@ test("a retried clientChangeId is deduped (idempotent), not re-applied", async (
   const { app } = makeApp();
   await push(app, "phone", [txn()]);
   const res = await push(app, "phone", [txn()]);
-  const body = await res.json();
+  const body = (await res.json()) as PushResult;
   expect(body.deduped).toBe(1);
   expect(body.applied).toBe(0);
 });
@@ -70,7 +77,7 @@ test("a stale update (older updatedAt) loses to the newer row (LWW)", async () =
   const res = await push(app, "phone", [
     txn({ ccid: "stale", updatedAt: 1000, amountCents: -9999 }),
   ]);
-  const body = await res.json();
+  const body = (await res.json()) as PushResult;
   expect(body.stale).toBe(1);
   expect(body.applied).toBe(0);
   const row = db
@@ -84,14 +91,15 @@ test("a stale update (older updatedAt) loses to the newer row (LWW)", async () =
 test("changes excludes the caller's own rows but returns others'", async () => {
   const { app } = makeApp();
   await push(app, "phoneA", [txn()]);
-  const own = await (
+  type Changes = { changes: { resourceId: string }[] };
+  const own = (await (
     await app.request("/v1/sync/changes?since=0&clientId=phoneA")
-  ).json();
-  expect(own.changes.some((c: { resourceId: string }) => c.resourceId === "t1")).toBe(false);
-  const other = await (
+  ).json()) as Changes;
+  expect(own.changes.some((c) => c.resourceId === "t1")).toBe(false);
+  const other = (await (
     await app.request("/v1/sync/changes?since=0&clientId=phoneB")
-  ).json();
-  expect(other.changes.some((c: { resourceId: string }) => c.resourceId === "t1")).toBe(true);
+  ).json()) as Changes;
+  expect(other.changes.some((c) => c.resourceId === "t1")).toBe(true);
 });
 
 test("auth gate: required key rejects missing/wrong, exempts health", async () => {
