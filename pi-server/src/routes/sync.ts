@@ -4,7 +4,7 @@ import { z } from "zod";
 
 import type { AppEnv } from "../app.ts";
 import type { DbOrTx } from "../repos/changelog.ts";
-import { sheetsEnabled, syncExpensesToSheet } from "../sheets/sync.ts";
+import { runExport } from "../destinations/run.ts";
 import {
   accounts,
   budgets,
@@ -234,12 +234,14 @@ syncRouter.post("/push", async (c) => {
     }
   });
 
-  // Fan out to the Google Sheet after a successful sync. Fire-and-forget so
-  // the client's push isn't blocked on the Google round-trip; the Apps Script
-  // dedupes, so an occasional extra run is harmless.
-  if (appliedCount > 0 && sheetsEnabled(config)) {
-    void syncExpensesToSheet(db, config).catch((e) =>
-      console.warn(`sheets push failed: ${e}`),
+  // Fan out to every enabled destination (Google Sheet, Actual Budget, …)
+  // after a successful sync. Fire-and-forget so the client's push isn't blocked
+  // on the external round-trips; each destination upserts by a stable id, so an
+  // occasional extra run is harmless. runExport no-ops for any destination
+  // that isn't configured.
+  if (appliedCount > 0) {
+    void runExport(db, config).catch((e) =>
+      console.warn(`export push failed: ${e}`),
     );
   }
 

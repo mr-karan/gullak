@@ -67,22 +67,30 @@ hidden `gullak_id` column; `replace=true` clears + rewrites (preserving manual,
 id-less rows). Soft failures (`{error}` on HTTP 200) are detected and abort the
 cursor advance so nothing is silently lost.
 
-### Actual Budget (`src/destinations/actual.ts`) — built (opt-in, gated)
+### Actual Budget (`src/destinations/actual.ts`) — shipping (opt-in)
 
 Adapter over the official `@actual-app/api` (init → `downloadBudget(syncId)` →
 `importTransactions` → `sync`), keyed on `imported_id = sourceId` for
 idempotency. Amounts already match Actual (integer minor units, outflow
-negative). Config (planned):
+negative). Enabled when SERVER_URL + PASSWORD + SYNC_ID are all set:
 
 | Env | Meaning |
 | --- | --- |
 | `GULLAK_ACTUAL_SERVER_URL` | e.g. `https://budget.example.com` |
 | `GULLAK_ACTUAL_PASSWORD` | Actual server login password (UI-set; not derivable) |
 | `GULLAK_ACTUAL_SYNC_ID` | the budget file's Sync ID |
+| `GULLAK_ACTUAL_ACCOUNT_ID` | account to import into; defaults to the first account |
+| `GULLAK_ACTUAL_DATA_DIR` | local budget cache dir; defaults to `<data>/.actual-cache` |
 
-Runtime note: `@actual-app/api` pulls `better-sqlite3` (native). If it doesn't
-build under the Bun image it runs as a small Node sidecar the server calls,
-rather than risking the main runtime.
+Runtime note: `@actual-app/api` pulls `better-sqlite3` (native). It is now a
+regular dependency — Bun (the server runtime) loads the native module fine, so
+no Node sidecar is needed. It is still imported lazily (only when the
+destination actually runs) to keep startup lean.
+
+Concurrency: `@actual-app/api` syncs from a single on-disk budget cache, so only
+one Actual export runs at a time. Since the post-push hook is fire-and-forget, a
+run that arrives while another is in flight throws (recorded as a failure, not a
+cursor advance) and the next push retries the still-pending rows.
 
 ## Per-destination state (`export_state`)
 
