@@ -201,6 +201,13 @@ async function classify(
   if (/^(yes|yeah|sure|ok|nope|no|thanks|thank you|hi|hello|hey)\b/.test(lower)) {
     return "noop";
   }
+  // LOG before ASK: a message that STARTS with an amount or a spend/receive
+  // verb ("spent 480 …", "got 2000 refund") is recording, even though words
+  // like "spent" also appear in the ask-regex. Questions start with how/what/
+  // show/etc., so they fall through to the ask check below.
+  if (/^(\d|rs\.?|inr|₹|spent|paid|got|received|refund|salary)\b/.test(lower)) {
+    return "log";
+  }
   if (
     /(how much|how many|show|what.*spend|spent|balance|budget left|recent|last \d|this month|last month)/.test(
       lower,
@@ -208,9 +215,6 @@ async function classify(
     !/^\d/.test(lower) // questions usually don't start with a digit
   ) {
     return "ask";
-  }
-  if (/^(\d|rs\.?|inr|₹|spent|paid|got|received|refund|salary)/.test(lower)) {
-    return "log";
   }
   if (/(edit|change|update|delete|remove|undo|cancel)/.test(lower)) {
     return "edit_or_delete";
