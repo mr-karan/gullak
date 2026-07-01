@@ -1,4 +1,4 @@
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq, gt } from "drizzle-orm";
 import { z } from "zod";
 
 import {
@@ -168,10 +168,7 @@ export async function handleMessage(
       return await handleAsk(db, config, threadId, text);
     }
     if (mode === "edit_or_delete") {
-      const msg =
-        "Edits live in the Gullak app for now — open the transaction there and tweak it.";
-      appendTurn(db, threadId, "assistant", msg);
-      return { threadId, reply: msg };
+      return handleEditOrDelete(db, threadId, text);
     }
     // noop
     const ack =
@@ -349,6 +346,58 @@ function resolveByHint<T extends { id: string; name: string }>(
       (r) => r.name.toLowerCase().includes(h) || h.includes(r.name.toLowerCase()),
     )
   );
+}
+
+function handleEditOrDelete(
+  db: Db,
+  threadId: string,
+  text: string,
+): AgentResponse {
+  const lower = text.toLowerCase();
+  const undoLast =
+    /^(undo|scrap|nvm|never ?mind)\b/.test(lower) ||
+    /\b(undo|delete|remove|cancel|scrap)\b.*\b(last|that|it|previous|latest)\b/.test(
+      lower,
+    );
+  if (undoLast) {
+    // Only the most-recent chat-booked expense, and only if it's fresh (1h),
+    // so a stray "undo" can never wipe an older transaction.
+    const cutoff = nowMs() - 60 * 60 * 1000;
+    const last = db
+      .select()
+      .from(transactions)
+      .where(
+        and(
+          eq(transactions.origin, "whatsapp"),
+          gt(transactions.createdAt, cutoff),
+        ),
+      )
+      .orderBy(desc(transactions.createdAt))
+      .limit(1)
+      .get();
+    if (!last) {
+      const reply =
+        "Nothing recent from here to undo — open the app to edit older entries.";
+      appendTurn(db, threadId, "assistant", reply);
+      return { threadId, reply };
+    }
+    db.transaction((tx) => {
+      tx.delete(transactions).where(eq(transactions.id, last.id)).run();
+      recordChange(tx, {
+        resource: "transactions",
+        resourceId: last.id,
+        op: "delete",
+      });
+    });
+    const what = last.payeeName ? ` — ${last.payeeName}` : "";
+    const reply = `Deleted ${formatMoney(Math.abs(last.amountCents))}${what}. It's gone from all your devices.`;
+    appendTurn(db, threadId, "assistant", reply);
+    return { threadId, reply };
+  }
+  const reply =
+    'To change a specific past entry, open it in the Gullak app. I can "undo" the last thing you logged here though — just say "undo".';
+  appendTurn(db, threadId, "assistant", reply);
+  return { threadId, reply };
 }
 
 async function handleAsk(
