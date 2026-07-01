@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { expect, test } from "vitest";
 
 import { mapCategory, paymentModeForKind, type SheetType } from "./mapping.ts";
 

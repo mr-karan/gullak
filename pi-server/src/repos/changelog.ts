@@ -1,18 +1,14 @@
-import { and, eq, type ExtractTablesWithRelations } from "drizzle-orm";
-import type { SQLiteTransaction } from "drizzle-orm/sqlite-core";
+import { and, eq } from "drizzle-orm";
 
 import type { Db } from "../db/index.ts";
 import { changeLog } from "../db/schema.ts";
-import type * as schema from "../db/schema.ts";
 
 export type ChangeOp = "upsert" | "delete";
 
-type Tx = SQLiteTransaction<
-  "sync",
-  void,
-  typeof schema,
-  ExtractTablesWithRelations<typeof schema>
->;
+// Derive the transaction type from the active Db so it tracks the driver
+// (better-sqlite3's run() returns a RunResult, not bun-sqlite's void) instead of
+// pinning the run-result type and breaking when the runtime changes.
+type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
 
 // Drizzle's transaction callback hands back a tx object with the same
 // query surface as the top-level Db. Helpers accept either so route
@@ -31,8 +27,8 @@ interface RecordChangeArgs {
 /// Append-only mutation log so sync clients can pull deltas after a
 /// cursor. Every successful write goes through here. Returns true on
 /// insert; false if dedupe (matching client_id + client_change_id)
-/// suppressed it. Uses RETURNING to detect suppression since the
-/// bun-sqlite driver's run() returns void.
+/// suppressed it. Uses RETURNING + .all() to detect suppression driver-
+/// independently rather than relying on a run()-affected-rows count.
 export function recordChange(db: DbOrTx, args: RecordChangeArgs): boolean {
   const inserted = db
     .insert(changeLog)

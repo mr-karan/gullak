@@ -1,3 +1,5 @@
+import { mkdirSync } from "node:fs";
+
 import type { AppConfig } from "../config.ts";
 import type {
   CanonicalExpense,
@@ -61,6 +63,10 @@ export class ActualDestination implements Destination {
         "Actual export requires @actual-app/api (bun add @actual-app/api) on a runtime that supports better-sqlite3",
       );
     }
+
+    // @actual-app/api scandir's this cache dir on init; create it up front so a
+    // fresh deploy (empty volume) doesn't crash with ENOENT.
+    mkdirSync(a.dataDir, { recursive: true });
 
     exportInFlight = true;
     try {

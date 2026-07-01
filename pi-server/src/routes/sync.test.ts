@@ -1,8 +1,8 @@
-import { Database } from "bun:sqlite";
-import { expect, test } from "bun:test";
+import Database from "better-sqlite3";
+import { expect, test } from "vitest";
 import { eq } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/bun-sqlite";
-import { migrate } from "drizzle-orm/bun-sqlite/migrator";
+import { drizzle } from "drizzle-orm/better-sqlite3";
+import { migrate } from "drizzle-orm/better-sqlite3/migrator";
 
 import { createApp } from "../app.ts";
 import type { AppConfig } from "../config.ts";

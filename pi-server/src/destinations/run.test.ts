@@ -1,7 +1,7 @@
-import { Database } from "bun:sqlite";
-import { afterEach, expect, mock, test } from "bun:test";
-import { drizzle } from "drizzle-orm/bun-sqlite";
-import { migrate } from "drizzle-orm/bun-sqlite/migrator";
+import Database from "better-sqlite3";
+import { afterEach, expect, test, vi } from "vitest";
+import { drizzle } from "drizzle-orm/better-sqlite3";
+import { migrate } from "drizzle-orm/better-sqlite3/migrator";
 
 import type { AppConfig } from "../config.ts";
 import * as schema from "../db/schema.ts";
@@ -27,7 +27,7 @@ const cfg = (sheets: boolean): AppConfig =>
 
 test("sheets disabled → reported enabled:false, no network call", async () => {
   let called = false;
-  globalThis.fetch = mock(async () => {
+  globalThis.fetch = vi.fn(async () => {
     called = true;
     return new Response("{}", { status: 200 });
   }) as unknown as typeof fetch;
@@ -49,7 +49,7 @@ test("a debit is collected and POSTed to the sheets destination", async () => {
     })
     .run();
   let posted = false;
-  globalThis.fetch = mock(async () => {
+  globalThis.fetch = vi.fn(async () => {
     posted = true;
     return new Response(JSON.stringify({ ok: true }), { status: 200 });
   }) as unknown as typeof fetch;

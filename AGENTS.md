@@ -8,9 +8,10 @@ is a merge point and trusted place to hold model credentials.
 
 - **`app/`** — Flutter Android/iOS app. Riverpod + Drift/SQLite. Optimized for
   quick manual logging, SMS review, and offline-first operation.
-- **`pi-server/`** — Bun + Hono + Drizzle + bun:sqlite HTTP API. Mirrors the app
-  schema, stores sync changelog, runs AI extraction/agent calls, and records
-  developer feedback.
+- **`pi-server/`** — Node + Hono + Drizzle + better-sqlite3 HTTP API (run with
+  `tsx`; migrated off Bun so `@actual-app/api`'s native better-sqlite3 works).
+  Mirrors the app schema, stores sync changelog, runs AI extraction/agent calls,
+  and records developer feedback.
 - **`whatsapp-bridge/`** — Bun + Baileys bridge. Posts inbound WhatsApp messages
   to `/v1/whatsapp/webhook`; auth/cache state lives in one SQLite DB.
 
@@ -24,7 +25,7 @@ gullak/
 │   ├── lib/features/        # screens/repos by feature
 │   ├── lib/sync/            # push/pull sync client + remote applier
 │   └── test/                # widget/unit tests
-├── pi-server/               # Bun + Hono API
+├── pi-server/               # Node + Hono API
 │   ├── src/ai/              # SMS + QuickEntry extraction prompts
 │   ├── src/agent/           # multi-turn assistant for app/WhatsApp
 │   ├── src/db/schema.ts     # Drizzle schema mirroring Drift tables
@@ -105,8 +106,8 @@ provider keys.
 - **Dates:** `YYYY-MM-DD` text. Timestamps are epoch ms integers.
 - **Server writes:** mutations to financial rows must call `recordChange(db,
   resource, id, op, payload)` so sync clients can pull them.
-- **SQLite:** `bun:sqlite` and Drizzle bun-sqlite are synchronous. Do not add
-  `await` to `db.select().get()` style calls.
+- **SQLite:** `better-sqlite3` and Drizzle better-sqlite3 are synchronous. Do not
+  add `await` to `db.select().get()` style calls.
 - **Sync conflicts:** last-write-wins by `updatedAt`.
 - **Snackbars:** all app snackbars must use `showTimedSnackBar`; do not call
   `ScaffoldMessenger.showSnackBar` directly outside that helper.
@@ -144,13 +145,13 @@ flutter test test/data/sms/sms_pipeline_test.dart \
 
 ```bash
 cd pi-server
-bun install
-bun run db:generate
-bun run dev
-bun run start
-bun run typecheck
-bun test
-GULLAK_DB_PATH=/path/gullak.db bun run start
+npm install
+npm run db:generate
+npm run dev
+npm run start
+npm run typecheck
+npm test
+GULLAK_DB_PATH=/path/gullak.db npm run start
 ```
 
 ### Release

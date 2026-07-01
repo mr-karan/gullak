@@ -82,10 +82,11 @@ negative). Enabled when SERVER_URL + PASSWORD + SYNC_ID are all set:
 | `GULLAK_ACTUAL_ACCOUNT_ID` | account to import into; defaults to the first account |
 | `GULLAK_ACTUAL_DATA_DIR` | local budget cache dir; defaults to `<data>/.actual-cache` |
 
-Runtime note: `@actual-app/api` pulls `better-sqlite3` (native). It is now a
-regular dependency — Bun (the server runtime) loads the native module fine, so
-no Node sidecar is needed. It is still imported lazily (only when the
-destination actually runs) to keep startup lean.
+Runtime note: `@actual-app/api` pulls `better-sqlite3` (native). It is a regular
+dependency and runs in-process. The server runs on **Node**, which loads that
+native module fine; Bun cannot (bun#4290 — `ERR_DLOPEN_FAILED`), which is the
+reason the server was migrated off Bun. It is still imported lazily (only when
+the destination actually runs) to keep startup lean.
 
 Concurrency: `@actual-app/api` syncs from a single on-disk budget cache, so only
 one Actual export runs at a time. Since the post-push hook is fire-and-forget, a

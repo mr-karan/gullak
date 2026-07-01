@@ -1,4 +1,4 @@
-import { afterEach, expect, mock, test } from "bun:test";
+import { afterEach, expect, test, vi } from "vitest";
 
 import type { AppConfig } from "../config.ts";
 import { SheetsDestination } from "./sheets.ts";
@@ -42,7 +42,7 @@ test("isEnabled requires both url and secret", () => {
 test("maps canonical rows to sheet columns and POSTs with secret + replace", async () => {
   let body: { secret: string; replace: boolean; rows: unknown[][] } | null =
     null;
-  globalThis.fetch = mock(async (_url: string, init: { body: string }) => {
+  globalThis.fetch = vi.fn(async (_url: string, init: { body: string }) => {
     body = JSON.parse(init.body);
     return new Response(JSON.stringify({ ok: true }), { status: 200 });
   }) as unknown as typeof fetch;
@@ -91,7 +91,7 @@ test("maps canonical rows to sheet columns and POSTs with secret + replace", asy
 });
 
 test("throws on an {error} body even when HTTP 200 (Apps Script soft-fail)", async () => {
-  globalThis.fetch = mock(
+  globalThis.fetch = vi.fn(
     async () =>
       new Response(JSON.stringify({ error: "bad secret" }), { status: 200 }),
   ) as unknown as typeof fetch;
@@ -101,7 +101,7 @@ test("throws on an {error} body even when HTTP 200 (Apps Script soft-fail)", asy
 });
 
 test("throws on a non-ok HTTP status", async () => {
-  globalThis.fetch = mock(
+  globalThis.fetch = vi.fn(
     async () => new Response("nope", { status: 500 }),
   ) as unknown as typeof fetch;
   await expect(

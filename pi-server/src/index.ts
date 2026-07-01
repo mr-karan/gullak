@@ -1,4 +1,5 @@
-import { migrate } from "drizzle-orm/bun-sqlite/migrator";
+import { serve } from "@hono/node-server";
+import { migrate } from "drizzle-orm/better-sqlite3/migrator";
 
 import { createApp } from "./app.ts";
 import { loadConfig, summarizeConfig } from "./config.ts";
@@ -13,13 +14,13 @@ migrate(db, { migrationsFolder: "./drizzle" });
 
 const app = createApp({ db, config });
 
-const server = Bun.serve({
+serve({
+  fetch: app.fetch,
   hostname: config.host,
   port: config.port,
-  fetch: app.fetch,
 });
 
-console.log(`gullak v${config.version} listening on http://${server.hostname}:${server.port}`);
+console.log(`gullak v${config.version} listening on http://${config.host}:${config.port}`);
 console.log("config:", JSON.stringify(summarizeConfig(config)));
 
 // Optional periodic push of categorised expenses to the Apps Script web app.

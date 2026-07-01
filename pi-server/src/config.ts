@@ -195,7 +195,7 @@ export function loadConfig(): AppConfig {
   }
 
   return {
-    version: "4.0.0-bun",
+    version: "4.1.0-node",
     dataDir,
     dbPath,
     timezone: getEnv("GULLAK_TIMEZONE", "Asia/Kolkata"),
