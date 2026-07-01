@@ -2,7 +2,6 @@ import { desc, eq } from "drizzle-orm";
 import { z } from "zod";
 
 import {
-  candidateJson,
   parseWhatsappExpenses,
   type WhatsappCandidate,
 } from "../ai/whatsapp_parser.ts";
@@ -13,22 +12,24 @@ import {
   agentTurns,
   categories,
   payees,
-  whatsappInboxCandidates,
+  transactions,
 } from "../db/schema.ts";
 import { chatJson } from "../llm/client.ts";
-import { newId, nowMs } from "../repos/changelog.ts";
+import { newId, nowMs, recordChange } from "../repos/changelog.ts";
 import { runAskTool, type AskToolCall, type AskToolName } from "./ask_tools.ts";
 
 /// Conversational entry point used by /v1/messages and the WhatsApp
-/// webhook. Splits into two paths:
-///   - log: parse N expenses, write each to `whatsapp_inbox_candidates`
-///     for the phone to pull and review. No transaction is auto-booked.
+/// webhook. Splits into:
+///   - log: parse N expenses and BOOK each straight into the server DB
+///     (with a change_log row), so the phone, sheets, and every other client
+///     pull them via normal sync. The reply states what was booked (account +
+///     category) so the user can correct it in-app — the app remains the place
+///     to review/edit, but the server is the source of truth.
 ///   - ask: pick one pre-canned aggregation tool and answer with concrete
 ///     numbers from the server DB.
 ///
-/// Auto-write of transactions and edit/delete via WhatsApp are gone — both
-/// were dangerous now that the phone owns the review UX. Edit/delete copy
-/// nudges the user back into the app.
+/// Edit/delete via chat still nudges to the app (identifying the exact row
+/// conversationally is a follow-up).
 
 export interface AgentRequest {
   text: string;
@@ -259,32 +260,91 @@ async function handleLog(
     return { threadId, reply };
   }
 
+  const defaultAccount = accountList[0];
+  if (!defaultAccount) {
+    const reply =
+      "You don't have any accounts set up yet — add one in the app first.";
+    appendTurn(db, threadId, "assistant", reply);
+    return { threadId, reply };
+  }
+
   const at = nowMs();
   const messageId = request.messageId ?? newId();
+  const booked: BookedExpense[] = [];
   db.transaction((tx) => {
     items.forEach((item, idx) => {
-      tx.insert(whatsappInboxCandidates)
-        .values({
-          id: newId(),
-          sourceUser: request.sourceUser ?? null,
-          pushName: request.pushName ?? null,
-          chatId: request.chatId ?? null,
-          messageId,
-          itemIndex: idx,
-          body: item.text,
-          receivedAt: request.receivedAtMs ?? at,
-          candidateJson: candidateJson(item),
-          status: "pending",
-          deliveredAt: null,
-          createdAt: at,
-        })
+      const account = resolveByHint(item.accountHint, accountList) ?? defaultAccount;
+      const category = resolveByHint(item.categoryHint, categoryList);
+      const id = newId();
+      // Expense is negative; income/refund/salary positive.
+      const amountCents = item.isIncome
+        ? Math.abs(item.amountCents)
+        : -Math.abs(item.amountCents);
+      const row = {
+        id,
+        accountId: account.id,
+        categoryId: category?.id ?? null,
+        payeeId: null,
+        payeeName: item.payee ?? null,
+        amountCents,
+        date: item.date ?? todayIso(),
+        notes: item.notes ?? null,
+        latitude: null,
+        longitude: null,
+        locationName: null,
+        cleared: false,
+        origin: "whatsapp",
+        originRef: `${messageId}:${idx}`,
+        transferAccountId: null,
+        transferGroupId: null,
+        parentId: null,
+        splitTotalCents: null,
+        createdAt: at,
+        updatedAt: at,
+      };
+      tx.insert(transactions)
+        .values(row)
+        .onConflictDoUpdate({ target: transactions.id, set: row })
         .run();
+      // change_log row → phone / sheets / any client pulls it via normal sync.
+      recordChange(tx, {
+        resource: "transactions",
+        resourceId: id,
+        op: "upsert",
+        payload: row,
+      });
+      booked.push({
+        item,
+        accountName: account.name,
+        categoryName: category?.name ?? null,
+      });
     });
   });
 
-  const reply = composeLogReply(items);
+  const reply = composeBookedReply(booked);
   appendTurn(db, threadId, "assistant", reply);
-  return { threadId, reply, queued: items.length };
+  return { threadId, reply, queued: booked.length };
+}
+
+interface BookedExpense {
+  item: WhatsappCandidate;
+  accountName: string;
+  categoryName: string | null;
+}
+
+/** Match a free-text hint ("hdfc", "groceries") to a named row, case-insensitive. */
+function resolveByHint<T extends { id: string; name: string }>(
+  hint: string | null | undefined,
+  rows: T[],
+): T | undefined {
+  const h = hint?.trim().toLowerCase();
+  if (!h) return undefined;
+  return (
+    rows.find((r) => r.name.toLowerCase() === h) ??
+    rows.find(
+      (r) => r.name.toLowerCase().includes(h) || h.includes(r.name.toLowerCase()),
+    )
+  );
 }
 
 async function handleAsk(
@@ -347,19 +407,22 @@ async function handleAsk(
   return { threadId, reply, tool: toolCall.tool };
 }
 
-function composeLogReply(items: WhatsappCandidate[]): string {
-  if (items.length === 1) {
-    const it = items[0]!;
-    const what = it.payee ?? it.categoryHint ?? it.notes ?? "expense";
-    return `Got it — ${formatMoney(it.amountCents)} for ${what}. It's waiting in the Gullak Inbox for review.`;
+function composeBookedReply(booked: BookedExpense[]): string {
+  const money = (c: number) => formatMoney(Math.abs(c));
+  if (booked.length === 1) {
+    const b = booked[0]!;
+    const what = b.item.payee ?? b.categoryName ?? b.item.notes ?? "expense";
+    const cat = b.categoryName ? ` · ${b.categoryName}` : "";
+    const verb = b.item.isIncome ? "Logged income" : "Logged";
+    return `${verb} ${money(b.item.amountCents)} — ${what}${cat} · ${b.accountName} ✓  Edit in the app if that's off.`;
   }
-  const list = items
-    .map((it) => {
-      const what = it.payee ?? it.categoryHint ?? it.notes ?? "expense";
-      return `${formatMoney(it.amountCents)} ${what}`;
+  const list = booked
+    .map((b) => {
+      const what = b.item.payee ?? b.categoryName ?? "expense";
+      return `• ${money(b.item.amountCents)} ${what} · ${b.accountName}`;
     })
-    .join(", ");
-  return `Got ${items.length} expenses: ${list}. They're waiting in the Gullak Inbox for review.`;
+    .join("\n");
+  return `Logged ${booked.length} ✓\n${list}\nEdit any in the app.`;
 }
 
 /// Final defense before any string leaves the agent: strip control
