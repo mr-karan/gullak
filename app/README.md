@@ -1,58 +1,50 @@
-# Gullak (mobile)
+# Gullak (app)
 
-A polished Flutter expense tracker that talks to a self-hosted Actual Budget
-server through the [`actual-http-api`](https://github.com/jhonderson/actual-http-api)
-shim. Optional AI parsing and Android SMS ingestion.
+The Flutter client for [Gullak](../README.md). A local-first expense tracker:
+the on-device SQLite database (Drift) is the source of truth, and it syncs to an
+optional self-hosted [pi-server](../pi-server/README.md).
 
-## What this is
+## Stack
 
-- Local-first SQLite cache (Drift) → server is the source of truth.
-- Quick-entry sheet (Form + AI) for fast logging.
-- SMS inbox on Android: classifier + bank parsers → one-tap confirm.
-- Reconciliation: pre-write near-duplicate matching + idempotent pushes
-  via `imported_id`.
-
-## Specs first
-
-Read [`plans/`](plans/) before changing behaviour. The plans are the design
-contract; this code implements them.
+- **Flutter** (Android/iOS) with **Riverpod** for state and **`go_router`** for
+  navigation.
+- **Drift** over SQLite for local storage; the schema mirrors the server's.
+- Sync, SMS, and AI features are additive — the app is fully usable offline with
+  no server configured.
 
 ## Run it
 
-You need the Flutter SDK (3.41+) and a desktop (macOS) or device target
-hooked up. The repo currently builds for macOS, iOS, and Android.
+Requires the Flutter SDK and a device or emulator.
 
 ```bash
 cd app
 flutter pub get
 dart run build_runner build --delete-conflicting-outputs
-flutter run -d macos        # or -d <iOS sim id> / -d <android emulator>
+flutter run                 # or: just install  (build release + adb install)
 ```
 
-You'll need an `actual-http-api` instance and its API key to connect.
+To use sync / server-side AI / SMS parsing, run a [pi-server](../pi-server/) and
+set its URL + API key in **Settings → Sync server**. All AI calls round-trip
+through the server, so the app never stores model credentials.
 
 ## Layout
 
 ```
 lib/
-├─ core/            logger, prefs, secure storage, money helpers
-├─ ui/              theme, shared widgets
-├─ router/          go_router setup
-├─ state/           top-level Riverpod providers
+├─ core/         money, prefs, secure storage, notifications, snackbars
+├─ ui/           theme + shared widgets
 ├─ data/
-│  ├─ db/           Drift schema + generated database
-│  ├─ actual/       HTTP client for actual-http-api
-│  ├─ ai/           OpenAI-compatible chat client
-│  ├─ sms/          reader, classifier, bank parsers
-│  └─ sync/         pull/push orchestration
-└─ features/        one folder per user-visible feature
+│  ├─ db/        Drift schema + generated database
+│  ├─ ai/        pi-server AI client
+│  └─ sms/       reader, classifier, server-parse pipeline
+├─ sync/         push/pull client, remote applier, scheduler
+└─ features/     one folder per user-visible feature
 ```
 
-See [`plans/02-architecture.md`](plans/02-architecture.md) for the rules
-about which layer can import which.
+## Development
 
-## Status
+```bash
+just gate        # dart format --check + flutter analyze + flutter test
+```
 
-Early. The app boots, onboards, syncs, logs expenses, and runs the SMS
-pipeline on Android. Polish bar: not yet at YNAB level — this is what the
-next iteration is for.
+Before shipping a release APK, work through [`ACCEPTANCE.md`](ACCEPTANCE.md).

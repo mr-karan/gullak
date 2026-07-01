@@ -18,7 +18,7 @@ import type {
  * imported lazily and only when this destination is actually invoked. To enable
  * Actual: `bun add @actual-app/api` on a runtime that supports better-sqlite3
  * (or run it in a small Node sidecar), then set GULLAK_ACTUAL_SERVER_URL /
- * _PASSWORD / _SYNC_ID. See docs/destinations.md.
+ * _PASSWORD / _SYNC_ID. See docs/destinations.md (repo root).
  */
 /**
  * Only one Actual export may run at a time: `@actual-app/api` downloads the

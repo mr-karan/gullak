@@ -34,9 +34,8 @@ Expected:
 
 ## Live AI Acceptance
 
-Defaults to OpenRouter + `google/gemini-3-flash-preview` (matches the homelab
-pi-server config); only the API key needs to be supplied. Override
-`AI_BASE_URL` / `AI_MODEL` to test a different provider.
+Defaults to OpenRouter + `google/gemini-3-flash-preview`; only the API key needs
+to be supplied. Override `AI_BASE_URL` / `AI_MODEL` to test a different provider.
 
 ```bash
 AI_API_KEY=$OPENROUTER_API_KEY just ai-acceptance
@@ -51,7 +50,7 @@ Expected:
 
 ## Pixel Acceptance
 
-Connect Karan's Pixel with USB debugging enabled, then run:
+Connect a physical Android device with USB debugging enabled, then run:
 
 ```bash
 just pixel-acceptance

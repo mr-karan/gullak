@@ -39,8 +39,8 @@ gullak/
 └── Justfile
 ```
 
-`data/gullak.db` is local pi-server persistence (gitignored). Homelab production
-uses `/mnt/storage/gullak/gullak.db` via `GULLAK_DB_PATH=/data/gullak.db`.
+`data/gullak.db` is local pi-server persistence (gitignored); production sets
+`GULLAK_DB_PATH` to a path on the server's mounted data volume.
 
 ## pi-server endpoints
 
@@ -199,7 +199,7 @@ fixed parser versions actually reparse old SMS.
 
 ## Fresh-start reset
 
-Remote homelab DB reset: backup first, stop/remove DB/WAL/SHM, restart stack so
+Server DB reset: back up first, stop/remove DB/WAL/SHM, restart the stack so
 migrations recreate an empty DB. Do not remove `whatsapp.db` unless explicitly
 resetting WhatsApp pairing.
 
