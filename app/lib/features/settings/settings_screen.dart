@@ -225,6 +225,16 @@ class SettingsScreen extends ConsumerWidget {
                   : 'v$buildVersion · $buildSha · $buildTimestamp',
             ),
           ),
+          ListTile(
+            leading: const Icon(Icons.description_outlined),
+            title: const Text('Open source licenses'),
+            subtitle: const Text('Bundled fonts and packages'),
+            onTap: () => showLicensePage(
+              context: context,
+              applicationName: 'Gullak',
+              applicationVersion: 'v$buildVersion',
+            ),
+          ),
         ],
       ),
     );

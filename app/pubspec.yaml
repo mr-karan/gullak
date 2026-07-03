@@ -82,6 +82,13 @@ dev_dependencies:
 flutter:
   uses-material-design: true
 
+  # OFL license texts for the bundled fonts, loaded at runtime and surfaced in
+  # Settings → About → Open source licenses via LicenseRegistry (main.dart).
+  assets:
+    - assets/fonts/Fraunces-OFL.txt
+    - assets/fonts/Inter-OFL.txt
+    - assets/fonts/JetBrainsMono-OFL.txt
+
   # Editorial type, bundled (not fetched at runtime) so the offline-first app
   # keeps its typography on a first launch with no network. Variable fonts:
   # one file per family covers every weight the theme requests. OFL-licensed —

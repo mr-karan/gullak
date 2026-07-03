@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:ui';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -34,8 +35,26 @@ const String _buildAt = String.fromEnvironment('GULLAK_BUILD_AT');
 final ValueNotifier<FlutterErrorDetails?> appErrorNotifier =
     ValueNotifier<FlutterErrorDetails?>(null);
 
+/// Surface the bundled OFL font licenses in the standard Flutter license page
+/// (Settings → About → Open source licenses). The fonts ship in the APK, so
+/// their licenses must ship with them.
+void _registerFontLicenses() {
+  LicenseRegistry.addLicense(() async* {
+    const files = <String, String>{
+      'Fraunces': 'assets/fonts/Fraunces-OFL.txt',
+      'Inter': 'assets/fonts/Inter-OFL.txt',
+      'JetBrains Mono': 'assets/fonts/JetBrainsMono-OFL.txt',
+    };
+    for (final entry in files.entries) {
+      final text = await rootBundle.loadString(entry.value);
+      yield LicenseEntryWithLineBreaks([entry.key], text);
+    }
+  });
+}
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  _registerFontLicenses();
   FlutterError.onError = (details) {
     FlutterError.presentError(details);
     appErrorNotifier.value = details;
