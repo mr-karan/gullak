@@ -62,7 +62,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           IconButton(
             icon: const Icon(Icons.more_horiz),
             tooltip: 'More',
-            onPressed: () => context.go('/settings'),
+            onPressed: () => context.push('/settings'),
           ),
         ],
       ),
@@ -118,7 +118,7 @@ class _InboxBadgeAction extends ConsumerWidget {
     final icon = IconButton(
       icon: const Icon(Icons.inbox_outlined),
       tooltip: 'Inbox',
-      onPressed: () => context.go('/inbox'),
+      onPressed: () => context.push('/inbox'),
     );
     if (n == 0) return icon;
     return Badge.count(count: n, child: icon);
@@ -151,7 +151,7 @@ class _AccountsStrip extends ConsumerWidget {
               final a = accounts[i];
               final bal = ref.watch(accountBalanceProvider(a.id)).value ?? 0;
               return InkWell(
-                onTap: () => context.go('/accounts/${a.id}'),
+                onTap: () => context.push('/accounts/${a.id}'),
                 borderRadius: BorderRadius.circular(14),
                 child: Container(
                   width: 150,
@@ -341,7 +341,7 @@ class _ReviewActionRow extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     return InkWell(
       borderRadius: BorderRadius.circular(12),
-      onTap: item.route == null ? null : () => context.go(item.route!),
+      onTap: item.route == null ? null : () => context.push(item.route!),
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 7),
         child: Row(

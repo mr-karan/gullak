@@ -304,13 +304,19 @@ class _Stat extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 6),
-          CountUpMoney(
-            amountCents: value,
-            symbol: symbol,
-            minorDigits: digits,
-            size: MoneySize.medium,
-            color: color,
-            showSign: showSign,
+          // Scale the amount down to fit the narrow card on one line rather
+          // than wrapping mid-number.
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: CountUpMoney(
+              amountCents: value,
+              symbol: symbol,
+              minorDigits: digits,
+              size: MoneySize.medium,
+              color: color,
+              showSign: showSign,
+            ),
           ),
         ],
       ),

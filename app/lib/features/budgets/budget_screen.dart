@@ -7,6 +7,7 @@ import '../../core/snackbars.dart';
 import '../../state/providers.dart';
 import '../../ui/category_palette.dart';
 import '../../ui/charts/progress_arc.dart';
+import '../categories/category_visuals.dart';
 import '../../ui/widgets/empty_state.dart';
 import '../../ui/widgets/error_state.dart';
 import '../../ui/widgets/money_text.dart';
@@ -289,12 +290,10 @@ class _BudgetRow extends ConsumerWidget {
               semanticsLabel: hasTarget
                   ? '${entry.categoryName} ${(ratio * 100).round()} percent of budget'
                   : '${entry.categoryName}, no budget set',
-              child: Text(
-                hasTarget ? '${(ratio * 100).round()}%' : '—',
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: cs.onSurfaceVariant,
-                  fontSize: 9,
-                ),
+              child: Icon(
+                categoryIconData(entry.categoryName),
+                size: 18,
+                color: hasTarget ? arcColor : cs.onSurfaceVariant,
               ),
             ),
             const SizedBox(width: 14),
@@ -311,7 +310,7 @@ class _BudgetRow extends ConsumerWidget {
                   const SizedBox(height: 2),
                   Text(
                     hasTarget
-                        ? '${Money.format(-entry.spentCents, symbol: symbol, minorDigits: minorDigits)} of ${Money.format(entry.targetCents, symbol: symbol, minorDigits: minorDigits)}'
+                        ? '${(ratio * 100).round()}% · ${Money.format(-entry.spentCents, symbol: symbol, minorDigits: minorDigits)} of ${Money.format(entry.targetCents, symbol: symbol, minorDigits: minorDigits)}'
                         : 'No budget · spent ${Money.format(-entry.spentCents, symbol: symbol, minorDigits: minorDigits)}',
                     style: Theme.of(
                       context,
