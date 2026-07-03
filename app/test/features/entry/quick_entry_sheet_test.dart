@@ -91,7 +91,8 @@ void main() {
       await tester.pump();
     }
 
-    final save = find.widgetWithText(FilledButton, 'Save');
+    // The button names the action once amount + account are set.
+    final save = find.widgetWithText(FilledButton, 'Save ₹123 to Main');
     expect(save, findsOneWidget);
     await tester.tap(save);
     await tester.tap(save);
@@ -179,6 +180,8 @@ void main() {
   });
 
   testWidgets('Add note keeps a 48dp minimum tap target', (tester) async {
+    tester.view.physicalSize = const Size(430, 1400);
+    tester.view.devicePixelRatio = 1;
     await tester.pumpWidget(quickEntryUnderTest());
     await tester.pumpAndSettle();
     await showFormTab(tester);
@@ -189,6 +192,8 @@ void main() {
     expect(tester.getSize(addNote).height, greaterThanOrEqualTo(48));
 
     await tester.pumpWidget(const SizedBox.shrink());
+    tester.view.resetPhysicalSize();
+    tester.view.resetDevicePixelRatio();
     await tester.pump();
   });
 

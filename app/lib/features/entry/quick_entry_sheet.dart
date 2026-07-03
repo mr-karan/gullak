@@ -1007,6 +1007,17 @@ class _FormTabState extends ConsumerState<_FormTab> {
     return r;
   }
 
+  /// The save button names the action ("Save ₹450 to HDFC") so the account
+  /// is confirmed at a glance before committing — cheap insurance against
+  /// logging to the wrong account. Falls back to a bare verb until both an
+  /// amount and an account are set (the button is disabled then anyway).
+  String _saveLabel(String symbol) {
+    final verb = _isEditing ? 'Update' : 'Save';
+    if (_amountWhole == 0 || _account == null) return verb;
+    final amt = Money.format(_amountWhole, minorDigits: 0, symbol: symbol);
+    return '$verb $amt to ${_account!.name}';
+  }
+
   @override
   Widget build(BuildContext context) {
     final prefs = ref.watch(prefsProvider);
@@ -1027,7 +1038,11 @@ class _FormTabState extends ConsumerState<_FormTab> {
                 whole: _amountWhole,
                 symbol: prefs.currencySymbol,
                 isIncome: _isIncome,
-                onSignToggle: () => setState(() => _isIncome = !_isIncome),
+              ),
+              const SizedBox(height: 10),
+              _SignSegment(
+                isIncome: _isIncome,
+                onChanged: (v) => setState(() => _isIncome = v),
               ),
               const SizedBox(height: 12),
               Expanded(
@@ -1172,7 +1187,11 @@ class _FormTabState extends ConsumerState<_FormTab> {
                 onPressed: _saving || _account == null || _amountWhole == 0
                     ? null
                     : _save,
-                child: Text(_saving ? 'Saving…' : 'Save'),
+                child: Text(
+                  _saving ? 'Saving…' : _saveLabel(prefs.currencySymbol),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
             ],
           );
@@ -1667,22 +1686,94 @@ class _DateRow extends StatelessWidget {
   }
 }
 
+/// Expense / Income segmented toggle. Replaces the cryptic +/- icon button —
+/// spend and income are named, and the active side tints to match the amount.
+class _SignSegment extends StatelessWidget {
+  const _SignSegment({required this.isIncome, required this.onChanged});
+
+  final bool isIncome;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
+    Widget seg(String label, bool incomeValue, IconData icon) {
+      final selected = isIncome == incomeValue;
+      final accent = incomeValue ? cs.tertiary : cs.primary;
+      return Expanded(
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () {
+            if (selected) return;
+            HapticFeedback.selectionClick();
+            onChanged(incomeValue);
+          },
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            curve: Curves.easeOut,
+            height: 40,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: selected
+                  ? accent.withValues(alpha: 0.14)
+                  : Colors.transparent,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  icon,
+                  size: 16,
+                  color: selected ? accent : cs.onSurfaceVariant,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  label,
+                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                    color: selected ? accent : cs.onSurfaceVariant,
+                    fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: cs.surfaceContainer,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          seg('Expense', false, Icons.south_east),
+          seg('Income', true, Icons.north_east),
+        ],
+      ),
+    );
+  }
+}
+
 class _AmountDisplay extends StatelessWidget {
   const _AmountDisplay({
     required this.whole,
     required this.symbol,
     required this.isIncome,
-    required this.onSignToggle,
   });
 
   final int whole;
   final String symbol;
   final bool isIncome;
-  final VoidCallback onSignToggle;
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final amountColor = isIncome ? cs.tertiary : cs.onSurface;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
       decoration: BoxDecoration(
@@ -1692,28 +1783,26 @@ class _AmountDisplay extends StatelessWidget {
       child: Row(
         children: [
           Text(
-            symbol,
+            isIncome ? '+$symbol' : symbol,
             style: moneyStyle(
               context,
               size: 28,
               weight: FontWeight.w600,
-            ).copyWith(color: cs.onSurfaceVariant),
+            ).copyWith(color: isIncome ? cs.tertiary : cs.onSurfaceVariant),
           ),
           const SizedBox(width: 6),
           Expanded(
             child: Text(
               _formatWhole(whole),
-              style: moneyStyle(context, size: 40, weight: FontWeight.w700),
+              style: moneyStyle(
+                context,
+                size: 40,
+                weight: FontWeight.w700,
+              ).copyWith(color: amountColor),
               maxLines: 1,
               overflow: TextOverflow.fade,
               softWrap: false,
             ),
-          ),
-          IconButton(
-            icon: Icon(isIncome ? Icons.add : Icons.remove),
-            color: isIncome ? cs.tertiary : cs.onSurfaceVariant,
-            onPressed: onSignToggle,
-            tooltip: isIncome ? 'Income' : 'Spend',
           ),
         ],
       ),
