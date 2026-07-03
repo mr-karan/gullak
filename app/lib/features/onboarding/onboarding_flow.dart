@@ -433,15 +433,41 @@ class _SyncSetupState extends State<_SyncSetup> {
           ),
           const SizedBox(height: 8),
           Text(
-            'Optional. Point at a self-hosted Gullak server to merge data '
-            'across devices and unlock SMS parsing, photo receipts, and '
-            'natural-language entry — those run on the server. Skip if '
-            'you just want a local ledger.',
+            'Optional — skip if you just want a local ledger on this phone.',
             style: Theme.of(
               context,
             ).textTheme.bodyLarge?.copyWith(color: cs.onSurfaceVariant),
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 12),
+          Theme(
+            // Drop the default ExpansionTile dividers for a cleaner card.
+            data: Theme.of(
+              context,
+            ).copyWith(dividerColor: Colors.transparent),
+            child: ExpansionTile(
+              tilePadding: EdgeInsets.zero,
+              childrenPadding: const EdgeInsets.only(bottom: 8),
+              expandedCrossAxisAlignment: CrossAxisAlignment.start,
+              leading: Icon(Icons.help_outline, color: cs.onSurfaceVariant),
+              title: Text(
+                "What's a sync server?",
+                style: Theme.of(context).textTheme.titleSmall,
+              ),
+              children: [
+                Text(
+                  'A self-hosted Gullak server (your homelab, a VPS, a Pi). '
+                  'It merges data across devices and holds the AI model keys, '
+                  'so SMS parsing, photo receipts, and natural-language entry '
+                  'run there — never on your phone. You can add it later in '
+                  'Settings → Sync.',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
           TextField(
             controller: _baseUrl,
             keyboardType: TextInputType.url,
