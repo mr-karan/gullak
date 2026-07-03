@@ -5,7 +5,10 @@ import 'package:webview_flutter/webview_flutter.dart';
 
 import '../../core/money.dart';
 import '../../state/providers.dart';
+import '../../ui/widgets/category_swatch.dart';
 import '../../ui/widgets/error_state.dart';
+import '../../ui/widgets/money_text.dart';
+import '../categories/category_visuals.dart';
 import '../entry/quick_entry.dart';
 import '../payees/data/payee_repository.dart';
 import '../tags/data/tag_repository.dart';
@@ -42,24 +45,63 @@ class TransactionDetailScreen extends ConsumerWidget {
         data: (tx) {
           if (tx == null) return const Center(child: Text('Not found'));
           final raw = rowFuture.value;
+          final cs = Theme.of(context).colorScheme;
+          final amountColor = tx.isTransfer
+              ? cs.onSurface
+              : tx.amountCents > 0
+              ? cs.tertiary
+              : cs.onSurface;
+          final hasFx =
+              raw?.originalAmountCents != null &&
+              (raw?.originalCurrency ?? '').isNotEmpty;
           return ListView(
             padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
             children: [
-              _PayeeTitle(
-                payeeName: tx.payeeName,
-                fallback: tx.categoryName ?? 'Transaction',
-                payeeId: raw?.payeeId,
+              // Receipt-style header: glyph, payee, hero amount, FX chip.
+              Center(
+                child: CategorySwatch(
+                  label: tx.categoryName ?? 'Uncategorised',
+                  size: 56,
+                  icon: tx.isTransfer
+                      ? Icons.swap_horiz
+                      : tx.isSplit
+                      ? Icons.call_split
+                      : tx.categoryName == null
+                      ? null
+                      : categoryIconData(tx.categoryName!),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Center(
+                child: _PayeeTitle(
+                  payeeName: tx.payeeName,
+                  fallback: tx.categoryName ?? 'Transaction',
+                  payeeId: raw?.payeeId,
+                ),
               ),
               const SizedBox(height: 8),
-              Text(
-                Money.format(
-                  tx.amountCents,
+              Center(
+                child: MoneyText(
+                  amountCents: tx.amountCents,
                   symbol: prefs.currencySymbol,
                   minorDigits: prefs.currencyMinorDigits,
+                  size: MoneySize.hero,
+                  color: amountColor,
+                  showSign: !tx.isTransfer && tx.amountCents > 0,
                 ),
-                style: Theme.of(context).textTheme.displaySmall,
               ),
-              const SizedBox(height: 20),
+              if (hasFx) ...[
+                const SizedBox(height: 8),
+                Center(
+                  child: Chip(
+                    visualDensity: VisualDensity.compact,
+                    label: Text(
+                      'Originally ${Money.formatForeign(raw!.originalAmountCents!, raw.originalCurrency!)}',
+                    ),
+                  ),
+                ),
+              ],
+              const SizedBox(height: 24),
               _DetailRow(label: 'Date', value: tx.dateLabel),
               _DetailRow(label: 'Account', value: tx.accountName ?? '-'),
               _DetailRow(
@@ -68,15 +110,6 @@ class TransactionDetailScreen extends ConsumerWidget {
                     tx.categoryName ??
                     (tx.isTransfer ? 'Transfer' : 'Uncategorised'),
               ),
-              if (raw?.originalAmountCents != null &&
-                  (raw?.originalCurrency ?? '').isNotEmpty)
-                _DetailRow(
-                  label: 'Original',
-                  value: Money.formatForeign(
-                    raw!.originalAmountCents!,
-                    raw.originalCurrency!,
-                  ),
-                ),
               if ((tx.notes ?? '').isNotEmpty)
                 _DetailRow(label: 'Note', value: tx.notes!),
               const SizedBox(height: 12),
