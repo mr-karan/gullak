@@ -34,8 +34,26 @@ class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
   final _searchCtrl = TextEditingController();
   Timer? _searchDebounce;
   String _query = '';
-  _ActivityMode _mode = _ActivityMode.weekly;
+  _ViewMode _view = _ViewMode.list;
+  // 0 = current month, -1 = last month, … Period is orthogonal to the view
+  // so the month navigator drives List, Calendar, and Summary alike.
+  int _monthOffset = 0;
   TransactionFilters _filters = const TransactionFilters();
+
+  static String _ymd(DateTime d) =>
+      '${d.year.toString().padLeft(4, '0')}-'
+      '${d.month.toString().padLeft(2, '0')}-'
+      '${d.day.toString().padLeft(2, '0')}';
+
+  DateTime get _activeMonth {
+    final now = clock.now();
+    return DateTime(now.year, now.month + _monthOffset, 1);
+  }
+
+  (String, String) get _monthRange {
+    final m = _activeMonth;
+    return (_ymd(m), _ymd(DateTime(m.year, m.month + 1, 0)));
+  }
 
   @override
   void dispose() {
@@ -55,6 +73,9 @@ class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
   Future<void> _openFilters() async {
     final result = await showModalBottomSheet<TransactionFilters>(
       context: context,
+      // Root navigator so the sheet covers the shell's floating Add button —
+      // otherwise the FAB sits on top of the sheet's Apply action.
+      useRootNavigator: true,
       isScrollControlled: true,
       showDragHandle: true,
       builder: (_) => _TransactionFilterSheet(initial: _filters),
@@ -66,7 +87,7 @@ class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
   @override
   Widget build(BuildContext context) {
     final prefs = ref.watch(prefsProvider);
-    final range = _mode.range;
+    final range = _monthRange;
     final listAsync = ref.watch(
       transactionsListProvider(
         TransactionListQuery(
@@ -74,8 +95,8 @@ class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
           categoryId: _filters.categoryId,
           search: _query.isEmpty ? null : _query,
           tagId: _filters.tagId,
-          fromDate: range?.$1,
-          toDate: range?.$2,
+          fromDate: range.$1,
+          toDate: range.$2,
           origin: _filters.origin,
           cleared: _filters.cleared,
           minAmountCents: _filters.minAmountCents,
@@ -110,40 +131,27 @@ class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
             children: [
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: SegmentedButton<_ActivityMode>(
-                    showSelectedIcon: false,
-                    segments: const [
-                      ButtonSegment(
-                        value: _ActivityMode.weekly,
-                        icon: Icon(Icons.calendar_view_week_outlined),
-                        label: Text('Week'),
-                      ),
-                      ButtonSegment(
-                        value: _ActivityMode.calendar,
-                        icon: Icon(Icons.calendar_month_outlined),
-                        label: Text('Calendar'),
-                      ),
-                      ButtonSegment(
-                        value: _ActivityMode.month,
-                        icon: Icon(Icons.list_alt_outlined),
-                        label: Text('Month'),
-                      ),
-                      ButtonSegment(
-                        value: _ActivityMode.summary,
-                        icon: Icon(Icons.summarize_outlined),
-                        label: Text('Summary'),
-                      ),
-                      ButtonSegment(
-                        value: _ActivityMode.all,
-                        icon: Icon(Icons.all_inbox_outlined),
-                        label: Text('All'),
-                      ),
-                    ],
-                    selected: {_mode},
-                    onSelectionChanged: (v) => setState(() => _mode = v.single),
-                  ),
+                child: SegmentedButton<_ViewMode>(
+                  showSelectedIcon: false,
+                  segments: const [
+                    ButtonSegment(
+                      value: _ViewMode.list,
+                      icon: Icon(Icons.list_alt_outlined),
+                      label: Text('List'),
+                    ),
+                    ButtonSegment(
+                      value: _ViewMode.calendar,
+                      icon: Icon(Icons.calendar_month_outlined),
+                      label: Text('Calendar'),
+                    ),
+                    ButtonSegment(
+                      value: _ViewMode.summary,
+                      icon: Icon(Icons.summarize_outlined),
+                      label: Text('Summary'),
+                    ),
+                  ],
+                  selected: {_view},
+                  onSelectionChanged: (v) => setState(() => _view = v.single),
                 ),
               ),
               Padding(
@@ -161,7 +169,31 @@ class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
           ),
         ),
       ),
-      body: listAsync.when(
+      body: Column(
+        children: [
+          _MonthNav(
+            month: _activeMonth,
+            canGoNext: _monthOffset < 0,
+            onPrev: () => setState(() => _monthOffset -= 1),
+            onNext: _monthOffset < 0
+                ? () => setState(() => _monthOffset += 1)
+                : null,
+          ),
+          _ActiveFilterChips(
+            filters: _filters,
+            onChanged: (f) => setState(() => _filters = f),
+          ),
+          Expanded(child: _buildBody(listAsync, prefs)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBody(
+    AsyncValue<List<TransactionListItem>> listAsync,
+    dynamic prefs,
+  ) {
+    return listAsync.when(
         data: (rows) {
           if (rows.isEmpty) {
             return ListView(
@@ -176,10 +208,14 @@ class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
               ],
             );
           }
-          if (_mode == _ActivityMode.calendar) {
-            return _CalendarActivityView(rows: rows, prefs: prefs);
+          if (_view == _ViewMode.calendar) {
+            return _CalendarActivityView(
+              rows: rows,
+              prefs: prefs,
+              month: _activeMonth,
+            );
           }
-          if (_mode == _ActivityMode.summary) {
+          if (_view == _ViewMode.summary) {
             return _SummaryActivityView(rows: rows, prefs: prefs);
           }
           // Group by date string (YYYY-MM-DD).
@@ -218,13 +254,13 @@ class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
           message: e.toString(),
           onRetry: () => ref.invalidate(transactionsListProvider),
         ),
-      ),
-    );
+      );
   }
 
   Future<void> _openSplitSheet(BuildContext context) {
     return showModalBottomSheet<void>(
       context: context,
+      useRootNavigator: true,
       isScrollControlled: true,
       showDragHandle: true,
       builder: (_) => const SplitTransactionSheet(),
@@ -234,6 +270,7 @@ class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
   Future<void> _openTransferSheet(BuildContext context) {
     return showModalBottomSheet<void>(
       context: context,
+      useRootNavigator: true,
       isScrollControlled: true,
       showDragHandle: true,
       builder: (_) => const TransferSheet(),
@@ -286,6 +323,9 @@ class TransactionFilters {
     bool clearTag = false,
     bool clearOrigin = false,
     bool clearCleared = false,
+    bool clearMinAmount = false,
+    bool clearMaxAmount = false,
+    bool clearSmsText = false,
   }) {
     return TransactionFilters(
       accountId: clearAccount ? null : accountId ?? this.accountId,
@@ -293,9 +333,9 @@ class TransactionFilters {
       tagId: clearTag ? null : tagId ?? this.tagId,
       origin: clearOrigin ? null : origin ?? this.origin,
       cleared: clearCleared ? null : cleared ?? this.cleared,
-      minAmountCents: minAmountCents ?? this.minAmountCents,
-      maxAmountCents: maxAmountCents ?? this.maxAmountCents,
-      smsText: smsText ?? this.smsText,
+      minAmountCents: clearMinAmount ? null : minAmountCents ?? this.minAmountCents,
+      maxAmountCents: clearMaxAmount ? null : maxAmountCents ?? this.maxAmountCents,
+      smsText: clearSmsText ? null : smsText ?? this.smsText,
     );
   }
 }
@@ -528,38 +568,166 @@ class _TransactionFilterSheetState
   }
 }
 
-enum _ActivityMode {
-  weekly,
-  calendar,
-  month,
-  summary,
-  all;
+enum _ViewMode { list, calendar, summary }
 
-  (String, String)? get range {
-    final now = clock.now();
-    String ymd(DateTime d) =>
-        '${d.year.toString().padLeft(4, '0')}-'
-        '${d.month.toString().padLeft(2, '0')}-'
-        '${d.day.toString().padLeft(2, '0')}';
-    return switch (this) {
-      _ActivityMode.weekly => (
-        ymd(clock.today().subtract(Duration(days: clock.today().weekday - 1))),
-        ymd(
-          clock.today().add(
-            Duration(days: DateTime.daysPerWeek - clock.today().weekday),
+/// ‹ Month yyyy › period stepper. Forward is disabled once we reach the
+/// current month — there's nothing to see in the future.
+class _MonthNav extends StatelessWidget {
+  const _MonthNav({
+    required this.month,
+    required this.canGoNext,
+    required this.onPrev,
+    this.onNext,
+  });
+
+  final DateTime month;
+  final bool canGoNext;
+  final VoidCallback onPrev;
+  final VoidCallback? onNext;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(4, 4, 4, 0),
+      child: Row(
+        children: [
+          IconButton(
+            icon: const Icon(Icons.chevron_left),
+            onPressed: onPrev,
+            tooltip: 'Previous month',
+          ),
+          Expanded(
+            child: Text(
+              DateFormat('MMMM yyyy').format(month),
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.chevron_right),
+            onPressed: onNext,
+            color: canGoNext ? null : cs.onSurface.withValues(alpha: 0.3),
+            tooltip: 'Next month',
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Dismissible chips for the currently-applied filters. Without this the
+/// only sign a filter is active is the app-bar tune icon — this makes each
+/// active constraint visible and one-tap removable.
+class _ActiveFilterChips extends ConsumerWidget {
+  const _ActiveFilterChips({required this.filters, required this.onChanged});
+
+  final TransactionFilters filters;
+  final ValueChanged<TransactionFilters> onChanged;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    if (!filters.isActive) return const SizedBox.shrink();
+    final accounts =
+        ref.watch(accountsListProvider).value ?? const <AccountRow>[];
+    final categories =
+        ref.watch(categoriesListProvider).value ?? const <CategoryRow>[];
+    final tags = ref.watch(tagsListProvider).value ?? const <TagRow>[];
+    final prefs = ref.watch(prefsProvider);
+
+    String accountName() {
+      for (final a in accounts) {
+        if (a.id == filters.accountId) return a.name;
+      }
+      return 'Account';
+    }
+
+    String categoryName() {
+      for (final c in categories) {
+        if (c.id == filters.categoryId) return c.name;
+      }
+      return 'Category';
+    }
+
+    String tagName() {
+      for (final t in tags) {
+        if (t.id == filters.tagId) return t.name;
+      }
+      return 'Tag';
+    }
+
+    String money(int cents) => Money.format(
+      cents,
+      symbol: prefs.currencySymbol,
+      minorDigits: prefs.currencyMinorDigits,
+    );
+
+    final chips = <Widget>[];
+    void add(String label, TransactionFilters cleared) {
+      chips.add(
+        Padding(
+          padding: const EdgeInsets.only(right: 8),
+          child: InputChip(
+            label: Text(label),
+            onDeleted: () => onChanged(cleared),
           ),
         ),
+      );
+    }
+
+    if (filters.accountId != null) {
+      add(accountName(), filters.copyWith(clearAccount: true));
+    }
+    if (filters.categoryId != null) {
+      add(categoryName(), filters.copyWith(clearCategory: true));
+    }
+    if (filters.tagId != null) {
+      add(tagName(), filters.copyWith(clearTag: true));
+    }
+    if (filters.origin != null) {
+      final label = {
+        'manual': 'Manual',
+        'ai': 'AI',
+        'sms': 'SMS',
+        'transfer': 'Transfer',
+        'split': 'Split',
+      }[filters.origin!] ?? filters.origin!;
+      add(label, filters.copyWith(clearOrigin: true));
+    }
+    if (filters.cleared != null) {
+      add(
+        filters.cleared! ? 'Cleared' : 'Open',
+        filters.copyWith(clearCleared: true),
+      );
+    }
+    if (filters.minAmountCents != null) {
+      add('≥ ${money(filters.minAmountCents!)}',
+          filters.copyWith(clearMinAmount: true));
+    }
+    if (filters.maxAmountCents != null) {
+      add('≤ ${money(filters.maxAmountCents!)}',
+          filters.copyWith(clearMaxAmount: true));
+    }
+    if ((filters.smsText ?? '').trim().isNotEmpty) {
+      add('SMS: ${filters.smsText!.trim()}',
+          filters.copyWith(clearSmsText: true));
+    }
+
+    return SizedBox(
+      height: 48,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+        children: [
+          ...chips,
+          ActionChip(
+            avatar: const Icon(Icons.clear_all, size: 18),
+            label: const Text('Clear all'),
+            onPressed: () => onChanged(const TransactionFilters()),
+          ),
+        ],
       ),
-      _ActivityMode.calendar || _ActivityMode.summary => (
-        ymd(DateTime(now.year, now.month, 1)),
-        ymd(DateTime(now.year, now.month + 1, 0)),
-      ),
-      _ActivityMode.month => (
-        ymd(DateTime(now.year, now.month, 1)),
-        ymd(DateTime(now.year, now.month + 1, 0)),
-      ),
-      _ActivityMode.all => null,
-    };
+    );
   }
 }
 
@@ -614,10 +782,15 @@ class _DateHeader extends StatelessWidget {
 }
 
 class _CalendarActivityView extends StatelessWidget {
-  const _CalendarActivityView({required this.rows, required this.prefs});
+  const _CalendarActivityView({
+    required this.rows,
+    required this.prefs,
+    required this.month,
+  });
 
   final List<TransactionListItem> rows;
   final dynamic prefs;
+  final DateTime month;
 
   @override
   Widget build(BuildContext context) {
@@ -629,13 +802,6 @@ class _CalendarActivityView extends StatelessWidget {
         ifAbsent: () => row.amountCents,
       );
     }
-    final month = rows.isEmpty
-        ? clock.today()
-        : DateTime.parse(
-            rows
-                .map((r) => r.date)
-                .reduce((a, b) => a.compareTo(b) < 0 ? a : b),
-          );
     final first = DateTime(month.year, month.month, 1);
     final days = DateTime(month.year, month.month + 1, 0).day;
     final leading = first.weekday % DateTime.daysPerWeek;
