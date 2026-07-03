@@ -138,7 +138,7 @@ class _InboxScreenState extends ConsumerState<InboxScreen> {
             valueListenable: pipeline.scanState,
             builder: (context, scan, _) => _SmsScanBanner(scan: scan),
           ),
-          _InboxBucketTabs(
+          _InboxBucketChips(
             selected: _bucket,
             counts: counts,
             onChanged: (bucket) => setState(() => _bucket = bucket),
@@ -467,8 +467,11 @@ class _InboxBulkActions extends StatelessWidget {
   }
 }
 
-class _InboxBucketTabs extends StatelessWidget {
-  const _InboxBucketTabs({
+/// Bucket chooser as filter chips. A bucket's chip hides when its count is
+/// zero (unless it's the one you're viewing) so the row stays focused on
+/// what actually needs triage.
+class _InboxBucketChips extends StatelessWidget {
+  const _InboxBucketChips({
     required this.selected,
     required this.counts,
     required this.onChanged,
@@ -480,23 +483,30 @@ class _InboxBucketTabs extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final visible = [
+      for (final bucket in _InboxBucket.values)
+        if ((counts[bucket] ?? 0) > 0 || bucket == selected) bucket,
+    ];
     return Material(
       color: Theme.of(context).colorScheme.surface,
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-        child: SegmentedButton<_InboxBucket>(
-          showSelectedIcon: false,
-          segments: [
-            for (final bucket in _InboxBucket.values)
-              ButtonSegment(
-                value: bucket,
-                icon: Icon(bucket.icon, size: 18),
-                label: Text('${bucket.label} (${counts[bucket] ?? 0})'),
+      child: SizedBox(
+        height: 48,
+        child: ListView(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.fromLTRB(16, 6, 16, 6),
+          children: [
+            for (final bucket in visible)
+              Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: FilterChip(
+                  avatar: Icon(bucket.icon, size: 18),
+                  label: Text('${bucket.label} ${counts[bucket] ?? 0}'),
+                  selected: selected == bucket,
+                  showCheckmark: false,
+                  onSelected: (_) => onChanged(bucket),
+                ),
               ),
           ],
-          selected: {selected},
-          onSelectionChanged: (value) => onChanged(value.single),
         ),
       ),
     );
@@ -532,16 +542,31 @@ class _InboxRow extends ConsumerWidget {
           children: [
             Row(
               children: [
+                _SenderGlyph(income: item.suggestedIsIncome && amount != null),
+                const SizedBox(width: 12),
                 Expanded(
-                  child: Text(
-                    title,
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w600,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w600),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      if (title != item.address)
+                        Text(
+                          item.address,
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(color: cs.onSurfaceVariant),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                    ],
                   ),
                 ),
+                const SizedBox(width: 8),
                 if (amount != null)
                   MoneyText(
                     amountCents: item.suggestedIsIncome ? amount : -amount,
@@ -553,14 +578,7 @@ class _InboxRow extends ConsumerWidget {
               ],
             ),
             const SizedBox(height: 6),
-            Text(
-              item.body,
-              style: Theme.of(
-                context,
-              ).textTheme.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
+            _ExpandableBody(text: item.body),
             if (item.suggestedAccountName != null ||
                 item.suggestedCategoryName != null) ...[
               const SizedBox(height: 10),
@@ -958,6 +976,60 @@ class _ParseDebugDialogState extends ConsumerState<_ParseDebugDialog> {
         errorSnackBar(context, message),
       );
     }
+  }
+}
+
+/// Leading avatar for a triage card — a bank glyph that tints income green,
+/// giving the card a visual anchor and an at-a-glance credit/debit cue.
+class _SenderGlyph extends StatelessWidget {
+  const _SenderGlyph({required this.income});
+  final bool income;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final accent = income ? cs.tertiary : cs.primary;
+    return CircleAvatar(
+      radius: 18,
+      backgroundColor: accent.withValues(alpha: 0.14),
+      child: Icon(Icons.account_balance_outlined, size: 18, color: accent),
+    );
+  }
+}
+
+/// The SMS body, truncated to two lines until tapped. Seeing the raw text is
+/// a trust feature — tap to expand, tap again to collapse.
+class _ExpandableBody extends StatefulWidget {
+  const _ExpandableBody({required this.text});
+  final String text;
+
+  @override
+  State<_ExpandableBody> createState() => _ExpandableBodyState();
+}
+
+class _ExpandableBodyState extends State<_ExpandableBody> {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => setState(() => _expanded = !_expanded),
+      child: AnimatedSize(
+        duration: const Duration(milliseconds: 150),
+        alignment: Alignment.topCenter,
+        curve: Curves.easeOut,
+        child: Text(
+          widget.text,
+          style: Theme.of(
+            context,
+          ).textTheme.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
+          maxLines: _expanded ? null : 2,
+          overflow: _expanded ? TextOverflow.visible : TextOverflow.ellipsis,
+        ),
+      ),
+    );
   }
 }
 
