@@ -17,13 +17,20 @@ own commit:
   bars, 6-month paired bars, heatmap); `ErrorState` for error slots.
 - **Phase 7 (detail) — receipt-style transaction detail** (glyph, hero amount, FX chip).
 - **Phase 8 (budget) — category-coloured progress rings.**
+- **Phase 6 (core) — Quick Entry redesign, device-verified:** cryptic +/- swapped
+  for an **Expense/Income segmented control** (tints to match the amount); the four
+  stacked picker rows became a compact **context-chip row** (account/payee/category/
+  tags — set chips fill with the category's own accent); the Save button now
+  **names the action** ("Save ₹450 to Kotak UPI") as a wrong-account guard. Save
+  path untouched; `quick_entry_sheet_test.dart` green.
 
 Remaining — these are the interaction-heavy rewrites that design.md itself says
 need an on-device pass for touch/motion feel; best done with a device in the loop:
 
-- **Phase 6 — Quick Entry redesign + file split.** Highest risk: it touches the
-  money save-path in a 1,900-line file. Do the pure-move split first, then the
-  chip/keypad redesign, verifying on device.
+- **Phase 6 (deferred sub-items):** Transfer mode (own flow — YAGNI until asked),
+  Type/Scan collapse into the chip row, suggested "?" category chip, and the
+  `entry/widgets/` file split (deferred as churn — best done alongside any further
+  redesign, not as a standalone pass).
 - **Phase 7 (remainder) — Activity:** active-filter chips, swipe edit/delete,
   collapse 5 segments → 3. (Row anatomy already matches the spec.)
 - **Phase 8 (remainder) — Inbox triage cards** (AnimatedList removal, per-chip fixing).
