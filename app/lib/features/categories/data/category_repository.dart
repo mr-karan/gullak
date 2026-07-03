@@ -95,9 +95,9 @@ class CategoryRepository {
   )..where((t) => t.id.equals(id))).getSingleOrNull();
 
   Stream<CategoryRow?> watchById(String id) =>
-      (_db.select(_db.categories)..where((t) => t.id.equals(id)))
-          .watch()
-          .map((rows) => rows.isEmpty ? null : rows.first);
+      (_db.select(_db.categories)..where((t) => t.id.equals(id))).watch().map(
+        (rows) => rows.isEmpty ? null : rows.first,
+      );
 
   Future<String> createGroup({
     required String name,

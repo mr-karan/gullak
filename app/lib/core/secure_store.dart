@@ -22,7 +22,9 @@ class SecureStore {
     try {
       return await _storage.read(key: key);
     } catch (e) {
-      log.w('secure read failed: $e'); // omit key name — don't reveal stored secrets
+      log.w(
+        'secure read failed: $e',
+      ); // omit key name — don't reveal stored secrets
       return null;
     }
   }

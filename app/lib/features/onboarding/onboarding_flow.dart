@@ -441,9 +441,7 @@ class _SyncSetupState extends State<_SyncSetup> {
           const SizedBox(height: 12),
           Theme(
             // Drop the default ExpansionTile dividers for a cleaner card.
-            data: Theme.of(
-              context,
-            ).copyWith(dividerColor: Colors.transparent),
+            data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
             child: ExpansionTile(
               tilePadding: EdgeInsets.zero,
               childrenPadding: const EdgeInsets.only(bottom: 8),

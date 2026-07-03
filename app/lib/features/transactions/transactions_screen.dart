@@ -194,67 +194,67 @@ class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
     dynamic prefs,
   ) {
     return listAsync.when(
-        data: (rows) {
-          if (rows.isEmpty) {
-            return ListView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              children: const [
-                SizedBox(height: 80),
-                EmptyState(
-                  icon: Icons.receipt_long_outlined,
-                  title: 'No transactions',
-                  body: 'Tap + to add your first.',
+      data: (rows) {
+        if (rows.isEmpty) {
+          return ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            children: const [
+              SizedBox(height: 80),
+              EmptyState(
+                icon: Icons.receipt_long_outlined,
+                title: 'No transactions',
+                body: 'Tap + to add your first.',
+              ),
+            ],
+          );
+        }
+        if (_view == _ViewMode.calendar) {
+          return _CalendarActivityView(
+            rows: rows,
+            prefs: prefs,
+            month: _activeMonth,
+          );
+        }
+        if (_view == _ViewMode.summary) {
+          return _SummaryActivityView(rows: rows, prefs: prefs);
+        }
+        // Group by date string (YYYY-MM-DD).
+        final groups = <String, List<TransactionListItem>>{};
+        for (final r in rows) {
+          groups.putIfAbsent(r.date, () => []).add(r);
+        }
+        final orderedDates = groups.keys.toList()
+          ..sort((a, b) => b.compareTo(a));
+        return ListView.builder(
+          physics: const AlwaysScrollableScrollPhysics(),
+          itemCount: orderedDates.length,
+          itemBuilder: (_, gi) {
+            final date = orderedDates[gi];
+            final entries = groups[date]!;
+            final daySpend = entries
+                .where((e) => !e.isTransfer)
+                .fold<int>(0, (s, e) => s + e.amountCents);
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _DateHeader(
+                  date: date,
+                  netCents: daySpend,
+                  symbol: prefs.currencySymbol,
+                  minorDigits: prefs.currencyMinorDigits,
                 ),
+                for (final r in entries) _TxRow(row: r, prefs: prefs),
               ],
             );
-          }
-          if (_view == _ViewMode.calendar) {
-            return _CalendarActivityView(
-              rows: rows,
-              prefs: prefs,
-              month: _activeMonth,
-            );
-          }
-          if (_view == _ViewMode.summary) {
-            return _SummaryActivityView(rows: rows, prefs: prefs);
-          }
-          // Group by date string (YYYY-MM-DD).
-          final groups = <String, List<TransactionListItem>>{};
-          for (final r in rows) {
-            groups.putIfAbsent(r.date, () => []).add(r);
-          }
-          final orderedDates = groups.keys.toList()
-            ..sort((a, b) => b.compareTo(a));
-          return ListView.builder(
-            physics: const AlwaysScrollableScrollPhysics(),
-            itemCount: orderedDates.length,
-            itemBuilder: (_, gi) {
-              final date = orderedDates[gi];
-              final entries = groups[date]!;
-              final daySpend = entries
-                  .where((e) => !e.isTransfer)
-                  .fold<int>(0, (s, e) => s + e.amountCents);
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  _DateHeader(
-                    date: date,
-                    netCents: daySpend,
-                    symbol: prefs.currencySymbol,
-                    minorDigits: prefs.currencyMinorDigits,
-                  ),
-                  for (final r in entries) _TxRow(row: r, prefs: prefs),
-                ],
-              );
-            },
-          );
-        },
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => ErrorState(
-          message: e.toString(),
-          onRetry: () => ref.invalidate(transactionsListProvider),
-        ),
-      );
+          },
+        );
+      },
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (e, _) => ErrorState(
+        message: e.toString(),
+        onRetry: () => ref.invalidate(transactionsListProvider),
+      ),
+    );
   }
 
   Future<void> _openSplitSheet(BuildContext context) {
@@ -333,8 +333,12 @@ class TransactionFilters {
       tagId: clearTag ? null : tagId ?? this.tagId,
       origin: clearOrigin ? null : origin ?? this.origin,
       cleared: clearCleared ? null : cleared ?? this.cleared,
-      minAmountCents: clearMinAmount ? null : minAmountCents ?? this.minAmountCents,
-      maxAmountCents: clearMaxAmount ? null : maxAmountCents ?? this.maxAmountCents,
+      minAmountCents: clearMinAmount
+          ? null
+          : minAmountCents ?? this.minAmountCents,
+      maxAmountCents: clearMaxAmount
+          ? null
+          : maxAmountCents ?? this.maxAmountCents,
       smsText: clearSmsText ? null : smsText ?? this.smsText,
     );
   }
@@ -685,13 +689,15 @@ class _ActiveFilterChips extends ConsumerWidget {
       add(tagName(), filters.copyWith(clearTag: true));
     }
     if (filters.origin != null) {
-      final label = {
-        'manual': 'Manual',
-        'ai': 'AI',
-        'sms': 'SMS',
-        'transfer': 'Transfer',
-        'split': 'Split',
-      }[filters.origin!] ?? filters.origin!;
+      final label =
+          {
+            'manual': 'Manual',
+            'ai': 'AI',
+            'sms': 'SMS',
+            'transfer': 'Transfer',
+            'split': 'Split',
+          }[filters.origin!] ??
+          filters.origin!;
       add(label, filters.copyWith(clearOrigin: true));
     }
     if (filters.cleared != null) {
@@ -701,16 +707,22 @@ class _ActiveFilterChips extends ConsumerWidget {
       );
     }
     if (filters.minAmountCents != null) {
-      add('≥ ${money(filters.minAmountCents!)}',
-          filters.copyWith(clearMinAmount: true));
+      add(
+        '≥ ${money(filters.minAmountCents!)}',
+        filters.copyWith(clearMinAmount: true),
+      );
     }
     if (filters.maxAmountCents != null) {
-      add('≤ ${money(filters.maxAmountCents!)}',
-          filters.copyWith(clearMaxAmount: true));
+      add(
+        '≤ ${money(filters.maxAmountCents!)}',
+        filters.copyWith(clearMaxAmount: true),
+      );
     }
     if ((filters.smsText ?? '').trim().isNotEmpty) {
-      add('SMS: ${filters.smsText!.trim()}',
-          filters.copyWith(clearSmsText: true));
+      add(
+        'SMS: ${filters.smsText!.trim()}',
+        filters.copyWith(clearSmsText: true),
+      );
     }
 
     return SizedBox(

@@ -13,8 +13,22 @@ typedef AccountLite = ({String id, String name, String kind});
 
 /// Words that appear in account names but don't identify a *specific* bank.
 const _generic = <String>{
-  'bank', 'credit', 'card', 'cc', 'upi', 'wallet', 'savings', 'current',
-  'account', 'acct', 'ac', 'the', 'no', 'x', 'xx', 'xxxx',
+  'bank',
+  'credit',
+  'card',
+  'cc',
+  'upi',
+  'wallet',
+  'savings',
+  'current',
+  'account',
+  'acct',
+  'ac',
+  'the',
+  'no',
+  'x',
+  'xx',
+  'xxxx',
 };
 
 final _wordSplit = RegExp(r'[^a-z0-9]+');
@@ -22,7 +36,9 @@ final _wordSplit = RegExp(r'[^a-z0-9]+');
 final _digitRun = RegExp(r'\d{3,6}');
 // Word-bounded so "credited" (account-credit alerts) doesn't read as a card.
 final _cardWords = RegExp(r'\bcard\b|\bcc\b|\bcredit\b');
-final _bankWords = RegExp(r'\bbank\b|\ba/?c\b|\bacc?t?\b|savings|current|upi|wallet');
+final _bankWords = RegExp(
+  r'\bbank\b|\ba/?c\b|\bacc?t?\b|savings|current|upi|wallet',
+);
 
 String? matchAccountHint(String? hint, List<AccountLite> accounts) {
   if (hint == null) return null;
