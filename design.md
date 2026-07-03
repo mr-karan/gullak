@@ -33,6 +33,12 @@ own commit:
   at zero (except the active one); each triage card gained a **leading bank glyph**
   (income-tinted), a sender subtitle, and a **tap-to-expand SMS body**. Confirm-all
   preview dialog and per-row confirm/dismiss already existed.
+- **Phase 9 (Polish):** the bundled **OFL font licenses** (Fraunces/Inter/JetBrains
+  Mono) are registered via `LicenseRegistry` and surfaced in Settings → About →
+  **Open source licenses** (device-verified). Onboarding's sync step now uses a
+  **"What's a sync server?" expandable** instead of a wall of text. Motion already
+  respects reduce-motion (`CountUpMoney`/`Motion.duration`); `MoneyText` and chart
+  `Semantics` landed in Phases 1–2.
 
 Remaining — these are the interaction-heavy rewrites that design.md itself says
 need an on-device pass for touch/motion feel; best done with a device in the loop:
@@ -44,7 +50,9 @@ need an on-device pass for touch/motion feel; best done with a device in the loo
 - **Phase 8 (deferred) — Inbox:** per-chip inline fixing (edit suggested account/
   category from the card) and `AnimatedList` slide-out on confirm — polish on top
   of the working reactive removal.
-- **Phase 9 — Polish:** onboarding, motion audit, full a11y sweep.
+- **Phase 9 (deferred) — onboarding:** the optional Android SMS-permission primer
+  step (a 4th onboarding page). Left for a pass with a data-clear device run —
+  verifying it means re-triggering onboarding, which wipes local state.
 
 One known cross-screen inconsistency to reconcile in a later pass: Activity/detail
 colour categories by name-hash (`categoryAccentColor`) while Insights/Budget use
