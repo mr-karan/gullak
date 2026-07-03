@@ -5,6 +5,8 @@ import 'package:intl/intl.dart';
 import '../../core/money.dart';
 import '../../core/snackbars.dart';
 import '../../state/providers.dart';
+import '../../ui/category_palette.dart';
+import '../../ui/charts/progress_arc.dart';
 import '../../ui/widgets/empty_state.dart';
 import '../../ui/widgets/error_state.dart';
 import '../../ui/widgets/money_text.dart';
@@ -265,61 +267,81 @@ class _BudgetRow extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final cs = Theme.of(context).colorScheme;
-    final color = entry.isOverspent
+    final hasTarget = entry.targetCents > 0;
+    final ratio = hasTarget ? -entry.spentCents / entry.targetCents : 0.0;
+    final arcColor = entry.isOverspent
         ? cs.error
-        : entry.targetCents == 0
-        ? cs.onSurfaceVariant
-        : cs.primary;
+        : categoryColor(cs, entry.categoryId);
+    // "left" is positive/tertiary; "over by" is negative/error.
+    final availColor = entry.isOverspent ? cs.error : cs.onSurface;
+
     return InkWell(
       onTap: () => _editTarget(context, ref),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+        padding: const EdgeInsets.fromLTRB(20, 10, 20, 10),
+        child: Row(
           children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    entry.categoryName,
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
+            ProgressArc(
+              progress: hasTarget ? ratio : 0,
+              size: 44,
+              stroke: 5,
+              color: arcColor,
+              semanticsLabel: hasTarget
+                  ? '${entry.categoryName} ${(ratio * 100).round()} percent of budget'
+                  : '${entry.categoryName}, no budget set',
+              child: Text(
+                hasTarget ? '${(ratio * 100).round()}%' : '—',
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: cs.onSurfaceVariant,
+                  fontSize: 9,
                 ),
-                MoneyText(
-                  amountCents: entry.availableCents,
-                  symbol: symbol,
-                  minorDigits: minorDigits,
-                  color: color,
-                ),
-              ],
-            ),
-            const SizedBox(height: 6),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(99),
-              child: LinearProgressIndicator(
-                value: entry.progress,
-                minHeight: 6,
-                backgroundColor: cs.surfaceContainerHighest,
-                color: color,
               ),
             ),
-            const SizedBox(height: 4),
-            DefaultTextStyle.merge(
-              style: Theme.of(
-                context,
-              ).textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant),
-              child: Row(
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Target ${Money.format(entry.targetCents, symbol: symbol, minorDigits: minorDigits)}',
+                    entry.categoryName,
+                    style: Theme.of(context).textTheme.titleMedium,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
-                  const Spacer(),
+                  const SizedBox(height: 2),
                   Text(
-                    'Spent ${Money.format(-entry.spentCents, symbol: symbol, minorDigits: minorDigits)}',
+                    hasTarget
+                        ? '${Money.format(-entry.spentCents, symbol: symbol, minorDigits: minorDigits)} of ${Money.format(entry.targetCents, symbol: symbol, minorDigits: minorDigits)}'
+                        : 'No budget · spent ${Money.format(-entry.spentCents, symbol: symbol, minorDigits: minorDigits)}',
+                    style: Theme.of(
+                      context,
+                    ).textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant),
                   ),
                 ],
               ),
             ),
+            const SizedBox(width: 10),
+            if (hasTarget)
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  MoneyText(
+                    amountCents: entry.availableCents.abs(),
+                    symbol: symbol,
+                    minorDigits: minorDigits,
+                    color: availColor,
+                    size: MoneySize.small,
+                  ),
+                  Text(
+                    entry.isOverspent ? 'over' : 'left',
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: cs.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              )
+            else
+              Icon(Icons.add, size: 18, color: cs.onSurfaceVariant),
           ],
         ),
       ),
