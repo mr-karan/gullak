@@ -45,11 +45,19 @@ list. The essentials:
 | `GULLAK_HTTP_API_KEY` | Shared secret for the `x-api-key` header |
 | `GULLAK_REQUIRE_AUTH` | `true` refuses to boot without an API key |
 | `GULLAK_MODEL_BASE_URL` / `GULLAK_MODEL_ID` / `GULLAK_MODEL_API_KEY` | OpenAI-compatible model config |
+| `GULLAK_MODEL_TIMEOUT_MS` | Per-call LLM timeout (default `60000`) |
+| `GULLAK_AI_RATE_PER_MIN` / `GULLAK_WHATSAPP_RATE_PER_MIN` | Fixed-window req/min caps on `/v1/ai/*` + `/v1/messages` and the webhook (default `30` / `60`; `0` disables) |
+| `GULLAK_TRUST_PROXY` | `true` keys rate limits off `X-Forwarded-For` (only behind a trusted reverse proxy; default off keys off the socket address) |
 | `OPENROUTER_API_KEY` / `OPENAI_API_KEY` | Aliases that auto-default base URL + model |
 
-`/v1/health` and `/v1/whatsapp/webhook` are public; every other route requires
-`x-api-key` once `GULLAK_HTTP_API_KEY` is set. If no model key resolves, `/v1/ai/*`
-simply returns `503` — AI is off, the rest of the server still works.
+`/v1/health` is public. The `/v1/whatsapp/webhook` is exempt from the global
+`x-api-key` gate (so the bridge can reach it) and is secured by a **dedicated**
+key: set `GULLAK_WHATSAPP_API_KEY` on both the server and the bridge to require
+it. Without that key the webhook is open (it does not accept the general
+`GULLAK_HTTP_API_KEY` — the bridge doesn't know it), so the process logs a
+warning at boot. Every other route requires `x-api-key` once
+`GULLAK_HTTP_API_KEY` is set. If no model key resolves, `/v1/ai/*` simply
+returns `503` — AI is off, the rest of the server still works.
 
 > **Expose it safely.** Put the server behind a reverse proxy with TLS, or keep
 > it on a private network / VPN. Always set `GULLAK_HTTP_API_KEY` (and

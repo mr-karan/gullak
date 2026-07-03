@@ -2,6 +2,75 @@
 
 All notable changes to Gullak are documented here.
 
+## [Unreleased]
+
+### Added
+
+- **Foreign-currency capture.** Optionally record what an expense was in its
+  original currency (e.g. USD 20) alongside the base-currency amount — an
+  "Add foreign amount" field in Quick Entry and an "Original" line on the
+  transaction detail. Display-only, no conversion. New nullable
+  `original_amount_cents` / `original_currency` columns sync and back up.
+- **Home-screen shortcut.** A long-press app shortcut jumps straight to Quick
+  Entry (via the first-party `quick_actions` plugin).
+- **Transfers in the UI.** An Activity-toolbar "New transfer" sheet records a
+  transfer between two accounts as a paired debit/credit via the existing
+  `createTransfer` repo path, so account balances stay correct (a credit-card
+  payment no longer reads as spend). The method existed but had no entry point.
+- **Recurrences now post automatically.** On launch/resume, due recurrence
+  schedules book their transactions (catching up missed periods, clamping
+  month-end dates) and advance. Idempotent by a deterministic per-occurrence id
+  so two devices can't double-book. A snackbar reports how many landed.
+- **Bundled editorial fonts.** Fraunces/Inter/JetBrains Mono ship as OFL assets
+  instead of being fetched at runtime via `google_fonts`, so the offline-first
+  app keeps its typography on a first launch with no network. `google_fonts`
+  dependency removed.
+- **Shared error state.** `AsyncValue.when(error:)` sites now render an
+  `ErrorState` with a Retry that re-runs the provider, replacing bare
+  `Error: $e` text dumps.
+- **Confirm-all preview.** The Inbox bulk-confirm dialog now previews how many
+  rows fall back to the first account / land uncategorised before committing.
+- **Server rate limits.** Fixed-window per-IP caps on `/v1/ai/*` and the
+  WhatsApp webhook (`GULLAK_AI_RATE_PER_MIN` / `GULLAK_WHATSAPP_RATE_PER_MIN`).
+- **Onboarding currency** now defaults from the device locale.
+
+### Changed
+
+- **Sync survives a corrupt row.** A malformed change-log payload no longer
+  wedges sync forever: the server skips it on pull (was an uncaught `JSON.parse`
+  → 500 for every client) and the client quarantines an undecodable local row
+  on push instead of throwing out of the whole batch.
+- **WhatsApp webhook is authenticated** whenever the server has any key set
+  (`GULLAK_WHATSAPP_API_KEY` or `GULLAK_HTTP_API_KEY`); a fully-open server logs
+  a boot warning since the webhook can write transactions.
+- **LLM calls time out** (`GULLAK_MODEL_TIMEOUT_MS`, default 60s) so a hung
+  upstream can't pin requests.
+- **Faster Budget + Activity at scale.** Budget spend is one grouped query
+  instead of one SUM per category; the Activity SMS-text filter is one SQL
+  `LIKE` instead of a per-row lookup; Inbox enrichment uses O(1) name maps.
+- Server transaction indexes on `date`, `(account_id, date)`, `category_id`.
+- CRUD route string fields (names, notes) are length-capped.
+
+### Fixed
+
+- **SMS rows stranded by a crash recover.** Rows stuck in `parsing` (mid
+  server round-trip) or `processing` (mid Inbox confirm) are reset on the next
+  launch/resume so they aren't lost.
+
+### Performance
+
+- **Home no longer keeps the SMS enrichment pipeline warm.** The Daily Review
+  badge now reads a lightweight counts stream instead of watching the full
+  enriched Inbox list.
+
+### Tests
+
+- New coverage for the sync engine (`RemoteApplier` LWW/deletes/malformed,
+  `SyncService` push quarantine + pull cursor), recurrence auto-posting,
+  stuck-row recovery, foreign-currency round-trip, the server corrupt-payload
+  path, and the server AI write paths (agent log/undo, SMS reprocess staleness
+  guard) via a mockable LLM seam.
+
 ## [0.2.1] - 2026-05-18
 
 ### Added
