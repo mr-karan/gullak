@@ -1048,30 +1048,43 @@ class _FormTabState extends ConsumerState<_FormTab> {
               Expanded(
                 child: ListView(
                   children: [
-                    _PickerRow(
-                      icon: Icons.account_balance_outlined,
-                      label: 'Account',
-                      value: _account?.name ?? 'Select',
-                      unset: _account == null,
-                      onTap: _pickAccount,
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      child: Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          _ContextChip(
+                            icon: Icons.account_balance_outlined,
+                            label: _account?.name ?? 'Account',
+                            isSet: _account != null,
+                            onTap: _pickAccount,
+                          ),
+                          _ContextChip(
+                            icon: Icons.store_outlined,
+                            label: _newPayeeName ?? _payee?.name ?? 'Payee',
+                            isSet: _payee != null || _newPayeeName != null,
+                            onTap: _pickPayee,
+                          ),
+                          _ContextChip(
+                            icon: _category == null
+                                ? Icons.label_outline
+                                : categoryIconData(_category!.name),
+                            label: _category?.name ?? 'Category',
+                            isSet: _category != null,
+                            accent: _category == null
+                                ? null
+                                : categoryAccentColor(
+                                    _category!.color,
+                                    _category!.name,
+                                  ),
+                            onTap: _pickCategory,
+                          ),
+                          _TagsChip(tagIds: _tagIds, onTap: _pickTags),
+                        ],
+                      ),
                     ),
-                    _PickerRow(
-                      icon: Icons.store_outlined,
-                      label: 'Payee',
-                      value: _newPayeeName ?? _payee?.name ?? 'Optional',
-                      unset: _payee == null && _newPayeeName == null,
-                      onTap: _pickPayee,
-                    ),
-                    _PickerRow(
-                      icon: _category == null
-                          ? Icons.label_outline
-                          : categoryIconData(_category!.name),
-                      label: 'Category',
-                      value: _category?.name ?? 'Optional',
-                      unset: _category == null,
-                      onTap: _pickCategory,
-                    ),
-                    _TagsRow(tagIds: _tagIds, onTap: _pickTags),
+                    const SizedBox(height: 4),
                     _DateRow(
                       date: _date,
                       onPick: _pickDate,
@@ -1828,59 +1841,61 @@ class _AmountDisplay extends StatelessWidget {
   }
 }
 
-class _PickerRow extends StatelessWidget {
-  const _PickerRow({
+/// A tap-to-pick context chip (account / payee / category / tags). Unset
+/// chips read as muted "add me" affordances; set chips fill with a tint
+/// (the category's own accent when it has one) and bold their label.
+class _ContextChip extends StatelessWidget {
+  const _ContextChip({
     required this.icon,
     required this.label,
-    required this.value,
     required this.onTap,
-    this.unset = false,
+    this.isSet = false,
+    this.accent,
   });
 
   final IconData icon;
   final String label;
-  final String value;
   final VoidCallback onTap;
-  final bool unset;
+  final bool isSet;
+  final Color? accent;
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return InkWell(
-      onTap: () {
-        HapticFeedback.selectionClick();
-        onTap();
-      },
-      borderRadius: BorderRadius.circular(12),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 10),
-        child: Row(
-          children: [
-            Icon(icon, size: 20, color: cs.onSurfaceVariant),
-            const SizedBox(width: 16),
-            SizedBox(
-              width: 80,
-              child: Text(
-                label,
-                style: Theme.of(
-                  context,
-                ).textTheme.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
-              ),
-            ),
-            Expanded(
-              child: Text(
-                value,
-                style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                  color: unset ? cs.onSurfaceVariant : cs.onSurface,
-                  fontWeight: unset ? FontWeight.w400 : FontWeight.w500,
+    final tint = accent ?? cs.primary;
+    final fg = isSet ? tint : cs.onSurfaceVariant;
+    final bg = isSet
+        ? tint.withValues(alpha: 0.12)
+        : cs.surfaceContainerHighest;
+    return Material(
+      color: bg,
+      borderRadius: BorderRadius.circular(10),
+      child: InkWell(
+        onTap: () {
+          HapticFeedback.selectionClick();
+          onTap();
+        },
+        borderRadius: BorderRadius.circular(10),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 16, color: fg),
+              const SizedBox(width: 6),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 200),
+                child: Text(
+                  label,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                    color: isSet ? cs.onSurface : cs.onSurfaceVariant,
+                    fontWeight: isSet ? FontWeight.w600 : FontWeight.w500,
+                  ),
                 ),
-                overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.right,
               ),
-            ),
-            const SizedBox(width: 4),
-            Icon(Icons.chevron_right, size: 18, color: cs.onSurfaceVariant),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -1943,8 +1958,8 @@ class _CategoryEmoji extends StatelessWidget {
   }
 }
 
-class _TagsRow extends ConsumerWidget {
-  const _TagsRow({required this.tagIds, required this.onTap});
+class _TagsChip extends ConsumerWidget {
+  const _TagsChip({required this.tagIds, required this.onTap});
 
   final Set<String> tagIds;
   final VoidCallback onTap;
@@ -1956,14 +1971,13 @@ class _TagsRow extends ConsumerWidget {
       builder: (context, snap) {
         final tags = snap.data ?? const <TagRow>[];
         final selected = tags.where((t) => tagIds.contains(t.id)).toList();
-        final value = selected.isEmpty
-            ? 'Optional'
+        final label = selected.isEmpty
+            ? 'Tags'
             : selected.map((t) => t.name).join(', ');
-        return _PickerRow(
+        return _ContextChip(
           icon: Icons.sell_outlined,
-          label: 'Tags',
-          value: value,
-          unset: selected.isEmpty,
+          label: label,
+          isSet: selected.isNotEmpty,
           onTap: onTap,
         );
       },
