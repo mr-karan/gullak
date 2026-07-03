@@ -23,6 +23,12 @@ own commit:
   tags — set chips fill with the category's own accent); the Save button now
   **names the action** ("Save ₹450 to Kotak UPI") as a wrong-account guard. Save
   path untouched; `quick_entry_sheet_test.dart` green.
+- **Phase 7 (Activity) — device-verified:** the 5-way mode control collapsed to
+  three view modes (**List / Calendar / Summary**) with an orthogonal **month
+  navigator** (‹ July 2026 ›); **active-filter chips** row makes applied filters
+  visible and one-tap removable (+ "Clear all"). Swipe edit/delete already existed.
+  Also fixed the filter/transfer/split sheets rendering *under* the floating Add
+  button (now shown on the root navigator).
 
 Remaining — these are the interaction-heavy rewrites that design.md itself says
 need an on-device pass for touch/motion feel; best done with a device in the loop:
@@ -31,8 +37,6 @@ need an on-device pass for touch/motion feel; best done with a device in the loo
   Type/Scan collapse into the chip row, suggested "?" category chip, and the
   `entry/widgets/` file split (deferred as churn — best done alongside any further
   redesign, not as a standalone pass).
-- **Phase 7 (remainder) — Activity:** active-filter chips, swipe edit/delete,
-  collapse 5 segments → 3. (Row anatomy already matches the spec.)
 - **Phase 8 (remainder) — Inbox triage cards** (AnimatedList removal, per-chip fixing).
 - **Phase 9 — Polish:** onboarding, motion audit, full a11y sweep.
 
