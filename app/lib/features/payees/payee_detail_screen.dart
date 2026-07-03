@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../ui/widgets/empty_state.dart';
+import '../../ui/widgets/error_state.dart';
 import '../transactions/data/transaction_repository.dart';
 import '../transactions/scoped_transactions_view.dart';
 import 'data/payee_repository.dart';
@@ -19,7 +20,13 @@ class PayeeDetailScreen extends ConsumerWidget {
     final payeeAsync = ref.watch(payeeByIdProvider(id));
     return payeeAsync.when(
       loading: () => _scaffold('Payee', const _Loading()),
-      error: (e, _) => _scaffold('Payee', Center(child: Text('Error: $e'))),
+      error: (e, _) => _scaffold(
+        'Payee',
+        ErrorState(
+          message: e.toString(),
+          onRetry: () => ref.invalidate(payeeByIdProvider(id)),
+        ),
+      ),
       data: (payee) {
         if (payee == null) {
           return _scaffold(
@@ -48,8 +55,10 @@ class PayeeDetailScreen extends ConsumerWidget {
     );
   }
 
-  Widget _scaffold(String title, Widget body) =>
-      Scaffold(appBar: AppBar(title: Text(title)), body: body);
+  Widget _scaffold(String title, Widget body) => Scaffold(
+    appBar: AppBar(title: Text(title)),
+    body: body,
+  );
 }
 
 class _Loading extends StatelessWidget {

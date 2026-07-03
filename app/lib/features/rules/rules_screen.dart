@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../ui/widgets/error_state.dart';
 import '../accounts/data/account_repository.dart';
 import '../categories/data/category_repository.dart';
 import '../tags/data/tag_repository.dart';
@@ -29,7 +30,10 @@ class RulesScreen extends ConsumerWidget {
       ),
       body: async.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('Error: $e')),
+        error: (e, _) => ErrorState(
+          message: e.toString(),
+          onRetry: () => ref.invalidate(rulesProvider),
+        ),
         data: (rules) {
           if (rules.isEmpty) {
             return const Center(

@@ -38,7 +38,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 10;
+  int get schemaVersion => 12;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -205,6 +205,22 @@ class AppDatabase extends _$AppDatabase {
         await customStatement(
           'CREATE INDEX IF NOT EXISTS idx_sms_next_parse '
           'ON sms_messages(candidate_status, next_parse_after)',
+        );
+      }
+      if (from < 11) {
+        // Optional foreign-currency metadata on transactions (display-only).
+        await m.addColumn(transactions, transactions.originalAmountCents);
+        await m.addColumn(transactions, transactions.originalCurrency);
+      }
+      if (from < 12) {
+        // Anchor day for monthly/yearly recurrences (fixes month-end drift).
+        await m.addColumn(recurrences, recurrences.anchorDay);
+        // Backfill from the current nextDate's day-of-month. Already-drifted
+        // rows lock to their drifted day; new/undrifted rows are correct.
+        await customStatement(
+          'UPDATE recurrences '
+          'SET anchor_day = CAST(substr(next_date, 9, 2) AS INTEGER) '
+          'WHERE anchor_day IS NULL',
         );
       }
     },

@@ -611,9 +611,6 @@ class DailyReviewSnapshot {
 
 final dailyReviewProvider = FutureProvider<DailyReviewSnapshot>((ref) async {
   ref.watch(recentTransactionsProvider);
-  // Re-run when SMS arrive or move buckets (confirm/dismiss/error). Without
-  // this the pending/failed counts stayed cached until pull-to-refresh.
-  ref.watch(inboxItemsProvider);
   // Budget warnings depend on category list and budget targets too.
   ref.watch(budgetsListProvider);
   ref.watch(categoriesListProvider);
@@ -622,18 +619,10 @@ final dailyReviewProvider = FutureProvider<DailyReviewSnapshot>((ref) async {
   final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
   final month = BudgetRepository.currentMonth();
 
-  final pendingRow = await db
-      .customSelect(
-        'SELECT COUNT(*) AS c FROM sms_messages '
-        "WHERE candidate_status IN ('parsed', 'inbox')",
-      )
-      .getSingle();
-  final failedRow = await db
-      .customSelect(
-        'SELECT COUNT(*) AS c FROM sms_messages '
-        "WHERE candidate_status IN ('parse_failed', 'error')",
-      )
-      .getSingle();
+  // Cheap SMS counts via a dedicated stream — re-runs the review when SMS
+  // change without keeping the full Inbox enrichment pipeline warm on Home.
+  final smsCounts = await ref.watch(inboxCountsProvider.future);
+
   final uncategorizedRow = await db
       .customSelect(
         'SELECT COUNT(*) AS c FROM transactions '
@@ -662,8 +651,8 @@ final dailyReviewProvider = FutureProvider<DailyReviewSnapshot>((ref) async {
       from: DateTime.now(),
       to: DateTime.now(),
     ),
-    pendingSms: pendingRow.read<int>('c'),
-    failedSms: failedRow.read<int>('c'),
+    pendingSms: smsCounts.pending,
+    failedSms: smsCounts.failed,
     uncategorizedToday: uncategorizedRow.read<int>('c'),
     budgetWarnings: warnings,
   );

@@ -18,6 +18,7 @@ import {
   whatsappInboxRouter,
   whatsappRouter,
 } from "./routes/messages.ts";
+import { rateLimit } from "./middleware/rate_limit.ts";
 import { payeesRouter } from "./routes/payees.ts";
 import { recurrencesRouter } from "./routes/recurrences.ts";
 import { sheetsRouter } from "./routes/sheets.ts";
@@ -74,6 +75,40 @@ export function createApp(ctx: AppContext) {
     }
     return next();
   });
+
+  // Cost guards on the LLM-driven surfaces. These spend model tokens per call
+  // and/or write financial rows: /v1/ai/* (draft parsing), the auth-exempt
+  // WhatsApp webhook (agent log-path), and /v1/messages (the multi-turn agent —
+  // the costliest surface, which also writes transactions). All get a
+  // fixed-window cap. trustProxy gates whether X-Forwarded-For is believed.
+  const trustProxy = ctx.config.trustProxy;
+  app.use(
+    "/v1/ai/*",
+    rateLimit({
+      max: ctx.config.rateLimit.aiPerMinute,
+      windowMs: 60_000,
+      bucket: "ai",
+      trustProxy,
+    }),
+  );
+  app.use(
+    "/v1/messages",
+    rateLimit({
+      max: ctx.config.rateLimit.aiPerMinute,
+      windowMs: 60_000,
+      bucket: "messages",
+      trustProxy,
+    }),
+  );
+  app.use(
+    "/v1/whatsapp/webhook",
+    rateLimit({
+      max: ctx.config.rateLimit.webhookPerMinute,
+      windowMs: 60_000,
+      bucket: "webhook",
+      trustProxy,
+    }),
+  );
 
   // AI is optional: refuse /v1/ai/* cleanly when no real model key is set,
   // rather than calling a provider with a "dummy" key and failing opaquely.

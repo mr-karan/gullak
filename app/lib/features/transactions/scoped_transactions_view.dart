@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/money.dart';
 import '../../state/providers.dart';
 import '../../ui/widgets/empty_state.dart';
+import '../../ui/widgets/error_state.dart';
 import '../../ui/widgets/money_text.dart';
 import '../entry/quick_entry.dart';
 import 'data/transaction_repository.dart';
@@ -83,7 +84,7 @@ class ScopedTransactionsView extends ConsumerWidget {
     final prefs = ref.watch(prefsProvider);
     return txAsync.when(
       loading: () => const Center(child: CircularProgressIndicator()),
-      error: (e, _) => Center(child: Text('Error: $e')),
+      error: (e, _) => ErrorState(message: e.toString()),
       data: (rows) {
         final totals = SpendPeriodTotals.from(rows);
         return Column(

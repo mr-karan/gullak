@@ -5,6 +5,7 @@ import 'package:webview_flutter/webview_flutter.dart';
 
 import '../../core/money.dart';
 import '../../state/providers.dart';
+import '../../ui/widgets/error_state.dart';
 import '../entry/quick_entry.dart';
 import '../payees/data/payee_repository.dart';
 import '../tags/data/tag_repository.dart';
@@ -34,7 +35,10 @@ class TransactionDetailScreen extends ConsumerWidget {
       ),
       body: item.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('Error: $e')),
+        error: (e, _) => ErrorState(
+          message: e.toString(),
+          onRetry: () => ref.invalidate(transactionByIdProvider(id)),
+        ),
         data: (tx) {
           if (tx == null) return const Center(child: Text('Not found'));
           final raw = rowFuture.value;
@@ -64,6 +68,15 @@ class TransactionDetailScreen extends ConsumerWidget {
                     tx.categoryName ??
                     (tx.isTransfer ? 'Transfer' : 'Uncategorised'),
               ),
+              if (raw?.originalAmountCents != null &&
+                  (raw?.originalCurrency ?? '').isNotEmpty)
+                _DetailRow(
+                  label: 'Original',
+                  value: Money.formatForeign(
+                    raw!.originalAmountCents!,
+                    raw.originalCurrency!,
+                  ),
+                ),
               if ((tx.notes ?? '').isNotEmpty)
                 _DetailRow(label: 'Note', value: tx.notes!),
               const SizedBox(height: 12),

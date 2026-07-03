@@ -5,6 +5,7 @@ import '../../core/money.dart';
 import '../../core/snackbars.dart';
 import '../../state/providers.dart';
 import '../../ui/widgets/empty_state.dart';
+import '../../ui/widgets/error_state.dart';
 import '../../ui/widgets/money_text.dart';
 import '../entry/quick_entry.dart';
 import '../transactions/data/transaction_repository.dart';
@@ -117,7 +118,7 @@ class AccountDetailScreen extends ConsumerWidget {
                 );
               },
               loading: () => const Center(child: CircularProgressIndicator()),
-              error: (e, _) => Center(child: Text('Error: $e')),
+              error: (e, _) => ErrorState(message: e.toString()),
             ),
           ),
         ],

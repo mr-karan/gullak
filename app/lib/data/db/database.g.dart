@@ -2044,6 +2044,27 @@ class $TransactionsTable extends Transactions
     type: DriftSqlType.int,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _originalAmountCentsMeta =
+      const VerificationMeta('originalAmountCents');
+  @override
+  late final GeneratedColumn<int> originalAmountCents = GeneratedColumn<int>(
+    'original_amount_cents',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _originalCurrencyMeta = const VerificationMeta(
+    'originalCurrency',
+  );
+  @override
+  late final GeneratedColumn<String> originalCurrency = GeneratedColumn<String>(
+    'original_currency',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _createdAtMeta = const VerificationMeta(
     'createdAt',
   );
@@ -2086,6 +2107,8 @@ class $TransactionsTable extends Transactions
     transferGroupId,
     parentId,
     splitTotalCents,
+    originalAmountCents,
+    originalCurrency,
     createdAt,
     updatedAt,
   ];
@@ -2229,6 +2252,24 @@ class $TransactionsTable extends Transactions
         ),
       );
     }
+    if (data.containsKey('original_amount_cents')) {
+      context.handle(
+        _originalAmountCentsMeta,
+        originalAmountCents.isAcceptableOrUnknown(
+          data['original_amount_cents']!,
+          _originalAmountCentsMeta,
+        ),
+      );
+    }
+    if (data.containsKey('original_currency')) {
+      context.handle(
+        _originalCurrencyMeta,
+        originalCurrency.isAcceptableOrUnknown(
+          data['original_currency']!,
+          _originalCurrencyMeta,
+        ),
+      );
+    }
     if (data.containsKey('created_at')) {
       context.handle(
         _createdAtMeta,
@@ -2326,6 +2367,14 @@ class $TransactionsTable extends Transactions
         DriftSqlType.int,
         data['${effectivePrefix}split_total_cents'],
       ),
+      originalAmountCents: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}original_amount_cents'],
+      ),
+      originalCurrency: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}original_currency'],
+      ),
       createdAt: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}created_at'],
@@ -2362,6 +2411,8 @@ class TransactionRow extends DataClass implements Insertable<TransactionRow> {
   final String? transferGroupId;
   final String? parentId;
   final int? splitTotalCents;
+  final int? originalAmountCents;
+  final String? originalCurrency;
   final int createdAt;
   final int updatedAt;
   const TransactionRow({
@@ -2383,6 +2434,8 @@ class TransactionRow extends DataClass implements Insertable<TransactionRow> {
     this.transferGroupId,
     this.parentId,
     this.splitTotalCents,
+    this.originalAmountCents,
+    this.originalCurrency,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -2430,6 +2483,12 @@ class TransactionRow extends DataClass implements Insertable<TransactionRow> {
     }
     if (!nullToAbsent || splitTotalCents != null) {
       map['split_total_cents'] = Variable<int>(splitTotalCents);
+    }
+    if (!nullToAbsent || originalAmountCents != null) {
+      map['original_amount_cents'] = Variable<int>(originalAmountCents);
+    }
+    if (!nullToAbsent || originalCurrency != null) {
+      map['original_currency'] = Variable<String>(originalCurrency);
     }
     map['created_at'] = Variable<int>(createdAt);
     map['updated_at'] = Variable<int>(updatedAt);
@@ -2480,6 +2539,12 @@ class TransactionRow extends DataClass implements Insertable<TransactionRow> {
       splitTotalCents: splitTotalCents == null && nullToAbsent
           ? const Value.absent()
           : Value(splitTotalCents),
+      originalAmountCents: originalAmountCents == null && nullToAbsent
+          ? const Value.absent()
+          : Value(originalAmountCents),
+      originalCurrency: originalCurrency == null && nullToAbsent
+          ? const Value.absent()
+          : Value(originalCurrency),
       createdAt: Value(createdAt),
       updatedAt: Value(updatedAt),
     );
@@ -2511,6 +2576,10 @@ class TransactionRow extends DataClass implements Insertable<TransactionRow> {
       transferGroupId: serializer.fromJson<String?>(json['transferGroupId']),
       parentId: serializer.fromJson<String?>(json['parentId']),
       splitTotalCents: serializer.fromJson<int?>(json['splitTotalCents']),
+      originalAmountCents: serializer.fromJson<int?>(
+        json['originalAmountCents'],
+      ),
+      originalCurrency: serializer.fromJson<String?>(json['originalCurrency']),
       createdAt: serializer.fromJson<int>(json['createdAt']),
       updatedAt: serializer.fromJson<int>(json['updatedAt']),
     );
@@ -2537,6 +2606,8 @@ class TransactionRow extends DataClass implements Insertable<TransactionRow> {
       'transferGroupId': serializer.toJson<String?>(transferGroupId),
       'parentId': serializer.toJson<String?>(parentId),
       'splitTotalCents': serializer.toJson<int?>(splitTotalCents),
+      'originalAmountCents': serializer.toJson<int?>(originalAmountCents),
+      'originalCurrency': serializer.toJson<String?>(originalCurrency),
       'createdAt': serializer.toJson<int>(createdAt),
       'updatedAt': serializer.toJson<int>(updatedAt),
     };
@@ -2561,6 +2632,8 @@ class TransactionRow extends DataClass implements Insertable<TransactionRow> {
     Value<String?> transferGroupId = const Value.absent(),
     Value<String?> parentId = const Value.absent(),
     Value<int?> splitTotalCents = const Value.absent(),
+    Value<int?> originalAmountCents = const Value.absent(),
+    Value<String?> originalCurrency = const Value.absent(),
     int? createdAt,
     int? updatedAt,
   }) => TransactionRow(
@@ -2588,6 +2661,12 @@ class TransactionRow extends DataClass implements Insertable<TransactionRow> {
     splitTotalCents: splitTotalCents.present
         ? splitTotalCents.value
         : this.splitTotalCents,
+    originalAmountCents: originalAmountCents.present
+        ? originalAmountCents.value
+        : this.originalAmountCents,
+    originalCurrency: originalCurrency.present
+        ? originalCurrency.value
+        : this.originalCurrency,
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
   );
@@ -2623,6 +2702,12 @@ class TransactionRow extends DataClass implements Insertable<TransactionRow> {
       splitTotalCents: data.splitTotalCents.present
           ? data.splitTotalCents.value
           : this.splitTotalCents,
+      originalAmountCents: data.originalAmountCents.present
+          ? data.originalAmountCents.value
+          : this.originalAmountCents,
+      originalCurrency: data.originalCurrency.present
+          ? data.originalCurrency.value
+          : this.originalCurrency,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
     );
@@ -2649,6 +2734,8 @@ class TransactionRow extends DataClass implements Insertable<TransactionRow> {
           ..write('transferGroupId: $transferGroupId, ')
           ..write('parentId: $parentId, ')
           ..write('splitTotalCents: $splitTotalCents, ')
+          ..write('originalAmountCents: $originalAmountCents, ')
+          ..write('originalCurrency: $originalCurrency, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt')
           ..write(')'))
@@ -2656,7 +2743,7 @@ class TransactionRow extends DataClass implements Insertable<TransactionRow> {
   }
 
   @override
-  int get hashCode => Object.hash(
+  int get hashCode => Object.hashAll([
     id,
     accountId,
     categoryId,
@@ -2675,9 +2762,11 @@ class TransactionRow extends DataClass implements Insertable<TransactionRow> {
     transferGroupId,
     parentId,
     splitTotalCents,
+    originalAmountCents,
+    originalCurrency,
     createdAt,
     updatedAt,
-  );
+  ]);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -2700,6 +2789,8 @@ class TransactionRow extends DataClass implements Insertable<TransactionRow> {
           other.transferGroupId == this.transferGroupId &&
           other.parentId == this.parentId &&
           other.splitTotalCents == this.splitTotalCents &&
+          other.originalAmountCents == this.originalAmountCents &&
+          other.originalCurrency == this.originalCurrency &&
           other.createdAt == this.createdAt &&
           other.updatedAt == this.updatedAt);
 }
@@ -2723,6 +2814,8 @@ class TransactionsCompanion extends UpdateCompanion<TransactionRow> {
   final Value<String?> transferGroupId;
   final Value<String?> parentId;
   final Value<int?> splitTotalCents;
+  final Value<int?> originalAmountCents;
+  final Value<String?> originalCurrency;
   final Value<int> createdAt;
   final Value<int> updatedAt;
   final Value<int> rowid;
@@ -2745,6 +2838,8 @@ class TransactionsCompanion extends UpdateCompanion<TransactionRow> {
     this.transferGroupId = const Value.absent(),
     this.parentId = const Value.absent(),
     this.splitTotalCents = const Value.absent(),
+    this.originalAmountCents = const Value.absent(),
+    this.originalCurrency = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.rowid = const Value.absent(),
@@ -2768,6 +2863,8 @@ class TransactionsCompanion extends UpdateCompanion<TransactionRow> {
     this.transferGroupId = const Value.absent(),
     this.parentId = const Value.absent(),
     this.splitTotalCents = const Value.absent(),
+    this.originalAmountCents = const Value.absent(),
+    this.originalCurrency = const Value.absent(),
     required int createdAt,
     required int updatedAt,
     this.rowid = const Value.absent(),
@@ -2796,6 +2893,8 @@ class TransactionsCompanion extends UpdateCompanion<TransactionRow> {
     Expression<String>? transferGroupId,
     Expression<String>? parentId,
     Expression<int>? splitTotalCents,
+    Expression<int>? originalAmountCents,
+    Expression<String>? originalCurrency,
     Expression<int>? createdAt,
     Expression<int>? updatedAt,
     Expression<int>? rowid,
@@ -2819,6 +2918,9 @@ class TransactionsCompanion extends UpdateCompanion<TransactionRow> {
       if (transferGroupId != null) 'transfer_group_id': transferGroupId,
       if (parentId != null) 'parent_id': parentId,
       if (splitTotalCents != null) 'split_total_cents': splitTotalCents,
+      if (originalAmountCents != null)
+        'original_amount_cents': originalAmountCents,
+      if (originalCurrency != null) 'original_currency': originalCurrency,
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (rowid != null) 'rowid': rowid,
@@ -2844,6 +2946,8 @@ class TransactionsCompanion extends UpdateCompanion<TransactionRow> {
     Value<String?>? transferGroupId,
     Value<String?>? parentId,
     Value<int?>? splitTotalCents,
+    Value<int?>? originalAmountCents,
+    Value<String?>? originalCurrency,
     Value<int>? createdAt,
     Value<int>? updatedAt,
     Value<int>? rowid,
@@ -2867,6 +2971,8 @@ class TransactionsCompanion extends UpdateCompanion<TransactionRow> {
       transferGroupId: transferGroupId ?? this.transferGroupId,
       parentId: parentId ?? this.parentId,
       splitTotalCents: splitTotalCents ?? this.splitTotalCents,
+      originalAmountCents: originalAmountCents ?? this.originalAmountCents,
+      originalCurrency: originalCurrency ?? this.originalCurrency,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       rowid: rowid ?? this.rowid,
@@ -2930,6 +3036,12 @@ class TransactionsCompanion extends UpdateCompanion<TransactionRow> {
     if (splitTotalCents.present) {
       map['split_total_cents'] = Variable<int>(splitTotalCents.value);
     }
+    if (originalAmountCents.present) {
+      map['original_amount_cents'] = Variable<int>(originalAmountCents.value);
+    }
+    if (originalCurrency.present) {
+      map['original_currency'] = Variable<String>(originalCurrency.value);
+    }
     if (createdAt.present) {
       map['created_at'] = Variable<int>(createdAt.value);
     }
@@ -2963,6 +3075,8 @@ class TransactionsCompanion extends UpdateCompanion<TransactionRow> {
           ..write('transferGroupId: $transferGroupId, ')
           ..write('parentId: $parentId, ')
           ..write('splitTotalCents: $splitTotalCents, ')
+          ..write('originalAmountCents: $originalAmountCents, ')
+          ..write('originalCurrency: $originalCurrency, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('rowid: $rowid')
@@ -5301,6 +5415,17 @@ class $RecurrencesTable extends Recurrences
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _anchorDayMeta = const VerificationMeta(
+    'anchorDay',
+  );
+  @override
+  late final GeneratedColumn<int> anchorDay = GeneratedColumn<int>(
+    'anchor_day',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _createdAtMeta = const VerificationMeta(
     'createdAt',
   );
@@ -5334,6 +5459,7 @@ class $RecurrencesTable extends Recurrences
     notes,
     cadence,
     nextDate,
+    anchorDay,
     createdAt,
     updatedAt,
   ];
@@ -5413,6 +5539,12 @@ class $RecurrencesTable extends Recurrences
     } else if (isInserting) {
       context.missing(_nextDateMeta);
     }
+    if (data.containsKey('anchor_day')) {
+      context.handle(
+        _anchorDayMeta,
+        anchorDay.isAcceptableOrUnknown(data['anchor_day']!, _anchorDayMeta),
+      );
+    }
     if (data.containsKey('created_at')) {
       context.handle(
         _createdAtMeta,
@@ -5474,6 +5606,10 @@ class $RecurrencesTable extends Recurrences
         DriftSqlType.string,
         data['${effectivePrefix}next_date'],
       )!,
+      anchorDay: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}anchor_day'],
+      ),
       createdAt: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}created_at'],
@@ -5501,6 +5637,7 @@ class RecurrenceRow extends DataClass implements Insertable<RecurrenceRow> {
   final String? notes;
   final String cadence;
   final String nextDate;
+  final int? anchorDay;
   final int createdAt;
   final int updatedAt;
   const RecurrenceRow({
@@ -5513,6 +5650,7 @@ class RecurrenceRow extends DataClass implements Insertable<RecurrenceRow> {
     this.notes,
     required this.cadence,
     required this.nextDate,
+    this.anchorDay,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -5536,6 +5674,9 @@ class RecurrenceRow extends DataClass implements Insertable<RecurrenceRow> {
     }
     map['cadence'] = Variable<String>(cadence);
     map['next_date'] = Variable<String>(nextDate);
+    if (!nullToAbsent || anchorDay != null) {
+      map['anchor_day'] = Variable<int>(anchorDay);
+    }
     map['created_at'] = Variable<int>(createdAt);
     map['updated_at'] = Variable<int>(updatedAt);
     return map;
@@ -5560,6 +5701,9 @@ class RecurrenceRow extends DataClass implements Insertable<RecurrenceRow> {
           : Value(notes),
       cadence: Value(cadence),
       nextDate: Value(nextDate),
+      anchorDay: anchorDay == null && nullToAbsent
+          ? const Value.absent()
+          : Value(anchorDay),
       createdAt: Value(createdAt),
       updatedAt: Value(updatedAt),
     );
@@ -5580,6 +5724,7 @@ class RecurrenceRow extends DataClass implements Insertable<RecurrenceRow> {
       notes: serializer.fromJson<String?>(json['notes']),
       cadence: serializer.fromJson<String>(json['cadence']),
       nextDate: serializer.fromJson<String>(json['nextDate']),
+      anchorDay: serializer.fromJson<int?>(json['anchorDay']),
       createdAt: serializer.fromJson<int>(json['createdAt']),
       updatedAt: serializer.fromJson<int>(json['updatedAt']),
     );
@@ -5597,6 +5742,7 @@ class RecurrenceRow extends DataClass implements Insertable<RecurrenceRow> {
       'notes': serializer.toJson<String?>(notes),
       'cadence': serializer.toJson<String>(cadence),
       'nextDate': serializer.toJson<String>(nextDate),
+      'anchorDay': serializer.toJson<int?>(anchorDay),
       'createdAt': serializer.toJson<int>(createdAt),
       'updatedAt': serializer.toJson<int>(updatedAt),
     };
@@ -5612,6 +5758,7 @@ class RecurrenceRow extends DataClass implements Insertable<RecurrenceRow> {
     Value<String?> notes = const Value.absent(),
     String? cadence,
     String? nextDate,
+    Value<int?> anchorDay = const Value.absent(),
     int? createdAt,
     int? updatedAt,
   }) => RecurrenceRow(
@@ -5624,6 +5771,7 @@ class RecurrenceRow extends DataClass implements Insertable<RecurrenceRow> {
     notes: notes.present ? notes.value : this.notes,
     cadence: cadence ?? this.cadence,
     nextDate: nextDate ?? this.nextDate,
+    anchorDay: anchorDay.present ? anchorDay.value : this.anchorDay,
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
   );
@@ -5642,6 +5790,7 @@ class RecurrenceRow extends DataClass implements Insertable<RecurrenceRow> {
       notes: data.notes.present ? data.notes.value : this.notes,
       cadence: data.cadence.present ? data.cadence.value : this.cadence,
       nextDate: data.nextDate.present ? data.nextDate.value : this.nextDate,
+      anchorDay: data.anchorDay.present ? data.anchorDay.value : this.anchorDay,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
     );
@@ -5659,6 +5808,7 @@ class RecurrenceRow extends DataClass implements Insertable<RecurrenceRow> {
           ..write('notes: $notes, ')
           ..write('cadence: $cadence, ')
           ..write('nextDate: $nextDate, ')
+          ..write('anchorDay: $anchorDay, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt')
           ..write(')'))
@@ -5676,6 +5826,7 @@ class RecurrenceRow extends DataClass implements Insertable<RecurrenceRow> {
     notes,
     cadence,
     nextDate,
+    anchorDay,
     createdAt,
     updatedAt,
   );
@@ -5692,6 +5843,7 @@ class RecurrenceRow extends DataClass implements Insertable<RecurrenceRow> {
           other.notes == this.notes &&
           other.cadence == this.cadence &&
           other.nextDate == this.nextDate &&
+          other.anchorDay == this.anchorDay &&
           other.createdAt == this.createdAt &&
           other.updatedAt == this.updatedAt);
 }
@@ -5706,6 +5858,7 @@ class RecurrencesCompanion extends UpdateCompanion<RecurrenceRow> {
   final Value<String?> notes;
   final Value<String> cadence;
   final Value<String> nextDate;
+  final Value<int?> anchorDay;
   final Value<int> createdAt;
   final Value<int> updatedAt;
   final Value<int> rowid;
@@ -5719,6 +5872,7 @@ class RecurrencesCompanion extends UpdateCompanion<RecurrenceRow> {
     this.notes = const Value.absent(),
     this.cadence = const Value.absent(),
     this.nextDate = const Value.absent(),
+    this.anchorDay = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.rowid = const Value.absent(),
@@ -5733,6 +5887,7 @@ class RecurrencesCompanion extends UpdateCompanion<RecurrenceRow> {
     this.notes = const Value.absent(),
     required String cadence,
     required String nextDate,
+    this.anchorDay = const Value.absent(),
     required int createdAt,
     required int updatedAt,
     this.rowid = const Value.absent(),
@@ -5753,6 +5908,7 @@ class RecurrencesCompanion extends UpdateCompanion<RecurrenceRow> {
     Expression<String>? notes,
     Expression<String>? cadence,
     Expression<String>? nextDate,
+    Expression<int>? anchorDay,
     Expression<int>? createdAt,
     Expression<int>? updatedAt,
     Expression<int>? rowid,
@@ -5767,6 +5923,7 @@ class RecurrencesCompanion extends UpdateCompanion<RecurrenceRow> {
       if (notes != null) 'notes': notes,
       if (cadence != null) 'cadence': cadence,
       if (nextDate != null) 'next_date': nextDate,
+      if (anchorDay != null) 'anchor_day': anchorDay,
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (rowid != null) 'rowid': rowid,
@@ -5783,6 +5940,7 @@ class RecurrencesCompanion extends UpdateCompanion<RecurrenceRow> {
     Value<String?>? notes,
     Value<String>? cadence,
     Value<String>? nextDate,
+    Value<int?>? anchorDay,
     Value<int>? createdAt,
     Value<int>? updatedAt,
     Value<int>? rowid,
@@ -5797,6 +5955,7 @@ class RecurrencesCompanion extends UpdateCompanion<RecurrenceRow> {
       notes: notes ?? this.notes,
       cadence: cadence ?? this.cadence,
       nextDate: nextDate ?? this.nextDate,
+      anchorDay: anchorDay ?? this.anchorDay,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       rowid: rowid ?? this.rowid,
@@ -5833,6 +5992,9 @@ class RecurrencesCompanion extends UpdateCompanion<RecurrenceRow> {
     if (nextDate.present) {
       map['next_date'] = Variable<String>(nextDate.value);
     }
+    if (anchorDay.present) {
+      map['anchor_day'] = Variable<int>(anchorDay.value);
+    }
     if (createdAt.present) {
       map['created_at'] = Variable<int>(createdAt.value);
     }
@@ -5857,6 +6019,7 @@ class RecurrencesCompanion extends UpdateCompanion<RecurrenceRow> {
           ..write('notes: $notes, ')
           ..write('cadence: $cadence, ')
           ..write('nextDate: $nextDate, ')
+          ..write('anchorDay: $anchorDay, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('rowid: $rowid')
@@ -9869,6 +10032,8 @@ typedef $$TransactionsTableCreateCompanionBuilder =
       Value<String?> transferGroupId,
       Value<String?> parentId,
       Value<int?> splitTotalCents,
+      Value<int?> originalAmountCents,
+      Value<String?> originalCurrency,
       required int createdAt,
       required int updatedAt,
       Value<int> rowid,
@@ -9893,6 +10058,8 @@ typedef $$TransactionsTableUpdateCompanionBuilder =
       Value<String?> transferGroupId,
       Value<String?> parentId,
       Value<int?> splitTotalCents,
+      Value<int?> originalAmountCents,
+      Value<String?> originalCurrency,
       Value<int> createdAt,
       Value<int> updatedAt,
       Value<int> rowid,
@@ -9994,6 +10161,16 @@ class $$TransactionsTableFilterComposer
 
   ColumnFilters<int> get splitTotalCents => $composableBuilder(
     column: $table.splitTotalCents,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get originalAmountCents => $composableBuilder(
+    column: $table.originalAmountCents,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get originalCurrency => $composableBuilder(
+    column: $table.originalCurrency,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -10107,6 +10284,16 @@ class $$TransactionsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<int> get originalAmountCents => $composableBuilder(
+    column: $table.originalAmountCents,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get originalCurrency => $composableBuilder(
+    column: $table.originalCurrency,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get createdAt => $composableBuilder(
     column: $table.createdAt,
     builder: (column) => ColumnOrderings(column),
@@ -10193,6 +10380,16 @@ class $$TransactionsTableAnnotationComposer
     builder: (column) => column,
   );
 
+  GeneratedColumn<int> get originalAmountCents => $composableBuilder(
+    column: $table.originalAmountCents,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get originalCurrency => $composableBuilder(
+    column: $table.originalCurrency,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<int> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
 
@@ -10249,6 +10446,8 @@ class $$TransactionsTableTableManager
                 Value<String?> transferGroupId = const Value.absent(),
                 Value<String?> parentId = const Value.absent(),
                 Value<int?> splitTotalCents = const Value.absent(),
+                Value<int?> originalAmountCents = const Value.absent(),
+                Value<String?> originalCurrency = const Value.absent(),
                 Value<int> createdAt = const Value.absent(),
                 Value<int> updatedAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
@@ -10271,6 +10470,8 @@ class $$TransactionsTableTableManager
                 transferGroupId: transferGroupId,
                 parentId: parentId,
                 splitTotalCents: splitTotalCents,
+                originalAmountCents: originalAmountCents,
+                originalCurrency: originalCurrency,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 rowid: rowid,
@@ -10295,6 +10496,8 @@ class $$TransactionsTableTableManager
                 Value<String?> transferGroupId = const Value.absent(),
                 Value<String?> parentId = const Value.absent(),
                 Value<int?> splitTotalCents = const Value.absent(),
+                Value<int?> originalAmountCents = const Value.absent(),
+                Value<String?> originalCurrency = const Value.absent(),
                 required int createdAt,
                 required int updatedAt,
                 Value<int> rowid = const Value.absent(),
@@ -10317,6 +10520,8 @@ class $$TransactionsTableTableManager
                 transferGroupId: transferGroupId,
                 parentId: parentId,
                 splitTotalCents: splitTotalCents,
+                originalAmountCents: originalAmountCents,
+                originalCurrency: originalCurrency,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 rowid: rowid,
@@ -11512,6 +11717,7 @@ typedef $$RecurrencesTableCreateCompanionBuilder =
       Value<String?> notes,
       required String cadence,
       required String nextDate,
+      Value<int?> anchorDay,
       required int createdAt,
       required int updatedAt,
       Value<int> rowid,
@@ -11527,6 +11733,7 @@ typedef $$RecurrencesTableUpdateCompanionBuilder =
       Value<String?> notes,
       Value<String> cadence,
       Value<String> nextDate,
+      Value<int?> anchorDay,
       Value<int> createdAt,
       Value<int> updatedAt,
       Value<int> rowid,
@@ -11583,6 +11790,11 @@ class $$RecurrencesTableFilterComposer
 
   ColumnFilters<String> get nextDate => $composableBuilder(
     column: $table.nextDate,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get anchorDay => $composableBuilder(
+    column: $table.anchorDay,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -11651,6 +11863,11 @@ class $$RecurrencesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<int> get anchorDay => $composableBuilder(
+    column: $table.anchorDay,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get createdAt => $composableBuilder(
     column: $table.createdAt,
     builder: (column) => ColumnOrderings(column),
@@ -11702,6 +11919,9 @@ class $$RecurrencesTableAnnotationComposer
   GeneratedColumn<String> get nextDate =>
       $composableBuilder(column: $table.nextDate, builder: (column) => column);
 
+  GeneratedColumn<int> get anchorDay =>
+      $composableBuilder(column: $table.anchorDay, builder: (column) => column);
+
   GeneratedColumn<int> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
 
@@ -11749,6 +11969,7 @@ class $$RecurrencesTableTableManager
                 Value<String?> notes = const Value.absent(),
                 Value<String> cadence = const Value.absent(),
                 Value<String> nextDate = const Value.absent(),
+                Value<int?> anchorDay = const Value.absent(),
                 Value<int> createdAt = const Value.absent(),
                 Value<int> updatedAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
@@ -11762,6 +11983,7 @@ class $$RecurrencesTableTableManager
                 notes: notes,
                 cadence: cadence,
                 nextDate: nextDate,
+                anchorDay: anchorDay,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 rowid: rowid,
@@ -11777,6 +11999,7 @@ class $$RecurrencesTableTableManager
                 Value<String?> notes = const Value.absent(),
                 required String cadence,
                 required String nextDate,
+                Value<int?> anchorDay = const Value.absent(),
                 required int createdAt,
                 required int updatedAt,
                 Value<int> rowid = const Value.absent(),
@@ -11790,6 +12013,7 @@ class $$RecurrencesTableTableManager
                 notes: notes,
                 cadence: cadence,
                 nextDate: nextDate,
+                anchorDay: anchorDay,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 rowid: rowid,

@@ -57,11 +57,19 @@ syncRouter.get("/changes", (c) => {
     : windowRows;
 
   // Parse payload server-side so clients don't have to JSON.parse a
-  // string nested in a JSON response.
-  const changes = visible.map((row) => ({
-    ...row,
-    payload: row.payload === null ? null : JSON.parse(row.payload),
-  }));
+  // string nested in a JSON response. A single corrupt payload must NOT 500
+  // the whole pull — that would wedge sync for every client forever. Emit the
+  // row with a null payload and an error marker so the client can skip it and
+  // the cursor still advances past it.
+  const changes = visible.map((row) => {
+    if (row.payload === null) return { ...row, payload: null };
+    try {
+      return { ...row, payload: JSON.parse(row.payload) };
+    } catch {
+      console.warn(`sync: corrupt payload for change_log id=${row.id}; skipping`);
+      return { ...row, payload: null, payloadError: true };
+    }
+  });
   const newCursor =
     windowRows.length > 0 ? windowRows[windowRows.length - 1]!.id : cursor;
   return c.json({ changes, cursor: newCursor });

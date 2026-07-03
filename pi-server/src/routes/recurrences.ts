@@ -5,17 +5,19 @@ import { z } from "zod";
 import type { AppEnv } from "../app.ts";
 import { recurrences } from "../db/schema.ts";
 import { newId, nowMs, recordChange } from "../repos/changelog.ts";
+import { nameField, textField } from "./_fields.ts";
 
 const upsertSchema = z.object({
   id: z.string().min(1).optional(),
   accountId: z.string().min(1),
   categoryId: z.string().nullable().optional(),
   payeeId: z.string().nullable().optional(),
-  payeeName: z.string().nullable().optional(),
+  payeeName: nameField.nullable().optional(),
   amountCents: z.number().int(),
-  notes: z.string().nullable().optional(),
+  notes: textField.nullable().optional(),
   cadence: z.enum(["daily", "weekly", "monthly", "yearly"]),
   nextDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  anchorDay: z.number().int().min(1).max(31).nullable().optional(),
 });
 
 export const recurrencesRouter = new Hono<AppEnv>();
@@ -40,6 +42,7 @@ recurrencesRouter.post("/", async (c) => {
     notes: parsed.notes ?? null,
     cadence: parsed.cadence,
     nextDate: parsed.nextDate,
+    anchorDay: parsed.anchorDay ?? null,
     createdAt: at,
     updatedAt: at,
   };

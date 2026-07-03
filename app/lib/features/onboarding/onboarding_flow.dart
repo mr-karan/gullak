@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 
 import '../../core/money.dart';
 import '../../data/ai/pi_ai_client.dart';
@@ -29,6 +30,9 @@ class OnboardingFlow extends ConsumerStatefulWidget {
 class _OnboardingFlowState extends ConsumerState<OnboardingFlow> {
   final _ctrl = PageController();
 
+  // Seeded from the device locale so a non-Indian user isn't forced to change
+  // the currency on the very first screen. Still fully editable below, and
+  // falls back to ₹ / 2 when the locale can't be resolved.
   String _symbol = '₹';
   int _minorDigits = 2;
 
@@ -36,6 +40,20 @@ class _OnboardingFlowState extends ConsumerState<OnboardingFlow> {
   AccountKind _kind = AccountKind.savings;
   int _openingBalanceCents = 0;
   bool _finishing = false;
+
+  @override
+  void initState() {
+    super.initState();
+    try {
+      final locale = WidgetsBinding.instance.platformDispatcher.locale;
+      final fmt = NumberFormat.simpleCurrency(locale: locale.toString());
+      final symbol = fmt.currencySymbol.trim();
+      if (symbol.isNotEmpty) _symbol = symbol;
+      _minorDigits = fmt.decimalDigits ?? _minorDigits;
+    } catch (_) {
+      // Unknown/unsupported locale — keep the ₹ / 2 fallback.
+    }
+  }
 
   @override
   void dispose() {

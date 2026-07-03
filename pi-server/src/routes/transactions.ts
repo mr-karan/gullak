@@ -5,26 +5,29 @@ import { z } from "zod";
 import type { AppEnv } from "../app.ts";
 import { transactions } from "../db/schema.ts";
 import { newId, nowMs, recordChange } from "../repos/changelog.ts";
+import { nameField, textField } from "./_fields.ts";
 
 const upsertSchema = z.object({
   id: z.string().min(1).optional(),
   accountId: z.string().min(1),
   categoryId: z.string().nullable().optional(),
   payeeId: z.string().nullable().optional(),
-  payeeName: z.string().nullable().optional(),
+  payeeName: nameField.nullable().optional(),
   amountCents: z.number().int(),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  notes: z.string().nullable().optional(),
+  notes: textField.nullable().optional(),
   latitude: z.number().nullable().optional(),
   longitude: z.number().nullable().optional(),
-  locationName: z.string().nullable().optional(),
+  locationName: textField.nullable().optional(),
   cleared: z.boolean().default(false),
-  origin: z.string().default("manual"),
-  originRef: z.string().nullable().optional(),
+  origin: z.string().max(64).default("manual"),
+  originRef: z.string().max(256).nullable().optional(),
   transferAccountId: z.string().nullable().optional(),
   transferGroupId: z.string().nullable().optional(),
   parentId: z.string().nullable().optional(),
   splitTotalCents: z.number().int().nullable().optional(),
+  originalAmountCents: z.number().int().nullable().optional(),
+  originalCurrency: z.string().max(8).nullable().optional(),
 });
 
 export const transactionsRouter = new Hono<AppEnv>();
@@ -96,6 +99,8 @@ transactionsRouter.post("/", async (c) => {
     transferGroupId: parsed.transferGroupId ?? null,
     parentId: parsed.parentId ?? null,
     splitTotalCents: parsed.splitTotalCents ?? null,
+    originalAmountCents: parsed.originalAmountCents ?? null,
+    originalCurrency: parsed.originalCurrency ?? null,
     createdAt: at,
     updatedAt: at,
   };

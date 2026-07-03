@@ -5,6 +5,7 @@ import '../../core/money.dart';
 import '../../core/snackbars.dart';
 import '../../state/providers.dart';
 import '../../ui/widgets/empty_state.dart';
+import '../../ui/widgets/error_state.dart';
 import '../../ui/widgets/money_text.dart';
 import '../accounts/data/account_repository.dart';
 import '../categories/data/category_repository.dart';
@@ -34,7 +35,10 @@ class RecurrencesScreen extends ConsumerWidget {
       ),
       body: rowsAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('Error: $e')),
+        error: (e, _) => ErrorState(
+          message: e.toString(),
+          onRetry: () => ref.invalidate(recurrencesListProvider),
+        ),
         data: (rows) {
           if (rows.isEmpty) {
             return EmptyState(

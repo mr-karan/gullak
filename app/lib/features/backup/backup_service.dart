@@ -355,6 +355,8 @@ class BackupService {
     'transfer_group_id': t.transferGroupId,
     'parent_id': t.parentId,
     'split_total_cents': t.splitTotalCents,
+    'original_amount_cents': t.originalAmountCents,
+    'original_currency': t.originalCurrency,
     'created_at': t.createdAt,
     'updated_at': t.updatedAt,
   };
@@ -381,6 +383,10 @@ class BackupService {
         transferGroupId: drift.Value(j['transfer_group_id'] as String?),
         parentId: drift.Value(j['parent_id'] as String?),
         splitTotalCents: drift.Value((j['split_total_cents'] as num?)?.toInt()),
+        originalAmountCents: drift.Value(
+          (j['original_amount_cents'] as num?)?.toInt(),
+        ),
+        originalCurrency: drift.Value(j['original_currency'] as String?),
       );
 
   Map<String, dynamic> _tagToJson(TagRow t) => {
@@ -492,6 +498,7 @@ class BackupService {
     'notes': r.notes,
     'cadence': r.cadence,
     'next_date': r.nextDate,
+    'anchor_day': r.anchorDay,
     'created_at': r.createdAt,
     'updated_at': r.updatedAt,
   };
@@ -509,6 +516,7 @@ class BackupService {
         payeeId: drift.Value(j['payee_id'] as String?),
         payeeName: drift.Value(j['payee_name'] as String?),
         notes: drift.Value(j['notes'] as String?),
+        anchorDay: drift.Value((j['anchor_day'] as num?)?.toInt()),
       );
 
   Map<String, dynamic> _kvToJson(AppKvRow r) => {

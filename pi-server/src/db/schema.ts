@@ -48,30 +48,43 @@ export const payees = sqliteTable("payees", {
   updatedAt: integer("updated_at").notNull().default(now),
 });
 
-export const transactions = sqliteTable("transactions", {
-  id: text("id").primaryKey(),
-  accountId: text("account_id").notNull(),
-  categoryId: text("category_id"),
-  payeeId: text("payee_id"),
-  payeeName: text("payee_name"),
-  amountCents: integer("amount_cents").notNull(),
-  date: text("date").notNull(), // YYYY-MM-DD
-  notes: text("notes"),
-  latitude: real("latitude"),
-  longitude: real("longitude"),
-  locationName: text("location_name"),
-  cleared: integer("cleared", { mode: "boolean" }).notNull().default(false),
-  origin: text("origin").notNull().default("manual"),
-  originRef: text("origin_ref"),
-  // Transfer linkage
-  transferAccountId: text("transfer_account_id"),
-  transferGroupId: text("transfer_group_id"),
-  // Split linkage
-  parentId: text("parent_id"),
-  splitTotalCents: integer("split_total_cents"),
-  createdAt: integer("created_at").notNull().default(now),
-  updatedAt: integer("updated_at").notNull().default(now),
-});
+export const transactions = sqliteTable(
+  "transactions",
+  {
+    id: text("id").primaryKey(),
+    accountId: text("account_id").notNull(),
+    categoryId: text("category_id"),
+    payeeId: text("payee_id"),
+    payeeName: text("payee_name"),
+    amountCents: integer("amount_cents").notNull(),
+    date: text("date").notNull(), // YYYY-MM-DD
+    notes: text("notes"),
+    latitude: real("latitude"),
+    longitude: real("longitude"),
+    locationName: text("location_name"),
+    cleared: integer("cleared", { mode: "boolean" }).notNull().default(false),
+    origin: text("origin").notNull().default("manual"),
+    originRef: text("origin_ref"),
+    // Transfer linkage
+    transferAccountId: text("transfer_account_id"),
+    transferGroupId: text("transfer_group_id"),
+    // Split linkage
+    parentId: text("parent_id"),
+    splitTotalCents: integer("split_total_cents"),
+    // Foreign-currency metadata (display-only; amountCents stays in base currency)
+    originalAmountCents: integer("original_amount_cents"),
+    originalCurrency: text("original_currency"),
+    createdAt: integer("created_at").notNull().default(now),
+    updatedAt: integer("updated_at").notNull().default(now),
+  },
+  (t) => ({
+    // /v1/summary, the agent ask-tools, and collectExpenses all filter by date
+    // and/or account; index those so large histories don't table-scan.
+    byDate: index("idx_tx_date").on(t.date),
+    byAccountDate: index("idx_tx_account_date").on(t.accountId, t.date),
+    byCategory: index("idx_tx_category").on(t.categoryId),
+  }),
+);
 
 export const tags = sqliteTable(
   "tags",
@@ -146,6 +159,7 @@ export const recurrences = sqliteTable("recurrences", {
   notes: text("notes"),
   cadence: text("cadence").notNull(), // 'monthly' | 'weekly' | 'daily' | 'yearly'
   nextDate: text("next_date").notNull(), // YYYY-MM-DD
+  anchorDay: integer("anchor_day"), // day-of-month anchor for monthly/yearly
   createdAt: integer("created_at").notNull().default(now),
   updatedAt: integer("updated_at").notNull().default(now),
 });

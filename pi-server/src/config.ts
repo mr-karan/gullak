@@ -86,6 +86,12 @@ export interface AppConfig {
   modelApiKey: string;
   modelReasoning: boolean;
   modelThinkingLevel: ThinkingLevel;
+  /** Per-call LLM request timeout in ms. Generous — vision calls are slow. */
+  modelTimeoutMs: number;
+  /** Fixed-window rate caps (requests/min/IP). 0 disables a limiter. */
+  rateLimit: { aiPerMinute: number; webhookPerMinute: number };
+  /** Trust X-Forwarded-For for rate-limit keying (set only behind a proxy). */
+  trustProxy: boolean;
   /** True when a real model key is configured; /v1/ai/* 503s otherwise. */
   ai: { enabled: boolean };
   whatsappBridgeUrl: string;
@@ -211,6 +217,12 @@ export function loadConfig(): AppConfig {
     modelApiKey: realModelApiKey ?? "dummy",
     modelReasoning: getBooleanEnv("GULLAK_MODEL_REASONING", true),
     modelThinkingLevel: getThinkingLevel(),
+    modelTimeoutMs: getIntEnv("GULLAK_MODEL_TIMEOUT_MS", 60_000),
+    rateLimit: {
+      aiPerMinute: getIntEnv("GULLAK_AI_RATE_PER_MIN", 30),
+      webhookPerMinute: getIntEnv("GULLAK_WHATSAPP_RATE_PER_MIN", 60),
+    },
+    trustProxy: getBooleanEnv("GULLAK_TRUST_PROXY", false),
     ai: { enabled: Boolean(realModelApiKey) },
     whatsappBridgeUrl: getEnv(
       "GULLAK_WHATSAPP_BRIDGE_URL",

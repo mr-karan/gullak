@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../state/providers.dart';
 import '../../ui/widgets/empty_state.dart';
+import '../../ui/widgets/error_state.dart';
 import '../../ui/widgets/money_text.dart';
 import 'account_form_sheet.dart';
 import 'data/account_repository.dart';
@@ -72,7 +73,10 @@ class AccountsScreen extends ConsumerWidget {
           );
         },
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('Error: $e')),
+        error: (e, _) => ErrorState(
+          message: e.toString(),
+          onRetry: () => ref.invalidate(accountsListProvider),
+        ),
       ),
     );
   }

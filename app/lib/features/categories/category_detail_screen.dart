@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../ui/widgets/empty_state.dart';
+import '../../ui/widgets/error_state.dart';
 import '../transactions/data/transaction_repository.dart';
 import '../transactions/scoped_transactions_view.dart';
 import 'data/category_repository.dart';
@@ -19,7 +20,13 @@ class CategoryDetailScreen extends ConsumerWidget {
     final categoryAsync = ref.watch(categoryByIdProvider(id));
     return categoryAsync.when(
       loading: () => _scaffold('Category', const _Loading()),
-      error: (e, _) => _scaffold('Category', Center(child: Text('Error: $e'))),
+      error: (e, _) => _scaffold(
+        'Category',
+        ErrorState(
+          message: e.toString(),
+          onRetry: () => ref.invalidate(categoryByIdProvider(id)),
+        ),
+      ),
       data: (category) {
         if (category == null) {
           return _scaffold(
@@ -46,8 +53,10 @@ class CategoryDetailScreen extends ConsumerWidget {
     );
   }
 
-  Widget _scaffold(String title, Widget body) =>
-      Scaffold(appBar: AppBar(title: Text(title)), body: body);
+  Widget _scaffold(String title, Widget body) => Scaffold(
+    appBar: AppBar(title: Text(title)),
+    body: body,
+  );
 }
 
 class _Loading extends StatelessWidget {

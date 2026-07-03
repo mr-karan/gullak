@@ -5,21 +5,22 @@ import { z } from "zod";
 import type { AppEnv } from "../app.ts";
 import { categories, categoryGroups } from "../db/schema.ts";
 import { newId, nowMs, recordChange } from "../repos/changelog.ts";
+import { nameField } from "./_fields.ts";
 
 const groupUpsertSchema = z.object({
   id: z.string().min(1).optional(),
-  name: z.string().min(1),
+  name: nameField,
   isIncome: z.boolean().default(false),
   sortOrder: z.number().int().default(0),
 });
 
 const categoryUpsertSchema = z.object({
   id: z.string().min(1).optional(),
-  name: z.string().min(1),
+  name: nameField,
   groupId: z.string().min(1),
   parentId: z.string().nullable().optional(),
   color: z.number().int().nullable().optional(),
-  icon: z.string().nullable().optional(),
+  icon: z.string().max(2000).nullable().optional(),
   hidden: z.boolean().default(false),
   sortOrder: z.number().int().default(0),
 });

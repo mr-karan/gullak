@@ -75,6 +75,32 @@ void main() {
     },
   );
 
+  test('stores and updates optional foreign-currency metadata', () async {
+    final id = await txs.create(
+      accountId: checkingId,
+      amountCents: -170000, // ₹1,700 base
+      date: DateTime(2026, 3, 4),
+      payeeName: 'Hotel',
+      originalAmountCents: 2000, // USD 20.00
+      originalCurrency: 'USD',
+    );
+    var row = await txs.byRow(id);
+    expect(row!.originalAmountCents, 2000);
+    expect(row.originalCurrency, 'USD');
+
+    // Update replaces the foreign values...
+    await txs.update(id, originalAmountCents: 1500, originalCurrency: 'EUR');
+    row = await txs.byRow(id);
+    expect(row!.originalAmountCents, 1500);
+    expect(row.originalCurrency, 'EUR');
+
+    // ...and can clear them.
+    await txs.update(id, originalAmountCents: null, originalCurrency: null);
+    row = await txs.byRow(id);
+    expect(row!.originalAmountCents, isNull);
+    expect(row.originalCurrency, isNull);
+  });
+
   test(
     'creates transfers as paired rows and restore round-trips both legs',
     () async {

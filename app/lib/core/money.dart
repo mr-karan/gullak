@@ -62,4 +62,53 @@ class Money {
     }
     return r;
   }
+
+  /// Best-effort ISO code for a currency symbol, for deciding whether a parsed
+  /// amount is in a foreign currency. Covers the symbols the onboarding picker
+  /// offers; returns null for anything else (caller treats unknown as "can't
+  /// tell", i.e. don't tag).
+  static String? currencyCodeForSymbol(String symbol) {
+    switch (symbol.trim()) {
+      case '₹':
+        return 'INR';
+      case r'$':
+        return 'USD';
+      case '€':
+        return 'EUR';
+      case '£':
+        return 'GBP';
+      case '¥':
+        return 'JPY';
+      default:
+        return null;
+    }
+  }
+
+  /// Minor-unit count for an ISO 4217 currency code (USD→2, JPY→0), used when
+  /// parsing/formatting a foreign amount whose scale differs from the base
+  /// currency. Defaults to 2 when the code is unknown.
+  static int minorDigitsForCurrency(String code) {
+    try {
+      return NumberFormat.simpleCurrency(
+            name: code.toUpperCase(),
+          ).decimalDigits ??
+          2;
+    } catch (_) {
+      return 2;
+    }
+  }
+
+  /// Format a foreign amount held in [minor] units of [code] (e.g. USD 2000 →
+  /// "$20.00"). Display-only; no conversion to the base currency.
+  static String formatForeign(int minor, String code) {
+    final upper = code.toUpperCase();
+    try {
+      final fmt = NumberFormat.simpleCurrency(name: upper);
+      final digits = fmt.decimalDigits ?? 2;
+      return fmt.format(minor / _pow10(digits));
+    } catch (_) {
+      // Unknown code — show the raw amount with the code as a suffix.
+      return '${format(minor, minorDigits: 2, symbol: '')} $upper';
+    }
+  }
 }

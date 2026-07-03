@@ -179,11 +179,14 @@ class BudgetRepository {
     final targetByCat = {for (final b in budgets) b.categoryId: b.targetCents};
 
     final txRepo = TransactionRepository(_db);
+    // One grouped query instead of one SUM per category (was an N+1 that made
+    // the Budget screen lag on large histories).
+    final spentByCat = await txRepo.sumByCategoryForMonth(month);
     final entries = <BudgetSummary>[];
     var totalAssigned = 0;
     var totalSpent = 0;
     for (final c in categories) {
-      final spent = await txRepo.sumByCategoryInMonth(c.id, month);
+      final spent = spentByCat[c.id] ?? 0;
       final target = targetByCat[c.id] ?? 0;
       totalAssigned += target;
       totalSpent += spent;

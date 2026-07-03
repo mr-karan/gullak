@@ -5,10 +5,11 @@ import { z } from "zod";
 import type { AppEnv } from "../app.ts";
 import { accounts } from "../db/schema.ts";
 import { newId, nowMs, recordChange } from "../repos/changelog.ts";
+import { nameField } from "./_fields.ts";
 
 const upsertSchema = z.object({
   id: z.string().min(1).optional(),
-  name: z.string().min(1),
+  name: nameField,
   kind: z.string().default("checking"),
   openingBalanceCents: z.number().int().default(0),
   reconciledBalanceCents: z.number().int().nullable().optional(),

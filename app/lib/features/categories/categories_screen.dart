@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../ui/widgets/empty_state.dart';
+import '../../ui/widgets/error_state.dart';
 import 'category_form_dialog.dart';
 import 'category_visuals.dart';
 import 'data/category_repository.dart';
@@ -45,7 +46,13 @@ class CategoriesScreen extends ConsumerWidget {
       ),
       body: groupsAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('Error: $e')),
+        error: (e, _) => ErrorState(
+          message: e.toString(),
+          onRetry: () {
+            ref.invalidate(categoryGroupsListProvider);
+            ref.invalidate(categoriesListProvider);
+          },
+        ),
         data: (groups) {
           final cats = catsAsync.value ?? const <CategoryRow>[];
           if (groups.isEmpty && cats.isEmpty) {

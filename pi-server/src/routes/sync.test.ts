@@ -23,6 +23,7 @@ function makeApp(apiKey?: string) {
     httpApiKey: apiKey,
     sheets: { syncIntervalMinutes: 0 },
     ai: { enabled: false },
+    rateLimit: { aiPerMinute: 0, webhookPerMinute: 0 },
   } as unknown as AppConfig;
   return { app: createApp({ db, config }), db };
 }
@@ -117,4 +118,31 @@ test("auth gate: required key rejects missing/wrong, exempts health", async () =
 test("no key configured = open (dev mode)", async () => {
   const { app } = makeApp();
   expect((await app.request("/v1/transactions")).status).toBe(200);
+});
+
+test("a corrupt change_log payload is skipped, not a 500 for the whole pull", async () => {
+  const { app, db } = makeApp();
+  // A well-formed row plus a hand-corrupted one, simulating a truncated write.
+  await push(app, "phone", [txn({ ccid: "ok" })]);
+  db.insert(schema.changeLog)
+    .values({
+      resource: "transactions",
+      resourceId: "bad",
+      op: "upsert",
+      payload: "{not valid json",
+      clientId: "other",
+      clientChangeId: "corrupt",
+      at: 2000,
+    })
+    .run();
+  const res = await app.request("/v1/sync/changes?since=0&clientId=reader");
+  expect(res.status).toBe(200); // did not 500
+  type Row = { resourceId: string; payload: unknown; payloadError?: boolean };
+  const body = (await res.json()) as { changes: Row[]; cursor: number };
+  const bad = body.changes.find((r) => r.resourceId === "bad");
+  expect(bad?.payload).toBeNull();
+  expect(bad?.payloadError).toBe(true);
+  // The good row still comes through and the cursor advances past both.
+  expect(body.changes.some((r) => r.resourceId === "t1")).toBe(true);
+  expect(body.cursor).toBeGreaterThan(0);
 });

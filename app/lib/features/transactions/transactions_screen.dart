@@ -12,6 +12,7 @@ import '../../core/snackbars.dart';
 import '../../state/providers.dart';
 import '../../ui/widgets/category_swatch.dart';
 import '../../ui/widgets/empty_state.dart';
+import '../../ui/widgets/error_state.dart';
 import '../../ui/widgets/money_text.dart';
 import '../accounts/data/account_repository.dart';
 import '../categories/data/category_repository.dart';
@@ -20,6 +21,7 @@ import '../entry/quick_entry.dart';
 import '../tags/data/tag_repository.dart';
 import 'data/transaction_repository.dart';
 import 'split_transaction_sheet.dart';
+import 'transfer_sheet.dart';
 
 class TransactionsScreen extends ConsumerStatefulWidget {
   const TransactionsScreen({super.key});
@@ -90,6 +92,11 @@ class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
             icon: Icon(_filters.isActive ? Icons.tune : Icons.tune_outlined),
             tooltip: 'Filters',
             onPressed: _openFilters,
+          ),
+          IconButton(
+            icon: const Icon(Icons.swap_horiz_outlined),
+            tooltip: 'New transfer',
+            onPressed: () => _openTransferSheet(context),
           ),
           IconButton(
             icon: const Icon(Icons.call_split_outlined),
@@ -207,7 +214,10 @@ class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
           );
         },
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('Error: $e')),
+        error: (e, _) => ErrorState(
+          message: e.toString(),
+          onRetry: () => ref.invalidate(transactionsListProvider),
+        ),
       ),
     );
   }
@@ -218,6 +228,15 @@ class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
       isScrollControlled: true,
       showDragHandle: true,
       builder: (_) => const SplitTransactionSheet(),
+    );
+  }
+
+  Future<void> _openTransferSheet(BuildContext context) {
+    return showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (_) => const TransferSheet(),
     );
   }
 }

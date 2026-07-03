@@ -23,6 +23,22 @@ serve({
 console.log(`gullak v${config.version} listening on http://${config.host}:${config.port}`);
 console.log("config:", JSON.stringify(summarizeConfig(config)));
 
+// The WhatsApp webhook can write financial rows via the agent log-path, and it
+// is exempt from the global x-api-key gate so the bridge can reach it. It is
+// secured only by GULLAK_WHATSAPP_API_KEY; without that key it is open to
+// anyone who can reach it, regardless of GULLAK_HTTP_API_KEY. Warn whenever the
+// bridge could plausibly be in use (bridge URL configured) but no dedicated key
+// guards the webhook. Fine on a trusted-only network (Tailscale); risky if
+// exposed.
+if (!config.whatsappApiKey) {
+  console.warn(
+    "WARNING: GULLAK_WHATSAPP_API_KEY is unset — the WhatsApp webhook is " +
+      "unauthenticated and can create transactions. Set it (on the server and " +
+      "the bridge) to secure it, or keep the server on a trusted network. " +
+      "See docs/self-hosting.md.",
+  );
+}
+
 // Optional periodic push of categorised expenses to the Apps Script web app.
 // Disabled unless GULLAK_SHEETS_SYNC_INTERVAL_MIN > 0 and the web-app URL +
 // secret are set. The push also fires after each /v1/sync/push.

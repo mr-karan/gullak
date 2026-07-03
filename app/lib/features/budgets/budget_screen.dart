@@ -6,6 +6,7 @@ import '../../core/money.dart';
 import '../../core/snackbars.dart';
 import '../../state/providers.dart';
 import '../../ui/widgets/empty_state.dart';
+import '../../ui/widgets/error_state.dart';
 import '../../ui/widgets/money_text.dart';
 import 'data/budget_repository.dart';
 
@@ -47,7 +48,10 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
       ),
       body: async.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('Error: $e')),
+        error: (e, _) => ErrorState(
+          message: e.toString(),
+          onRetry: () => ref.invalidate(budgetMonthProvider),
+        ),
         data: (overview) {
           final groups = <String, List<BudgetSummary>>{};
           for (final e in overview.entries) {

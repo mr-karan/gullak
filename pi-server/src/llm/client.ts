@@ -39,20 +39,32 @@ export async function chatJson<T = unknown>(
     ...(opts.history ?? []).map((h) => ({ role: h.role, content: h.content })),
     { role: "user", content: userContent },
   ];
-  const r = await fetch(url, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      authorization: `Bearer ${config.modelApiKey}`,
-      accept: "application/json",
-    },
-    body: JSON.stringify({
-      model: config.modelId,
-      temperature: opts.temperature ?? 0.1,
-      response_format: { type: "json_object" },
-      messages,
-    }),
-  });
+  // Bound every call so a hung upstream (Ollama, OpenRouter) can't pin the
+  // request forever and stack up behind the global body limit. The ceiling is
+  // generous because vision/receipt calls are legitimately slow.
+  let r: Response;
+  try {
+    r = await fetch(url, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${config.modelApiKey}`,
+        accept: "application/json",
+      },
+      body: JSON.stringify({
+        model: config.modelId,
+        temperature: opts.temperature ?? 0.1,
+        response_format: { type: "json_object" },
+        messages,
+      }),
+      signal: AbortSignal.timeout(config.modelTimeoutMs),
+    });
+  } catch (e) {
+    if (e instanceof Error && e.name === "TimeoutError") {
+      throw new Error(`LLM request timed out after ${config.modelTimeoutMs}ms`);
+    }
+    throw e;
+  }
   if (!r.ok) {
     const body = await r.text();
     throw new Error(`LLM ${r.status}: ${body.slice(0, 200)}`);

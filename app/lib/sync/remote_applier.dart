@@ -265,6 +265,10 @@ class RemoteApplier {
             splitTotalCents: Value(
               (payload['splitTotalCents'] as num?)?.toInt(),
             ),
+            originalAmountCents: Value(
+              (payload['originalAmountCents'] as num?)?.toInt(),
+            ),
+            originalCurrency: Value(payload['originalCurrency'] as String?),
             createdAt: Value(
               (payload['createdAt'] as num?)?.toInt() ??
                   local?.createdAt ??
@@ -375,7 +379,12 @@ class RemoteApplier {
         );
   }
 
-  Future<void> _applyRule(String id, String op, dynamic payload, int? at) async {
+  Future<void> _applyRule(
+    String id,
+    String op,
+    dynamic payload,
+    int? at,
+  ) async {
     if (op == 'delete') {
       final local = await (_db.select(
         _db.rules,
@@ -480,6 +489,7 @@ class RemoteApplier {
             notes: Value(payload['notes'] as String?),
             cadence: Value(payload['cadence'] as String? ?? 'monthly'),
             nextDate: Value(payload['nextDate'] as String? ?? ''),
+            anchorDay: Value((payload['anchorDay'] as num?)?.toInt()),
             createdAt: Value(
               (payload['createdAt'] as num?)?.toInt() ??
                   local?.createdAt ??

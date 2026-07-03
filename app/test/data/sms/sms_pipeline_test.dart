@@ -23,22 +23,23 @@ void main() {
   late ParserRegistry registry;
   late List<_NotificationCall> notifications;
 
-  SmsPipeline build({void Function(_NotificationCall)? onNotify}) => SmsPipeline(
-    db: db,
-    reader: reader,
-    parserRegistry: registry,
-    notifyInboxCandidate:
-        ({
-          required smsRowId,
-          required amountCents,
-          required payee,
-          accountHint,
-        }) async {
-          (onNotify ?? notifications.add)(
-            _NotificationCall(amountCents, payee, smsRowId),
-          );
-        },
-  );
+  SmsPipeline build({void Function(_NotificationCall)? onNotify}) =>
+      SmsPipeline(
+        db: db,
+        reader: reader,
+        parserRegistry: registry,
+        notifyInboxCandidate:
+            ({
+              required smsRowId,
+              required amountCents,
+              required payee,
+              accountHint,
+            }) async {
+              (onNotify ?? notifications.add)(
+                _NotificationCall(amountCents, payee, smsRowId),
+              );
+            },
+      );
 
   SmsCandidate candidate(DateTime date, {String? categoryId}) => SmsCandidate(
     amountCents: 45000,
@@ -155,59 +156,65 @@ void main() {
     expect(await db.select(db.smsMessages).get(), hasLength(1));
   });
 
-  test('sibling double-alert is linked as duplicate, not double-counted', () async {
-    final receivedAt = DateTime.now().subtract(const Duration(hours: 2));
-    const body1 = 'Rs.450.00 debited from HDFC Bank card xx1234 at BLINKIT.';
-    const body2 = 'Rs.450.00 debited from HDFC Bank card xx1234 at BLINKIT. ';
-    fakeParser
-      ..respondTo(body1, candidate(receivedAt))
-      ..respondTo(body2, candidate(receivedAt));
-    reader.backfillMessages = [
-      IncomingSms(
-        id: 'hdfc-1',
-        address: 'VK-HDFCBK',
-        body: body1,
-        receivedAt: receivedAt,
-      ),
-      IncomingSms(
-        id: 'hdfc-2',
-        address: 'VK-HDFCBK',
-        body: body2,
-        receivedAt: receivedAt.add(const Duration(seconds: 1)),
-      ),
-    ];
+  test(
+    'sibling double-alert is linked as duplicate, not double-counted',
+    () async {
+      final receivedAt = DateTime.now().subtract(const Duration(hours: 2));
+      const body1 = 'Rs.450.00 debited from HDFC Bank card xx1234 at BLINKIT.';
+      const body2 = 'Rs.450.00 debited from HDFC Bank card xx1234 at BLINKIT. ';
+      fakeParser
+        ..respondTo(body1, candidate(receivedAt))
+        ..respondTo(body2, candidate(receivedAt));
+      reader.backfillMessages = [
+        IncomingSms(
+          id: 'hdfc-1',
+          address: 'VK-HDFCBK',
+          body: body1,
+          receivedAt: receivedAt,
+        ),
+        IncomingSms(
+          id: 'hdfc-2',
+          address: 'VK-HDFCBK',
+          body: body2,
+          receivedAt: receivedAt.add(const Duration(seconds: 1)),
+        ),
+      ];
 
-    await build().backfill();
-    final statuses =
-        (await db.select(db.smsMessages).get())
-            .map((r) => r.candidateStatus)
-            .toList()
-          ..sort();
-    // Both captured (bodies differ), but the second parse is recognised as a
-    // sibling of the first and marked duplicate rather than creating a 2nd txn.
-    expect(statuses, ['duplicate', 'parsed']);
-  });
+      await build().backfill();
+      final statuses =
+          (await db.select(db.smsMessages).get())
+              .map((r) => r.candidateStatus)
+              .toList()
+            ..sort();
+      // Both captured (bodies differ), but the second parse is recognised as a
+      // sibling of the first and marked duplicate rather than creating a 2nd txn.
+      expect(statuses, ['duplicate', 'parsed']);
+    },
+  );
 
-  test('stores non-transactional SMS without candidate or notification', () async {
-    reader.backfillMessages = [
-      IncomingSms(
-        id: 'otp-1',
-        address: 'VM-HDFCBK',
-        body: 'OTP 123456 for HDFC Bank login. Do not share it.',
-        receivedAt: DateTime.now().subtract(const Duration(hours: 3)),
-      ),
-    ];
+  test(
+    'stores non-transactional SMS without candidate or notification',
+    () async {
+      reader.backfillMessages = [
+        IncomingSms(
+          id: 'otp-1',
+          address: 'VM-HDFCBK',
+          body: 'OTP 123456 for HDFC Bank login. Do not share it.',
+          receivedAt: DateTime.now().subtract(const Duration(hours: 3)),
+        ),
+      ];
 
-    final added = await build().backfill();
-    final rows = await db.select(db.smsMessages).get();
+      final added = await build().backfill();
+      final rows = await db.select(db.smsMessages).get();
 
-    expect(added, 0);
-    expect(rows, hasLength(1));
-    expect(rows.single.classifiedAs, 'non_transactional');
-    expect(rows.single.candidateStatus, 'none');
-    expect(rows.single.candidateJson, isNull);
-    expect(notifications, isEmpty);
-  });
+      expect(added, 0);
+      expect(rows, hasLength(1));
+      expect(rows.single.classifiedAs, 'non_transactional');
+      expect(rows.single.candidateStatus, 'none');
+      expect(rows.single.candidateJson, isNull);
+      expect(notifications, isEmpty);
+    },
+  );
 
   test('drains queued background SMS during backfill', () async {
     final queuedAt = DateTime.now().subtract(const Duration(days: 1));
@@ -339,7 +346,11 @@ void main() {
     final receivedAt = DateTime.now().subtract(const Duration(hours: 2));
     // "HDFC Card xx1234" resolves to this account (brand + last-4 + card), so
     // the same-amount/day row is corroborated → safe to link, don't re-book.
-    await insertAccount('acc-hdfc', 'HDFC Credit Card 1234', kind: 'credit_card');
+    await insertAccount(
+      'acc-hdfc',
+      'HDFC Credit Card 1234',
+      kind: 'credit_card',
+    );
     await insertManualTxn(
       id: 'm-hdfc',
       accountId: 'acc-hdfc',
@@ -378,7 +389,11 @@ void main() {
     final receivedAt = DateTime.now().subtract(const Duration(hours: 2));
     // Even though this resolves to the HDFC account at the same amount/day, a
     // transfer leg (transferAccountId set) must be excluded from dedupe.
-    await insertAccount('acc-hdfc', 'HDFC Credit Card 1234', kind: 'credit_card');
+    await insertAccount(
+      'acc-hdfc',
+      'HDFC Credit Card 1234',
+      kind: 'credit_card',
+    );
     await insertAccount('acc-dest', 'Savings');
     await insertManualTxn(
       id: 'm-transfer',
@@ -395,27 +410,67 @@ void main() {
     expect(row.linkedTransactionId, isNull);
   });
 
-  test('live listener and catch-up do not double-ingest the same SMS', () async {
-    final receivedAt = DateTime.now().subtract(const Duration(hours: 2));
-    final sms = IncomingSms(
-      id: 'race-1',
-      address: 'VK-HDFCBK',
-      body: 'Rs.450.00 debited from HDFC Bank card xx1234 at BLINKIT.',
-      receivedAt: receivedAt,
-    );
-    fakeParser.respondTo(sms.body, candidate(receivedAt));
-    reader.backfillMessages = [sms];
+  test('recoverStuckParses re-queues rows stranded by a crash', () async {
     final pipeline = build();
+    // Simulate a crash that left one row mid-parse and one mid-confirm.
+    await db
+        .into(db.smsMessages)
+        .insert(
+          SmsMessagesCompanion.insert(
+            address: 'HDFC',
+            body: 'stuck parsing',
+            receivedAt: DateTime(2026, 6, 1).millisecondsSinceEpoch,
+            classifiedAs: const Value('transactional'),
+            candidateStatus: const Value('parsing'),
+            stableSmsId: const Value('android:stuck1'),
+          ),
+        );
+    await db
+        .into(db.smsMessages)
+        .insert(
+          SmsMessagesCompanion.insert(
+            address: 'ICICI',
+            body: 'stuck confirming',
+            receivedAt: DateTime(2026, 6, 1).millisecondsSinceEpoch,
+            classifiedAs: const Value('transactional'),
+            candidateStatus: const Value('processing'),
+            stableSmsId: const Value('android:stuck2'),
+          ),
+        );
 
-    pipeline.startListening(drainQueued: false);
-    reader.emit(sms);
-    await Future<void>.delayed(const Duration(milliseconds: 30));
+    final recovered = await pipeline.recoverStuckParses();
+    expect(recovered, 2);
+
     final rows = await db.select(db.smsMessages).get();
-
-    expect(rows, hasLength(1));
-    expect(rows.single.androidId, 'race-1');
-    await pipeline.dispose();
+    final byBody = {for (final r in rows) r.body: r.candidateStatus};
+    expect(byBody['stuck parsing'], 'pending_parse');
+    expect(byBody['stuck confirming'], 'parsed');
   });
+
+  test(
+    'live listener and catch-up do not double-ingest the same SMS',
+    () async {
+      final receivedAt = DateTime.now().subtract(const Duration(hours: 2));
+      final sms = IncomingSms(
+        id: 'race-1',
+        address: 'VK-HDFCBK',
+        body: 'Rs.450.00 debited from HDFC Bank card xx1234 at BLINKIT.',
+        receivedAt: receivedAt,
+      );
+      fakeParser.respondTo(sms.body, candidate(receivedAt));
+      reader.backfillMessages = [sms];
+      final pipeline = build();
+
+      pipeline.startListening(drainQueued: false);
+      reader.emit(sms);
+      await Future<void>.delayed(const Duration(milliseconds: 30));
+      final rows = await db.select(db.smsMessages).get();
+
+      expect(rows, hasLength(1));
+      expect(rows.single.androidId, 'race-1');
+      await pipeline.dispose();
+    },
+  );
 }
 
 class _FakeSmsParser implements SmsParser {

@@ -5,10 +5,14 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:quick_actions/quick_actions.dart';
 
+import 'core/logger.dart';
 import 'core/notification_service.dart';
 import 'core/prefs.dart';
 import 'core/secure_store.dart';
+import 'core/snackbars.dart';
+import 'features/recurrences/data/recurrence_repository.dart';
 import 'data/ai/pi_ai_client.dart';
 import 'data/db/database.dart';
 import 'data/sms/sms_pipeline.dart';
@@ -20,6 +24,7 @@ import 'data/sms/sms_background_parse_worker.dart';
 import 'data/sms/sms_enrichment_worker.dart';
 import 'sync/sync_health_monitor.dart';
 import 'sync/sync_scheduler.dart';
+import 'sync/sync_service.dart';
 import 'package:workmanager/workmanager.dart';
 import 'ui/theme.dart';
 
@@ -91,10 +96,12 @@ class GullakApp extends ConsumerStatefulWidget {
 
 class _GullakAppState extends ConsumerState<GullakApp> {
   AppLifecycleListener? _lifecycle;
+  final QuickActions _quickActions = const QuickActions();
 
   @override
   void initState() {
     super.initState();
+    _setupQuickActions();
     // Sync on every resume so we get whatever the homelab learned
     // about while we were backgrounded (wife's iPhone logged
     // expenses, WhatsApp messages came through, etc.).
@@ -102,6 +109,7 @@ class _GullakAppState extends ConsumerState<GullakApp> {
       onResume: () {
         ref.read(syncSchedulerProvider).runNow();
         ref.read(syncHealthMonitorProvider).start();
+        unawaited(_postDueRecurrences());
         if (ref.read(prefsProvider).smsEnabled) {
           unawaited(ref.read(smsPipelineProvider).catchUpRecent());
         }
@@ -118,6 +126,7 @@ class _GullakAppState extends ConsumerState<GullakApp> {
       if (!mounted) return;
       ref.read(syncSchedulerProvider).runNow();
       ref.read(syncHealthMonitorProvider).start();
+      unawaited(_postDueRecurrences());
     });
     // If the user already enabled SMS in a previous session, the
     // listener has to be re-armed each launch — the pref persists
@@ -139,6 +148,67 @@ class _GullakAppState extends ConsumerState<GullakApp> {
   void dispose() {
     _lifecycle?.dispose();
     super.dispose();
+  }
+
+  /// Register a home-screen long-press shortcut that jumps straight to Quick
+  /// Entry — the fastest capture path (unlock → long-press → sheet), skipping
+  /// the app-open + FAB tap. The launch callback fires both on cold start via
+  /// the shortcut and while running.
+  void _setupQuickActions() {
+    _quickActions.initialize((type) {
+      if (type != 'action_new_expense') return;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        final ctx = rootNavigatorKey.currentContext;
+        if (ctx != null) openQuickEntry(ctx);
+      });
+    });
+    _quickActions.setShortcutItems(const [
+      ShortcutItem(
+        type: 'action_new_expense',
+        localizedTitle: 'New expense',
+        icon: 'ic_launcher',
+      ),
+    ]);
+  }
+
+  /// Post any recurrences that have come due since the last launch/resume, and
+  /// tell the user how many landed (the transactions themselves stream into
+  /// Activity automatically via Drift).
+  ///
+  /// Pulls remote changes FIRST. Without this, a device that was offline across
+  /// a due date would post occurrences from its stale `nextDate` — re-creating
+  /// (deterministic id) transactions another device already posted, edited, or
+  /// deleted, and clobbering those via last-write-wins. Pulling first gives us
+  /// the advanced `nextDate` and the already-posted rows, so postDue no-ops.
+  Future<void> _postDueRecurrences() async {
+    try {
+      final sync = ref.read(syncServiceProvider);
+      if (await sync.isConfigured()) {
+        try {
+          await sync.pullChanges();
+        } catch (_) {
+          // Offline/unreachable: fall through and post from local state. A
+          // truly-offline device can't push the re-post until it next syncs,
+          // and syncOnce pulls before this fires again on the next resume.
+        }
+      }
+      final posted = await ref.read(recurrenceRepoProvider).postDue();
+      if (posted == 0 || !mounted) return;
+      final ctx = rootNavigatorKey.currentContext;
+      if (ctx == null) return;
+      showTimedSnackBar(
+        // ignore: use_build_context_synchronously
+        ScaffoldMessenger.of(ctx),
+        SnackBar(
+          content: Text(
+            'Posted $posted recurring transaction${posted == 1 ? '' : 's'}.',
+          ),
+        ),
+      );
+    } catch (e) {
+      // Never let a recurrence hiccup take down launch/resume.
+      log.w('postDue failed: $e');
+    }
   }
 
   @override

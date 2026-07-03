@@ -39,6 +39,14 @@ class MoneyText extends StatelessWidget {
         symbol: symbol,
         showSign: showSign,
       ),
+      // Mono tabular glyphs can read oddly to a screen reader; give it a clean
+      // spoken form with the sign spelled out.
+      semanticsLabel: moneySemanticsLabel(
+        amountCents,
+        minorDigits: minorDigits,
+        symbol: symbol,
+        showSign: showSign,
+      ),
       style: moneyStyle(
         context,
         size: dp,
@@ -46,4 +54,22 @@ class MoneyText extends StatelessWidget {
       ).copyWith(color: color),
     );
   }
+}
+
+/// Screen-reader label for a money amount: the sign spelled out, then the
+/// symbol and magnitude (e.g. -45000 → "minus ₹450.00").
+String moneySemanticsLabel(
+  int amountCents, {
+  int minorDigits = 2,
+  String symbol = '₹',
+  bool showSign = false,
+}) {
+  final magnitude = Money.format(
+    amountCents.abs(),
+    minorDigits: minorDigits,
+    symbol: symbol,
+  );
+  if (amountCents < 0) return 'minus $magnitude';
+  if (showSign && amountCents > 0) return 'plus $magnitude';
+  return magnitude;
 }

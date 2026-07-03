@@ -4,6 +4,8 @@ import 'dart:convert';
 import 'package:drift/drift.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/logger.dart';
+import '../../../core/money.dart';
 import '../../../data/ai/pi_ai_client.dart';
 import '../../../data/db/database.dart';
 import '../../../data/sms/account_matcher.dart';
@@ -49,8 +51,7 @@ class InboxItem {
   final String? suggestedCategoryName;
 
   bool get hasCandidate =>
-      (status == 'parsed' || status == 'inbox') &&
-      suggestedAmountCents != null;
+      (status == 'parsed' || status == 'inbox') && suggestedAmountCents != null;
 }
 
 /// A parsed SMS row resolved into the fields a transaction needs.
@@ -106,12 +107,25 @@ class SmsRepository {
   List<CategoryRow>? _categories;
   List<PayeeRow>? _payees;
   Map<String, dynamic>? _payeeCategoryHints;
+  // Exact-match lookups built once per warm so per-row enrichment doesn't
+  // linear-scan the category/payee lists on every SMS. The substring-hint
+  // fallbacks still iterate, but only when an exact match misses.
+  Map<String, CategoryRow>? _categoriesById;
+  Map<String, CategoryRow>? _categoriesByLowerName;
+  Map<String, PayeeRow>? _payeesByLowerName;
 
   Future<void> _warmCache() async {
     if (_accounts != null) return;
     _accounts = await ref.read(accountRepoProvider).list();
-    _categories = await ref.read(categoryRepoProvider).list();
-    _payees = await ref.read(payeeRepoProvider).list();
+    final categories = await ref.read(categoryRepoProvider).list();
+    _categories = categories;
+    final payees = await ref.read(payeeRepoProvider).list();
+    _payees = payees;
+    _categoriesById = {for (final c in categories) c.id: c};
+    _categoriesByLowerName = {
+      for (final c in categories) c.name.toLowerCase(): c,
+    };
+    _payeesByLowerName = {for (final p in payees) p.name.toLowerCase(): p};
     try {
       _payeeCategoryHints =
           jsonDecode(ref.read(prefsProvider).payeeCategoryHints)
@@ -126,6 +140,9 @@ class SmsRepository {
     _categories = null;
     _payees = null;
     _payeeCategoryHints = null;
+    _categoriesById = null;
+    _categoriesByLowerName = null;
+    _payeesByLowerName = null;
   }
 
   /// Pending review: server-parsed SMS that needs the user (status='parsed',
@@ -173,6 +190,9 @@ class SmsRepository {
             _categories!,
             _payees!,
             _payeeCategoryHints!,
+            _categoriesById!,
+            _categoriesByLowerName!,
+            _payeesByLowerName!,
           ),
         )
         .toList();
@@ -274,6 +294,27 @@ class SmsRepository {
     });
   }
 
+  /// Cheap pending/failed counts for surfaces (the Home Daily Review) that need
+  /// the numbers but not the enriched rows. Watching [watchInbox] from Home
+  /// kept the whole enrichment pipeline warm on every SMS change just to render
+  /// a badge; this is a single indexed COUNT with no enrichment.
+  Stream<({int pending, int failed})> watchInboxCounts() {
+    final q = _db.customSelect(
+      'SELECT '
+      "SUM(CASE WHEN candidate_status IN ('parsed','inbox') THEN 1 ELSE 0 END) "
+      'AS pending, '
+      "SUM(CASE WHEN candidate_status IN ('parse_failed','error') THEN 1 ELSE 0 END) "
+      'AS failed FROM sms_messages',
+      readsFrom: {_db.smsMessages},
+    );
+    return q.watchSingle().map(
+      (r) => (
+        pending: r.read<int?>('pending') ?? 0,
+        failed: r.read<int?>('failed') ?? 0,
+      ),
+    );
+  }
+
   /// Re-queue a row for server parsing, e.g. when the user disagrees with the
   /// classifier's "non-transactional" call or wants a failed parse retried.
   /// Status flips to `pending_parse` with backoff cleared so the next drain
@@ -295,6 +336,9 @@ class SmsRepository {
     List<CategoryRow> categories,
     List<PayeeRow> payees,
     Map<String, dynamic> categoryHintsByPayeeId,
+    Map<String, CategoryRow> categoriesById,
+    Map<String, CategoryRow> categoriesByLowerName,
+    Map<String, PayeeRow> payeesByLowerName,
   ) {
     String? payeeText;
     int? amount;
@@ -321,6 +365,8 @@ class SmsRepository {
 
     String? accountName;
     if (accountHint != null && accountHint.isNotEmpty) {
+      // Account names are unstructured ("HDFC Card xx1234"), so this stays a
+      // substring match — but the list is tiny (a handful of accounts).
       for (final a in accounts) {
         final n = a.name.toLowerCase();
         if (n == accountHint ||
@@ -334,43 +380,37 @@ class SmsRepository {
 
     String? categoryName;
     if (categoryId != null) {
-      for (final c in categories) {
-        if (c.id == categoryId) {
-          categoryName = c.name;
-          break;
-        }
-      }
+      categoryName = categoriesById[categoryId]?.name; // O(1)
     }
     if (categoryName == null &&
         categoryHint != null &&
         categoryHint.isNotEmpty) {
-      for (final c in categories) {
-        final n = c.name.toLowerCase();
-        if (n == categoryHint ||
-            n.contains(categoryHint) ||
-            categoryHint.contains(n)) {
-          categoryName = c.name;
-          break;
+      // Try the exact name first (O(1)); fall back to substring only on miss.
+      categoryName = categoriesByLowerName[categoryHint]?.name;
+      if (categoryName == null) {
+        for (final c in categories) {
+          final n = c.name.toLowerCase();
+          if (n.contains(categoryHint) || categoryHint.contains(n)) {
+            categoryName = c.name;
+            break;
+          }
         }
       }
     }
     if (categoryName == null && payeeText != null && payeeText.isNotEmpty) {
       final pn = payeeText.toLowerCase();
-      for (final p in payees) {
-        final n = p.name.toLowerCase();
-        if (n == pn || n.contains(pn) || pn.contains(n)) {
-          final cid = categoryHintsByPayeeId[p.id];
-          if (cid is String) {
-            for (final c in categories) {
-              if (c.id == cid) {
-                categoryName = c.name;
-                break;
-              }
-            }
+      PayeeRow? matched = payeesByLowerName[pn]; // O(1) exact
+      if (matched == null) {
+        for (final p in payees) {
+          final n = p.name.toLowerCase();
+          if (n.contains(pn) || pn.contains(n)) {
+            matched = p;
+            break;
           }
-          break;
         }
       }
+      final cid = matched == null ? null : categoryHintsByPayeeId[matched.id];
+      if (cid is String) categoryName = categoriesById[cid]?.name;
     }
 
     return InboxItem(
@@ -492,13 +532,14 @@ class SmsRepository {
       }
 
       if (resolved.duplicateOf != null) {
-        await (_db.update(_db.smsMessages)..where((t) => t.id.equals(id)))
-            .write(
-              SmsMessagesCompanion(
-                candidateStatus: const Value('duplicate'),
-                linkedTransactionId: Value(resolved.duplicateOf),
-              ),
-            );
+        await (_db.update(
+          _db.smsMessages,
+        )..where((t) => t.id.equals(id))).write(
+          SmsMessagesCompanion(
+            candidateStatus: const Value('duplicate'),
+            linkedTransactionId: Value(resolved.duplicateOf),
+          ),
+        );
         settled = true;
         return true;
       }
@@ -517,6 +558,8 @@ class SmsRepository {
             : 'SMS · ${resolved.row.address}',
         origin: 'sms',
         originRef: resolved.row.id.toString(),
+        originalAmountCents: resolved.originalAmountCents,
+        originalCurrency: resolved.originalCurrency,
       );
       if (resolved.tagIds.isNotEmpty) {
         await ref
@@ -557,8 +600,7 @@ class SmsRepository {
       // in 'processing'.
       if (!settled) {
         await (_db.update(_db.smsMessages)..where(
-              (t) =>
-                  t.id.equals(id) & t.candidateStatus.equals('processing'),
+              (t) => t.id.equals(id) & t.candidateStatus.equals('processing'),
             ))
             .write(
               const SmsMessagesCompanion(candidateStatus: Value('parsed')),
@@ -590,6 +632,18 @@ class SmsRepository {
     }
     final amount = (j['amount_cents'] as num?)?.toInt() ?? 0;
     if (amount == 0) return null;
+    // Foreign-currency: the parser returns an ISO code. Tag the transaction
+    // when it's a currency other than the user's base so the amount isn't
+    // silently mislabeled as base-currency units (the phantom-amount class).
+    final currency = (j['currency'] as String?)?.trim().toUpperCase();
+    final baseCode = Money.currencyCodeForSymbol(
+      ref.read(prefsProvider).currencySymbol,
+    );
+    final isForeign =
+        currency != null &&
+        RegExp(r'^[A-Z]{3}$').hasMatch(currency) &&
+        baseCode != null &&
+        currency != baseCode;
     final isIncome = j['is_income'] == true;
     var payee = j['payee'] as String?;
     final accountHint = (j['account_hint'] as String?)?.toLowerCase();
@@ -674,6 +728,92 @@ class SmsRepository {
       categoryId: categoryId,
       tagIds: ruleAction.tagIds,
       duplicateOf: existing?.id,
+      originalAmountCents: isForeign ? amount.abs() : null,
+      originalCurrency: isForeign ? currency : null,
+    );
+  }
+
+  /// Read-only forecast of what [confirmAll] would do, for the confirm dialog.
+  /// Runs the SAME resolution as [_resolveRow] — rules (actionForSms), then
+  /// matchAccountHint, then category-hint matching — so the preview counts
+  /// match the commit. It must stay in sync with [_resolveRow]; the shared
+  /// steps are annotated in both. No writes (no payee ensure, no dismiss).
+  Future<({int total, int noAccount, int noCategory, int ignored})>
+  previewConfirmAll(List<int> rowIds) async {
+    final accounts = await ref
+        .read(accountRepoProvider)
+        .list(includeArchived: false);
+    final categories = await ref.read(categoryRepoProvider).list();
+    var total = 0;
+    var noAccount = 0;
+    var noCategory = 0;
+    var ignored = 0;
+    for (final id in rowIds) {
+      final row = await (_db.select(
+        _db.smsMessages,
+      )..where((t) => t.id.equals(id))).getSingleOrNull();
+      if (row == null) continue;
+      final source = (row.enrichedCandidateJson?.isNotEmpty ?? false)
+          ? row.enrichedCandidateJson
+          : row.candidateJson;
+      if (source == null) continue;
+      Map<String, dynamic> j;
+      try {
+        j = jsonDecode(source) as Map<String, dynamic>;
+      } catch (_) {
+        continue;
+      }
+      final amount = (j['amount_cents'] as num?)?.toInt() ?? 0;
+      if (amount == 0) continue;
+      total += 1;
+      final payee = j['payee'] as String?;
+      final accountHint = (j['account_hint'] as String?)?.toLowerCase();
+      var categoryId = j['category_id'] as String?;
+      final categoryHint = (j['category_hint'] as String?)?.toLowerCase();
+      final ruleAction = await ref
+          .read(ruleRepoProvider)
+          .actionForSms(
+            address: row.address,
+            body: row.body,
+            payeeName: payee,
+            accountHint: accountHint,
+            amountCents: amount,
+          );
+      if (ruleAction.ignore == true) {
+        ignored += 1;
+        continue;
+      }
+      categoryId = ruleAction.categoryId ?? categoryId;
+      // Account resolution BEFORE the first-account fallback — a fallback is
+      // what the dialog warns about.
+      String? acctId;
+      if (ruleAction.accountId != null &&
+          accounts.any((a) => a.id == ruleAction.accountId)) {
+        acctId = ruleAction.accountId;
+      }
+      acctId ??= matchAccountHint(
+        accountHint,
+        accounts.map((a) => (id: a.id, name: a.name, kind: a.kind)).toList(),
+      );
+      if (acctId == null) noAccount += 1;
+      if (categoryId == null && categoryHint != null) {
+        for (final c in categories) {
+          final n = c.name.toLowerCase();
+          if (n == categoryHint ||
+              n.contains(categoryHint) ||
+              categoryHint.contains(n)) {
+            categoryId = c.id;
+            break;
+          }
+        }
+      }
+      if (categoryId == null) noCategory += 1;
+    }
+    return (
+      total: total,
+      noAccount: noAccount,
+      noCategory: noCategory,
+      ignored: ignored,
     );
   }
 
@@ -739,8 +879,10 @@ class SmsRepository {
           ),
         ],
       );
-    } catch (_) {
-      // best-effort
+    } catch (e) {
+      // Best-effort: the server may be offline. A later backfill re-uploads;
+      // log so a persistent failure is diagnosable rather than invisible.
+      log.w('sms body upload failed (will retry via backfill): $e');
     }
   }
 
@@ -749,8 +891,8 @@ class SmsRepository {
       final client = await ref.read(piAiClientProvider.future);
       if (client == null) return;
       await client.reprocessSms(limit: 200);
-    } catch (_) {
-      // best-effort
+    } catch (e) {
+      log.w('server SMS reprocess trigger failed (best-effort): $e');
     }
   }
 
@@ -795,8 +937,9 @@ class SmsRepository {
       try {
         await client.bulkIngestSms(items: items);
         uploaded += items.length;
-      } catch (_) {
-        // skip this batch; partial progress is fine
+      } catch (e) {
+        // Skip this batch; partial progress is fine and the next run retries.
+        log.w('historical SMS backfill batch failed (best-effort): $e');
       }
     }
     if (uploaded > 0) await _triggerServerReprocess();
@@ -807,6 +950,11 @@ class SmsRepository {
 final Provider<SmsRepository> smsRepositoryProvider = Provider<SmsRepository>(
   (ref) => SmsRepository(ref),
 );
+
+/// Lightweight pending/failed counts (no row enrichment) for the Home badge.
+final inboxCountsProvider = StreamProvider<({int pending, int failed})>((ref) {
+  return ref.watch(smsRepositoryProvider).watchInboxCounts();
+});
 
 final StreamProvider<List<InboxItem>> inboxItemsProvider =
     StreamProvider<List<InboxItem>>((ref) {
@@ -845,6 +993,8 @@ class _ResolvedSms {
     this.tagIds = const [],
     this.duplicateOf,
     this.ignored = false,
+    this.originalAmountCents,
+    this.originalCurrency,
   });
 
   /// Constructor for rows that a rule said to ignore. The DB row is
@@ -871,4 +1021,8 @@ class _ResolvedSms {
   final List<String> tagIds;
   final String? duplicateOf;
   final bool ignored;
+  // Foreign-currency metadata carried from the SMS parse (display-only). Set
+  // only when the SMS was in a currency other than the user's base.
+  final int? originalAmountCents;
+  final String? originalCurrency;
 }

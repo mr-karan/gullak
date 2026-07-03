@@ -104,12 +104,18 @@ class SyncService {
     return testConnection(baseUrl: baseUrl, apiKey: apiKey);
   }
 
-  Future<({int pushed, int pulled, String? error})> syncOnce() async {
+  Future<({int pushed, int pulled, int quarantined, String? error})>
+  syncOnce() async {
     if (!await isConfigured()) {
-      return (pushed: 0, pulled: 0, error: 'Sync server not configured.');
+      return (
+        pushed: 0,
+        pulled: 0,
+        quarantined: 0,
+        error: 'Sync server not configured.',
+      );
     }
     try {
-      final pushed = await pushPending();
+      final push = await pushPending();
       final pulled = await pullChanges();
       // WhatsApp-derived inbox candidates land on the server queue;
       // import them into the local SMS Inbox so the existing review
@@ -121,11 +127,31 @@ class SyncService {
         log.w('whatsapp candidate import failed: $e');
       }
       await _prefs.setSyncLastAt(DateTime.now().millisecondsSinceEpoch);
+      // Persist a running total of quarantined (unsyncable) changes so the
+      // signal survives pruneSynced and can be shown in Settings. Corruption is
+      // near-impossible in practice, but if it happens the user must know a
+      // change never left the device rather than silently diverging.
+      if (push.quarantined > 0) {
+        log.e('sync: quarantined ${push.quarantined} unsyncable change(s)');
+        await _prefs.setSyncQuarantined(
+          _prefs.syncQuarantined + push.quarantined,
+        );
+      }
       await pruneSynced();
-      return (pushed: pushed, pulled: pulled, error: null);
+      return (
+        pushed: push.pushed,
+        pulled: pulled,
+        quarantined: push.quarantined,
+        error: null,
+      );
     } catch (e) {
       log.w('sync failed: $e');
-      return (pushed: 0, pulled: 0, error: networkErrorMessage(e));
+      return (
+        pushed: 0,
+        pulled: 0,
+        quarantined: 0,
+        error: networkErrorMessage(e),
+      );
     }
   }
 
@@ -288,13 +314,18 @@ class SyncService {
     return pulled;
   }
 
-  Future<int> pushPending() async {
+  /// Pushes unsynced change-log rows. Returns the count actually sent and the
+  /// count quarantined (locally-corrupt rows that can never be pushed — see the
+  /// decode guard below). Quarantined is surfaced up so the user learns a
+  /// change couldn't sync instead of it vanishing silently.
+  Future<({int pushed, int quarantined})> pushPending() async {
     final baseUrl = (await _secure.readSyncBaseUrl())?.trim();
     final apiKey = (await _secure.readSyncApiKey())?.trim();
-    if (baseUrl == null || baseUrl.isEmpty) return 0;
+    if (baseUrl == null || baseUrl.isEmpty) return (pushed: 0, quarantined: 0);
 
     final clientId = await _getClientId();
     var pushed = 0;
+    var quarantined = 0;
     while (true) {
       final batch =
           await (_db.select(_db.changeLog)
@@ -308,43 +339,73 @@ class SyncService {
               .get();
       if (batch.isEmpty) break;
 
-      final body = {
-        'clientId': clientId,
-        'changes': [
-          for (final row in batch)
-            {
-              'clientChangeId': row.clientChangeId,
-              'resource': row.resource,
-              'resourceId': row.resourceId,
-              'op': row.op,
-              if (row.payload != null) 'payload': jsonDecode(row.payload!),
+      // Decode each row's payload defensively. A change_log payload is written
+      // by us via jsonEncode, so a decode failure means the local row is
+      // corrupt — it can never be pushed. Quarantine it (mark synced) so a
+      // single bad row can't throw out of the batch and wedge every future
+      // push forever.
+      final changes = <Map<String, dynamic>>[];
+      final sentIds = <int>[];
+      final corruptIds = <int>[];
+      for (final row in batch) {
+        dynamic payload;
+        if (row.payload != null) {
+          try {
+            payload = jsonDecode(row.payload!);
+          } catch (e) {
+            log.w(
+              'sync: corrupt local change_log payload id=${row.id}; '
+              'quarantining: $e',
+            );
+            corruptIds.add(row.id);
+            continue;
+          }
+        }
+        changes.add({
+          'clientChangeId': row.clientChangeId,
+          'resource': row.resource,
+          'resourceId': row.resourceId,
+          'op': row.op,
+          // ignore: use_null_aware_elements
+          if (payload != null) 'payload': payload,
+        });
+        sentIds.add(row.id);
+      }
+
+      // Retire corrupt rows regardless of the network outcome so they leave the
+      // unsynced set and the loop can make progress.
+      if (corruptIds.isNotEmpty) {
+        await (_db.update(_db.changeLog)..where((t) => t.id.isIn(corruptIds)))
+            .write(const ChangeLogCompanion(synced: Value(true)));
+        quarantined += corruptIds.length;
+      }
+
+      if (changes.isNotEmpty) {
+        final url = _join(baseUrl, '/v1/sync/push');
+        await _dio.post<dynamic>(
+          url,
+          data: {'clientId': clientId, 'changes': changes},
+          options: Options(
+            headers: {
+              if (apiKey != null && apiKey.isNotEmpty) 'x-api-key': apiKey,
+              'content-type': 'application/json',
+              'accept': 'application/json',
+              'connection': 'close',
             },
-        ],
-      };
+            connectTimeout: const Duration(seconds: 5),
+            sendTimeout: const Duration(seconds: 20),
+            receiveTimeout: const Duration(seconds: 30),
+          ),
+        );
 
-      final url = _join(baseUrl, '/v1/sync/push');
-      await _dio.post<dynamic>(
-        url,
-        data: body,
-        options: Options(
-          headers: {
-            if (apiKey != null && apiKey.isNotEmpty) 'x-api-key': apiKey,
-            'content-type': 'application/json',
-            'accept': 'application/json',
-            'connection': 'close',
-          },
-          connectTimeout: const Duration(seconds: 5),
-          sendTimeout: const Duration(seconds: 20),
-          receiveTimeout: const Duration(seconds: 30),
-        ),
-      );
-
-      await (_db.update(_db.changeLog)
-            ..where((t) => t.id.isIn(batch.map((r) => r.id).toList())))
-          .write(const ChangeLogCompanion(synced: Value(true)));
-      pushed += batch.length;
+        // Only mark rows synced after the POST returns non-error (Dio throws on
+        // non-2xx, which propagates and leaves them unsynced for retry).
+        await (_db.update(_db.changeLog)..where((t) => t.id.isIn(sentIds)))
+            .write(const ChangeLogCompanion(synced: Value(true)));
+        pushed += sentIds.length;
+      }
     }
-    return pushed;
+    return (pushed: pushed, quarantined: quarantined);
   }
 
   /// Drop synced change-log rows older than [_pruneRetainDays]. Keeps

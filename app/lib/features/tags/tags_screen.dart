@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/money.dart';
 import '../../state/providers.dart';
+import '../../ui/widgets/error_state.dart';
 import '../transactions/data/transaction_repository.dart';
 import 'data/tag_repository.dart';
 
@@ -27,7 +28,10 @@ class TagsScreen extends ConsumerWidget {
       ),
       body: analytics.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('Error: $e')),
+        error: (e, _) => ErrorState(
+          message: e.toString(),
+          onRetry: () => ref.invalidate(tagAnalyticsProvider),
+        ),
         data: (rows) {
           if (rows.isEmpty) {
             return ListView(

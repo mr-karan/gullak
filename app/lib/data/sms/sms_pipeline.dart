@@ -81,6 +81,12 @@ class SmsPipeline {
   StreamSubscription<IncomingSms>? _sub;
   int _generation = 0;
   bool _scanRunning = false;
+  // Stuck-row recovery must run at most once per process launch. Running it on
+  // every backfill/resume can reset a 'processing'/'parsing' claim that is
+  // legitimately in flight (an Inbox confirm, or a slow server parse),
+  // re-exposing the row and enabling a duplicate transaction. At the first
+  // backfill after launch nothing has claimed anything yet, so it's safe there.
+  bool _stuckRecovered = false;
   bool _disposed = false;
   final Set<String> _inFlightSmsKeys = <String>{};
   final ValueNotifier<SmsScanState> scanState = ValueNotifier<SmsScanState>(
@@ -89,6 +95,31 @@ class SmsPipeline {
 
   void _updateScanState(SmsScanState state) {
     if (!_disposed) scanState.value = state;
+  }
+
+  /// Reset rows stranded mid-flight by a crash or force-kill. `parsing` is a
+  /// transient claim set by [drainPendingParses] before the server round-trip;
+  /// `processing` is the Inbox confirm claim. If the app dies between claim and
+  /// resolution the row is stuck forever — the drainer only looks at
+  /// `pending_parse`, and the Inbox doesn't show `parsing`/`processing`. This
+  /// runs at the launch/resume entry points (before any drain), where no claim
+  /// can legitimately be in flight, so resetting them is safe. Re-sending a
+  /// recovered parse is harmless: the stableSmsId keeps it idempotent.
+  Future<int> recoverStuckParses() async {
+    final reparse = await db.customUpdate(
+      "UPDATE sms_messages SET candidate_status = 'pending_parse', "
+      'next_parse_after = NULL '
+      "WHERE candidate_status = 'parsing'",
+      updates: {db.smsMessages},
+    );
+    final rereview = await db.customUpdate(
+      "UPDATE sms_messages SET candidate_status = 'parsed' "
+      "WHERE candidate_status = 'processing'",
+      updates: {db.smsMessages},
+    );
+    final total = reparse + rereview;
+    if (total > 0) log.w('sms: recovered $total row(s) stuck mid-flight');
+    return total;
   }
 
   Future<int> backfill({
@@ -100,6 +131,10 @@ class SmsPipeline {
     _scanRunning = true;
     final generation = _generation;
     try {
+      if (!_stuckRecovered) {
+        _stuckRecovered = true;
+        await recoverStuckParses();
+      }
       if (showProgress) {
         _updateScanState(
           SmsScanState(
@@ -170,6 +205,11 @@ class SmsPipeline {
   /// task uses this so SMS received while the app is closed get parsed
   /// without waiting for the next foreground open. Returns the count ingested.
   Future<int> ingestBackgroundQueue() async {
+    // Deliberately does NOT call recoverStuckParses(): this runs in the
+    // WorkManager isolate with its own DB connection and can fire while the
+    // foreground app holds a legitimate claim — resetting it cross-isolate
+    // would race a confirm into a duplicate. Stuck rows are recovered by the
+    // next foreground launch instead.
     final queued = await reader.drainBackgroundQueue();
     var added = 0;
     for (final m in queued) {
@@ -381,9 +421,7 @@ class SmsPipeline {
                     t.candidateStatus.equals('pending_parse'),
               ))
               .write(
-                const SmsMessagesCompanion(
-                  candidateStatus: Value('parsing'),
-                ),
+                const SmsMessagesCompanion(candidateStatus: Value('parsing')),
               );
       if (claimed == 0) continue;
       final sms = IncomingSms(
@@ -411,15 +449,16 @@ class SmsPipeline {
         // Transport failure: server unreachable / not configured yet. Keep the
         // SMS queued and back off so it parses once the server is reachable.
         final attempt = row.parseAttemptCount + 1;
-        await (db.update(db.smsMessages)..where((t) => t.id.equals(row.id)))
-            .write(
-              SmsMessagesCompanion(
-                candidateStatus: const Value('pending_parse'),
-                parseAttemptCount: Value(attempt),
-                nextParseAfter: Value(now + _backoffMs(attempt)),
-                lastParseError: Value(e.toString()),
-              ),
-            );
+        await (db.update(
+          db.smsMessages,
+        )..where((t) => t.id.equals(row.id))).write(
+          SmsMessagesCompanion(
+            candidateStatus: const Value('pending_parse'),
+            parseAttemptCount: Value(attempt),
+            nextParseAfter: Value(now + _backoffMs(attempt)),
+            lastParseError: Value(e.toString()),
+          ),
+        );
       }
     }
     return processed;
@@ -773,4 +812,3 @@ final Provider<SmsPipeline> smsPipelineProvider = Provider<SmsPipeline>((ref) {
   });
   return pipeline;
 });
-

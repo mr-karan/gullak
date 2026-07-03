@@ -9,10 +9,10 @@ import { whatsappInboxCandidates } from "../db/schema.ts";
 export const messagesRouter = new Hono<AppEnv>();
 
 const messageBody = z.object({
-  text: z.string().min(1),
-  threadId: z.string().optional(),
-  source: z.string().optional(),
-  sourceUser: z.string().optional(),
+  text: z.string().min(1).max(4000),
+  threadId: z.string().max(128).optional(),
+  source: z.string().max(64).optional(),
+  sourceUser: z.string().max(128).optional(),
 });
 
 messagesRouter.post("/", async (c) => {
@@ -26,18 +26,18 @@ messagesRouter.post("/", async (c) => {
 export const whatsappRouter = new Hono<AppEnv>();
 
 const whatsappBody = z.object({
-  event: z.string(),
+  event: z.string().max(64),
   payload: z.object({
-    id: z.string().optional(),
-    from: z.string().optional(),
+    id: z.string().max(256).optional(),
+    from: z.string().max(256).optional(),
     fromMe: z.boolean().optional(),
-    author: z.string().optional(),
-    authorPhone: z.string().optional(),
-    pushName: z.string().nullable().optional(),
-    body: z.string().optional(),
-    quotedText: z.string().nullable().optional(),
-    quotedMessageId: z.string().nullable().optional(),
-    timestamp: z.union([z.number(), z.string()]).optional(),
+    author: z.string().max(256).optional(),
+    authorPhone: z.string().max(64).optional(),
+    pushName: z.string().max(256).nullable().optional(),
+    body: z.string().max(4000).optional(),
+    quotedText: z.string().max(4000).nullable().optional(),
+    quotedMessageId: z.string().max(256).nullable().optional(),
+    timestamp: z.union([z.number(), z.string().max(32)]).optional(),
   }),
 });
 
@@ -45,8 +45,13 @@ whatsappRouter.post("/webhook", async (c) => {
   const db = c.get("db");
   const config = c.get("config");
   // The webhook is exempt from the global x-api-key gate so the bridge can
-  // reach it — but if a WhatsApp key is configured, require the bridge to
-  // present it, so the endpoint isn't an open injection point.
+  // reach it. The agent log-path can WRITE financial rows, so lock it down with
+  // a DEDICATED key: when GULLAK_WHATSAPP_API_KEY is set, require it. We do NOT
+  // accept the general httpApiKey here — the bridge only knows the WhatsApp key,
+  // and requiring the http key would silently 401 every existing bridge that
+  // was set up before this key existed. Operators who want the webhook secured
+  // set GULLAK_WHATSAPP_API_KEY on both sides; index.ts warns at boot when it's
+  // reachable without one.
   if (
     config.whatsappApiKey &&
     c.req.header("x-api-key") !== config.whatsappApiKey

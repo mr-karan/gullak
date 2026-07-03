@@ -725,6 +725,9 @@ class SettingsScreen extends ConsumerWidget {
     }
     final msg = result.error != null
         ? 'Sync failed: ${result.error}'
+        : result.quarantined > 0
+        ? 'Pushed ${result.pushed}, pulled ${result.pulled} · '
+              '${result.quarantined} change(s) could not sync'
         : 'Pushed ${result.pushed}, pulled ${result.pulled}';
     showTimedSnackBar(
       messenger,

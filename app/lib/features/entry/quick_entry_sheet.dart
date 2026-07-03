@@ -701,6 +701,12 @@ class _FormTabState extends ConsumerState<_FormTab> {
   String? _newPayeeName;
   DateTime _date = clock.today();
   final _notesCtrl = TextEditingController();
+  // Optional foreign-currency capture, hidden behind a chip like notes.
+  // Records what the expense was in its original currency (e.g. USD 20); the
+  // main amount stays in the base currency. Display-only, no conversion.
+  final _foreignAmountCtrl = TextEditingController();
+  final _foreignCurrencyCtrl = TextEditingController();
+  bool _foreignExpanded = false;
   final Set<String> _tagIds = <String>{};
   // Notes is hidden behind a + chip until the user wants it. Most
   // entries don't carry a note; keeping the form short saves a row.
@@ -806,6 +812,16 @@ class _FormTabState extends ConsumerState<_FormTab> {
       _date = DateTime.tryParse(row.date) ?? clock.today();
       _notesCtrl.text = row.notes ?? '';
       _notesExpanded = (row.notes ?? '').isNotEmpty;
+      if (row.originalAmountCents != null &&
+          (row.originalCurrency ?? '').isNotEmpty) {
+        final code = row.originalCurrency!;
+        _foreignAmountCtrl.text = Money.formatDigitsOnly(
+          row.originalAmountCents!,
+          minorDigits: Money.minorDigitsForCurrency(code),
+        );
+        _foreignCurrencyCtrl.text = code;
+        _foreignExpanded = true;
+      }
       _hydrating = false;
     });
   }
@@ -834,7 +850,24 @@ class _FormTabState extends ConsumerState<_FormTab> {
   @override
   void dispose() {
     _notesCtrl.dispose();
+    _foreignAmountCtrl.dispose();
+    _foreignCurrencyCtrl.dispose();
     super.dispose();
+  }
+
+  /// Parse the optional foreign-amount fields into (minorUnits, code), or
+  /// (null, null) when unset/blank. The amount is scaled by the chosen
+  /// currency's own minor digits (USD 2, JPY 0).
+  ({int? cents, String? code}) _foreignValue() {
+    final code = _foreignCurrencyCtrl.text.trim().toUpperCase();
+    final raw = _foreignAmountCtrl.text.trim();
+    if (code.isEmpty || raw.isEmpty) return (cents: null, code: null);
+    final cents = Money.parseToMinor(
+      raw,
+      minorDigits: Money.minorDigitsForCurrency(code),
+    );
+    if (cents == 0) return (cents: null, code: null);
+    return (cents: cents.abs(), code: code);
   }
 
   Future<void> _onPayeePicked({PayeeRow? payee, String? newName}) async {
@@ -894,6 +927,7 @@ class _FormTabState extends ConsumerState<_FormTab> {
       final location = !_isEditing && prefs.locationCaptureEnabled
           ? await ref.read(locationServiceProvider).capture()
           : null;
+      final foreign = _foreignValue();
       if (_isEditing) {
         await repo.update(
           widget.editingTransactionId!,
@@ -904,6 +938,8 @@ class _FormTabState extends ConsumerState<_FormTab> {
           amountCents: amount,
           date: _date,
           notes: _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
+          originalAmountCents: foreign.cents,
+          originalCurrency: foreign.code,
         );
         await ref
             .read(tagRepoProvider)
@@ -926,6 +962,8 @@ class _FormTabState extends ConsumerState<_FormTab> {
           locationName: location?.name,
           origin: draft != null ? 'sms' : 'manual',
           originRef: draft?.smsRowId.toString(),
+          originalAmountCents: foreign.cents,
+          originalCurrency: foreign.code,
         );
         final activeTagId = prefs.activeTagId;
         final tags = {..._tagIds, ?activeTagId};
@@ -1050,6 +1088,63 @@ class _FormTabState extends ConsumerState<_FormTab> {
                               setState(() => _notesExpanded = true),
                           icon: const Icon(Icons.note_add_outlined, size: 18),
                           label: const Text('Add note'),
+                          style: TextButton.styleFrom(
+                            alignment: Alignment.centerLeft,
+                            minimumSize: const Size.fromHeight(48),
+                            padding: const EdgeInsets.symmetric(horizontal: 4),
+                          ),
+                        ),
+                      ),
+                    if (_foreignExpanded)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8, bottom: 4),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              flex: 2,
+                              child: TextField(
+                                controller: _foreignAmountCtrl,
+                                keyboardType:
+                                    const TextInputType.numberWithOptions(
+                                      decimal: true,
+                                    ),
+                                decoration: const InputDecoration(
+                                  labelText: 'Foreign amount',
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: TextField(
+                                controller: _foreignCurrencyCtrl,
+                                textCapitalization:
+                                    TextCapitalization.characters,
+                                decoration: InputDecoration(
+                                  labelText: 'Code',
+                                  hintText: 'USD',
+                                  suffixIcon: IconButton(
+                                    icon: const Icon(Icons.close),
+                                    onPressed: () => setState(() {
+                                      _foreignExpanded = false;
+                                      _foreignAmountCtrl.clear();
+                                      _foreignCurrencyCtrl.clear();
+                                    }),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      )
+                    else
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 6),
+                        child: TextButton.icon(
+                          onPressed: () =>
+                              setState(() => _foreignExpanded = true),
+                          icon: const Icon(Icons.public_outlined, size: 18),
+                          label: const Text('Add foreign amount'),
                           style: TextButton.styleFrom(
                             alignment: Alignment.centerLeft,
                             minimumSize: const Size.fromHeight(48),

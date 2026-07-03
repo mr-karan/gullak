@@ -78,6 +78,8 @@ class TransactionRepository {
     bool cleared = false,
     String origin = 'manual',
     String? originRef,
+    int? originalAmountCents,
+    String? originalCurrency,
   }) async {
     final id = _uuid.v4();
     final now = DateTime.now().millisecondsSinceEpoch;
@@ -101,6 +103,8 @@ class TransactionRepository {
             cleared: Value(cleared),
             origin: Value(origin),
             originRef: Value(originRef),
+            originalAmountCents: Value(originalAmountCents),
+            originalCurrency: Value(originalCurrency),
           ),
         );
     await _logRow(id);
@@ -251,6 +255,8 @@ class TransactionRepository {
     Object? longitude = _Sentinel.value,
     Object? locationName = _Sentinel.value,
     bool? cleared,
+    Object? originalAmountCents = _Sentinel.value,
+    Object? originalCurrency = _Sentinel.value,
   }) async {
     final now = DateTime.now().millisecondsSinceEpoch;
     await (_db.update(_db.transactions)..where((t) => t.id.equals(id))).write(
@@ -268,6 +274,8 @@ class TransactionRepository {
         longitude: _v<double?>(longitude),
         locationName: _v<String?>(locationName),
         cleared: cleared == null ? const Value.absent() : Value(cleared),
+        originalAmountCents: _v<int?>(originalAmountCents),
+        originalCurrency: _v<String?>(originalCurrency),
         updatedAt: Value(now),
       ),
     );
@@ -438,17 +446,36 @@ class TransactionRepository {
     String smsText,
   ) async {
     final wanted = smsText.trim().toLowerCase();
-    final out = <TransactionListItem>[];
-    for (final row in rows) {
-      if (row.origin != 'sms') continue;
-      final id = int.tryParse(row.originRef ?? '');
-      if (id == null) continue;
-      final sms = await (_db.select(
-        _db.smsMessages,
-      )..where((t) => t.id.equals(id))).getSingleOrNull();
-      if ((sms?.body.toLowerCase() ?? '').contains(wanted)) out.add(row);
-    }
-    return out;
+    // One query for every matching SMS id instead of a per-row lookup (which
+    // turned this filter into an O(rows) round-trip storm). `_` and `%` are
+    // LIKE wildcards; escape them so a literal query char isn't treated as one.
+    final needle = wanted
+        .replaceAll(r'\', r'\\')
+        .replaceAll('%', r'\%')
+        .replaceAll('_', r'\_');
+    final idCol = _db.smsMessages.id;
+    final matches =
+        await (_db.selectOnly(_db.smsMessages)
+              ..addColumns([idCol])
+              ..where(
+                _db.smsMessages.body.lower().like(
+                  '%$needle%',
+                  escapeChar: r'\',
+                ),
+              ))
+            .get();
+    final matchedIds = matches
+        .map((r) => r.read(idCol))
+        .whereType<int>()
+        .toSet();
+    if (matchedIds.isEmpty) return const [];
+    return rows
+        .where(
+          (row) =>
+              row.origin == 'sms' &&
+              matchedIds.contains(int.tryParse(row.originRef ?? '')),
+        )
+        .toList();
   }
 
   Future<int> sumSpendInRange({DateTime? from, DateTime? to}) async {
@@ -503,6 +530,33 @@ class TransactionRepository {
               ))
             .getSingle();
     return r.read(sumExpr) ?? 0;
+  }
+
+  /// One-query spend-by-category for a month: `categoryId -> summed amount`.
+  /// Replaces calling [sumByCategoryInMonth] once per category (an N+1 that
+  /// dominated the Budget screen). Categories with no spend are simply absent
+  /// from the map; callers default those to 0.
+  Future<Map<String, int>> sumByCategoryForMonth(String yyyymm) async {
+    final start = '$yyyymm-01';
+    final end = _lastDayOfMonth(yyyymm);
+    final cat = _db.transactions.categoryId;
+    final sumExpr = _db.transactions.amountCents.sum();
+    final rows =
+        await (_db.selectOnly(_db.transactions)
+              ..addColumns([cat, sumExpr])
+              ..where(
+                cat.isNotNull() &
+                    _db.transactions.date.isBiggerOrEqualValue(start) &
+                    _db.transactions.date.isSmallerOrEqualValue(end),
+              )
+              ..groupBy([cat]))
+            .get();
+    final out = <String, int>{};
+    for (final r in rows) {
+      final id = r.read(cat);
+      if (id != null) out[id] = r.read(sumExpr) ?? 0;
+    }
+    return out;
   }
 
   // ── duplicate detection ──────────────────────────────────────────────

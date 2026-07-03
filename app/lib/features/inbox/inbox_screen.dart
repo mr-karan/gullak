@@ -6,6 +6,7 @@ import '../../data/ai/pi_ai_client.dart';
 import '../../data/sms/sms_pipeline.dart';
 import '../../state/providers.dart';
 import '../../ui/widgets/empty_state.dart';
+import '../../ui/widgets/error_state.dart';
 import '../../ui/widgets/money_text.dart';
 import '../entry/quick_entry.dart';
 import 'data/sms_repository.dart';
@@ -75,7 +76,9 @@ class _InboxScreenState extends ConsumerState<InboxScreen> {
           asyncRows.maybeWhen(
             data: (rows) {
               final failed = rows
-                  .where((r) => r.status == 'parse_failed' || r.status == 'error')
+                  .where(
+                    (r) => r.status == 'parse_failed' || r.status == 'error',
+                  )
                   .length;
               return PopupMenuButton<_InboxAction>(
                 tooltip: 'Inbox actions',
@@ -173,7 +176,10 @@ class _InboxScreenState extends ConsumerState<InboxScreen> {
                 );
               },
               loading: () => const Center(child: CircularProgressIndicator()),
-              error: (e, _) => Center(child: Text('Error: $e')),
+              error: (e, _) => ErrorState(
+                message: e.toString(),
+                onRetry: () => ref.invalidate(inboxItemsProvider),
+              ),
             ),
           ),
         ],
@@ -275,17 +281,52 @@ class _InboxScreenState extends ConsumerState<InboxScreen> {
   Future<void> _confirmAll(
     BuildContext context,
     WidgetRef ref,
-    int count,
+    List<InboxItem> ready,
   ) async {
     final messenger = ScaffoldMessenger.of(context);
+    // Forecast using the SAME resolution the commit runs (rules + account
+    // matcher + category hints), not the display-layer suggestions — otherwise
+    // the numbers can disagree with what actually happens.
+    final preview = await ref
+        .read(smsRepositoryProvider)
+        .previewConfirmAll(ready.map((r) => r.id).toList());
+    if (!context.mounted) return;
+    final count = preview.total;
+    if (count == 0) return;
     final go = await showDialog<bool>(
       context: context,
       builder: (dialogCtx) => AlertDialog(
         title: Text('Confirm $count candidate${count == 1 ? '' : 's'}?'),
-        content: const Text(
-          'Each will be added as a transaction using its parsed amount, '
-          'payee, and account hint. Items without a matched account will '
-          'fall back to your first account.',
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Each becomes a transaction from its parsed amount, payee, and '
+              'account hint.',
+            ),
+            const SizedBox(height: 12),
+            _PreviewLine(
+              icon: Icons.account_balance_wallet_outlined,
+              text: preview.noAccount == 0
+                  ? 'All matched to an account'
+                  : '${preview.noAccount} will use your first account (no match)',
+            ),
+            const SizedBox(height: 4),
+            _PreviewLine(
+              icon: Icons.label_outline,
+              text: preview.noCategory == 0
+                  ? 'All have a category'
+                  : '${preview.noCategory} will be uncategorised',
+            ),
+            if (preview.ignored > 0) ...[
+              const SizedBox(height: 4),
+              _PreviewLine(
+                icon: Icons.block_outlined,
+                text: '${preview.ignored} skipped by a rule',
+              ),
+            ],
+          ],
         ),
         actions: [
           TextButton(
@@ -367,6 +408,27 @@ class _SmsScanBanner extends StatelessWidget {
   }
 }
 
+class _PreviewLine extends StatelessWidget {
+  const _PreviewLine({required this.icon, required this.text});
+
+  final IconData icon;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Row(
+      children: [
+        Icon(icon, size: 18, color: cs.onSurfaceVariant),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(text, style: Theme.of(context).textTheme.bodyMedium),
+        ),
+      ],
+    );
+  }
+}
+
 class _InboxBulkActions extends StatelessWidget {
   const _InboxBulkActions({
     required this.rows,
@@ -376,12 +438,12 @@ class _InboxBulkActions extends StatelessWidget {
 
   final List<InboxItem> rows;
   final bool scanning;
-  final ValueChanged<int> onConfirmAll;
+  final ValueChanged<List<InboxItem>> onConfirmAll;
 
   @override
   Widget build(BuildContext context) {
-    final ready = rows.where((r) => r.hasCandidate).length;
-    if (ready == 0) return const SizedBox.shrink();
+    final readyRows = rows.where((r) => r.hasCandidate).toList();
+    if (readyRows.isEmpty) return const SizedBox.shrink();
 
     final cs = Theme.of(context).colorScheme;
     return Material(
@@ -394,9 +456,9 @@ class _InboxBulkActions extends StatelessWidget {
           child: SizedBox(
             width: double.infinity,
             child: FilledButton.icon(
-              onPressed: scanning ? null : () => onConfirmAll(ready),
+              onPressed: scanning ? null : () => onConfirmAll(readyRows),
               icon: const Icon(Icons.done_all, size: 18),
-              label: Text('Confirm all ($ready)'),
+              label: Text('Confirm all (${readyRows.length})'),
             ),
           ),
         ),
@@ -615,13 +677,13 @@ class _InboxRow extends ConsumerWidget {
 
   static String _statusReason(String status) => switch (status) {
     'accepted' => 'Already matched — transaction was created from this SMS.',
-    'none' || 'not_a_txn' =>
-      'Ignored — classified as non-transactional.',
+    'none' || 'not_a_txn' => 'Ignored — classified as non-transactional.',
     'duplicate' =>
       'Ignored — looked like a duplicate of an existing transaction.',
     'dismissed' => 'Dismissed by you.',
     'pending_parse' || 'parsing' => 'Waiting to be parsed by the server.',
-    'parse_failed' => 'The server could not parse this SMS — tap to log it manually.',
+    'parse_failed' =>
+      'The server could not parse this SMS — tap to log it manually.',
     _ => 'Ignored.',
   };
 

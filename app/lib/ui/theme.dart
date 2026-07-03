@@ -1,5 +1,25 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+
+// Editorial type families, bundled as assets (see pubspec `fonts:`). These are
+// the family names declared there — used directly instead of google_fonts so
+// nothing is fetched over the network at runtime.
+//
+// These are VARIABLE fonts (one file per family, a `wght` axis). Flutter's
+// `fontWeight` alone does NOT pick a weight from a single variable asset — the
+// axis must be driven via `fontVariations`. So every weighted style pairs
+// `fontWeight` (kept for widget semantics / non-variable fallback) with a
+// matching `FontVariation('wght', …)`. Fraunces also has an optical-size axis
+// (default 9, and a default weight of 900) — pin `opsz` near the point size so
+// display text uses the display cut instead of rendering ultra-heavy.
+const String _serif = 'Fraunces'; // display + headline
+const String _sans = 'Inter'; // UI surfaces
+const String _mono = 'JetBrainsMono'; // money
+
+List<FontVariation> _wght(int w) => [FontVariation('wght', w.toDouble())];
+List<FontVariation> _serifAxes(int w, double opsz) => [
+  FontVariation('wght', w.toDouble()),
+  FontVariation('opsz', opsz),
+];
 
 /// Editorial palette — warm off-white surface, charcoal text, kept teal
 /// primary, burnt amber for income/positive moments, rose-clay for danger.
@@ -15,7 +35,9 @@ class _Palette {
   static const lightSurfaceContainerHigh = Color(0xFFEDEEF1);
   static const lightSurfaceContainerHighest = Color(0xFFE5E7EB);
   static const lightOnSurface = Color(0xFF1A1D22);
-  static const lightOnSurfaceVariant = Color(0xFF6B7280);
+  // Darkened from #6B7280 (~4.6:1) to clear WCAG AA comfortably (~5.5:1) on the
+  // near-white surface, so muted text survives cheap panels.
+  static const lightOnSurfaceVariant = Color(0xFF5B6472);
   static const lightOutline = Color(0xFFC7CBD1);
   static const lightOutlineVariant = Color(0xFFE5E7EB);
 
@@ -168,11 +190,13 @@ ThemeData _build(Brightness brightness) {
       elevation: 0,
       scrolledUnderElevation: 0,
       centerTitle: false,
-      titleTextStyle: GoogleFonts.fraunces(
+      titleTextStyle: TextStyle(
+        fontFamily: _serif,
         fontSize: 22,
         fontWeight: FontWeight.w600,
-        color: scheme.onSurface,
+        fontVariations: _serifAxes(600, 22),
         height: 1.2,
+        color: scheme.onSurface,
       ),
     ),
     cardTheme: CardThemeData(
@@ -222,9 +246,11 @@ ThemeData _build(Brightness brightness) {
       style: FilledButton.styleFrom(
         minimumSize: const Size(64, 52),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-        textStyle: GoogleFonts.inter(
+        textStyle: TextStyle(
+          fontFamily: _sans,
           fontSize: 15,
           fontWeight: FontWeight.w600,
+          fontVariations: _wght(600),
           letterSpacing: 0.1,
         ),
       ),
@@ -238,9 +264,11 @@ ThemeData _build(Brightness brightness) {
     ),
     textButtonTheme: TextButtonThemeData(
       style: TextButton.styleFrom(
-        textStyle: GoogleFonts.inter(
+        textStyle: TextStyle(
+          fontFamily: _sans,
           fontSize: 14,
           fontWeight: FontWeight.w600,
+          fontVariations: _wght(600),
           letterSpacing: 0.1,
         ),
       ),
@@ -255,7 +283,8 @@ ThemeData _build(Brightness brightness) {
     snackBarTheme: SnackBarThemeData(
       behavior: SnackBarBehavior.floating,
       backgroundColor: scheme.inverseSurface,
-      contentTextStyle: GoogleFonts.inter(
+      contentTextStyle: TextStyle(
+        fontFamily: _sans,
         fontSize: 14,
         color: scheme.onInverseSurface,
       ),
@@ -272,9 +301,11 @@ ThemeData _build(Brightness brightness) {
     chipTheme: ChipThemeData(
       backgroundColor: scheme.surfaceContainerHigh,
       side: BorderSide.none,
-      labelStyle: GoogleFonts.inter(
+      labelStyle: TextStyle(
+        fontFamily: _sans,
         fontSize: 13,
         fontWeight: FontWeight.w500,
+        fontVariations: _wght(500),
         color: scheme.onSurface,
       ),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -285,11 +316,12 @@ ThemeData _build(Brightness brightness) {
       elevation: 0,
       indicatorColor: scheme.primaryContainer,
       labelTextStyle: WidgetStateProperty.resolveWith((states) {
-        return GoogleFonts.inter(
+        final selected = states.contains(WidgetState.selected);
+        return TextStyle(
+          fontFamily: _sans,
           fontSize: 11.5,
-          fontWeight: states.contains(WidgetState.selected)
-              ? FontWeight.w600
-              : FontWeight.w500,
+          fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+          fontVariations: _wght(selected ? 600 : 500),
           color: scheme.onSurface,
         );
       }),
@@ -306,14 +338,15 @@ TextTheme _textTheme(TextTheme base, ColorScheme scheme) {
   // Fraunces (variable serif) carries display + headline. Inter handles
   // every UI surface — bodies, titles, labels. Money typography lives
   // in [moneyStyle].
-  final display = GoogleFonts.frauncesTextTheme(base);
-  final ui = GoogleFonts.interTextTheme(base);
+  final display = base.apply(fontFamily: _serif);
+  final ui = base.apply(fontFamily: _sans);
   return base.copyWith(
-    // Editorial display: serif, big, deliberate.
+    // Editorial display: serif, big, deliberate. Fraunces gets wght + opsz.
     displayLarge: display.displayLarge?.copyWith(
       fontSize: 40,
       height: 1.1,
       fontWeight: FontWeight.w700,
+      fontVariations: _serifAxes(700, 40),
       letterSpacing: -0.5,
       color: scheme.onSurface,
     ),
@@ -321,6 +354,7 @@ TextTheme _textTheme(TextTheme base, ColorScheme scheme) {
       fontSize: 32,
       height: 1.15,
       fontWeight: FontWeight.w700,
+      fontVariations: _serifAxes(700, 32),
       letterSpacing: -0.3,
       color: scheme.onSurface,
     ),
@@ -328,18 +362,21 @@ TextTheme _textTheme(TextTheme base, ColorScheme scheme) {
       fontSize: 26,
       height: 1.2,
       fontWeight: FontWeight.w600,
+      fontVariations: _serifAxes(600, 26),
       color: scheme.onSurface,
     ),
     headlineMedium: display.headlineMedium?.copyWith(
       fontSize: 22,
       height: 1.25,
       fontWeight: FontWeight.w600,
+      fontVariations: _serifAxes(600, 22),
       color: scheme.onSurface,
     ),
     headlineSmall: display.headlineSmall?.copyWith(
       fontSize: 18,
       height: 1.3,
       fontWeight: FontWeight.w600,
+      fontVariations: _serifAxes(600, 18),
       color: scheme.onSurface,
     ),
     // Sans for everything interactive — closer to system defaults so
@@ -348,17 +385,20 @@ TextTheme _textTheme(TextTheme base, ColorScheme scheme) {
       fontSize: 17,
       height: 1.3,
       fontWeight: FontWeight.w600,
+      fontVariations: _wght(600),
       color: scheme.onSurface,
     ),
     titleMedium: ui.titleMedium?.copyWith(
       fontSize: 15,
       height: 1.4,
       fontWeight: FontWeight.w500,
+      fontVariations: _wght(500),
       color: scheme.onSurface,
     ),
     titleSmall: ui.titleSmall?.copyWith(
       fontSize: 13,
       fontWeight: FontWeight.w500,
+      fontVariations: _wght(500),
       color: scheme.onSurface,
     ),
     bodyLarge: ui.bodyLarge?.copyWith(
@@ -380,6 +420,7 @@ TextTheme _textTheme(TextTheme base, ColorScheme scheme) {
       fontSize: 13,
       height: 1.45,
       fontWeight: FontWeight.w600,
+      fontVariations: _wght(600),
       letterSpacing: 0.1,
       color: scheme.onSurface,
     ),
@@ -387,12 +428,14 @@ TextTheme _textTheme(TextTheme base, ColorScheme scheme) {
       fontSize: 12,
       height: 1.4,
       fontWeight: FontWeight.w500,
+      fontVariations: _wght(500),
       color: scheme.onSurfaceVariant,
     ),
     labelSmall: ui.labelSmall?.copyWith(
       fontSize: 11,
       height: 1.45,
       fontWeight: FontWeight.w500,
+      fontVariations: _wght(500),
       letterSpacing: 0.6,
       color: scheme.onSurfaceVariant,
     ),
@@ -407,10 +450,12 @@ TextStyle moneyStyle(
   FontWeight weight = FontWeight.w600,
 }) {
   final theme = Theme.of(context);
-  return GoogleFonts.jetBrainsMono(
+  return TextStyle(
+    fontFamily: _mono,
     fontSize: size,
     height: 1.1,
     fontWeight: weight,
+    fontVariations: _wght(weight.value),
     fontFeatures: const [FontFeature.tabularFigures()],
     color: theme.colorScheme.onSurface,
   );
@@ -425,10 +470,12 @@ Color warningColor(ColorScheme cs) => cs.brightness == Brightness.light
 /// Used for editorial-feel section headers like "RECENT" and "BY CATEGORY".
 TextStyle eyebrowStyle(BuildContext context, {double size = 11}) {
   final theme = Theme.of(context);
-  return GoogleFonts.inter(
+  return TextStyle(
+    fontFamily: _sans,
     fontSize: size,
     height: 1.4,
     fontWeight: FontWeight.w600,
+    fontVariations: _wght(600),
     letterSpacing: 1.6,
     color: theme.colorScheme.onSurfaceVariant,
   );

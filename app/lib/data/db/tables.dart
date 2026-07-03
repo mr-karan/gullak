@@ -104,6 +104,14 @@ class Transactions extends Table {
   TextColumn get parentId => text().nullable()();
   IntColumn get splitTotalCents => integer().nullable()();
 
+  // Foreign-currency metadata. Display-only: [amountCents] stays in the base
+  // (home) currency; these record what the expense was in its original
+  // currency (e.g. USD 20) so a trip abroad shows the real figure. No
+  // conversion is performed. [originalAmountCents] is integer minor units of
+  // [originalCurrency] (an ISO 4217 code like "USD").
+  IntColumn get originalAmountCents => integer().nullable()();
+  TextColumn get originalCurrency => text().nullable()();
+
   IntColumn get createdAt => integer()();
   IntColumn get updatedAt => integer()();
 
@@ -193,6 +201,11 @@ class Recurrences extends Table {
   // ISO 8601 duration-ish: 'monthly', 'weekly', 'daily', 'yearly'.
   TextColumn get cadence => text()();
   TextColumn get nextDate => text()(); // YYYY-MM-DD
+  // Day-of-month the schedule is anchored to (1–31) for monthly/yearly
+  // cadences. Kept separate from [nextDate] so a month-end schedule (e.g. the
+  // 31st) clamps per short month WITHOUT permanently drifting: Jan 31 → Feb 28
+  // → Mar 31, not → Mar 28. Null for legacy rows / daily-weekly (ignored).
+  IntColumn get anchorDay => integer().nullable()();
   IntColumn get createdAt => integer()();
   IntColumn get updatedAt => integer()();
 
