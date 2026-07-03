@@ -29,6 +29,10 @@ own commit:
   visible and one-tap removable (+ "Clear all"). Swipe edit/delete already existed.
   Also fixed the filter/transfer/split sheets rendering *under* the floating Add
   button (now shown on the root navigator).
+- **Phase 8 (Inbox) — device-verified:** buckets became **filter chips** that hide
+  at zero (except the active one); each triage card gained a **leading bank glyph**
+  (income-tinted), a sender subtitle, and a **tap-to-expand SMS body**. Confirm-all
+  preview dialog and per-row confirm/dismiss already existed.
 
 Remaining — these are the interaction-heavy rewrites that design.md itself says
 need an on-device pass for touch/motion feel; best done with a device in the loop:
@@ -37,7 +41,9 @@ need an on-device pass for touch/motion feel; best done with a device in the loo
   Type/Scan collapse into the chip row, suggested "?" category chip, and the
   `entry/widgets/` file split (deferred as churn — best done alongside any further
   redesign, not as a standalone pass).
-- **Phase 8 (remainder) — Inbox triage cards** (AnimatedList removal, per-chip fixing).
+- **Phase 8 (deferred) — Inbox:** per-chip inline fixing (edit suggested account/
+  category from the card) and `AnimatedList` slide-out on confirm — polish on top
+  of the working reactive removal.
 - **Phase 9 — Polish:** onboarding, motion audit, full a11y sweep.
 
 One known cross-screen inconsistency to reconcile in a later pass: Activity/detail
