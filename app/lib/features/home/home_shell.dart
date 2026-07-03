@@ -5,7 +5,6 @@ import 'package:go_router/go_router.dart';
 import '../../core/snackbars.dart';
 import '../../sync/sync_health_monitor.dart';
 import '../../sync/sync_status.dart';
-import '../../state/providers.dart';
 import '../entry/quick_entry.dart';
 
 class HomeShell extends ConsumerWidget {
@@ -13,6 +12,9 @@ class HomeShell extends ConsumerWidget {
 
   final Widget child;
 
+  // Four destinations (Material guidance is 3–5). Inbox is a badge on Home /
+  // Activity (a review queue, not a browse destination); Tags and Accounts live
+  // in the More/Settings hub, with account balances surfaced on Home.
   static const _tabs = [
     _Tab(
       icon: Icons.home_outlined,
@@ -27,46 +29,26 @@ class HomeShell extends ConsumerWidget {
       path: '/transactions',
     ),
     _Tab(
+      icon: Icons.insights_outlined,
+      selected: Icons.insights,
+      label: 'Insights',
+      path: '/reports',
+    ),
+    _Tab(
       icon: Icons.pie_chart_outline,
       selected: Icons.pie_chart,
       label: 'Budget',
       path: '/budgets',
-    ),
-    _Tab(
-      icon: Icons.sell_outlined,
-      selected: Icons.sell,
-      label: 'Tags',
-      path: '/tags',
-    ),
-    _Tab(
-      icon: Icons.inbox_outlined,
-      selected: Icons.inbox,
-      label: 'Inbox',
-      path: '/inbox',
-    ),
-    _Tab(
-      icon: Icons.account_balance_outlined,
-      selected: Icons.account_balance,
-      label: 'Accounts',
-      path: '/accounts',
     ),
   ];
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final loc = GoRouterState.of(context).matchedLocation;
-    final smsEnabled = watchPrefs(ref).smsEnabled;
-    final tabs = smsEnabled
-        ? _tabs
-        : _tabs.where((t) => t.path != '/inbox').toList(growable: false);
+    const tabs = _tabs;
     final index = _indexOf(tabs, loc);
 
-    final showFab =
-        loc == '/' ||
-        loc == '/transactions' ||
-        loc == '/budgets' ||
-        loc == '/tags' ||
-        loc == '/accounts';
+    final showFab = tabs.any((t) => t.path == loc);
     final syncStatus = ref.watch(syncStatusProvider);
     // Surface offline → online recovery as a one-shot green toast so the
     // user gets confirmation that the network came back, without a sticky
@@ -103,8 +85,7 @@ class HomeShell extends ConsumerWidget {
             _SyncOfflineBanner(
               message: syncStatus.message ?? 'Checking sync server…',
               checking: syncStatus.checking,
-              onRetry: () =>
-                  ref.read(syncHealthMonitorProvider).retryNow(),
+              onRetry: () => ref.read(syncHealthMonitorProvider).retryNow(),
             ),
           Expanded(child: child),
         ],

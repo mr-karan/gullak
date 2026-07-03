@@ -142,6 +142,12 @@ class SettingsScreen extends ConsumerWidget {
           ),
           const _SectionHeader('Library'),
           ListTile(
+            leading: const Icon(Icons.account_balance_outlined),
+            title: const Text('Accounts'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => context.go('/accounts'),
+          ),
+          ListTile(
             leading: const Icon(Icons.label_outline),
             title: const Text('Categories'),
             trailing: const Icon(Icons.chevron_right),

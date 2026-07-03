@@ -4,12 +4,16 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
+import '../../core/money.dart';
 import '../../state/providers.dart';
+import '../../ui/charts/sparkline.dart';
 import '../../ui/theme.dart';
 import '../../ui/widgets/category_swatch.dart';
+import '../../ui/widgets/count_up_money.dart';
 import '../../ui/widgets/empty_state.dart';
 import '../../ui/widgets/money_text.dart';
 import '../../ui/widgets/section_header.dart';
+import '../accounts/data/account_repository.dart';
 import '../budgets/data/budget_repository.dart';
 import '../categories/category_visuals.dart';
 import '../categories/data/category_repository.dart';
@@ -41,24 +45,23 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
     final monthSpend = ref.watch(monthSpendProvider);
     final monthIncome = ref.watch(monthIncomeProvider);
-    final todaySpend = ref.watch(todaySpendProvider);
     final recent = ref.watch(recentTransactionsProvider);
     final review = ref.watch(dailyReviewProvider);
+    final spendSeries = ref.watch(last30DaysSpendProvider);
 
-    final monthLabel = DateFormat('MMMM yyyy').format(DateTime.now());
+    final monthLabel = DateFormat('MMMM').format(DateTime.now());
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Gullak'),
+        title: Text(
+          monthLabel,
+          style: Theme.of(context).textTheme.headlineMedium,
+        ),
         actions: [
+          if (prefs.smsEnabled) const _InboxBadgeAction(),
           IconButton(
-            icon: const Icon(Icons.bar_chart_outlined),
-            tooltip: 'Reports',
-            onPressed: () => context.go('/reports'),
-          ),
-          IconButton(
-            icon: const Icon(Icons.settings_outlined),
-            tooltip: 'Settings',
+            icon: const Icon(Icons.more_horiz),
+            tooltip: 'More',
             onPressed: () => context.go('/settings'),
           ),
         ],
@@ -69,14 +72,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           padding: const EdgeInsets.only(bottom: 96),
           children: [
             _MonthHeroCard(
-              monthLabel: monthLabel,
               spent: monthSpend.value ?? 0,
               income: monthIncome.value ?? 0,
-              symbol: symbol,
-              minorDigits: minorDigits,
-            ),
-            _TodayChip(
-              spent: todaySpend.value ?? 0,
+              spendSeries: spendSeries.value ?? const [],
               symbol: symbol,
               minorDigits: minorDigits,
             ),
@@ -89,6 +87,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               loading: () => const _DailyReviewLoading(),
               error: (_, _) => const SizedBox.shrink(),
             ),
+            const _AccountsStrip(),
             const SectionHeader('Recent'),
             recent.when(
               data: (rows) {
@@ -107,25 +106,126 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 }
 
+/// App-bar Inbox entry point — an icon with a count badge. Inbox is a review
+/// queue you enter when there's work, not a browse tab.
+class _InboxBadgeAction extends ConsumerWidget {
+  const _InboxBadgeAction();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final counts = ref.watch(inboxCountsProvider).value;
+    final n = (counts?.pending ?? 0) + (counts?.failed ?? 0);
+    final icon = IconButton(
+      icon: const Icon(Icons.inbox_outlined),
+      tooltip: 'Inbox',
+      onPressed: () => context.go('/inbox'),
+    );
+    if (n == 0) return icon;
+    return Badge.count(count: n, child: icon);
+  }
+}
+
+/// Horizontal account-balance strip — the daily balance surface that replaces
+/// the old Accounts tab. Tap a card to open that account.
+class _AccountsStrip extends ConsumerWidget {
+  const _AccountsStrip();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final accounts = ref.watch(accountsListProvider).value ?? const [];
+    if (accounts.isEmpty) return const SizedBox.shrink();
+    final prefs = ref.watch(prefsProvider);
+    final cs = Theme.of(context).colorScheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SectionHeader('Accounts'),
+        SizedBox(
+          height: 76,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            itemCount: accounts.length,
+            separatorBuilder: (_, _) => const SizedBox(width: 10),
+            itemBuilder: (context, i) {
+              final a = accounts[i];
+              final bal = ref.watch(accountBalanceProvider(a.id)).value ?? 0;
+              return InkWell(
+                onTap: () => context.go('/accounts/${a.id}'),
+                borderRadius: BorderRadius.circular(14),
+                child: Container(
+                  width: 150,
+                  padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+                  decoration: BoxDecoration(
+                    color: cs.surfaceContainer,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: cs.outlineVariant.withValues(alpha: 0.6),
+                      width: 0.5,
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        a.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: cs.onSurfaceVariant,
+                        ),
+                      ),
+                      MoneyText(
+                        amountCents: bal,
+                        symbol: prefs.currencySymbol,
+                        minorDigits: prefs.currencyMinorDigits,
+                        size: MoneySize.medium,
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _MonthHeroCard extends StatelessWidget {
   const _MonthHeroCard({
-    required this.monthLabel,
     required this.spent,
     required this.income,
+    required this.spendSeries,
     required this.symbol,
     required this.minorDigits,
   });
 
-  final String monthLabel;
-  final int spent;
-  final int income;
+  final int spent; // negative
+  final int income; // positive
+  final List<double> spendSeries;
   final String symbol;
   final int minorDigits;
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final net = income + spent; // spent is negative
+    final spentMag = spent.abs();
+    // One support line, at most two facts: income (if any) and net.
+    final net = income + spent;
+    final support = StringBuffer();
+    if (income > 0) {
+      support.write(
+        '+${Money.format(income, symbol: symbol, minorDigits: minorDigits)} in',
+      );
+    }
+    if (support.isNotEmpty) support.write(' · ');
+    support.write(
+      'net ${Money.format(net, symbol: symbol, minorDigits: minorDigits, showSign: true)}',
+    );
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
       child: Container(
@@ -141,159 +241,33 @@ class _MonthHeroCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(monthLabel.toUpperCase(), style: eyebrowStyle(context)),
+            Text('SPENT THIS MONTH', style: eyebrowStyle(context)),
             const SizedBox(height: 14),
-            Text(
-              _formatNet(net, symbol: symbol, minorDigits: minorDigits),
-              style: moneyStyle(
-                context,
-                size: 40,
-                weight: FontWeight.w700,
-              ).copyWith(color: cs.onSurface, letterSpacing: -0.5),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Expanded(
+                  child: CountUpMoney(
+                    amountCents: spentMag,
+                    symbol: symbol,
+                    minorDigits: minorDigits,
+                    size: MoneySize.hero,
+                  ),
+                ),
+                if (spendSeries.isNotEmpty)
+                  SizedBox(
+                    width: 96,
+                    height: 34,
+                    child: Sparkline(values: spendSeries),
+                  ),
+              ],
             ),
-            const SizedBox(height: 6),
+            const SizedBox(height: 8),
             Text(
-              net >= 0 ? 'net this month' : 'over budget this month',
+              support.toString(),
               style: Theme.of(
                 context,
               ).textTheme.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
-            ),
-            const SizedBox(height: 22),
-            Row(
-              children: [
-                Expanded(
-                  child: _StatTile(
-                    label: 'Income',
-                    value: income,
-                    color: cs.tertiary,
-                    symbol: symbol,
-                    minorDigits: minorDigits,
-                  ),
-                ),
-                Container(
-                  width: 0.5,
-                  height: 36,
-                  color: cs.outlineVariant.withValues(alpha: 0.7),
-                ),
-                Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.only(left: 16),
-                    child: _StatTile(
-                      label: 'Spent',
-                      value: -spent,
-                      color: cs.onSurface,
-                      symbol: symbol,
-                      minorDigits: minorDigits,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  static String _formatNet(
-    int net, {
-    required String symbol,
-    required int minorDigits,
-  }) {
-    final scale = _pow10(minorDigits);
-    final whole = (net.abs()) ~/ scale;
-    final formatted = NumberFormat('#,##,###').format(whole);
-    final frac = net.abs() % scale;
-    final fracStr = minorDigits == 0
-        ? ''
-        : '.${frac.toString().padLeft(minorDigits, '0')}';
-    final sign = net < 0 ? '-' : '';
-    return '$sign$symbol$formatted$fracStr';
-  }
-
-  static int _pow10(int n) {
-    var r = 1;
-    for (var i = 0; i < n; i++) {
-      r *= 10;
-    }
-    return r;
-  }
-}
-
-class _StatTile extends StatelessWidget {
-  const _StatTile({
-    required this.label,
-    required this.value,
-    required this.color,
-    required this.symbol,
-    required this.minorDigits,
-  });
-
-  final String label;
-  final int value;
-  final Color color;
-  final String symbol;
-  final int minorDigits;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label.toUpperCase(),
-          style: eyebrowStyle(context).copyWith(color: color),
-        ),
-        const SizedBox(height: 6),
-        MoneyText(
-          amountCents: value,
-          symbol: symbol,
-          minorDigits: minorDigits,
-          color: color,
-          size: MoneySize.medium,
-        ),
-      ],
-    );
-  }
-}
-
-class _TodayChip extends StatelessWidget {
-  const _TodayChip({
-    required this.spent,
-    required this.symbol,
-    required this.minorDigits,
-  });
-
-  final int spent;
-  final String symbol;
-  final int minorDigits;
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
-        decoration: BoxDecoration(
-          color: cs.surfaceContainerLow,
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Row(
-          children: [
-            Expanded(
-              child: Text(
-                'Today',
-                style: Theme.of(
-                  context,
-                ).textTheme.titleMedium?.copyWith(color: cs.onSurfaceVariant),
-              ),
-            ),
-            MoneyText(
-              amountCents: spent.abs(),
-              minorDigits: minorDigits,
-              symbol: symbol,
-              size: MoneySize.large,
             ),
           ],
         ),

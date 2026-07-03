@@ -497,6 +497,37 @@ class TransactionRepository {
     return r.read(sumExpr) ?? 0;
   }
 
+  /// Daily spend magnitude for the last [days] days (oldest→newest), for the
+  /// Home sparkline. One grouped query; days with no spend are 0. Excludes
+  /// split children and transfer legs (same filter as [sumSpendInRange]).
+  Future<List<double>> dailySpendSeries({int days = 30}) async {
+    final today = clock.today();
+    final start = DateTime(today.year, today.month, today.day - (days - 1));
+    final dateCol = _db.transactions.date;
+    final sumExpr = _db.transactions.amountCents.sum();
+    final rows =
+        await (_db.selectOnly(_db.transactions)
+              ..addColumns([dateCol, sumExpr])
+              ..where(
+                _db.transactions.amountCents.isSmallerThanValue(0) &
+                    _db.transactions.parentId.isNull() &
+                    _db.transactions.transferGroupId.isNull() &
+                    dateCol.isBiggerOrEqualValue(_ymd(start)) &
+                    dateCol.isSmallerOrEqualValue(_ymd(today)),
+              )
+              ..groupBy([dateCol]))
+            .get();
+    final byDate = <String, int>{
+      for (final r in rows) (r.read(dateCol) ?? ''): (r.read(sumExpr) ?? 0),
+    };
+    return [
+      for (var i = 0; i < days; i++)
+        (byDate[_ymd(DateTime(start.year, start.month, start.day + i))] ?? 0)
+            .abs()
+            .toDouble(),
+    ];
+  }
+
   Future<int> sumIncomeInRange({DateTime? from, DateTime? to}) async {
     final sumExpr = _db.transactions.amountCents.sum();
     final q = _db.selectOnly(_db.transactions)
@@ -946,3 +977,10 @@ final FutureProvider<int> todaySpendProvider = FutureProvider<int>((ref) async {
       .watch(transactionRepoProvider)
       .sumSpendInRange(from: today, to: today);
 });
+
+/// Last-30-day daily spend series for the Home hero sparkline.
+final FutureProvider<List<double>> last30DaysSpendProvider =
+    FutureProvider<List<double>>((ref) async {
+      ref.watch(recentTransactionsProvider);
+      return ref.watch(transactionRepoProvider).dailySpendSeries(days: 30);
+    });
