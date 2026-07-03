@@ -6,13 +6,21 @@ import 'package:intl/intl.dart';
 
 import '../../core/money.dart';
 import '../../state/providers.dart';
-import '../../ui/widgets/category_swatch.dart';
+import '../../ui/category_palette.dart';
+import '../../ui/charts/bar_chart.dart';
+import '../../ui/charts/category_bars.dart';
+import '../../ui/charts/heatmap_calendar.dart';
+import '../../ui/widgets/count_up_money.dart';
+import '../../ui/widgets/error_state.dart';
 import '../../ui/widgets/money_text.dart';
+import '../../ui/widgets/section_header.dart';
 import '../budgets/data/budget_repository.dart';
 import '../transactions/data/transaction_repository.dart';
 
-/// A read-only monthly report. We intentionally don't pull in a chart
-/// library; numbers + a daily sparkline are enough at v1.
+/// Insights: one scrolling screen per month. A headline stat row, a daily-spend
+/// bar chart, a category breakdown, a 6-month income-vs-spend comparison, and a
+/// spend heatmap — all on the shared chart kit, each paired with the numbers as
+/// text (charts never carry information alone).
 class ReportsScreen extends ConsumerStatefulWidget {
   const ReportsScreen({super.key});
 
@@ -26,33 +34,40 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
   @override
   Widget build(BuildContext context) {
     final prefs = ref.watch(prefsProvider);
+    final cs = Theme.of(context).colorScheme;
+    final symbol = prefs.currencySymbol;
+    final digits = prefs.currencyMinorDigits;
     final monthDate = DateTime.parse('$_month-01');
     final monthLabel = DateFormat('MMMM yyyy').format(monthDate);
     final async = ref.watch(budgetMonthProvider(_month));
     final daily = ref.watch(_dailySpendProvider(_month));
     final incomeSpending = ref.watch(_incomeSpendingProvider);
-    // This month's income, from the income/spending series (0 while loading).
     final monthIncome =
         incomeSpending.value
             ?.where((v) => v.month == _month)
             .fold<int>(0, (s, v) => s + v.incomeCents) ??
         0;
 
+    String money(int v) => Money.format(v, symbol: symbol, minorDigits: digits);
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Reports'),
+        title: const Text('Insights'),
         actions: [
           IconButton(
             icon: const Icon(Icons.chevron_left),
+            tooltip: 'Previous month',
             onPressed: () => _shift(-1),
           ),
           IconButton(
             icon: const Icon(Icons.chevron_right),
+            tooltip: 'Next month',
             onPressed: () => _shift(1),
           ),
         ],
       ),
       body: ListView(
+        padding: const EdgeInsets.only(bottom: 96),
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
@@ -61,19 +76,18 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
               style: Theme.of(context).textTheme.headlineMedium,
             ),
           ),
+
+          // 1. Headline stats.
           async.when(
-            loading: () => const Padding(
-              padding: EdgeInsets.all(40),
-              child: Center(child: CircularProgressIndicator()),
-            ),
-            error: (e, _) => Padding(
-              padding: const EdgeInsets.all(20),
-              child: Text('Error: $e'),
+            loading: () => const _Loading(),
+            error: (e, _) => ErrorState(
+              message: e.toString(),
+              compact: true,
+              onRetry: () => ref.invalidate(budgetMonthProvider(_month)),
             ),
             data: (overview) {
-              final spent = -overview.totalSpent; // positive magnitude
+              final spent = -overview.totalSpent;
               final net = monthIncome - spent;
-              final cs = Theme.of(context).colorScheme;
               return Padding(
                 padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
                 child: Row(
@@ -82,16 +96,16 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                       child: _Stat(
                         label: 'Spent',
                         value: spent,
-                        symbol: prefs.currencySymbol,
-                        digits: prefs.currencyMinorDigits,
+                        symbol: symbol,
+                        digits: digits,
                       ),
                     ),
                     Expanded(
                       child: _Stat(
                         label: 'Income',
                         value: monthIncome,
-                        symbol: prefs.currencySymbol,
-                        digits: prefs.currencyMinorDigits,
+                        symbol: symbol,
+                        digits: digits,
                         color: cs.tertiary,
                       ),
                     ),
@@ -99,9 +113,10 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                       child: _Stat(
                         label: 'Net',
                         value: net,
-                        symbol: prefs.currencySymbol,
-                        digits: prefs.currencyMinorDigits,
+                        symbol: symbol,
+                        digits: digits,
                         color: net >= 0 ? cs.tertiary : cs.error,
+                        showSign: true,
                       ),
                     ),
                   ],
@@ -109,93 +124,133 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
               );
             },
           ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
-            child: Text(
-              'Income vs spending',
-              style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-                letterSpacing: 1.2,
-              ),
-            ),
-          ),
-          incomeSpending.when(
-            loading: () => const SizedBox(height: 96),
-            error: (e, _) => Padding(
-              padding: const EdgeInsets.all(20),
-              child: Text('Error: $e'),
-            ),
-            data: (values) => Padding(
-              padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
-              child: _IncomeSpendingChart(values: values),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
-            child: Text(
-              'Daily',
-              style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-                letterSpacing: 1.2,
-              ),
-            ),
-          ),
+
+          // 2. Daily rhythm.
+          const SectionHeader('Daily rhythm'),
           daily.when(
-            loading: () => const SizedBox(height: 80),
-            error: (e, _) => Padding(
-              padding: const EdgeInsets.all(20),
-              child: Text('Error: $e'),
-            ),
+            loading: () => const SizedBox(height: 160),
+            error: (e, _) => ErrorState(message: e.toString(), compact: true),
             data: (values) => Padding(
-              padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
-              child: _Sparkline(values: values),
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+              child: values.every((v) => v == 0)
+                  ? _empty(context, 'No spending this month yet.')
+                  : BarChart(
+                      data: [
+                        for (var i = 0; i < values.length; i++)
+                          BarDatum(
+                            label: '${i + 1}',
+                            spend: values[i].toDouble(),
+                          ),
+                      ],
+                      highlightIndex: _todayIndex(),
+                      tooltipFor: (i) => money(-values[i]),
+                      semanticsLabel: 'Daily spend for $monthLabel',
+                    ),
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
-            child: Text(
-              'By category',
-              style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-                letterSpacing: 1.2,
-              ),
-            ),
-          ),
+
+          // 3. By category.
+          const SectionHeader('By category'),
           async.when(
-            loading: () => const SizedBox(height: 0),
-            error: (_, _) => const SizedBox(height: 0),
+            loading: () => const _Loading(),
+            error: (_, _) => const SizedBox.shrink(),
             data: (overview) {
               final entries =
                   overview.entries.where((e) => e.spentCents != 0).toList()
                     ..sort((a, b) => a.spentCents.compareTo(b.spentCents));
               if (entries.isEmpty) {
-                return const Padding(
-                  padding: EdgeInsets.fromLTRB(20, 0, 20, 24),
-                  child: Text('No spending recorded for this month yet.'),
-                );
+                return _empty(context, 'No spending recorded this month.');
               }
               final total = entries.fold<int>(0, (s, e) => s + -e.spentCents);
-              return Column(
-                children: [
-                  for (final e in entries)
-                    _CategoryRow(
-                      categoryId: e.categoryId,
-                      name: e.categoryName,
-                      group: e.groupName,
-                      spentCents: e.spentCents,
-                      total: total,
-                      symbol: prefs.currencySymbol,
-                      minorDigits: prefs.currencyMinorDigits,
-                    ),
-                  const SizedBox(height: 24),
-                ],
+              final maxSpent = entries
+                  .map((e) => -e.spentCents)
+                  .reduce((a, b) => a > b ? a : b);
+              return Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: CategoryBars(
+                  data: [
+                    for (final e in entries)
+                      CategoryBarDatum(
+                        label: e.categoryName,
+                        amountText: money(-e.spentCents),
+                        color: categoryColor(cs, e.categoryId),
+                        fraction: maxSpent > 0 ? -e.spentCents / maxSpent : 0,
+                        percentText: total > 0
+                            ? '${(-e.spentCents / total * 100).round()}%'
+                            : null,
+                        onTap: () =>
+                            context.push('/categories/${e.categoryId}'),
+                      ),
+                  ],
+                ),
               );
             },
+          ),
+
+          // 4. Month vs month.
+          const SectionHeader('Last 6 months'),
+          incomeSpending.when(
+            loading: () => const SizedBox(height: 160),
+            error: (e, _) => ErrorState(message: e.toString(), compact: true),
+            data: (values) => Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+              child: BarChart(
+                data: [
+                  for (final v in values)
+                    BarDatum(
+                      label: DateFormat(
+                        'MMM',
+                      ).format(DateTime.parse('${v.month}-01')),
+                      spend: v.spendingCents.toDouble(),
+                      income: v.incomeCents.toDouble(),
+                    ),
+                ],
+                tooltipFor: (i) =>
+                    '${money(-values[i].spendingCents)} spent · '
+                    '${money(values[i].incomeCents)} in',
+                semanticsLabel: 'Income versus spending, last 6 months',
+              ),
+            ),
+          ),
+
+          // 5. Heatmap.
+          const SectionHeader('Spend heatmap'),
+          daily.when(
+            loading: () => const SizedBox(height: 200),
+            error: (_, _) => const SizedBox.shrink(),
+            data: (values) => Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+              child: HeatmapCalendar(
+                year: monthDate.year,
+                month: monthDate.month,
+                valueByDay: {
+                  for (var i = 0; i < values.length; i++)
+                    if (values[i] > 0) i + 1: values[i].toDouble(),
+                },
+              ),
+            ),
           ),
         ],
       ),
     );
   }
+
+  /// Index of today within the current month's daily series, or null when
+  /// viewing a different month.
+  int? _todayIndex() {
+    final now = DateTime.now();
+    return BudgetRepository.monthOf(now) == _month ? now.day - 1 : null;
+  }
+
+  Widget _empty(BuildContext context, String text) => Padding(
+    padding: const EdgeInsets.fromLTRB(20, 4, 20, 16),
+    child: Text(
+      text,
+      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+        color: Theme.of(context).colorScheme.onSurfaceVariant,
+      ),
+    ),
+  );
 
   void _shift(int by) {
     final d = DateTime.parse('$_month-01');
@@ -204,88 +259,13 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
   }
 }
 
-/// One row of the "By category" breakdown — tappable into the category's full
-/// history (`/categories/:id`), with a swatch and a share-of-total bar.
-class _CategoryRow extends StatelessWidget {
-  const _CategoryRow({
-    required this.categoryId,
-    required this.name,
-    required this.group,
-    required this.spentCents,
-    required this.total,
-    required this.symbol,
-    required this.minorDigits,
-  });
-
-  final String categoryId;
-  final String name;
-  final String group;
-  final int spentCents; // negative
-  final int total; // positive sum of all spend
-  final String symbol;
-  final int minorDigits;
-
+class _Loading extends StatelessWidget {
+  const _Loading();
   @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final spent = -spentCents;
-    final share = total > 0 ? (spent / total).clamp(0.0, 1.0) : 0.0;
-    return InkWell(
-      onTap: () => context.push('/categories/$categoryId'),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
-        child: Row(
-          children: [
-            CategorySwatch(label: name, size: 36),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          name,
-                          style: Theme.of(context).textTheme.titleMedium,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      MoneyText(
-                        amountCents: spentCents,
-                        symbol: symbol,
-                        minorDigits: minorDigits,
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 6),
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(3),
-                    child: LinearProgressIndicator(
-                      value: share,
-                      minHeight: 4,
-                      backgroundColor: cs.surfaceContainerHighest,
-                      color: cs.primary,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    '${(share * 100).round()}% · $group',
-                    style: Theme.of(
-                      context,
-                    ).textTheme.labelSmall?.copyWith(color: cs.onSurfaceVariant),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 4),
-            Icon(Icons.chevron_right, size: 18, color: cs.onSurfaceVariant),
-          ],
-        ),
-      ),
-    );
-  }
+  Widget build(BuildContext context) => const Padding(
+    padding: EdgeInsets.all(28),
+    child: Center(child: CircularProgressIndicator()),
+  );
 }
 
 class _Stat extends StatelessWidget {
@@ -295,18 +275,20 @@ class _Stat extends StatelessWidget {
     required this.symbol,
     required this.digits,
     this.color,
+    this.showSign = false,
   });
   final String label;
   final int value;
   final String symbol;
   final int digits;
   final Color? color;
+  final bool showSign;
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     return Container(
       margin: const EdgeInsets.only(right: 8),
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
       decoration: BoxDecoration(
         color: cs.surfaceContainer,
         borderRadius: BorderRadius.circular(16),
@@ -322,49 +304,14 @@ class _Stat extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 6),
-          Text(
-            Money.format(value, symbol: symbol, minorDigits: digits),
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-              color: color,
-            ),
+          CountUpMoney(
+            amountCents: value,
+            symbol: symbol,
+            minorDigits: digits,
+            size: MoneySize.medium,
+            color: color,
+            showSign: showSign,
           ),
-        ],
-      ),
-    );
-  }
-}
-
-class _Sparkline extends StatelessWidget {
-  const _Sparkline({required this.values});
-  final List<int> values;
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    if (values.isEmpty) return const SizedBox.shrink();
-    final maxV = values
-        .reduce((a, b) => a > b ? a : b)
-        .clamp(1, double.infinity)
-        .toInt();
-    return SizedBox(
-      height: 60,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          for (final v in values)
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 1),
-                child: FractionallySizedBox(
-                  heightFactor: v <= 0 ? 0.05 : (v / maxV).clamp(0.05, 1.0),
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      color: cs.primary,
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                ),
-              ),
-            ),
         ],
       ),
     );
@@ -381,85 +328,6 @@ class _IncomeSpendingMonth {
   final String month;
   final int incomeCents;
   final int spendingCents;
-}
-
-class _IncomeSpendingChart extends StatelessWidget {
-  const _IncomeSpendingChart({required this.values});
-
-  final List<_IncomeSpendingMonth> values;
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    if (values.isEmpty) return const Text('No spending history yet.');
-    final maxV = values
-        .expand((v) => [v.incomeCents, v.spendingCents])
-        .reduce((a, b) => a > b ? a : b)
-        .clamp(1, double.infinity)
-        .toInt();
-    return SizedBox(
-      height: 140,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          for (final v in values)
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 4),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    Expanded(
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          Expanded(
-                            child: FractionallySizedBox(
-                              heightFactor: (v.incomeCents / maxV).clamp(
-                                0.04,
-                                1.0,
-                              ),
-                              child: DecoratedBox(
-                                decoration: BoxDecoration(
-                                  color: cs.tertiary,
-                                  borderRadius: BorderRadius.circular(3),
-                                ),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 3),
-                          Expanded(
-                            child: FractionallySizedBox(
-                              heightFactor: (v.spendingCents / maxV).clamp(
-                                0.04,
-                                1.0,
-                              ),
-                              child: DecoratedBox(
-                                decoration: BoxDecoration(
-                                  color: cs.primary,
-                                  borderRadius: BorderRadius.circular(3),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      v.month.substring(5),
-                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                        color: cs.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
 }
 
 /// Daily *spend* per day-of-month, length = days in that month.
@@ -483,6 +351,7 @@ final _dailySpendProvider = FutureProvider.family<List<int>, String>((
         'WHERE amount_cents < 0 AND parent_id IS NULL AND transfer_group_id IS NULL '
         'AND date BETWEEN ? AND ? GROUP BY date',
         variables: [Variable.withString(start), Variable.withString(end)],
+        readsFrom: {db.transactions},
       )
       .get();
   for (final r in rows) {
