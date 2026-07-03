@@ -1,5 +1,41 @@
 # Gullak UI overhaul — design specification
 
+## Implementation status (2026-07-03)
+
+Shipped and pushed (app `flutter analyze` clean, 75 tests green), each phase its
+own commit:
+
+- **Phase 1 — Foundations:** `ui/category_palette.dart`, `ui/motion.dart`,
+  shimmer `Skeleton`, `CountUpMoney`, `MoneyText` semantics, WCAG-AA contrast fix.
+- **Phase 2 — Chart kit:** `ui/charts/` — Sparkline, BarChart (tap + tooltip),
+  CategoryBars, ProgressArc, HeatmapCalendar, with structural/semantic tests.
+- **Phase 3 — Nav:** bottom nav 6→4 (Home/Activity/Insights/Budget); Inbox is an
+  app-bar count badge; Tags/Accounts moved to the Settings hub.
+- **Phase 4 — Home:** count-up "spent this month" hero + 30-day sparkline, one
+  support line, Daily Review card, account-balance strip, Recent.
+- **Phase 5 — Insights:** rebuilt Reports on the chart kit (daily bars, category
+  bars, 6-month paired bars, heatmap); `ErrorState` for error slots.
+- **Phase 7 (detail) — receipt-style transaction detail** (glyph, hero amount, FX chip).
+- **Phase 8 (budget) — category-coloured progress rings.**
+
+Remaining — these are the interaction-heavy rewrites that design.md itself says
+need an on-device pass for touch/motion feel; best done with a device in the loop:
+
+- **Phase 6 — Quick Entry redesign + file split.** Highest risk: it touches the
+  money save-path in a 1,900-line file. Do the pure-move split first, then the
+  chip/keypad redesign, verifying on device.
+- **Phase 7 (remainder) — Activity:** active-filter chips, swipe edit/delete,
+  collapse 5 segments → 3. (Row anatomy already matches the spec.)
+- **Phase 8 (remainder) — Inbox triage cards** (AnimatedList removal, per-chip fixing).
+- **Phase 9 — Polish:** onboarding, motion audit, full a11y sweep.
+
+One known cross-screen inconsistency to reconcile in a later pass: Activity/detail
+colour categories by name-hash (`categoryAccentColor`) while Insights/Budget use
+the id-hash `categoryColor` — unify once `TransactionListItem` carries the id.
+
+---
+
+
 Goal: a minimalist, beautiful, *fast-feeling* expense tracker that wins on
 three things — (1) glanceable spending visuals, (2) frictionless capture and
 editing, (3) reports that answer "where did my money go?" in one screen. This
