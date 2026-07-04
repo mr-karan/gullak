@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 
 import '../../core/money.dart';
 import '../../core/snackbars.dart';
+import '../../state/active_month.dart';
 import '../../state/providers.dart';
 import '../../ui/category_palette.dart';
 import '../../ui/charts/progress_arc.dart';
@@ -21,10 +22,12 @@ class BudgetScreen extends ConsumerStatefulWidget {
 }
 
 class _BudgetScreenState extends ConsumerState<BudgetScreen> {
-  late String _month = BudgetRepository.currentMonth();
+  // Shared across tabs — read the current value, watched in build below.
+  String get _month => ref.read(activeMonthProvider);
 
   @override
   Widget build(BuildContext context) {
+    ref.watch(activeMonthProvider);
     final prefs = ref.watch(prefsProvider);
     final async = ref.watch(budgetMonthProvider(_month));
     final monthDate = DateTime.parse('$_month-01');
@@ -131,7 +134,7 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
   }
 
   void _shiftMonth(int by) {
-    setState(() => _month = BudgetRepository.shiftMonth(_month, by));
+    ref.read(activeMonthProvider.notifier).shift(by);
   }
 
   Future<void> _copyPreviousTargets(BuildContext context, WidgetRef ref) async {

@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../core/money.dart';
+import '../../state/active_month.dart';
 import '../../state/providers.dart';
 import '../../ui/category_palette.dart';
 import '../../ui/charts/bar_chart.dart';
@@ -29,10 +30,12 @@ class ReportsScreen extends ConsumerStatefulWidget {
 }
 
 class _ReportsScreenState extends ConsumerState<ReportsScreen> {
-  late String _month = BudgetRepository.currentMonth();
+  // Shared across tabs — read the current value, watched in build below.
+  String get _month => ref.read(activeMonthProvider);
 
   @override
   Widget build(BuildContext context) {
+    ref.watch(activeMonthProvider);
     final prefs = ref.watch(prefsProvider);
     final cs = Theme.of(context).colorScheme;
     final symbol = prefs.currencySymbol;
@@ -253,9 +256,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
   );
 
   void _shift(int by) {
-    final d = DateTime.parse('$_month-01');
-    final next = DateTime(d.year, d.month + by, 1);
-    setState(() => _month = BudgetRepository.monthOf(next));
+    ref.read(activeMonthProvider.notifier).shift(by);
   }
 }
 

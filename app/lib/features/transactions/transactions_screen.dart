@@ -14,9 +14,11 @@ import '../../ui/widgets/category_swatch.dart';
 import '../../ui/widgets/empty_state.dart';
 import '../../ui/widgets/error_state.dart';
 import '../../core/dates.dart';
+import '../../state/active_month.dart';
 import '../../ui/app_sheet.dart';
 import '../../ui/widgets/money_text.dart';
 import '../accounts/data/account_repository.dart';
+import '../budgets/data/budget_repository.dart';
 import '../categories/data/category_repository.dart';
 import '../categories/category_visuals.dart';
 import '../entry/quick_entry.dart';
@@ -37,15 +39,11 @@ class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
   Timer? _searchDebounce;
   String _query = '';
   _ViewMode _view = _ViewMode.list;
-  // 0 = current month, -1 = last month, … Period is orthogonal to the view
-  // so the month navigator drives List, Calendar, and Summary alike.
-  int _monthOffset = 0;
   TransactionFilters _filters = const TransactionFilters();
 
-  DateTime get _activeMonth {
-    final now = clock.now();
-    return DateTime(now.year, now.month + _monthOffset, 1);
-  }
+  // Month shared across tabs (YYYY-MM); read current, watched in build.
+  String get _month => ref.read(activeMonthProvider);
+  DateTime get _activeMonth => DateTime.parse('$_month-01');
 
   (String, String) get _monthRange {
     final m = _activeMonth;
@@ -78,6 +76,7 @@ class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    ref.watch(activeMonthProvider);
     final prefs = ref.watch(prefsProvider);
     // A search should find anything you ever logged, so it widens to all
     // time — otherwise a query silently only matches the visible month and
@@ -173,10 +172,11 @@ class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
           else
             _MonthNav(
               month: _activeMonth,
-              canGoNext: _monthOffset < 0,
-              onPrev: () => setState(() => _monthOffset -= 1),
-              onNext: _monthOffset < 0
-                  ? () => setState(() => _monthOffset += 1)
+              canGoNext:
+                  _month.compareTo(BudgetRepository.currentMonth()) < 0,
+              onPrev: () => ref.read(activeMonthProvider.notifier).shift(-1),
+              onNext: _month.compareTo(BudgetRepository.currentMonth()) < 0
+                  ? () => ref.read(activeMonthProvider.notifier).shift(1)
                   : null,
             ),
           _ActiveFilterChips(
