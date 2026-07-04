@@ -6,6 +6,7 @@ import '../../../core/clock.dart';
 import '../../../core/logger.dart';
 import '../../../data/db/database.dart';
 import '../../../state/providers.dart';
+import '../../../core/dates.dart';
 import '../../../sync/changelog_writer.dart';
 
 export '../../../data/db/database.dart' show RecurrenceRow;
@@ -62,7 +63,7 @@ class RecurrenceRepository {
             accountId: accountId,
             amountCents: amountCents,
             cadence: cadence,
-            nextDate: _ymd(nextDate),
+            nextDate: ymd(nextDate),
             createdAt: now,
             updatedAt: now,
             categoryId: Value(categoryId),
@@ -93,7 +94,7 @@ class RecurrenceRepository {
   /// the number of transactions posted.
   Future<int> postDue({DateTime? asOf}) async {
     final today = _dateOnly(asOf ?? clock.now());
-    final todayYmd = _ymd(today);
+    final todayYmd = ymd(today);
     final due = await (_db.select(
       _db.recurrences,
     )..where((t) => t.nextDate.isSmallerOrEqualValue(todayYmd))).get();
@@ -119,7 +120,7 @@ class RecurrenceRepository {
       await (_db.update(
         _db.recurrences,
       )..where((t) => t.id.equals(r.id))).write(
-        RecurrencesCompanion(nextDate: Value(_ymd(occ)), updatedAt: Value(now)),
+        RecurrencesCompanion(nextDate: Value(ymd(occ)), updatedAt: Value(now)),
       );
       await _logRow(r.id);
     }
@@ -143,7 +144,7 @@ class RecurrenceRepository {
             id: txId,
             accountId: r.accountId,
             amountCents: r.amountCents,
-            date: _ymd(occ),
+            date: ymd(occ),
             createdAt: now,
             updatedAt: now,
             categoryId: Value(r.categoryId),
@@ -166,7 +167,7 @@ class RecurrenceRepository {
   }
 
   static String _occurrenceId(String recurrenceId, DateTime occ) => const Uuid()
-      .v5(Namespace.url.value, 'gullak-recurrence:$recurrenceId:${_ymd(occ)}');
+      .v5(Namespace.url.value, 'gullak-recurrence:$recurrenceId:${ymd(occ)}');
 
   static DateTime _advance(DateTime d, String cadence, int anchor) {
     switch (cadence) {
@@ -204,11 +205,6 @@ class RecurrenceRepository {
     if (y == null || m == null || day == null) return null;
     return DateTime(y, m, day);
   }
-
-  static String _ymd(DateTime d) =>
-      '${d.year.toString().padLeft(4, '0')}-'
-      '${d.month.toString().padLeft(2, '0')}-'
-      '${d.day.toString().padLeft(2, '0')}';
 }
 
 final Provider<RecurrenceRepository> recurrenceRepoProvider =

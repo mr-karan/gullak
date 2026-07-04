@@ -6,6 +6,7 @@ import 'package:uuid/uuid.dart';
 import '../../../core/clock.dart';
 import '../../../data/db/database.dart';
 import '../../../state/providers.dart';
+import '../../../core/dates.dart';
 import '../../../sync/changelog_writer.dart';
 
 export '../../../data/db/database.dart' show TransactionRow;
@@ -90,7 +91,7 @@ class TransactionRepository {
             id: id,
             accountId: accountId,
             amountCents: amountCents,
-            date: _ymd(date),
+            date: ymd(date),
             createdAt: now,
             updatedAt: now,
             categoryId: Value(categoryId),
@@ -132,7 +133,7 @@ class TransactionRepository {
     final outId = _uuid.v4();
     final inId = _uuid.v4();
     final now = DateTime.now().millisecondsSinceEpoch;
-    final ymd = _ymd(date);
+    final dateStr = ymd(date);
     await _db.batch((batch) {
       batch.insert(
         _db.transactions,
@@ -140,7 +141,7 @@ class TransactionRepository {
           id: outId,
           accountId: fromAccountId,
           amountCents: -amountCents,
-          date: ymd,
+          date: dateStr,
           createdAt: now,
           updatedAt: now,
           notes: Value(notes),
@@ -156,7 +157,7 @@ class TransactionRepository {
           id: inId,
           accountId: toAccountId,
           amountCents: amountCents,
-          date: ymd,
+          date: dateStr,
           createdAt: now,
           updatedAt: now,
           notes: Value(notes),
@@ -191,7 +192,7 @@ class TransactionRepository {
     final parentId = _uuid.v4();
     final childIds = <String>[];
     final now = DateTime.now().millisecondsSinceEpoch;
-    final ymd = _ymd(date);
+    final dateStr = ymd(date);
     await _db.batch((batch) {
       batch.insert(
         _db.transactions,
@@ -199,7 +200,7 @@ class TransactionRepository {
           id: parentId,
           accountId: accountId,
           amountCents: total,
-          date: ymd,
+          date: dateStr,
           createdAt: now,
           updatedAt: now,
           payeeId: Value(payeeId),
@@ -219,7 +220,7 @@ class TransactionRepository {
             id: childId,
             accountId: accountId,
             amountCents: s.amountCents,
-            date: ymd,
+            date: dateStr,
             createdAt: now,
             updatedAt: now,
             categoryId: Value(s.categoryId),
@@ -268,7 +269,7 @@ class TransactionRepository {
         amountCents: amountCents == null
             ? const Value.absent()
             : Value(amountCents),
-        date: date == null ? const Value.absent() : Value(_ymd(date)),
+        date: date == null ? const Value.absent() : Value(ymd(date)),
         notes: _v<String?>(notes),
         latitude: _v<double?>(latitude),
         longitude: _v<double?>(longitude),
@@ -488,10 +489,10 @@ class TransactionRepository {
             _db.transactions.transferGroupId.isNull(),
       );
     if (from != null) {
-      q.where(_db.transactions.date.isBiggerOrEqualValue(_ymd(from)));
+      q.where(_db.transactions.date.isBiggerOrEqualValue(ymd(from)));
     }
     if (to != null) {
-      q.where(_db.transactions.date.isSmallerOrEqualValue(_ymd(to)));
+      q.where(_db.transactions.date.isSmallerOrEqualValue(ymd(to)));
     }
     final r = await q.getSingle();
     return r.read(sumExpr) ?? 0;
@@ -512,8 +513,8 @@ class TransactionRepository {
                 _db.transactions.amountCents.isSmallerThanValue(0) &
                     _db.transactions.parentId.isNull() &
                     _db.transactions.transferGroupId.isNull() &
-                    dateCol.isBiggerOrEqualValue(_ymd(start)) &
-                    dateCol.isSmallerOrEqualValue(_ymd(today)),
+                    dateCol.isBiggerOrEqualValue(ymd(start)) &
+                    dateCol.isSmallerOrEqualValue(ymd(today)),
               )
               ..groupBy([dateCol]))
             .get();
@@ -522,7 +523,7 @@ class TransactionRepository {
     };
     return [
       for (var i = 0; i < days; i++)
-        (byDate[_ymd(DateTime(start.year, start.month, start.day + i))] ?? 0)
+        (byDate[ymd(DateTime(start.year, start.month, start.day + i))] ?? 0)
             .abs()
             .toDouble(),
     ];
@@ -538,10 +539,10 @@ class TransactionRepository {
             _db.transactions.transferGroupId.isNull(),
       );
     if (from != null) {
-      q.where(_db.transactions.date.isBiggerOrEqualValue(_ymd(from)));
+      q.where(_db.transactions.date.isBiggerOrEqualValue(ymd(from)));
     }
     if (to != null) {
-      q.where(_db.transactions.date.isSmallerOrEqualValue(_ymd(to)));
+      q.where(_db.transactions.date.isSmallerOrEqualValue(ymd(to)));
     }
     final r = await q.getSingle();
     return r.read(sumExpr) ?? 0;
@@ -598,8 +599,8 @@ class TransactionRepository {
     required DateTime date,
     String? payeeName,
   }) async {
-    final lo = _ymd(date.subtract(const Duration(days: 2)));
-    final hi = _ymd(date.add(const Duration(days: 2)));
+    final lo = ymd(date.subtract(const Duration(days: 2)));
+    final hi = ymd(date.add(const Duration(days: 2)));
     final rows = await _select(
       accountId: accountId,
       amountEquals: amountCents,
@@ -760,11 +761,6 @@ class TransactionRepository {
       originRef: t.originRef,
     );
   }
-
-  static String _ymd(DateTime d) =>
-      '${d.year.toString().padLeft(4, '0')}-'
-      '${d.month.toString().padLeft(2, '0')}-'
-      '${d.day.toString().padLeft(2, '0')}';
 
   static String _lastDayOfMonth(String yyyymm) {
     final parts = yyyymm.split('-');

@@ -7,6 +7,7 @@ import '../../ui/widgets/empty_state.dart';
 import '../../ui/widgets/error_state.dart';
 import '../../ui/widgets/money_text.dart';
 import '../entry/quick_entry.dart';
+import '../../core/dates.dart';
 import 'data/transaction_repository.dart';
 
 /// Which dimension is fixed for this scoped view — decides what each row leads
@@ -38,7 +39,7 @@ class SpendPeriodTotals {
     final yearStart = DateTime(now.year, 1, 1);
 
     int since(DateTime start) {
-      final s = _ymd(start);
+      final s = ymd(start);
       return rows
           .where(
             (t) =>
@@ -57,11 +58,6 @@ class SpendPeriodTotals {
           .fold(0, (sum, t) => sum - t.amountCents),
     );
   }
-
-  static String _ymd(DateTime d) =>
-      '${d.year.toString().padLeft(4, '0')}-'
-      '${d.month.toString().padLeft(2, '0')}-'
-      '${d.day.toString().padLeft(2, '0')}';
 }
 
 /// Period-totals header + the full transaction list for a scoped view (one

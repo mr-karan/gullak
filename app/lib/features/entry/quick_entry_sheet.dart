@@ -1889,18 +1889,18 @@ class _ContextChip extends StatelessWidget {
                 const SizedBox(width: 6),
                 ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 200),
-                child: Text(
-                  label,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                    color: isSet ? cs.onSurface : cs.onSurfaceVariant,
-                    fontWeight: isSet ? FontWeight.w600 : FontWeight.w500,
+                  child: Text(
+                    label,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                      color: isSet ? cs.onSurface : cs.onSurfaceVariant,
+                      fontWeight: isSet ? FontWeight.w600 : FontWeight.w500,
+                    ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
         ),
       ),
     );

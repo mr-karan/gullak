@@ -172,8 +172,7 @@ class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
           else
             _MonthNav(
               month: _activeMonth,
-              canGoNext:
-                  _month.compareTo(BudgetRepository.currentMonth()) < 0,
+              canGoNext: _month.compareTo(BudgetRepository.currentMonth()) < 0,
               onPrev: () => ref.read(activeMonthProvider.notifier).shift(-1),
               onNext: _month.compareTo(BudgetRepository.currentMonth()) < 0
                   ? () => ref.read(activeMonthProvider.notifier).shift(1)
@@ -270,10 +269,7 @@ class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
   }
 
   Future<void> _openTransferSheet(BuildContext context) {
-    return showAppSheet<void>(
-      context,
-      builder: (_) => const TransferSheet(),
-    );
+    return showAppSheet<void>(context, builder: (_) => const TransferSheet());
   }
 }
 
@@ -699,8 +695,13 @@ class _ActiveFilterChips extends ConsumerWidget {
       final rows =
           ref.watch(accountsListProvider).value ?? const <AccountRow>[];
       add(
-        _nameFor(rows, filters.accountId!, (a) => a.id, (a) => a.name,
-            'Account'),
+        _nameFor(
+          rows,
+          filters.accountId!,
+          (a) => a.id,
+          (a) => a.name,
+          'Account',
+        ),
         filters.copyWith(clearAccount: true),
       );
     }
@@ -708,8 +709,13 @@ class _ActiveFilterChips extends ConsumerWidget {
       final rows =
           ref.watch(categoriesListProvider).value ?? const <CategoryRow>[];
       add(
-        _nameFor(rows, filters.categoryId!, (c) => c.id, (c) => c.name,
-            'Category'),
+        _nameFor(
+          rows,
+          filters.categoryId!,
+          (c) => c.id,
+          (c) => c.name,
+          'Category',
+        ),
         filters.copyWith(clearCategory: true),
       );
     }

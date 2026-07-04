@@ -83,10 +83,7 @@ class AccountsScreen extends ConsumerWidget {
   }
 
   Future<void> _newAccount(BuildContext context) async {
-    await showAppSheet<void>(
-      context,
-      builder: (_) => const AccountFormSheet(),
-    );
+    await showAppSheet<void>(context, builder: (_) => const AccountFormSheet());
   }
 }
 

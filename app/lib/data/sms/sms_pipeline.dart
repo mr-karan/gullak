@@ -15,6 +15,7 @@ import '../db/database.dart';
 import 'classifier.dart';
 import 'parser_registry.dart';
 import 'sms_models.dart';
+import '../../core/dates.dart';
 import 'sms_reader.dart';
 
 class SmsScanState {
@@ -613,8 +614,8 @@ class SmsPipeline {
     final signed = candidate.isIncome
         ? candidate.amountCents.abs()
         : -candidate.amountCents.abs();
-    final lo = _ymd(candidate.date.subtract(const Duration(days: 1)));
-    final hi = _ymd(candidate.date.add(const Duration(days: 1)));
+    final lo = ymd(candidate.date.subtract(const Duration(days: 1)));
+    final hi = ymd(candidate.date.add(const Duration(days: 1)));
     final matches =
         await (db.select(db.transactions)
               ..where(
@@ -709,11 +710,6 @@ class SmsPipeline {
       originRef: originRef,
     );
   }
-
-  static String _ymd(DateTime d) =>
-      '${d.year.toString().padLeft(4, '0')}-'
-      '${d.month.toString().padLeft(2, '0')}-'
-      '${d.day.toString().padLeft(2, '0')}';
 
   static String _smsKey(IncomingSms sms) {
     final address = sms.address.trim().toLowerCase();

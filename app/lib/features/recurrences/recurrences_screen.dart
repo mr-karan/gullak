@@ -10,6 +10,7 @@ import '../../ui/widgets/money_text.dart';
 import '../accounts/data/account_repository.dart';
 import '../categories/data/category_repository.dart';
 import '../../ui/app_sheet.dart';
+import '../../core/dates.dart';
 import 'data/recurrence_repository.dart';
 
 class RecurrencesScreen extends ConsumerWidget {
@@ -229,7 +230,7 @@ class _RecurrenceFormState extends ConsumerState<_RecurrenceForm> {
             ListTile(
               contentPadding: EdgeInsets.zero,
               title: const Text('Next date'),
-              subtitle: Text(_ymd(_nextDate)),
+              subtitle: Text(ymd(_nextDate)),
               trailing: const Icon(Icons.event_outlined),
               onTap: _pickDate,
             ),
@@ -275,9 +276,4 @@ class _RecurrenceFormState extends ConsumerState<_RecurrenceForm> {
     if (!mounted) return;
     Navigator.of(context).maybePop();
   }
-
-  String _ymd(DateTime d) =>
-      '${d.year.toString().padLeft(4, '0')}-'
-      '${d.month.toString().padLeft(2, '0')}-'
-      '${d.day.toString().padLeft(2, '0')}';
 }

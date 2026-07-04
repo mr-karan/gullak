@@ -35,8 +35,7 @@ class LocationService {
       if (!await canCapture()) return null;
       var pos = await Geolocator.getLastKnownPosition();
       final fresh =
-          pos != null &&
-          DateTime.now().difference(pos.timestamp).inMinutes < 2;
+          pos != null && DateTime.now().difference(pos.timestamp).inMinutes < 2;
       if (!fresh) {
         pos = await Geolocator.getCurrentPosition(
           locationSettings: const LocationSettings(

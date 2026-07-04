@@ -5,6 +5,7 @@ import '../../core/money.dart';
 import '../../core/snackbars.dart';
 import '../../state/providers.dart';
 import '../accounts/data/account_repository.dart';
+import '../../core/dates.dart';
 import 'data/transaction_repository.dart';
 
 /// Records a transfer between two of the user's own accounts as a paired
@@ -116,7 +117,7 @@ class _TransferSheetState extends ConsumerState<TransferSheet> {
             ListTile(
               contentPadding: EdgeInsets.zero,
               title: const Text('Date'),
-              subtitle: Text(_ymd(_date)),
+              subtitle: Text(ymd(_date)),
               trailing: const Icon(Icons.event_outlined),
               onTap: canSave ? _pickDate : null,
             ),
@@ -194,9 +195,4 @@ class _TransferSheetState extends ConsumerState<TransferSheet> {
       if (mounted) setState(() => _saving = false);
     }
   }
-
-  String _ymd(DateTime d) =>
-      '${d.year.toString().padLeft(4, '0')}-'
-      '${d.month.toString().padLeft(2, '0')}-'
-      '${d.day.toString().padLeft(2, '0')}';
 }

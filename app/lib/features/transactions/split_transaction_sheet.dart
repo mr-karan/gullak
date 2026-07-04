@@ -5,6 +5,7 @@ import '../../core/money.dart';
 import '../../state/providers.dart';
 import '../accounts/data/account_repository.dart';
 import '../categories/data/category_repository.dart';
+import '../../core/dates.dart';
 import 'data/transaction_repository.dart';
 
 class SplitTransactionSheet extends ConsumerStatefulWidget {
@@ -104,7 +105,7 @@ class _SplitTransactionSheetState extends ConsumerState<SplitTransactionSheet> {
             ListTile(
               contentPadding: EdgeInsets.zero,
               title: const Text('Date'),
-              subtitle: Text(_ymd(_date)),
+              subtitle: Text(ymd(_date)),
               trailing: const Icon(Icons.event_outlined),
               onTap: _pickDate,
             ),
@@ -180,11 +181,6 @@ class _SplitTransactionSheetState extends ConsumerState<SplitTransactionSheet> {
       if (mounted) setState(() => _saving = false);
     }
   }
-
-  String _ymd(DateTime d) =>
-      '${d.year.toString().padLeft(4, '0')}-'
-      '${d.month.toString().padLeft(2, '0')}-'
-      '${d.day.toString().padLeft(2, '0')}';
 }
 
 class _SplitLine extends StatelessWidget {
