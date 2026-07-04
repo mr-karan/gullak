@@ -1726,7 +1726,7 @@ class _SignSegment extends StatelessWidget {
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 150),
             curve: Curves.easeOut,
-            height: 40,
+            height: 48,
             alignment: Alignment.center,
             decoration: BoxDecoration(
               color: selected
@@ -1877,15 +1877,18 @@ class _ContextChip extends StatelessWidget {
           onTap();
         },
         borderRadius: BorderRadius.circular(10),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, size: 16, color: fg),
-              const SizedBox(width: 6),
-              ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 200),
+        // Min 48dp tall so the chip is a comfortable touch target.
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 48),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon, size: 16, color: fg),
+                const SizedBox(width: 6),
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 200),
                 child: Text(
                   label,
                   overflow: TextOverflow.ellipsis,
@@ -1897,6 +1900,7 @@ class _ContextChip extends StatelessWidget {
               ),
             ],
           ),
+        ),
         ),
       ),
     );
@@ -1959,19 +1963,31 @@ class _CategoryEmoji extends StatelessWidget {
   }
 }
 
-class _TagsChip extends ConsumerWidget {
+class _TagsChip extends ConsumerStatefulWidget {
   const _TagsChip({required this.tagIds, required this.onTap});
 
   final Set<String> tagIds;
   final VoidCallback onTap;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_TagsChip> createState() => _TagsChipState();
+}
+
+class _TagsChipState extends ConsumerState<_TagsChip> {
+  // Fetch the tag list once and reuse it across rebuilds. The form rebuilds
+  // on every keypad digit, so querying per build re-hit SQLite and flickered
+  // the chip; a live stream subscription instead leaked a pending timer.
+  late final Future<List<TagRow>> _tags = ref.read(tagRepoProvider).list();
+
+  @override
+  Widget build(BuildContext context) {
     return FutureBuilder<List<TagRow>>(
-      future: ref.read(tagRepoProvider).list(),
+      future: _tags,
       builder: (context, snap) {
         final tags = snap.data ?? const <TagRow>[];
-        final selected = tags.where((t) => tagIds.contains(t.id)).toList();
+        final selected = tags
+            .where((t) => widget.tagIds.contains(t.id))
+            .toList();
         final label = selected.isEmpty
             ? 'Tags'
             : selected.map((t) => t.name).join(', ');
@@ -1979,7 +1995,7 @@ class _TagsChip extends ConsumerWidget {
           icon: Icons.sell_outlined,
           label: label,
           isSet: selected.isNotEmpty,
-          onTap: onTap,
+          onTap: widget.onTap,
         );
       },
     );

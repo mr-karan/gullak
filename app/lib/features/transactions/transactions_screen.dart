@@ -13,6 +13,7 @@ import '../../state/providers.dart';
 import '../../ui/widgets/category_swatch.dart';
 import '../../ui/widgets/empty_state.dart';
 import '../../ui/widgets/error_state.dart';
+import '../../core/dates.dart';
 import '../../ui/app_sheet.dart';
 import '../../ui/widgets/money_text.dart';
 import '../accounts/data/account_repository.dart';
@@ -41,11 +42,6 @@ class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
   int _monthOffset = 0;
   TransactionFilters _filters = const TransactionFilters();
 
-  static String _ymd(DateTime d) =>
-      '${d.year.toString().padLeft(4, '0')}-'
-      '${d.month.toString().padLeft(2, '0')}-'
-      '${d.day.toString().padLeft(2, '0')}';
-
   DateTime get _activeMonth {
     final now = clock.now();
     return DateTime(now.year, now.month + _monthOffset, 1);
@@ -53,7 +49,7 @@ class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
 
   (String, String) get _monthRange {
     final m = _activeMonth;
-    return (_ymd(m), _ymd(DateTime(m.year, m.month + 1, 0)));
+    return (ymd(m), ymd(DateTime(m.year, m.month + 1, 0)));
   }
 
   @override
@@ -83,7 +79,12 @@ class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
   @override
   Widget build(BuildContext context) {
     final prefs = ref.watch(prefsProvider);
-    final range = _monthRange;
+    // A search should find anything you ever logged, so it widens to all
+    // time — otherwise a query silently only matches the visible month and
+    // an older transaction reads as lost. Browsing (no query) stays scoped
+    // to the month the navigator is on.
+    final searching = _query.isNotEmpty;
+    final (String, String)? range = searching ? null : _monthRange;
     final listAsync = ref.watch(
       transactionsListProvider(
         TransactionListQuery(
@@ -91,8 +92,8 @@ class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
           categoryId: _filters.categoryId,
           search: _query.isEmpty ? null : _query,
           tagId: _filters.tagId,
-          fromDate: range.$1,
-          toDate: range.$2,
+          fromDate: range?.$1,
+          toDate: range?.$2,
           origin: _filters.origin,
           cleared: _filters.cleared,
           minAmountCents: _filters.minAmountCents,
@@ -167,19 +168,22 @@ class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
       ),
       body: Column(
         children: [
-          _MonthNav(
-            month: _activeMonth,
-            canGoNext: _monthOffset < 0,
-            onPrev: () => setState(() => _monthOffset -= 1),
-            onNext: _monthOffset < 0
-                ? () => setState(() => _monthOffset += 1)
-                : null,
-          ),
+          if (searching)
+            const _AllTimeBar()
+          else
+            _MonthNav(
+              month: _activeMonth,
+              canGoNext: _monthOffset < 0,
+              onPrev: () => setState(() => _monthOffset -= 1),
+              onNext: _monthOffset < 0
+                  ? () => setState(() => _monthOffset += 1)
+                  : null,
+            ),
           _ActiveFilterChips(
             filters: _filters,
             onChanged: (f) => setState(() => _filters = f),
           ),
-          Expanded(child: _buildBody(listAsync, prefs)),
+          Expanded(child: _buildBody(listAsync, prefs, searching)),
         ],
       ),
     );
@@ -188,18 +192,23 @@ class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
   Widget _buildBody(
     AsyncValue<List<TransactionListItem>> listAsync,
     dynamic prefs,
+    bool searching,
   ) {
     return listAsync.when(
       data: (rows) {
         if (rows.isEmpty) {
           return ListView(
             physics: const AlwaysScrollableScrollPhysics(),
-            children: const [
-              SizedBox(height: 80),
+            children: [
+              const SizedBox(height: 80),
               EmptyState(
-                icon: Icons.receipt_long_outlined,
-                title: 'No transactions',
-                body: 'Tap + to add your first.',
+                icon: searching
+                    ? Icons.search_off_outlined
+                    : Icons.receipt_long_outlined,
+                title: searching ? 'No matches' : 'No transactions',
+                body: searching
+                    ? 'Nothing matched "$_query" across all time.'
+                    : 'Tap + to add your first.',
               ),
             ],
           );
@@ -613,6 +622,46 @@ class _MonthNav extends StatelessWidget {
 /// Dismissible chips for the currently-applied filters. Without this the
 /// only sign a filter is active is the app-bar tune icon — this makes each
 /// active constraint visible and one-tap removable.
+/// Replaces the month navigator while a search is active, so it's obvious the
+/// results span every month rather than the one you were browsing.
+class _AllTimeBar extends StatelessWidget {
+  const _AllTimeBar();
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.public, size: 16, color: cs.onSurfaceVariant),
+          const SizedBox(width: 8),
+          Text(
+            'Searching all transactions',
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+String _nameFor<T>(
+  List<T> rows,
+  String id,
+  String Function(T) idOf,
+  String Function(T) nameOf,
+  String fallback,
+) {
+  for (final r in rows) {
+    if (idOf(r) == id) return nameOf(r);
+  }
+  return fallback;
+}
+
 class _ActiveFilterChips extends ConsumerWidget {
   const _ActiveFilterChips({required this.filters, required this.onChanged});
 
@@ -622,33 +671,7 @@ class _ActiveFilterChips extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     if (!filters.isActive) return const SizedBox.shrink();
-    final accounts =
-        ref.watch(accountsListProvider).value ?? const <AccountRow>[];
-    final categories =
-        ref.watch(categoriesListProvider).value ?? const <CategoryRow>[];
-    final tags = ref.watch(tagsListProvider).value ?? const <TagRow>[];
     final prefs = ref.watch(prefsProvider);
-
-    String accountName() {
-      for (final a in accounts) {
-        if (a.id == filters.accountId) return a.name;
-      }
-      return 'Account';
-    }
-
-    String categoryName() {
-      for (final c in categories) {
-        if (c.id == filters.categoryId) return c.name;
-      }
-      return 'Category';
-    }
-
-    String tagName() {
-      for (final t in tags) {
-        if (t.id == filters.tagId) return t.name;
-      }
-      return 'Tag';
-    }
 
     String money(int cents) => Money.format(
       cents,
@@ -669,14 +692,33 @@ class _ActiveFilterChips extends ConsumerWidget {
       );
     }
 
+    // Only subscribe to a lookup list when its filter is set, so an
+    // amount- or SMS-only filter doesn't rebuild this row when unrelated
+    // accounts/categories/tags change (e.g. during an SMS import).
     if (filters.accountId != null) {
-      add(accountName(), filters.copyWith(clearAccount: true));
+      final rows =
+          ref.watch(accountsListProvider).value ?? const <AccountRow>[];
+      add(
+        _nameFor(rows, filters.accountId!, (a) => a.id, (a) => a.name,
+            'Account'),
+        filters.copyWith(clearAccount: true),
+      );
     }
     if (filters.categoryId != null) {
-      add(categoryName(), filters.copyWith(clearCategory: true));
+      final rows =
+          ref.watch(categoriesListProvider).value ?? const <CategoryRow>[];
+      add(
+        _nameFor(rows, filters.categoryId!, (c) => c.id, (c) => c.name,
+            'Category'),
+        filters.copyWith(clearCategory: true),
+      );
     }
     if (filters.tagId != null) {
-      add(tagName(), filters.copyWith(clearTag: true));
+      final rows = ref.watch(tagsListProvider).value ?? const <TagRow>[];
+      add(
+        _nameFor(rows, filters.tagId!, (t) => t.id, (t) => t.name, 'Tag'),
+        filters.copyWith(clearTag: true),
+      );
     }
     if (filters.origin != null) {
       final label =
@@ -819,10 +861,7 @@ class _CalendarActivityView extends StatelessWidget {
       itemBuilder: (context, i) {
         if (i < leading) return const SizedBox.shrink();
         final day = i - leading + 1;
-        final date =
-            '${month.year.toString().padLeft(4, '0')}-'
-            '${month.month.toString().padLeft(2, '0')}-'
-            '${day.toString().padLeft(2, '0')}';
+        final date = ymd(DateTime(month.year, month.month, day));
         final cents = byDay[date] ?? 0;
         return _CalendarDayCell(
           day: day,
