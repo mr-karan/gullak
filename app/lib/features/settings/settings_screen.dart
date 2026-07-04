@@ -19,6 +19,8 @@ import '../../sync/sync_status.dart';
 import '../backup/backup_service.dart';
 import '../backup/file_pick.dart';
 import '../inbox/data/sms_repository.dart';
+import '../location/location_service.dart';
+import 'package:geolocator/geolocator.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -125,10 +127,35 @@ class SettingsScreen extends ConsumerWidget {
             secondary: const Icon(Icons.my_location_outlined),
             title: const Text('Attach location to new entries'),
             subtitle: const Text(
-              'When enabled, manual and AI saves ask for location permission and store coordinates on the transaction.',
+              'Entries you log by hand get a place name in the background after '
+              'you save. Never blocks the save; SMS entries are unaffected.',
             ),
             value: prefs.locationCaptureEnabled,
             onChanged: (v) async {
+              if (v) {
+                final svc = ref.read(locationServiceProvider);
+                final p = await svc.ensurePermission();
+                final granted =
+                    p == LocationPermission.always ||
+                    p == LocationPermission.whileInUse;
+                if (!granted && context.mounted) {
+                  showTimedSnackBar(
+                    ScaffoldMessenger.of(context),
+                    SnackBar(
+                      content: const Text(
+                        "Location permission denied — entries won't get a "
+                        'place until you grant it.',
+                      ),
+                      action: p == LocationPermission.deniedForever
+                          ? SnackBarAction(
+                              label: 'Settings',
+                              onPressed: svc.openSystemSettings,
+                            )
+                          : null,
+                    ),
+                  );
+                }
+              }
               await prefs.setLocationCaptureEnabled(v);
               bumpPrefs(ref);
             },

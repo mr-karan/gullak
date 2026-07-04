@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:geocoding/geocoding.dart' as geo;
 import 'package:geolocator/geolocator.dart';
 
 class CapturedLocation {
@@ -14,26 +15,78 @@ class CapturedLocation {
 }
 
 class LocationService {
+  /// Non-interactive check — does NOT prompt. Permission is requested up
+  /// front from the settings toggle ([ensurePermission]); capture time should
+  /// never pop a dialog mid-save.
   Future<bool> canCapture() async {
     if (!await Geolocator.isLocationServiceEnabled()) return false;
-    var permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied) {
-      permission = await Geolocator.requestPermission();
-    }
+    final permission = await Geolocator.checkPermission();
     return permission == LocationPermission.always ||
         permission == LocationPermission.whileInUse;
   }
 
+  /// Best-effort location capture. **Never throws** — returns null on any
+  /// failure (permission off, service off, GPS timeout, platform error) so a
+  /// caller can fire it without risking whatever it's attached to (e.g. a
+  /// transaction save). Prefers a recent last-known fix (instant), else a
+  /// live medium-accuracy fix capped at 8s.
   Future<CapturedLocation?> capture() async {
-    if (!await canCapture()) return null;
-    final pos = await Geolocator.getCurrentPosition(
-      locationSettings: const LocationSettings(
-        accuracy: LocationAccuracy.high,
-        timeLimit: Duration(seconds: 8),
-      ),
-    );
-    return CapturedLocation(latitude: pos.latitude, longitude: pos.longitude);
+    try {
+      if (!await canCapture()) return null;
+      var pos = await Geolocator.getLastKnownPosition();
+      final fresh =
+          pos != null &&
+          DateTime.now().difference(pos.timestamp).inMinutes < 2;
+      if (!fresh) {
+        pos = await Geolocator.getCurrentPosition(
+          locationSettings: const LocationSettings(
+            accuracy: LocationAccuracy.medium,
+            timeLimit: Duration(seconds: 8),
+          ),
+        );
+      }
+      return CapturedLocation(
+        latitude: pos.latitude,
+        longitude: pos.longitude,
+        name: await _placeName(pos.latitude, pos.longitude),
+      );
+    } catch (_) {
+      // Timeout / permission race / platform error — never break the caller.
+      return null;
+    }
   }
+
+  /// Reverse-geocode to a compact "place, area" label. Best-effort; null on
+  /// any failure so a missing name never blocks the coordinates.
+  Future<String?> _placeName(double lat, double lng) async {
+    try {
+      final marks = await geo.placemarkFromCoordinates(lat, lng);
+      if (marks.isEmpty) return null;
+      final p = marks.first;
+      final seen = <String>{};
+      final label = [p.name, p.subLocality, p.locality]
+          .map((s) => (s ?? '').trim())
+          .where((s) => s.isNotEmpty && seen.add(s.toLowerCase()))
+          .take(2)
+          .join(', ');
+      return label.isEmpty ? null : label;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Called from the settings toggle so the OS permission prompt happens when
+  /// the user opts in — not silently deferred to the first save. Returns the
+  /// resulting permission so the UI can warn on denial.
+  Future<LocationPermission> ensurePermission() async {
+    var p = await Geolocator.checkPermission();
+    if (p == LocationPermission.denied) {
+      p = await Geolocator.requestPermission();
+    }
+    return p;
+  }
+
+  Future<bool> openSystemSettings() => Geolocator.openAppSettings();
 }
 
 final locationServiceProvider = Provider<LocationService>(

@@ -429,27 +429,26 @@ class _TypeTabState extends ConsumerState<_TypeTab> {
           ref.read(prefsProvider).defaultAccountId ??
           accounts.first.id;
       final prefs = ref.read(prefsProvider);
-      final location = prefs.locationCaptureEnabled
-          ? await ref.read(locationServiceProvider).capture()
+      final repo = ref.read(transactionRepoProvider);
+      final locationService = prefs.locationCaptureEnabled
+          ? ref.read(locationServiceProvider)
           : null;
-      final id = await ref
-          .read(transactionRepoProvider)
-          .create(
-            accountId: acctId,
-            categoryId: value.categoryId,
-            payeeId: value.payeeId,
-            payeeName: value.payeeName,
-            amountCents: value.isIncome
-                ? value.amountCents.abs()
-                : -value.amountCents.abs(),
-            date: value.date,
-            notes: value.notes,
-            latitude: location?.latitude,
-            longitude: location?.longitude,
-            locationName: location?.name,
-            origin: 'ai',
-            originRef: _ctrl.text,
-          );
+      final id = await repo.create(
+        accountId: acctId,
+        categoryId: value.categoryId,
+        payeeId: value.payeeId,
+        payeeName: value.payeeName,
+        amountCents: value.isIncome
+            ? value.amountCents.abs()
+            : -value.amountCents.abs(),
+        date: value.date,
+        notes: value.notes,
+        origin: 'ai',
+        originRef: _ctrl.text,
+      );
+      if (locationService != null) {
+        _attachLocationInBackground(locationService, repo, id);
+      }
       final activeTagId = prefs.activeTagId;
       if (activeTagId != null) {
         await ref.read(tagRepoProvider).setTransactionTags(id, [activeTagId]);
@@ -924,8 +923,8 @@ class _FormTabState extends ConsumerState<_FormTab> {
 
       final repo = ref.read(transactionRepoProvider);
       final prefs = ref.read(prefsProvider);
-      final location = !_isEditing && prefs.locationCaptureEnabled
-          ? await ref.read(locationServiceProvider).capture()
+      final locationService = !_isEditing && prefs.locationCaptureEnabled
+          ? ref.read(locationServiceProvider)
           : null;
       final foreign = _foreignValue();
       if (_isEditing) {
@@ -957,9 +956,6 @@ class _FormTabState extends ConsumerState<_FormTab> {
           amountCents: amount,
           date: _date,
           notes: notes,
-          latitude: location?.latitude,
-          longitude: location?.longitude,
-          locationName: location?.name,
           origin: draft != null ? 'sms' : 'manual',
           originRef: draft?.smsRowId.toString(),
           originalAmountCents: foreign.cents,
@@ -972,6 +968,9 @@ class _FormTabState extends ConsumerState<_FormTab> {
         }
         if (widget.onCreated != null) {
           await widget.onCreated!(id);
+        }
+        if (locationService != null) {
+          _attachLocationInBackground(locationService, repo, id);
         }
       }
 
@@ -2054,6 +2053,27 @@ class _Keypad extends StatelessWidget {
       ],
     );
   }
+}
+
+/// Fire-and-forget location attach, kept off the save critical path so a slow
+/// or failed GPS fix never blocks or breaks the save. Snapshots the
+/// repo/service (not `ref`) because the sheet is usually disposed by the time
+/// the fix returns.
+void _attachLocationInBackground(
+  LocationService service,
+  TransactionRepository repo,
+  String transactionId,
+) {
+  unawaited(() async {
+    final loc = await service.capture();
+    if (loc == null) return;
+    await repo.update(
+      transactionId,
+      latitude: loc.latitude,
+      longitude: loc.longitude,
+      locationName: loc.name,
+    );
+  }());
 }
 
 SnackBar _savedSnackBar(String label) {

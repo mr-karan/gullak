@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:webview_flutter/webview_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/money.dart';
 import '../../state/providers.dart';
@@ -141,15 +141,10 @@ class TransactionDetailScreen extends ConsumerWidget {
                   ),
                 ),
                 const SizedBox(height: 8),
-                SizedBox(
-                  height: 220,
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(12),
-                    child: _MapPreview(
-                      latitude: raw!.latitude!,
-                      longitude: raw.longitude!,
-                    ),
-                  ),
+                _LocationCard(
+                  latitude: raw!.latitude!,
+                  longitude: raw.longitude!,
+                  name: raw.locationName,
                 ),
               ],
             ],
@@ -270,32 +265,75 @@ class _DetailRow extends StatelessWidget {
   }
 }
 
-class _MapPreview extends StatefulWidget {
-  const _MapPreview({required this.latitude, required this.longitude});
+/// Location shown as a tappable card (place name if reverse-geocoded, else
+/// coordinates) that opens the platform maps app. Replaces the old in-app
+/// WebView that loaded the full Google Maps *website* — which showed consent
+/// banners and read as broken.
+class _LocationCard extends StatelessWidget {
+  const _LocationCard({
+    required this.latitude,
+    required this.longitude,
+    this.name,
+  });
 
   final double latitude;
   final double longitude;
+  final String? name;
 
   @override
-  State<_MapPreview> createState() => _MapPreviewState();
-}
-
-class _MapPreviewState extends State<_MapPreview> {
-  late final WebViewController _controller;
-
-  @override
-  void initState() {
-    super.initState();
-    final q = '${widget.latitude},${widget.longitude}';
-    _controller = WebViewController()
-      ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..loadRequest(
-        Uri.parse('https://www.google.com/maps/search/?api=1&query=$q'),
-      );
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final coords =
+        '${latitude.toStringAsFixed(5)}, ${longitude.toStringAsFixed(5)}';
+    final hasName = name?.trim().isNotEmpty == true;
+    return Material(
+      color: cs.surfaceContainerHighest,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: _openMaps,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+          child: Row(
+            children: [
+              Icon(Icons.place_outlined, color: cs.primary),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      hasName ? name!.trim() : coords,
+                      style: Theme.of(context).textTheme.titleSmall,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      hasName ? 'Open in Maps' : 'Open in Maps · $coords',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: cs.onSurfaceVariant,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+              Icon(Icons.open_in_new, size: 18, color: cs.onSurfaceVariant),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
-  @override
-  Widget build(BuildContext context) => WebViewWidget(controller: _controller);
+  Future<void> _openMaps() async {
+    final uri = Uri.parse(
+      'https://www.google.com/maps/search/?api=1&query=$latitude,$longitude',
+    );
+    await launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
 }
 
 final _transactionRowProvider = StreamProvider.family<TransactionRow?, String>(
