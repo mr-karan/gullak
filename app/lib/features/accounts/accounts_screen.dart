@@ -7,6 +7,7 @@ import '../../ui/widgets/empty_state.dart';
 import '../../ui/widgets/error_state.dart';
 import '../../ui/widgets/money_text.dart';
 import 'account_form_sheet.dart';
+import '../../ui/app_sheet.dart';
 import 'data/account_repository.dart';
 
 class AccountsScreen extends ConsumerWidget {
@@ -82,10 +83,8 @@ class AccountsScreen extends ConsumerWidget {
   }
 
   Future<void> _newAccount(BuildContext context) async {
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
+    await showAppSheet<void>(
+      context,
       builder: (_) => const AccountFormSheet(),
     );
   }

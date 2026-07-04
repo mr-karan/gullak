@@ -9,6 +9,7 @@ import '../../core/clock.dart';
 import '../../core/money.dart';
 import '../../core/snackbars.dart';
 import '../../state/providers.dart';
+import '../../ui/app_sheet.dart';
 import '../../ui/theme.dart';
 import '../accounts/data/account_repository.dart';
 import '../categories/category_form_dialog.dart';
@@ -378,8 +379,9 @@ class _TypeTabState extends ConsumerState<_TypeTab> {
   }
 
   Future<void> _showImageMenu() async {
-    final source = await showModalBottomSheet<ImageSource>(
-      context: context,
+    final source = await showAppSheet<ImageSource>(
+      context,
+      showDragHandle: false,
       builder: (ctx) => SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,

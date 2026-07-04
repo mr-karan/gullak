@@ -9,6 +9,7 @@ import '../../ui/widgets/error_state.dart';
 import '../../ui/widgets/money_text.dart';
 import '../accounts/data/account_repository.dart';
 import '../categories/data/category_repository.dart';
+import '../../ui/app_sheet.dart';
 import 'data/recurrence_repository.dart';
 
 class RecurrencesScreen extends ConsumerWidget {
@@ -111,10 +112,8 @@ class RecurrencesScreen extends ConsumerWidget {
       );
       return;
     }
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
+    await showAppSheet<void>(
+      context,
       builder: (_) =>
           _RecurrenceForm(accounts: accounts, categories: categories),
     );

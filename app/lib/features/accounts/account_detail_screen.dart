@@ -10,6 +10,7 @@ import '../../ui/widgets/money_text.dart';
 import '../entry/quick_entry.dart';
 import '../transactions/data/transaction_repository.dart';
 import 'account_form_sheet.dart';
+import '../../ui/app_sheet.dart';
 import 'data/account_repository.dart';
 
 class AccountDetailScreen extends ConsumerWidget {
@@ -38,10 +39,8 @@ class AccountDetailScreen extends ConsumerWidget {
             icon: const Icon(Icons.edit_outlined),
             onPressed: account == null
                 ? null
-                : () => showModalBottomSheet<void>(
-                    context: context,
-                    isScrollControlled: true,
-                    useSafeArea: true,
+                : () => showAppSheet<void>(
+                    context,
                     builder: (_) => AccountFormSheet(accountId: id),
                   ),
           ),

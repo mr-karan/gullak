@@ -7,6 +7,7 @@ import '../../ui/widgets/error_state.dart';
 import '../accounts/data/account_repository.dart';
 import '../categories/data/category_repository.dart';
 import '../tags/data/tag_repository.dart';
+import '../../ui/app_sheet.dart';
 import 'data/rule_repository.dart';
 
 class RulesScreen extends ConsumerWidget {
@@ -18,11 +19,8 @@ class RulesScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(title: const Text('Rules')),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => showModalBottomSheet<void>(
-          context: context,
-          isScrollControlled: true,
-          useSafeArea: true,
-          showDragHandle: true,
+        onPressed: () => showAppSheet<void>(
+          context,
           builder: (_) => const _RuleSheet(),
         ),
         icon: const Icon(Icons.add),

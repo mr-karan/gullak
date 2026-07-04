@@ -13,6 +13,7 @@ import '../../state/providers.dart';
 import '../../ui/widgets/category_swatch.dart';
 import '../../ui/widgets/empty_state.dart';
 import '../../ui/widgets/error_state.dart';
+import '../../ui/app_sheet.dart';
 import '../../ui/widgets/money_text.dart';
 import '../accounts/data/account_repository.dart';
 import '../categories/data/category_repository.dart';
@@ -71,13 +72,8 @@ class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
   }
 
   Future<void> _openFilters() async {
-    final result = await showModalBottomSheet<TransactionFilters>(
-      context: context,
-      // Root navigator so the sheet covers the shell's floating Add button —
-      // otherwise the FAB sits on top of the sheet's Apply action.
-      useRootNavigator: true,
-      isScrollControlled: true,
-      showDragHandle: true,
+    final result = await showAppSheet<TransactionFilters>(
+      context,
       builder: (_) => _TransactionFilterSheet(initial: _filters),
     );
     if (result == null || !mounted) return;
@@ -258,21 +254,15 @@ class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
   }
 
   Future<void> _openSplitSheet(BuildContext context) {
-    return showModalBottomSheet<void>(
-      context: context,
-      useRootNavigator: true,
-      isScrollControlled: true,
-      showDragHandle: true,
+    return showAppSheet<void>(
+      context,
       builder: (_) => const SplitTransactionSheet(),
     );
   }
 
   Future<void> _openTransferSheet(BuildContext context) {
-    return showModalBottomSheet<void>(
-      context: context,
-      useRootNavigator: true,
-      isScrollControlled: true,
-      showDragHandle: true,
+    return showAppSheet<void>(
+      context,
       builder: (_) => const TransferSheet(),
     );
   }

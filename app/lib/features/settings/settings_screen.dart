@@ -19,6 +19,7 @@ import '../../sync/sync_status.dart';
 import '../backup/backup_service.dart';
 import '../backup/file_pick.dart';
 import '../inbox/data/sms_repository.dart';
+import '../../ui/app_sheet.dart';
 import '../location/location_service.dart';
 import 'package:geolocator/geolocator.dart';
 
@@ -466,9 +467,8 @@ class SettingsScreen extends ConsumerWidget {
   Future<void> _editTheme(BuildContext context, WidgetRef ref) async {
     final prefs = ref.read(prefsProvider);
     final current = prefs.themeMode;
-    final v = await showModalBottomSheet<String>(
-      context: context,
-      showDragHandle: true,
+    final v = await showAppSheet<String>(
+      context,
       builder: (sheetCtx) => SafeArea(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 20),
