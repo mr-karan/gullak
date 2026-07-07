@@ -462,7 +462,10 @@ class _SmsPrimer extends StatelessWidget {
                       color: cs.onSurfaceVariant,
                     ),
                     const SizedBox(width: 8),
-                    Text('HDFCBK', style: Theme.of(context).textTheme.labelLarge),
+                    Text(
+                      'HDFCBK',
+                      style: Theme.of(context).textTheme.labelLarge,
+                    ),
                   ],
                 ),
                 const SizedBox(height: 6),

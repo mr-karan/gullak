@@ -238,7 +238,9 @@ void main() {
     final transfers = rows.where((r) => r.origin == 'transfer').toList();
     expect(transfers, hasLength(2));
     expect(
-      transfers.any((r) => r.amountCents == -50000 && r.accountId == account.id),
+      transfers.any(
+        (r) => r.amountCents == -50000 && r.accountId == account.id,
+      ),
       isTrue,
     );
     expect(
