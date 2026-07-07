@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -138,6 +140,11 @@ class _OnboardingFlowState extends ConsumerState<OnboardingFlow> {
                         _next();
                       },
                 ),
+                // Android only: prime the SMS feature before Settings asks for
+                // the OS permission (priming lifts grant rates). Absent on iOS
+                // and under `flutter test` (host isn't Android), so the flow
+                // stays three pages there.
+                if (Platform.isAndroid) _SmsPrimer(onNext: _next),
                 _SyncSetup(
                   busy: _finishing,
                   onSkip: () => _finish(),
@@ -393,6 +400,115 @@ class _FirstAccountState extends State<_FirstAccount> {
 /// QuickEntry, and receipt photos. Skipping is fine — those features
 /// stay disabled until the server is configured here or later in
 /// Settings → Sync.
+/// Android-only primer: explains the SMS auto-log feature with a worked
+/// example before Settings later asks for the OS permission.
+class _SmsPrimer extends StatelessWidget {
+  const _SmsPrimer({required this.onNext});
+
+  final VoidCallback onNext;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    Widget chip(IconData icon, String label) => Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: cs.surface,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: cs.onSurfaceVariant),
+          const SizedBox(width: 6),
+          Text(label, style: Theme.of(context).textTheme.labelMedium),
+        ],
+      ),
+    );
+
+    return _OnboardingPageShell(
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Auto-log from SMS',
+            style: Theme.of(context).textTheme.headlineMedium,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Gullak can read bank & UPI messages and draft expenses for you — '
+            'you just confirm them in the Inbox. Parsing runs on your own sync '
+            "server, never a third party. You'll be asked for SMS access, and "
+            'can turn it off anytime in Settings.',
+            style: Theme.of(
+              context,
+            ).textTheme.bodyLarge?.copyWith(color: cs.onSurfaceVariant),
+          ),
+          const SizedBox(height: 24),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: cs.surfaceContainerHighest,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(
+                      Icons.sms_outlined,
+                      size: 18,
+                      color: cs.onSurfaceVariant,
+                    ),
+                    const SizedBox(width: 8),
+                    Text('HDFCBK', style: Theme.of(context).textTheme.labelLarge),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'Sent Rs.450.00 to BLINKIT via UPI on 04-07.',
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
+                const SizedBox(height: 14),
+                Row(
+                  children: [
+                    Icon(Icons.arrow_downward, size: 16, color: cs.primary),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Draft ready to confirm',
+                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                        color: cs.primary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    chip(Icons.currency_rupee, '450'),
+                    chip(Icons.store_outlined, 'Blinkit'),
+                    chip(Icons.label_outline, 'Groceries'),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+      footer: Row(
+        children: [
+          const Spacer(),
+          FilledButton(onPressed: onNext, child: const Text('Continue')),
+        ],
+      ),
+    );
+  }
+}
+
 class _SyncSetup extends StatefulWidget {
   const _SyncSetup({
     required this.onSubmit,

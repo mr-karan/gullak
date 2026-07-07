@@ -163,16 +163,15 @@ class _InboxScreenState extends ConsumerState<InboxScreen> {
                     body: _emptyBody,
                   );
                 }
-                return ListView.separated(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-                  itemCount: visibleRows.length,
-                  separatorBuilder: (_, _) => const SizedBox(height: 12),
-                  itemBuilder: (_, i) => _InboxRow(
-                    item: visibleRows[i],
-                    symbol: prefs.currencySymbol,
-                    minorDigits: prefs.currencyMinorDigits,
-                    bucket: _bucket,
-                  ),
+                return _InboxList(
+                  // Key by bucket so switching buckets remounts a fresh list
+                  // (no cross-bucket animation); within a bucket, the list
+                  // diffs stream updates to slide confirmed/dismissed cards out.
+                  key: ValueKey(_bucket),
+                  rows: visibleRows,
+                  bucket: _bucket,
+                  symbol: prefs.currencySymbol,
+                  minorDigits: prefs.currencyMinorDigits,
                 );
               },
               loading: () => const Center(child: CircularProgressIndicator()),
@@ -509,6 +508,94 @@ class _InboxBucketChips extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// Hosts an [AnimatedList] over the bucket's rows and diffs stream updates so a
+/// confirmed/dismissed card slides + fades out and the next card rises to fill
+/// the gap — email-client triage rhythm. Keyed by bucket in the parent, so a
+/// bucket switch remounts this fresh instead of animating the whole set.
+class _InboxList extends StatefulWidget {
+  const _InboxList({
+    required this.rows,
+    required this.bucket,
+    required this.symbol,
+    required this.minorDigits,
+    super.key,
+  });
+
+  final List<InboxItem> rows;
+  final _InboxBucket bucket;
+  final String symbol;
+  final int minorDigits;
+
+  @override
+  State<_InboxList> createState() => _InboxListState();
+}
+
+class _InboxListState extends State<_InboxList> {
+  final _listKey = GlobalKey<AnimatedListState>();
+  late final List<InboxItem> _shown = List.of(widget.rows);
+  static const _anim = Duration(milliseconds: 260);
+
+  @override
+  void didUpdateWidget(covariant _InboxList old) {
+    super.didUpdateWidget(old);
+    final next = widget.rows;
+    final nextIds = next.map((r) => r.id).toSet();
+    // Remove (back-to-front so indices stay valid) rows that left the bucket.
+    for (var i = _shown.length - 1; i >= 0; i--) {
+      if (!nextIds.contains(_shown[i].id)) {
+        final gone = _shown.removeAt(i);
+        _listKey.currentState?.removeItem(
+          i,
+          (context, animation) => _card(gone, animation),
+          duration: _anim,
+        );
+      }
+    }
+    // Insert rows that arrived, at their target index.
+    final shownIds = _shown.map((r) => r.id).toSet();
+    for (var i = 0; i < next.length; i++) {
+      if (!shownIds.contains(next[i].id)) {
+        _shown.insert(i, next[i]);
+        _listKey.currentState?.insertItem(i, duration: _anim);
+      }
+    }
+    // Refresh content of rows that stayed (status/suggestion may have changed).
+    for (var i = 0; i < _shown.length && i < next.length; i++) {
+      if (_shown[i].id == next[i].id) _shown[i] = next[i];
+    }
+  }
+
+  Widget _card(InboxItem item, Animation<double> animation) {
+    final curved = CurvedAnimation(parent: animation, curve: Curves.easeOut);
+    return SizeTransition(
+      sizeFactor: curved,
+      child: FadeTransition(
+        opacity: curved,
+        child: Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: _InboxRow(
+            item: item,
+            symbol: widget.symbol,
+            minorDigits: widget.minorDigits,
+            bucket: widget.bucket,
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedList(
+      key: _listKey,
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+      initialItemCount: _shown.length,
+      itemBuilder: (context, index, animation) =>
+          _card(_shown[index], animation),
     );
   }
 }
