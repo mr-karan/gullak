@@ -58,52 +58,13 @@ class QuickEntrySheet extends ConsumerStatefulWidget {
   ConsumerState<QuickEntrySheet> createState() => _QuickEntrySheetState();
 }
 
-class _QuickEntrySheetState extends ConsumerState<QuickEntrySheet>
-    with SingleTickerProviderStateMixin {
-  bool _showType = false;
-  TabController? _tabs;
-
+class _QuickEntrySheetState extends ConsumerState<QuickEntrySheet> {
   bool get _isEditing => widget.editingTransactionId != null;
   bool get _isSmsConfirm => widget.smsDraft != null;
 
   @override
-  void initState() {
-    super.initState();
-    // Editing always goes straight to Form. Creating shows the
-    // natural-language tab only when the homelab pi-server is
-    // configured (it does the parsing). The check is async so we
-    // start without the tab and add it once we know.
-    if (_isEditing) return;
-    // SMS confirm hydrates the form directly from the draft — there's
-    // nothing to type in natural language, so suppress the Type tab.
-    if (_isSmsConfirm) return;
-    () async {
-      final base = await ref.read(secureStoreProvider).readSyncBaseUrl();
-      if (!mounted) return;
-      if (base == null || base.trim().isEmpty) return;
-      final prefs = ref.read(prefsProvider);
-      // If a caller pre-filled a note (e.g. "log this SMS manually"),
-      // open on the Type tab regardless of the user's last choice — the
-      // text only makes sense in the natural-language flow.
-      final initialIndex = widget.initialNote != null
-          ? 0
-          : (prefs.quickEntryTab == 'type' ? 0 : 1);
-      setState(() {
-        _showType = true;
-        _tabs = TabController(
-          length: 2,
-          vsync: this,
-          initialIndex: initialIndex,
-        );
-      });
-    }();
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
     final mq = MediaQuery.of(context);
-    final showType = _showType;
     final keyboardOpen = mq.viewInsets.bottom > 0;
 
     return SafeArea(
@@ -126,57 +87,20 @@ class _QuickEntrySheetState extends ConsumerState<QuickEntrySheet>
                 onCancel: () => Navigator.of(context).maybePop(),
                 editingTransactionId: widget.editingTransactionId,
               ),
-              if (showType)
-                TabBar(
-                  controller: _tabs,
-                  indicatorSize: TabBarIndicatorSize.label,
-                  labelColor: cs.primary,
-                  indicatorColor: cs.primary,
-                  tabs: const [
-                    Tab(text: 'Type'),
-                    Tab(text: 'Form'),
-                  ],
-                  onTap: (i) {
-                    ref
-                        .read(prefsProvider)
-                        .setQuickEntryTab(i == 0 ? 'type' : 'form');
-                  },
-                ),
               Expanded(
-                child: showType
-                    ? TabBarView(
-                        controller: _tabs,
-                        children: [
-                          _TypeTab(
-                            initialText: widget.initialNote,
-                            onTweakInForm: () => _tabs?.animateTo(1),
-                          ),
-                          _FormTab(
-                            editingTransactionId: widget.editingTransactionId,
-                            smsDraft: widget.smsDraft,
-                            onCreated: widget.onCreated,
-                            keyboardOpen: keyboardOpen,
-                          ),
-                        ],
-                      )
-                    : _FormTab(
-                        editingTransactionId: widget.editingTransactionId,
-                        smsDraft: widget.smsDraft,
-                        onCreated: widget.onCreated,
-                        keyboardOpen: keyboardOpen,
-                      ),
+                child: _FormTab(
+                  editingTransactionId: widget.editingTransactionId,
+                  smsDraft: widget.smsDraft,
+                  initialNote: widget.initialNote,
+                  onCreated: widget.onCreated,
+                  keyboardOpen: keyboardOpen,
+                ),
               ),
             ],
           ),
         ),
       ),
     );
-  }
-
-  @override
-  void dispose() {
-    _tabs?.dispose();
-    super.dispose();
   }
 }
 
@@ -237,17 +161,21 @@ class _Header extends ConsumerWidget {
   }
 }
 
-class _TypeTab extends ConsumerStatefulWidget {
-  const _TypeTab({required this.onTweakInForm, this.initialText});
+/// AI capture, presented as a modal sheet launched from the form. Parses a
+/// natural-language line or a receipt photo and **returns** a [ParsedExpense]
+/// (via Navigator.pop) for the form to apply — it no longer saves directly, so
+/// the user always reviews/tweaks the parsed fields in the form before saving.
+class _DescribeSheet extends ConsumerStatefulWidget {
+  const _DescribeSheet({this.initialText, this.autoScan = false});
 
-  final VoidCallback onTweakInForm;
   final String? initialText;
+  final bool autoScan;
 
   @override
-  ConsumerState<_TypeTab> createState() => _TypeTabState();
+  ConsumerState<_DescribeSheet> createState() => _DescribeSheetState();
 }
 
-class _TypeTabState extends ConsumerState<_TypeTab> {
+class _DescribeSheetState extends ConsumerState<_DescribeSheet> {
   late final TextEditingController _ctrl = TextEditingController(
     text: widget.initialText ?? '',
   );
@@ -257,7 +185,6 @@ class _TypeTabState extends ConsumerState<_TypeTab> {
   AsyncValue<ParsedExpense?> _parse = const AsyncValue<ParsedExpense?>.data(
     null,
   );
-  bool _saving = false;
   Uint8List? _imageBytes;
 
   @override
@@ -281,6 +208,12 @@ class _TypeTabState extends ConsumerState<_TypeTab> {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
         _runParse(_ctrl.text);
+      });
+    } else if (widget.autoScan) {
+      // Opened via the Scan button — jump straight to the image picker.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _showImageMenu();
       });
     }
   }
@@ -415,77 +348,34 @@ class _TypeTabState extends ConsumerState<_TypeTab> {
     if (source != null) await _pickImage(source);
   }
 
-  Future<void> _save() async {
-    if (_saving) return;
+  /// Hand the parsed result back to the form, which fills its fields and lets
+  /// the user review before saving.
+  void _use() {
     final value = _parse.value;
-    if (value == null) return;
-    if (value.amountCents == 0) return;
-    setState(() => _saving = true);
-    final messenger = ScaffoldMessenger.of(context);
-    final navigator = Navigator.of(context);
-    try {
-      final accounts = await ref.read(accountsListProvider.future);
-      if (accounts.isEmpty) return;
-      final acctId =
-          value.accountId ??
-          ref.read(prefsProvider).defaultAccountId ??
-          accounts.first.id;
-      final prefs = ref.read(prefsProvider);
-      final repo = ref.read(transactionRepoProvider);
-      final locationService = prefs.locationCaptureEnabled
-          ? ref.read(locationServiceProvider)
-          : null;
-      final id = await repo.create(
-        accountId: acctId,
-        categoryId: value.categoryId,
-        payeeId: value.payeeId,
-        payeeName: value.payeeName,
-        amountCents: value.isIncome
-            ? value.amountCents.abs()
-            : -value.amountCents.abs(),
-        date: value.date,
-        notes: value.notes,
-        origin: 'ai',
-        originRef: _ctrl.text,
-      );
-      if (locationService != null) {
-        _attachLocationInBackground(locationService, repo, id);
-      }
-      final activeTagId = prefs.activeTagId;
-      if (activeTagId != null) {
-        await ref.read(tagRepoProvider).setTransactionTags(id, [activeTagId]);
-      }
-      if (value.payeeId != null) {
-        await ref
-            .read(entryMemoryProvider)
-            .rememberPayeeMapping(
-              payeeId: value.payeeId!,
-              accountId: acctId,
-              categoryId: value.categoryId,
-            );
-        await ref.read(payeeRepoProvider).bumpUseCount(value.payeeId!);
-      }
-      navigator.maybePop();
-      showTimedSnackBar(messenger, _savedSnackBar('Saved'));
-    } catch (_) {
-      if (mounted) setState(() => _saving = false);
-      rethrow;
-    }
+    if (value == null || value.amountCents == 0) return;
+    Navigator.of(context).pop(value);
   }
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-      child: Column(
-        children: [
-          TextField(
-            controller: _ctrl,
-            autofocus: true,
+    return SafeArea(
+      child: Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).viewInsets.bottom,
+        ),
+        child: SizedBox(
+          height: MediaQuery.of(context).size.height * 0.7,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+            child: Column(
+              children: [
+                TextField(
+                  controller: _ctrl,
+                  autofocus: true,
             textInputAction: TextInputAction.done,
             onChanged: _onChanged,
-            onSubmitted: (_) => _save(),
+            onSubmitted: (_) => _use(),
             decoration: InputDecoration(
               hintText: 'e.g. blinkit 450 hdfc',
               suffixIcon: IconButton(
@@ -545,20 +435,23 @@ class _TypeTabState extends ConsumerState<_TypeTab> {
             children: [
               Expanded(
                 child: OutlinedButton(
-                  onPressed: widget.onTweakInForm,
-                  child: const Text('Tweak in form'),
+                  onPressed: () => Navigator.of(context).maybePop(),
+                  child: const Text('Cancel'),
                 ),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: FilledButton(
-                  onPressed: _saving || _parse.value == null ? null : _save,
-                  child: Text(_saving ? 'Saving…' : 'Save'),
+                  onPressed: _parse.value == null ? null : _use,
+                  child: const Text('Use these details'),
                 ),
               ),
             ],
           ),
-        ],
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -677,12 +570,14 @@ class _FormTab extends ConsumerStatefulWidget {
   const _FormTab({
     this.editingTransactionId,
     this.smsDraft,
+    this.initialNote,
     this.onCreated,
     required this.keyboardOpen,
   });
 
   final String? editingTransactionId;
   final SmsTransactionDraft? smsDraft;
+  final String? initialNote;
   final Future<void> Function(String transactionId)? onCreated;
   final bool keyboardOpen;
 
@@ -731,7 +626,67 @@ class _FormTabState extends ConsumerState<_FormTab> {
     } else if (_isSmsConfirm) {
       _hydrating = true;
       _hydrateFromSmsDraft();
+    } else {
+      // Fresh entry: if a shared image is pending (Android share sheet) or a
+      // note was pre-filled (SMS "log manually"), jump straight into the AI
+      // Describe sheet and apply its result to the form.
+      final hasShare = ref.read(pendingShareProvider) != null;
+      final note = widget.initialNote?.trim() ?? '';
+      if (hasShare || note.length >= 3) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _openDescribe(text: hasShare ? null : note);
+        });
+      }
     }
+  }
+
+  /// Opens the AI Describe/Scan sheet and applies whatever it returns.
+  Future<void> _openDescribe({String? text, bool autoScan = false}) async {
+    final parsed = await showAppSheet<ParsedExpense>(
+      context,
+      builder: (_) => _DescribeSheet(initialText: text, autoScan: autoScan),
+    );
+    if (parsed != null) await _applyParsed(parsed);
+  }
+
+  /// Fills the form from an AI-parsed result so the user can review before
+  /// saving. Resolves ids to rows best-effort; leaves untouched anything the
+  /// parser didn't determine.
+  Future<void> _applyParsed(ParsedExpense p) async {
+    final scale = _pow10(ref.read(prefsProvider).currencyMinorDigits);
+    AccountRow? account;
+    if (p.accountId != null) {
+      final list = await ref.read(accountsListProvider.future);
+      account = list.where((a) => a.id == p.accountId).firstOrNull;
+    }
+    final category = p.categoryId == null
+        ? null
+        : await ref.read(categoryRepoProvider).byId(p.categoryId!);
+    final payee = p.payeeId == null
+        ? null
+        : await ref.read(payeeRepoProvider).byId(p.payeeId!);
+    if (!mounted) return;
+    setState(() {
+      _amountWhole = p.amountCents.abs() ~/ scale;
+      _isIncome = p.isIncome;
+      _date = p.date;
+      if (account != null) _account = account;
+      if (payee != null) {
+        _payee = payee;
+        _newPayeeName = null;
+      } else if ((p.payeeName ?? '').isNotEmpty) {
+        _payee = null;
+        _newPayeeName = p.payeeName;
+      }
+      if (category != null) {
+        _category = category;
+        _categorySuggested = true;
+      }
+      if ((p.notes ?? '').trim().isNotEmpty) {
+        _notesCtrl.text = p.notes!.trim();
+        _notesExpanded = true;
+      }
+    });
   }
 
   Future<void> _hydrateFromSmsDraft() async {
@@ -1033,6 +988,12 @@ class _FormTabState extends ConsumerState<_FormTab> {
     final prefs = ref.watch(prefsProvider);
     final accounts =
         ref.watch(accountsListProvider).value ?? const <AccountRow>[];
+    // AI describe/scan is only offered on a fresh manual entry, and only when
+    // the sync server (which does the parsing) is configured.
+    final aiReady =
+        !_isEditing &&
+        !_isSmsConfirm &&
+        ref.watch(aiExtractorProvider).value != null;
     _maybeHydrateAccount(accounts);
     if (_hydrating) {
       return const _QuickEntrySkeleton();
@@ -1198,6 +1159,28 @@ class _FormTabState extends ConsumerState<_FormTab> {
                 ),
               ),
               if (!hideKeypad) ...[
+                if (aiReady) ...[
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () => _openDescribe(),
+                          icon: const Icon(Icons.edit_note, size: 18),
+                          label: const Text('Describe'),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () => _openDescribe(autoScan: true),
+                          icon: const Icon(Icons.photo_camera_outlined, size: 18),
+                          label: const Text('Scan'),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                ],
                 _Keypad(
                   onDigit: (d) => setState(() {
                     // Cap at 10 digits (max ~₹9.99B) to avoid integer overflow.
