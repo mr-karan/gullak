@@ -698,6 +698,10 @@ class _FormTabState extends ConsumerState<_FormTab> {
   bool _isIncome = false;
   AccountRow? _account;
   CategoryRow? _category;
+  // True when the category was auto-filled from payee memory rather than
+  // picked by the user — the chip shows a "?" so a wrong guess is easy to
+  // catch. Saving uses it either way; the flag is just a visual cue.
+  bool _categorySuggested = false;
   PayeeRow? _payee;
   String? _newPayeeName;
   DateTime _date = clock.today();
@@ -893,7 +897,12 @@ class _FormTabState extends ConsumerState<_FormTab> {
       ref.read(categoriesListProvider.future).then((list) {
         if (!mounted) return;
         final c = list.where((x) => x.id == hintedCategory).firstOrNull;
-        if (c != null) setState(() => _category = c);
+        if (c != null) {
+          setState(() {
+            _category = c;
+            _categorySuggested = true;
+          });
+        }
       });
     }
   }
@@ -1071,7 +1080,11 @@ class _FormTabState extends ConsumerState<_FormTab> {
                             icon: _category == null
                                 ? Icons.label_outline
                                 : categoryIconData(_category!.name),
-                            label: _category?.name ?? 'Category',
+                            label: _category == null
+                                ? 'Category'
+                                : (_categorySuggested
+                                      ? '${_category!.name} ?'
+                                      : _category!.name),
                             isSet: _category != null,
                             accent: _category == null
                                 ? null
@@ -1498,7 +1511,12 @@ class _FormTabState extends ConsumerState<_FormTab> {
     } finally {
       input.dispose();
     }
-    if (picked != null) setState(() => _category = picked);
+    if (picked != null) {
+      setState(() {
+        _category = picked;
+        _categorySuggested = false;
+      });
+    }
   }
 
   Future<void> _pickTags() async {
