@@ -591,7 +591,12 @@ class _FormTabState extends ConsumerState<_FormTab> {
   /// minor units only at save time.
   int _amountWhole = 0;
   bool _isIncome = false;
+  // Transfer mode: money moves between two of your own accounts (via
+  // createTransfer) so it doesn't read as spend. Replaces payee/category with
+  // a From/To account pair.
+  bool _isTransfer = false;
   AccountRow? _account;
+  AccountRow? _toAccount;
   CategoryRow? _category;
   // True when the category was auto-filled from payee memory rather than
   // picked by the user — the chip shows a "?" so a wrong guess is easy to
@@ -876,6 +881,32 @@ class _FormTabState extends ConsumerState<_FormTab> {
       final minorDigits = ref.read(prefsProvider).currencyMinorDigits;
       final scale = _pow10(minorDigits);
       final cents = _amountWhole * scale;
+
+      // Transfer: a paired debit/credit between two of your own accounts, so
+      // it never reads as spend. No payee/category/tags/location apply.
+      if (_isTransfer) {
+        final to = _toAccount;
+        if (to == null || to.id == _account!.id) {
+          setState(() => _saving = false);
+          return;
+        }
+        await ref
+            .read(transactionRepoProvider)
+            .createTransfer(
+              fromAccountId: _account!.id,
+              toAccountId: to.id,
+              amountCents: cents,
+              date: _date,
+              notes: _notesCtrl.text.trim().isEmpty
+                  ? null
+                  : _notesCtrl.text.trim(),
+            );
+        await ref.read(entryMemoryProvider).rememberAccount(_account!.id);
+        navigator.maybePop();
+        showTimedSnackBar(messenger, _savedSnackBar('Transfer recorded'));
+        return;
+      }
+
       final amount = _isIncome ? cents : -cents;
 
       // Resolve a payee id once: either the existing one, or create from
@@ -977,6 +1008,13 @@ class _FormTabState extends ConsumerState<_FormTab> {
   /// logging to the wrong account. Falls back to a bare verb until both an
   /// amount and an account are set (the button is disabled then anyway).
   String _saveLabel(String symbol) {
+    if (_isTransfer) {
+      if (_amountWhole == 0 || _account == null || _toAccount == null) {
+        return 'Transfer';
+      }
+      final amt = Money.format(_amountWhole, minorDigits: 0, symbol: symbol);
+      return 'Transfer $amt to ${_toAccount!.name}';
+    }
     final verb = _isEditing ? 'Update' : 'Save';
     if (_amountWhole == 0 || _account == null) return verb;
     final amt = Money.format(_amountWhole, minorDigits: 0, symbol: symbol);
@@ -993,6 +1031,7 @@ class _FormTabState extends ConsumerState<_FormTab> {
     final aiReady =
         !_isEditing &&
         !_isSmsConfirm &&
+        !_isTransfer &&
         ref.watch(aiExtractorProvider).value != null;
     _maybeHydrateAccount(accounts);
     if (_hydrating) {
@@ -1012,8 +1051,13 @@ class _FormTabState extends ConsumerState<_FormTab> {
               ),
               const SizedBox(height: 10),
               _SignSegment(
-                isIncome: _isIncome,
-                onChanged: (v) => setState(() => _isIncome = v),
+                kind: _isTransfer
+                    ? _TxKind.transfer
+                    : (_isIncome ? _TxKind.income : _TxKind.expense),
+                onChanged: (k) => setState(() {
+                  _isTransfer = k == _TxKind.transfer;
+                  _isIncome = k == _TxKind.income;
+                }),
               ),
               const SizedBox(height: 12),
               Expanded(
@@ -1024,39 +1068,56 @@ class _FormTabState extends ConsumerState<_FormTab> {
                       child: Wrap(
                         spacing: 8,
                         runSpacing: 8,
-                        children: [
-                          _ContextChip(
-                            icon: Icons.account_balance_outlined,
-                            label: _account?.name ?? 'Account',
-                            isSet: _account != null,
-                            onTap: _pickAccount,
-                          ),
-                          _ContextChip(
-                            icon: Icons.store_outlined,
-                            label: _newPayeeName ?? _payee?.name ?? 'Payee',
-                            isSet: _payee != null || _newPayeeName != null,
-                            onTap: _pickPayee,
-                          ),
-                          _ContextChip(
-                            icon: _category == null
-                                ? Icons.label_outline
-                                : categoryIconData(_category!.name),
-                            label: _category == null
-                                ? 'Category'
-                                : (_categorySuggested
-                                      ? '${_category!.name} ?'
-                                      : _category!.name),
-                            isSet: _category != null,
-                            accent: _category == null
-                                ? null
-                                : categoryAccentColor(
-                                    _category!.color,
-                                    _category!.name,
-                                  ),
-                            onTap: _pickCategory,
-                          ),
-                          _TagsChip(tagIds: _tagIds, onTap: _pickTags),
-                        ],
+                        children: _isTransfer
+                            ? [
+                                _ContextChip(
+                                  icon: Icons.account_balance_outlined,
+                                  label: 'From: ${_account?.name ?? 'Select'}',
+                                  isSet: _account != null,
+                                  onTap: _pickAccount,
+                                ),
+                                _ContextChip(
+                                  icon: Icons.arrow_forward,
+                                  label: 'To: ${_toAccount?.name ?? 'Select'}',
+                                  isSet: _toAccount != null,
+                                  onTap: _pickToAccount,
+                                ),
+                              ]
+                            : [
+                                _ContextChip(
+                                  icon: Icons.account_balance_outlined,
+                                  label: _account?.name ?? 'Account',
+                                  isSet: _account != null,
+                                  onTap: _pickAccount,
+                                ),
+                                _ContextChip(
+                                  icon: Icons.store_outlined,
+                                  label:
+                                      _newPayeeName ?? _payee?.name ?? 'Payee',
+                                  isSet:
+                                      _payee != null || _newPayeeName != null,
+                                  onTap: _pickPayee,
+                                ),
+                                _ContextChip(
+                                  icon: _category == null
+                                      ? Icons.label_outline
+                                      : categoryIconData(_category!.name),
+                                  label: _category == null
+                                      ? 'Category'
+                                      : (_categorySuggested
+                                            ? '${_category!.name} ?'
+                                            : _category!.name),
+                                  isSet: _category != null,
+                                  accent: _category == null
+                                      ? null
+                                      : categoryAccentColor(
+                                          _category!.color,
+                                          _category!.name,
+                                        ),
+                                  onTap: _pickCategory,
+                                ),
+                                _TagsChip(tagIds: _tagIds, onTap: _pickTags),
+                              ],
                       ),
                     ),
                     const SizedBox(height: 4),
@@ -1098,7 +1159,7 @@ class _FormTabState extends ConsumerState<_FormTab> {
                           ),
                         ),
                       ),
-                    if (_foreignExpanded)
+                    if (!_isTransfer && _foreignExpanded)
                       Padding(
                         padding: const EdgeInsets.only(top: 8, bottom: 4),
                         child: Row(
@@ -1140,7 +1201,7 @@ class _FormTabState extends ConsumerState<_FormTab> {
                           ],
                         ),
                       )
-                    else
+                    else if (!_isTransfer)
                       Padding(
                         padding: const EdgeInsets.symmetric(vertical: 6),
                         child: TextButton.icon(
@@ -1194,7 +1255,13 @@ class _FormTabState extends ConsumerState<_FormTab> {
                 const SizedBox(height: 8),
               ],
               FilledButton(
-                onPressed: _saving || _account == null || _amountWhole == 0
+                onPressed:
+                    _saving ||
+                        _account == null ||
+                        _amountWhole == 0 ||
+                        (_isTransfer &&
+                            (_toAccount == null ||
+                                _toAccount!.id == _account!.id))
                     ? null
                     : _save,
                 child: Text(
@@ -1210,11 +1277,11 @@ class _FormTabState extends ConsumerState<_FormTab> {
     );
   }
 
-  Future<void> _pickAccount() async {
+  Future<AccountRow?> _chooseAccount(String title) async {
     HapticFeedback.selectionClick();
     final accounts = await ref.read(accountRepoProvider).list();
-    if (!mounted) return;
-    final picked = await showModalBottomSheet<AccountRow>(
+    if (!mounted) return null;
+    return showModalBottomSheet<AccountRow>(
       context: context,
       useRootNavigator: true,
       isScrollControlled: true,
@@ -1228,10 +1295,7 @@ class _FormTabState extends ConsumerState<_FormTab> {
                 padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
                 child: Align(
                   alignment: Alignment.centerLeft,
-                  child: Text(
-                    'Account',
-                    style: Theme.of(ctx).textTheme.titleLarge,
-                  ),
+                  child: Text(title, style: Theme.of(ctx).textTheme.titleLarge),
                 ),
               ),
               Expanded(
@@ -1252,7 +1316,16 @@ class _FormTabState extends ConsumerState<_FormTab> {
         ),
       ),
     );
+  }
+
+  Future<void> _pickAccount() async {
+    final picked = await _chooseAccount('Account');
     if (picked != null) setState(() => _account = picked);
+  }
+
+  Future<void> _pickToAccount() async {
+    final picked = await _chooseAccount('Transfer to');
+    if (picked != null) setState(() => _toAccount = picked);
   }
 
   Future<void> _pickPayee() async {
@@ -1703,26 +1776,32 @@ class _DateRow extends StatelessWidget {
 
 /// Expense / Income segmented toggle. Replaces the cryptic +/- icon button —
 /// spend and income are named, and the active side tints to match the amount.
-class _SignSegment extends StatelessWidget {
-  const _SignSegment({required this.isIncome, required this.onChanged});
+enum _TxKind { expense, income, transfer }
 
-  final bool isIncome;
-  final ValueChanged<bool> onChanged;
+class _SignSegment extends StatelessWidget {
+  const _SignSegment({required this.kind, required this.onChanged});
+
+  final _TxKind kind;
+  final ValueChanged<_TxKind> onChanged;
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
 
-    Widget seg(String label, bool incomeValue, IconData icon) {
-      final selected = isIncome == incomeValue;
-      final accent = incomeValue ? cs.tertiary : cs.primary;
+    Widget seg(String label, _TxKind value, IconData icon) {
+      final selected = kind == value;
+      final accent = switch (value) {
+        _TxKind.income => cs.tertiary,
+        _TxKind.transfer => cs.secondary,
+        _TxKind.expense => cs.primary,
+      };
       return Expanded(
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
           onTap: () {
             if (selected) return;
             HapticFeedback.selectionClick();
-            onChanged(incomeValue);
+            onChanged(value);
           },
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 150),
@@ -1743,12 +1822,16 @@ class _SignSegment extends StatelessWidget {
                   size: 16,
                   color: selected ? accent : cs.onSurfaceVariant,
                 ),
-                const SizedBox(width: 6),
-                Text(
-                  label,
-                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                    color: selected ? accent : cs.onSurfaceVariant,
-                    fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+                const SizedBox(width: 4),
+                Flexible(
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                      color: selected ? accent : cs.onSurfaceVariant,
+                      fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+                    ),
                   ),
                 ),
               ],
@@ -1766,8 +1849,9 @@ class _SignSegment extends StatelessWidget {
       ),
       child: Row(
         children: [
-          seg('Expense', false, Icons.south_east),
-          seg('Income', true, Icons.north_east),
+          seg('Expense', _TxKind.expense, Icons.south_east),
+          seg('Income', _TxKind.income, Icons.north_east),
+          seg('Transfer', _TxKind.transfer, Icons.swap_horiz),
         ],
       ),
     );

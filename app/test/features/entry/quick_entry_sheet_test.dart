@@ -197,6 +197,59 @@ void main() {
     await tester.pump();
   });
 
+  testWidgets('transfer mode records a paired transfer between two accounts', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(430, 1600);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    final savingsId = await AccountRepository(
+      db,
+    ).create(name: 'Savings', kind: AccountKind.savings);
+
+    await tester.pumpWidget(quickEntryUnderTest());
+    await tester.pumpAndSettle();
+
+    // Switch to Transfer mode.
+    await tester.tap(find.text('Transfer'));
+    await tester.pumpAndSettle();
+
+    // Amount 500.
+    for (final d in ['5', '0', '0']) {
+      await tester.tap(find.text(d).last);
+      await tester.pump();
+    }
+
+    // From auto-defaults to Main; choose To = Savings.
+    await tester.tap(find.textContaining('To:'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Savings').last);
+    await tester.pumpAndSettle();
+
+    final save = find.widgetWithText(FilledButton, 'Transfer ₹500 to Savings');
+    expect(save, findsOneWidget);
+    await tester.tap(save);
+    await tester.pumpAndSettle();
+
+    final rows = await db.select(db.transactions).get();
+    final transfers = rows.where((r) => r.origin == 'transfer').toList();
+    expect(transfers, hasLength(2));
+    expect(
+      transfers.any((r) => r.amountCents == -50000 && r.accountId == account.id),
+      isTrue,
+    );
+    expect(
+      transfers.any((r) => r.amountCents == 50000 && r.accountId == savingsId),
+      isTrue,
+    );
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+  });
+
   testWidgets('edit mode hydrates existing amount category payee and note', (
     tester,
   ) async {
