@@ -35,3 +35,8 @@ bun.lockb
 
 # Claude Code transient state
 .claude/
+
+# Signing material — never commit (audit 2026-07-13)
+app/android/key.properties
+*.jks
+*.keystore
