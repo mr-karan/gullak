@@ -1,7 +1,7 @@
 {
-  "name": "gullak-whatsapp-bridge",
+  "name": "chavanni-whatsapp-bridge",
   "version": "1.0.0",
-  "description": "WhatsApp bridge for Gullak using Baileys",
+  "description": "WhatsApp bridge for Chavanni using Baileys",
   "main": "index.js",
   "type": "module",
   "scripts": {

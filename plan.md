@@ -1,3 +1,5 @@
+*The app described here has since been renamed **Chavanni** (formerly Gullak).*
+
 # Gullak improvement plan
 
 ## Implementation status (2026-07-03)

@@ -46,11 +46,11 @@ whatsappRouter.post("/webhook", async (c) => {
   const config = c.get("config");
   // The webhook is exempt from the global x-api-key gate so the bridge can
   // reach it. The agent log-path can WRITE financial rows, so lock it down with
-  // a DEDICATED key: when GULLAK_WHATSAPP_API_KEY is set, require it. We do NOT
+  // a DEDICATED key: when CHAVANNI_WHATSAPP_API_KEY is set, require it. We do NOT
   // accept the general httpApiKey here — the bridge only knows the WhatsApp key,
   // and requiring the http key would silently 401 every existing bridge that
   // was set up before this key existed. Operators who want the webhook secured
-  // set GULLAK_WHATSAPP_API_KEY on both sides; index.ts warns at boot when it's
+  // set CHAVANNI_WHATSAPP_API_KEY on both sides; index.ts warns at boot when it's
   // reachable without one.
   if (
     config.whatsappApiKey &&

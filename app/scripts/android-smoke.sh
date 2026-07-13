@@ -13,7 +13,7 @@ if [[ -z "$device" ]]; then
   exit 1
 fi
 
-log_file="${GULLAK_RUN_LOG:-/tmp/gullak-run.log}"
+log_file="${CHAVANNI_RUN_LOG:-/tmp/chavanni-run.log}"
 apk="build/app/outputs/flutter-apk/app-release.apk"
 sdk_root="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/opt/homebrew/share/android-commandlinetools}}"
 aapt="$sdk_root/build-tools/35.0.0/aapt"
@@ -25,7 +25,7 @@ if [[ -x "$apksigner" ]]; then
   for marker in \
     "Verifies" \
     "Verified using v2 scheme (APK Signature Scheme v2): true" \
-    "Signer #1 certificate DN: CN=Gullak Dev, O=Gullak, C=IN"; do
+    "Signer #1 certificate DN: CN=Chavanni Dev, O=Chavanni, C=IN"; do
     if [[ "$signer" != *"$marker"* ]]; then
       echo "Release APK signature check failed; missing marker: $marker" >&2
       exit 1
@@ -52,7 +52,7 @@ else
 fi
 adb -s "$device" install -r "$apk"
 adb -s "$device" install -r "$apk"
-adb -s "$device" uninstall dev.mrkaran.gullak >/dev/null || true
+adb -s "$device" uninstall dev.mrkaran.chavanni >/dev/null || true
 
 adb -s "$device" logcat -c
 flutter test integration_test/ -d "$device"

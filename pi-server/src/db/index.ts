@@ -11,7 +11,7 @@ let _db: Db | null = null;
 
 export function getDb(): Db {
   if (_db) return _db;
-  const path = resolve(process.env.GULLAK_DB_PATH ?? "../data/gullak.db");
+  const path = resolve(process.env.CHAVANNI_DB_PATH ?? "../data/chavanni.db");
   mkdirSync(dirname(path), { recursive: true });
   const sqlite = new Database(path);
   // WAL gives concurrent readers + a single writer, which is what we

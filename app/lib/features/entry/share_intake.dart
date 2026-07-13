@@ -8,7 +8,7 @@ import 'package:receive_sharing_intent/receive_sharing_intent.dart';
 import '../../core/logger.dart';
 
 /// Holds the bytes of the most recent image the user shared into
-/// Gullak from another app via the Android share-sheet. QuickEntry's
+/// Chavanni from another app via the Android share-sheet. QuickEntry's
 /// _TypeTab reads + clears it on mount so the receipt shows up
 /// pre-loaded and the AI parse kicks off immediately.
 class PendingShare {

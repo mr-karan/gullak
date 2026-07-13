@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:gullak/ui/category_palette.dart';
-import 'package:gullak/ui/widgets/money_text.dart';
+import 'package:chavanni/ui/category_palette.dart';
+import 'package:chavanni/ui/widgets/money_text.dart';
 
 void main() {
   const light = ColorScheme.light();

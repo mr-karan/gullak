@@ -55,7 +55,7 @@ function getListEnv(name: string): string[] {
 }
 
 function getThinkingLevel(): ThinkingLevel {
-  const raw = getEnv("GULLAK_MODEL_THINKING_LEVEL", "minimal");
+  const raw = getEnv("CHAVANNI_MODEL_THINKING_LEVEL", "minimal");
   const allowed: ThinkingLevel[] = [
     "off",
     "minimal",
@@ -101,7 +101,7 @@ export interface AppConfig {
   sheets: {
     /** Apps Script web-app /exec URL bound to the sheet; unset = no-op. */
     webAppUrl?: string;
-    /** Shared secret matching GULLAK_SECRET in the Apps Script. */
+    /** Shared secret matching CHAVANNI_SECRET in the Apps Script. */
     secret?: string;
     /** Optional periodic push cadence in minutes; 0 disables the interval
      *  (the push also fires after each /v1/sync/push). */
@@ -131,21 +131,21 @@ const criticalSchema = z.object({
 });
 
 export function loadConfig(): AppConfig {
-  const dataDir = getEnv("GULLAK_DATA_DIR", "../data");
-  const dbPath = getEnv("GULLAK_DB_PATH", `${dataDir}/gullak.db`);
+  const dataDir = getEnv("CHAVANNI_DATA_DIR", "../data");
+  const dbPath = getEnv("CHAVANNI_DB_PATH", `${dataDir}/chavanni.db`);
 
   const allowAmbientModelKeys = getBooleanEnv(
-    "GULLAK_ALLOW_AMBIENT_MODEL_KEYS",
+    "CHAVANNI_ALLOW_AMBIENT_MODEL_KEYS",
     false,
   );
   // Honor the ambient flag CONSISTENTLY: OPENROUTER_API_KEY / OPENAI_API_KEY
-  // are only consulted when explicitly allowed. An explicit GULLAK_MODEL_API_KEY
+  // are only consulted when explicitly allowed. An explicit CHAVANNI_MODEL_API_KEY
   // always wins.
   const ambientApiKey = allowAmbientModelKeys
     ? getFirstOptionalEnv("OPENROUTER_API_KEY", "OPENAI_API_KEY")
     : undefined;
   const realModelApiKey =
-    getOptionalEnv("GULLAK_MODEL_API_KEY") ?? ambientApiKey;
+    getOptionalEnv("CHAVANNI_MODEL_API_KEY") ?? ambientApiKey;
   const openRouterApiKey = allowAmbientModelKeys
     ? getOptionalEnv("OPENROUTER_API_KEY")
     : undefined;
@@ -155,7 +155,7 @@ export function loadConfig(): AppConfig {
 
   const modelBaseUrl =
     getFirstOptionalEnv(
-      "GULLAK_MODEL_BASE_URL",
+      "CHAVANNI_MODEL_BASE_URL",
       ...(allowAmbientModelKeys ? ["OPENROUTER_BASE_URL", "OPENAI_BASE_URL"] : []),
     ) ??
     (openRouterApiKey
@@ -164,25 +164,25 @@ export function loadConfig(): AppConfig {
         ? "https://api.openai.com/v1"
         : "http://localhost:11434/v1");
   const modelId =
-    getFirstOptionalEnv("GULLAK_MODEL_ID") ??
+    getFirstOptionalEnv("CHAVANNI_MODEL_ID") ??
     (openRouterApiKey
       ? "google/gemini-3-flash-preview"
       : openAiApiKey
         ? "gpt-4.1-mini"
         : "gpt-oss:20b");
   const modelName =
-    getFirstOptionalEnv("GULLAK_MODEL_NAME") ??
+    getFirstOptionalEnv("CHAVANNI_MODEL_NAME") ??
     (openRouterApiKey
       ? "Gemini 3 Flash"
       : openAiApiKey
         ? "GPT-4.1 Mini"
         : "GPT-OSS 20B");
 
-  const port = getIntEnv("GULLAK_PORT", 8787);
-  const syncIntervalMinutes = getIntEnv("GULLAK_SHEETS_SYNC_INTERVAL_MIN", 0);
-  const host = getEnv("GULLAK_HOST", "127.0.0.1");
-  const httpApiKey = getOptionalEnv("GULLAK_HTTP_API_KEY");
-  const requireAuth = getBooleanEnv("GULLAK_REQUIRE_AUTH", false);
+  const port = getIntEnv("CHAVANNI_PORT", 8787);
+  const syncIntervalMinutes = getIntEnv("CHAVANNI_SHEETS_SYNC_INTERVAL_MIN", 0);
+  const host = getEnv("CHAVANNI_HOST", "127.0.0.1");
+  const httpApiKey = getOptionalEnv("CHAVANNI_HTTP_API_KEY");
+  const requireAuth = getBooleanEnv("CHAVANNI_REQUIRE_AUTH", false);
 
   // Fail fast on malformed critical values.
   const parsed = criticalSchema.safeParse({
@@ -196,7 +196,7 @@ export function loadConfig(): AppConfig {
   }
   if (requireAuth && !httpApiKey) {
     throw new Error(
-      "config: GULLAK_REQUIRE_AUTH is on but GULLAK_HTTP_API_KEY is unset — refusing to start an unauthenticated server",
+      "config: CHAVANNI_REQUIRE_AUTH is on but CHAVANNI_HTTP_API_KEY is unset — refusing to start an unauthenticated server",
     );
   }
 
@@ -204,8 +204,8 @@ export function loadConfig(): AppConfig {
     version: "4.1.0-node",
     dataDir,
     dbPath,
-    timezone: getEnv("GULLAK_TIMEZONE", "Asia/Kolkata"),
-    defaultCurrency: getEnv("GULLAK_DEFAULT_CURRENCY", "INR"),
+    timezone: getEnv("CHAVANNI_TIMEZONE", "Asia/Kolkata"),
+    defaultCurrency: getEnv("CHAVANNI_DEFAULT_CURRENCY", "INR"),
     host,
     port,
     httpApiKey,
@@ -215,36 +215,36 @@ export function loadConfig(): AppConfig {
     modelName,
     // Keep a non-empty string so the type stays simple; ai.enabled gates use.
     modelApiKey: realModelApiKey ?? "dummy",
-    modelReasoning: getBooleanEnv("GULLAK_MODEL_REASONING", true),
+    modelReasoning: getBooleanEnv("CHAVANNI_MODEL_REASONING", true),
     modelThinkingLevel: getThinkingLevel(),
-    modelTimeoutMs: getIntEnv("GULLAK_MODEL_TIMEOUT_MS", 60_000),
+    modelTimeoutMs: getIntEnv("CHAVANNI_MODEL_TIMEOUT_MS", 60_000),
     rateLimit: {
-      aiPerMinute: getIntEnv("GULLAK_AI_RATE_PER_MIN", 30),
-      webhookPerMinute: getIntEnv("GULLAK_WHATSAPP_RATE_PER_MIN", 60),
+      aiPerMinute: getIntEnv("CHAVANNI_AI_RATE_PER_MIN", 30),
+      webhookPerMinute: getIntEnv("CHAVANNI_WHATSAPP_RATE_PER_MIN", 60),
     },
-    trustProxy: getBooleanEnv("GULLAK_TRUST_PROXY", false),
+    trustProxy: getBooleanEnv("CHAVANNI_TRUST_PROXY", false),
     ai: { enabled: Boolean(realModelApiKey) },
     whatsappBridgeUrl: getEnv(
-      "GULLAK_WHATSAPP_BRIDGE_URL",
+      "CHAVANNI_WHATSAPP_BRIDGE_URL",
       "http://localhost:3000",
     ),
-    whatsappApiKey: getOptionalEnv("GULLAK_WHATSAPP_API_KEY"),
-    whatsappAllowedNumbers: getListEnv("GULLAK_WHATSAPP_ALLOWED_NUMBERS"),
+    whatsappApiKey: getOptionalEnv("CHAVANNI_WHATSAPP_API_KEY"),
+    whatsappAllowedNumbers: getListEnv("CHAVANNI_WHATSAPP_ALLOWED_NUMBERS"),
     whatsappGroupRequireMention: getBooleanEnv(
-      "GULLAK_WHATSAPP_GROUP_REQUIRE_MENTION",
+      "CHAVANNI_WHATSAPP_GROUP_REQUIRE_MENTION",
       false,
     ),
     sheets: {
-      webAppUrl: getOptionalEnv("GULLAK_SHEETS_WEBAPP_URL"),
-      secret: getOptionalEnv("GULLAK_SHEETS_SECRET"),
+      webAppUrl: getOptionalEnv("CHAVANNI_SHEETS_WEBAPP_URL"),
+      secret: getOptionalEnv("CHAVANNI_SHEETS_SECRET"),
       syncIntervalMinutes,
     },
     actual: {
-      serverUrl: getOptionalEnv("GULLAK_ACTUAL_SERVER_URL"),
-      password: getOptionalEnv("GULLAK_ACTUAL_PASSWORD"),
-      syncId: getOptionalEnv("GULLAK_ACTUAL_SYNC_ID"),
-      accountId: getOptionalEnv("GULLAK_ACTUAL_ACCOUNT_ID"),
-      dataDir: getEnv("GULLAK_ACTUAL_DATA_DIR", `${dataDir}/.actual-cache`),
+      serverUrl: getOptionalEnv("CHAVANNI_ACTUAL_SERVER_URL"),
+      password: getOptionalEnv("CHAVANNI_ACTUAL_PASSWORD"),
+      syncId: getOptionalEnv("CHAVANNI_ACTUAL_SYNC_ID"),
+      accountId: getOptionalEnv("CHAVANNI_ACTUAL_ACCOUNT_ID"),
+      dataDir: getEnv("CHAVANNI_ACTUAL_DATA_DIR", `${dataDir}/.actual-cache`),
     },
   };
 }

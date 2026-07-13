@@ -12,11 +12,11 @@ import 'sms_pipeline.dart';
 import 'sms_reader.dart';
 
 /// WorkManager task name for the periodic background SMS parse pass.
-const String backgroundParseTaskName = 'gullak.sms.parse';
+const String backgroundParseTaskName = 'chavanni.sms.parse';
 
 /// Periodic background worker that parses SMS captured while the app was
 /// closed. The `another_telephony` broadcast receiver enqueues inbound SMS
-/// into a SharedPreferences queue ([gullakBackgroundSmsHandler]); this worker
+/// into a SharedPreferences queue ([chavanniBackgroundSmsHandler]); this worker
 /// drains and ingests that queue on a schedule so transactions land without
 /// the user having to open the app.
 ///

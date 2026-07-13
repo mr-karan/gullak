@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:gullak/ui/charts/bar_chart.dart';
-import 'package:gullak/ui/charts/category_bars.dart';
-import 'package:gullak/ui/charts/heatmap_calendar.dart';
-import 'package:gullak/ui/charts/progress_arc.dart';
-import 'package:gullak/ui/charts/sparkline.dart';
+import 'package:chavanni/ui/charts/bar_chart.dart';
+import 'package:chavanni/ui/charts/category_bars.dart';
+import 'package:chavanni/ui/charts/heatmap_calendar.dart';
+import 'package:chavanni/ui/charts/progress_arc.dart';
+import 'package:chavanni/ui/charts/sparkline.dart';
 
 Widget _host(Widget child) => MaterialApp(
   home: Scaffold(

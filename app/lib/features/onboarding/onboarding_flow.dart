@@ -261,7 +261,7 @@ class _WelcomeAndCurrency extends StatelessWidget {
             child: Icon(Icons.savings_outlined, color: cs.onPrimaryContainer),
           ),
           const SizedBox(height: 24),
-          Text('Gullak', style: Theme.of(context).textTheme.displayMedium),
+          Text('Chavanni', style: Theme.of(context).textTheme.displayMedium),
           const SizedBox(height: 8),
           Text(
             'A local-first expense tracker. Lives on your phone, syncs nowhere.',
@@ -436,7 +436,7 @@ class _SmsPrimer extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            'Gullak can read bank & UPI messages and draft expenses for you — '
+            'Chavanni can read bank & UPI messages and draft expenses for you — '
             'you just confirm them in the Inbox. Parsing runs on your own sync '
             "server, never a third party. You'll be asked for SMS access, and "
             'can turn it off anytime in Settings.',
@@ -572,7 +572,7 @@ class _SyncSetupState extends State<_SyncSetup> {
               ),
               children: [
                 Text(
-                  'A self-hosted Gullak server (your homelab, a VPS, a Pi). '
+                  'A self-hosted Chavanni server (your homelab, a VPS, a Pi). '
                   'It merges data across devices and holds the AI model keys, '
                   'so SMS parsing, photo receipts, and natural-language entry '
                   'run there — never on your phone. You can add it later in '

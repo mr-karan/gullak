@@ -1,6 +1,6 @@
-# Self-hosting the Gullak sync server
+# Self-hosting the Chavanni sync server
 
-The Gullak app works with **no server at all** — the phone owns your ledger and
+The Chavanni app works with **no server at all** — the phone owns your ledger and
 everything runs offline. You only need a server when you want:
 
 - **Sync** across multiple devices,
@@ -72,10 +72,10 @@ RUN npm ci
 COPY . .
 
 ENV NODE_ENV=production \
-    GULLAK_HOST=0.0.0.0 \
-    GULLAK_PORT=8787 \
-    GULLAK_DB_PATH=/data/gullak.db \
-    GULLAK_DATA_DIR=/data
+    CHAVANNI_HOST=0.0.0.0 \
+    CHAVANNI_PORT=8787 \
+    CHAVANNI_DB_PATH=/data/chavanni.db \
+    CHAVANNI_DATA_DIR=/data
 
 # SQLite DB, WAL/SHM, and any local caches live on the mounted volume.
 VOLUME ["/data"]
@@ -102,24 +102,24 @@ services:
     ports:
       - "8787:8787"          # or keep internal and reverse-proxy it
     volumes:
-      - gullak-data:/data
+      - chavanni-data:/data
     environment:
-      GULLAK_HOST: "0.0.0.0"
-      GULLAK_PORT: "8787"
-      GULLAK_DB_PATH: "/data/gullak.db"
-      GULLAK_DATA_DIR: "/data"
-      GULLAK_TIMEZONE: "Asia/Kolkata"
-      GULLAK_DEFAULT_CURRENCY: "INR"
+      CHAVANNI_HOST: "0.0.0.0"
+      CHAVANNI_PORT: "8787"
+      CHAVANNI_DB_PATH: "/data/chavanni.db"
+      CHAVANNI_DATA_DIR: "/data"
+      CHAVANNI_TIMEZONE: "Asia/Kolkata"
+      CHAVANNI_DEFAULT_CURRENCY: "INR"
       # Auth — set a strong secret and require it in production.
-      GULLAK_HTTP_API_KEY: "${GULLAK_HTTP_API_KEY}"
-      GULLAK_REQUIRE_AUTH: "true"
+      CHAVANNI_HTTP_API_KEY: "${CHAVANNI_HTTP_API_KEY}"
+      CHAVANNI_REQUIRE_AUTH: "true"
       # AI (optional) — bring your own OpenAI-compatible provider.
-      GULLAK_MODEL_BASE_URL: "${GULLAK_MODEL_BASE_URL:-}"
-      GULLAK_MODEL_ID: "${GULLAK_MODEL_ID:-}"
-      GULLAK_MODEL_API_KEY: "${GULLAK_MODEL_API_KEY:-}"
+      CHAVANNI_MODEL_BASE_URL: "${CHAVANNI_MODEL_BASE_URL:-}"
+      CHAVANNI_MODEL_ID: "${CHAVANNI_MODEL_ID:-}"
+      CHAVANNI_MODEL_API_KEY: "${CHAVANNI_MODEL_API_KEY:-}"
       # WhatsApp (optional) — must match the bridge's key.
-      GULLAK_WHATSAPP_BRIDGE_URL: "http://whatsapp-bridge:3000"
-      GULLAK_WHATSAPP_API_KEY: "${GULLAK_WHATSAPP_API_KEY:-}"
+      CHAVANNI_WHATSAPP_BRIDGE_URL: "http://whatsapp-bridge:3000"
+      CHAVANNI_WHATSAPP_API_KEY: "${CHAVANNI_WHATSAPP_API_KEY:-}"
 
   # Optional. Delete this whole service if you don't use WhatsApp.
   whatsapp-bridge:
@@ -132,14 +132,14 @@ services:
       PORT: "3000"
       WEBHOOK_URL: "http://pi-server:8787/v1/whatsapp/webhook"
       AUTH_DIR: "/data/auth_state"
-      GULLAK_WHATSAPP_API_KEY: "${GULLAK_WHATSAPP_API_KEY:-}"
+      CHAVANNI_WHATSAPP_API_KEY: "${CHAVANNI_WHATSAPP_API_KEY:-}"
       # Optional allowlists — empty means allow all.
       ALLOWED_PHONE_NUMBERS: "${ALLOWED_PHONE_NUMBERS:-}"
       ALLOWED_GROUPS: "${ALLOWED_GROUPS:-}"
     # No public port — pi-server reaches it on the internal network.
 
 volumes:
-  gullak-data:
+  chavanni-data:
   whatsapp-data:
 ```
 
@@ -151,7 +151,7 @@ environment — do not commit real keys.
 
 ## Environment variables
 
-Every `GULLAK_*` variable the server reads, from `pi-server/src/config.ts`. All
+Every `CHAVANNI_*` variable the server reads, from `pi-server/src/config.ts`. All
 are optional; the defaults run a **local, no-auth dev server**. Harden auth and
 set a model key before exposing the server.
 
@@ -159,20 +159,20 @@ set a model key before exposing the server.
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `GULLAK_DATA_DIR` | `../data` | Base directory for the DB and local caches. |
-| `GULLAK_DB_PATH` | `${GULLAK_DATA_DIR}/gullak.db` | SQLite database file path. |
-| `GULLAK_TIMEZONE` | `Asia/Kolkata` | Server timezone for date bucketing. |
-| `GULLAK_DEFAULT_CURRENCY` | `INR` | Default currency code. |
+| `CHAVANNI_DATA_DIR` | `../data` | Base directory for the DB and local caches. |
+| `CHAVANNI_DB_PATH` | `${CHAVANNI_DATA_DIR}/chavanni.db` | SQLite database file path. |
+| `CHAVANNI_TIMEZONE` | `Asia/Kolkata` | Server timezone for date bucketing. |
+| `CHAVANNI_DEFAULT_CURRENCY` | `INR` | Default currency code. |
 
 ### HTTP & auth
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `GULLAK_HOST` | `127.0.0.1` | Bind address. Use `0.0.0.0` in a container. |
-| `GULLAK_PORT` | `8787` | Listen port. Must be a valid integer (fails fast otherwise). |
-| `GULLAK_HTTP_API_KEY` | *(unset)* | Shared secret for the `x-api-key` header. Unset = open server. |
-| `GULLAK_REQUIRE_AUTH` | `false` | `true` refuses to boot unless `GULLAK_HTTP_API_KEY` is set. Turn on in production. |
-| `GULLAK_TRUST_PROXY` | `false` | `true` keys rate limits off `X-Forwarded-For`. Only enable behind a trusted reverse proxy. |
+| `CHAVANNI_HOST` | `127.0.0.1` | Bind address. Use `0.0.0.0` in a container. |
+| `CHAVANNI_PORT` | `8787` | Listen port. Must be a valid integer (fails fast otherwise). |
+| `CHAVANNI_HTTP_API_KEY` | *(unset)* | Shared secret for the `x-api-key` header. Unset = open server. |
+| `CHAVANNI_REQUIRE_AUTH` | `false` | `true` refuses to boot unless `CHAVANNI_HTTP_API_KEY` is set. Turn on in production. |
+| `CHAVANNI_TRUST_PROXY` | `false` | `true` keys rate limits off `X-Forwarded-For`. Only enable behind a trusted reverse proxy. |
 
 ### AI model (optional)
 
@@ -182,47 +182,47 @@ the rest of the server still works. The provider must be OpenAI-compatible
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `GULLAK_MODEL_BASE_URL` | `http://localhost:11434/v1`¹ | OpenAI-compatible base URL. |
-| `GULLAK_MODEL_ID` | `gpt-oss:20b`¹ | Model identifier passed to the provider. |
-| `GULLAK_MODEL_NAME` | `GPT-OSS 20B`¹ | Human-readable model name (display only). |
-| `GULLAK_MODEL_API_KEY` | *(unset)* | The model provider key. Enables AI when set. |
-| `GULLAK_MODEL_REASONING` | `true` | Whether to request reasoning from the model. |
-| `GULLAK_MODEL_THINKING_LEVEL` | `minimal` | One of `off`, `minimal`, `low`, `medium`, `high`, `xhigh`. |
-| `GULLAK_MODEL_TIMEOUT_MS` | `60000` | Per-call LLM request timeout in ms (vision calls are slow). |
-| `GULLAK_AI_RATE_PER_MIN` | `30` | Fixed-window req/min/IP cap on `/v1/ai/*` and `/v1/messages`. `0` disables. |
-| `GULLAK_ALLOW_AMBIENT_MODEL_KEYS` | `false` | When `true`, allow `OPENROUTER_API_KEY` / `OPENAI_API_KEY` from the ambient environment to be used as the model key. |
+| `CHAVANNI_MODEL_BASE_URL` | `http://localhost:11434/v1`¹ | OpenAI-compatible base URL. |
+| `CHAVANNI_MODEL_ID` | `gpt-oss:20b`¹ | Model identifier passed to the provider. |
+| `CHAVANNI_MODEL_NAME` | `GPT-OSS 20B`¹ | Human-readable model name (display only). |
+| `CHAVANNI_MODEL_API_KEY` | *(unset)* | The model provider key. Enables AI when set. |
+| `CHAVANNI_MODEL_REASONING` | `true` | Whether to request reasoning from the model. |
+| `CHAVANNI_MODEL_THINKING_LEVEL` | `minimal` | One of `off`, `minimal`, `low`, `medium`, `high`, `xhigh`. |
+| `CHAVANNI_MODEL_TIMEOUT_MS` | `60000` | Per-call LLM request timeout in ms (vision calls are slow). |
+| `CHAVANNI_AI_RATE_PER_MIN` | `30` | Fixed-window req/min/IP cap on `/v1/ai/*` and `/v1/messages`. `0` disables. |
+| `CHAVANNI_ALLOW_AMBIENT_MODEL_KEYS` | `false` | When `true`, allow `OPENROUTER_API_KEY` / `OPENAI_API_KEY` from the ambient environment to be used as the model key. |
 | `OPENROUTER_API_KEY` | *(unset)* | Alias, only read when the ambient flag is on. Auto-defaults base URL to `https://openrouter.ai/api/v1` and model to `google/gemini-3-flash-preview`. |
 | `OPENAI_API_KEY` | *(unset)* | Alias, only read when the ambient flag is on. Auto-defaults base URL to `https://api.openai.com/v1` and model to `gpt-4.1-mini`. |
 
 ¹ Defaults shift based on which key resolves: with `OPENROUTER_API_KEY` the base
 URL/model default to OpenRouter + Gemini; with `OPENAI_API_KEY`, to OpenAI +
-GPT-4.1 Mini; otherwise to a local Ollama. An explicit `GULLAK_MODEL_*` always
+GPT-4.1 Mini; otherwise to a local Ollama. An explicit `CHAVANNI_MODEL_*` always
 wins.
 
 ### WhatsApp bridge (optional)
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `GULLAK_WHATSAPP_BRIDGE_URL` | `http://localhost:3000` | Where the server reaches the bridge's HTTP API. |
-| `GULLAK_WHATSAPP_API_KEY` | *(unset)* | Shared secret for the webhook + bridge API. Set on **both** server and bridge. |
-| `GULLAK_WHATSAPP_ALLOWED_NUMBERS` | `[]` | Comma-separated or JSON-array allowlist of numbers. Empty = allow all. |
-| `GULLAK_WHATSAPP_GROUP_REQUIRE_MENTION` | `false` | `true` = only respond in groups when the bot is mentioned. |
-| `GULLAK_WHATSAPP_RATE_PER_MIN` | `60` | Fixed-window req/min/IP cap on the webhook. `0` disables. |
+| `CHAVANNI_WHATSAPP_BRIDGE_URL` | `http://localhost:3000` | Where the server reaches the bridge's HTTP API. |
+| `CHAVANNI_WHATSAPP_API_KEY` | *(unset)* | Shared secret for the webhook + bridge API. Set on **both** server and bridge. |
+| `CHAVANNI_WHATSAPP_ALLOWED_NUMBERS` | `[]` | Comma-separated or JSON-array allowlist of numbers. Empty = allow all. |
+| `CHAVANNI_WHATSAPP_GROUP_REQUIRE_MENTION` | `false` | `true` = only respond in groups when the bot is mentioned. |
+| `CHAVANNI_WHATSAPP_RATE_PER_MIN` | `60` | Fixed-window req/min/IP cap on the webhook. `0` disables. |
 
 ### Exports (optional, opt-in, write-only)
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `GULLAK_SHEETS_WEBAPP_URL` | *(unset)* | Apps Script `/exec` URL bound to your sheet. |
-| `GULLAK_SHEETS_SECRET` | *(unset)* | Shared secret matching `GULLAK_SECRET` in the Apps Script. |
-| `GULLAK_SHEETS_SYNC_INTERVAL_MIN` | `0` | Periodic push cadence in minutes. `0` disables the timer (push still fires after each sync push). |
-| `GULLAK_ACTUAL_SERVER_URL` | *(unset)* | Actual Budget server URL. |
-| `GULLAK_ACTUAL_PASSWORD` | *(unset)* | Actual Budget password. |
-| `GULLAK_ACTUAL_SYNC_ID` | *(unset)* | The budget file's Sync ID (Actual → Settings → Advanced). |
-| `GULLAK_ACTUAL_ACCOUNT_ID` | *(unset)* | Account to import into. Defaults to the first account. |
-| `GULLAK_ACTUAL_DATA_DIR` | `${GULLAK_DATA_DIR}/.actual-cache` | Local cache dir the Actual API downloads the budget into. |
+| `CHAVANNI_SHEETS_WEBAPP_URL` | *(unset)* | Apps Script `/exec` URL bound to your sheet. |
+| `CHAVANNI_SHEETS_SECRET` | *(unset)* | Shared secret matching `CHAVANNI_SECRET` in the Apps Script. |
+| `CHAVANNI_SHEETS_SYNC_INTERVAL_MIN` | `0` | Periodic push cadence in minutes. `0` disables the timer (push still fires after each sync push). |
+| `CHAVANNI_ACTUAL_SERVER_URL` | *(unset)* | Actual Budget server URL. |
+| `CHAVANNI_ACTUAL_PASSWORD` | *(unset)* | Actual Budget password. |
+| `CHAVANNI_ACTUAL_SYNC_ID` | *(unset)* | The budget file's Sync ID (Actual → Settings → Advanced). |
+| `CHAVANNI_ACTUAL_ACCOUNT_ID` | *(unset)* | Account to import into. Defaults to the first account. |
+| `CHAVANNI_ACTUAL_DATA_DIR` | `${CHAVANNI_DATA_DIR}/.actual-cache` | Local cache dir the Actual API downloads the budget into. |
 
-Sheets is enabled when `GULLAK_SHEETS_WEBAPP_URL` **and** `GULLAK_SHEETS_SECRET`
+Sheets is enabled when `CHAVANNI_SHEETS_WEBAPP_URL` **and** `CHAVANNI_SHEETS_SECRET`
 are both set. Actual is enabled when server URL + password + sync ID are all
 set. Enabled destinations fan out after each sync push and upsert by a stable
 id, so re-runs never duplicate.
@@ -233,21 +233,21 @@ id, so re-runs never duplicate.
 
 `/v1/health` is public. `/v1/whatsapp/webhook` is exempt from the general
 `x-api-key` gate (so the bridge can reach it) and is instead secured by the
-**dedicated** `GULLAK_WHATSAPP_API_KEY`. Every other route requires `x-api-key`
-once `GULLAK_HTTP_API_KEY` is set.
+**dedicated** `CHAVANNI_WHATSAPP_API_KEY`. Every other route requires `x-api-key`
+once `CHAVANNI_HTTP_API_KEY` is set.
 
 **Before exposing the server beyond localhost:**
 
-1. Set a strong `GULLAK_HTTP_API_KEY` and `GULLAK_REQUIRE_AUTH=true`.
+1. Set a strong `CHAVANNI_HTTP_API_KEY` and `CHAVANNI_REQUIRE_AUTH=true`.
 2. Terminate TLS at a reverse proxy (Caddy, nginx, Traefik) or keep the server
    on a private network / VPN (e.g. Tailscale).
-3. If behind a proxy, set `GULLAK_TRUST_PROXY=true` so rate limits key off the
+3. If behind a proxy, set `CHAVANNI_TRUST_PROXY=true` so rate limits key off the
    real client IP.
 
 Minimal Caddy example (automatic HTTPS):
 
 ```
-gullak.example.com {
+chavanni.example.com {
     reverse_proxy 127.0.0.1:8787
 }
 ```
@@ -256,11 +256,11 @@ gullak.example.com {
 
 ## Backups
 
-The entire server state is one SQLite file (`GULLAK_DB_PATH`). Copy it while the
+The entire server state is one SQLite file (`CHAVANNI_DB_PATH`). Copy it while the
 server is idle, or use SQLite's online backup:
 
 ```bash
-cp "$GULLAK_DB_PATH" "$GULLAK_DB_PATH.backup-$(date +%Y%m%d-%H%M%S)"
+cp "$CHAVANNI_DB_PATH" "$CHAVANNI_DB_PATH.backup-$(date +%Y%m%d-%H%M%S)"
 ```
 
 For continuous, point-in-time backups to object storage, run
@@ -278,8 +278,8 @@ server-only state (sync changelog, feedback events).
 
 In the app: **Settings → Sync server**
 
-- **Base URL** — e.g. `https://gullak.example.com`
-- **API key** — matches the server's `GULLAK_HTTP_API_KEY`
+- **Base URL** — e.g. `https://chavanni.example.com`
+- **API key** — matches the server's `CHAVANNI_HTTP_API_KEY`
 
 The app pushes local changes, then pulls server changes. All AI calls
 round-trip through the server, so the app never holds provider credentials.
@@ -309,9 +309,9 @@ Back up first, then stop the server and remove the DB (and its WAL/SHM
 sidecars) so migrations recreate an empty database on the next boot:
 
 ```bash
-cd "$(dirname "$GULLAK_DB_PATH")"
-cp gullak.db "gullak.db.backup-$(date +%Y%m%d-%H%M%S)"
-rm -f gullak.db gullak.db-wal gullak.db-shm
+cd "$(dirname "$CHAVANNI_DB_PATH")"
+cp chavanni.db "chavanni.db.backup-$(date +%Y%m%d-%H%M%S)"
+rm -f chavanni.db chavanni.db-wal chavanni.db-shm
 ```
 
 Do not remove the WhatsApp `auth_state` / `whatsapp.db` unless you specifically

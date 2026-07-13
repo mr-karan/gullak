@@ -167,7 +167,7 @@ class RecurrenceRepository {
   }
 
   static String _occurrenceId(String recurrenceId, DateTime occ) => const Uuid()
-      .v5(Namespace.url.value, 'gullak-recurrence:$recurrenceId:${ymd(occ)}');
+      .v5(Namespace.url.value, 'chavanni-recurrence:$recurrenceId:${ymd(occ)}');
 
   static DateTime _advance(DateTime d, String cadence, int anchor) {
     switch (cadence) {

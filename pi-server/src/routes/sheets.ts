@@ -27,7 +27,7 @@ sheetsRouter.post("/sync", async (c) => {
   const config = c.get("config");
   if (!sheetsEnabled(config)) {
     return c.json(
-      { error: "sheets sync not configured (GULLAK_SHEETS_WEBAPP_URL + GULLAK_SHEETS_SECRET)" },
+      { error: "sheets sync not configured (CHAVANNI_SHEETS_WEBAPP_URL + CHAVANNI_SHEETS_SECRET)" },
       400,
     );
   }

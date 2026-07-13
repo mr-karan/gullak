@@ -1037,7 +1037,7 @@ packages:
       path: "vendor/phosphor_flutter"
       relative: true
     source: path
-    version: "2.1.0+gullak.1"
+    version: "2.1.0+chavanni.1"
   platform:
     dependency: transitive
     description:

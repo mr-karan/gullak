@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:gullak/data/sms/classifier.dart';
-import 'package:gullak/data/sms/sms_models.dart';
+import 'package:chavanni/data/sms/classifier.dart';
+import 'package:chavanni/data/sms/sms_models.dart';
 
 void main() {
   test('ignores credit card statements', () {

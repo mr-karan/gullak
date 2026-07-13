@@ -1,3 +1,5 @@
+*The app described here has since been renamed **Chavanni** (formerly Gullak).*
+
 # Gullak — exploration brief (UI/UX & feature ideation)
 
 > **Your job:** explore how to make Gullak *meaningfully better* — sharper UX,

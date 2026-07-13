@@ -1,6 +1,6 @@
-# Gullak (app)
+# Chavanni (app)
 
-The Flutter client for [Gullak](../README.md). A local-first expense tracker:
+The Flutter client for [Chavanni](../README.md). A local-first expense tracker:
 the on-device SQLite database (Drift) is the source of truth, and it syncs to an
 optional self-hosted [pi-server](../pi-server/README.md).
 

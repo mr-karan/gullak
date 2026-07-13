@@ -5,6 +5,6 @@ export default defineConfig({
   out: "./drizzle",
   dialect: "sqlite",
   dbCredentials: {
-    url: process.env.GULLAK_DB_PATH ?? "../data/gullak.db",
+    url: process.env.CHAVANNI_DB_PATH ?? "../data/chavanni.db",
   },
 });

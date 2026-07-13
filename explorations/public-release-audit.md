@@ -1,3 +1,5 @@
+*The app described here has since been renamed **Chavanni** (formerly Gullak).*
+
 # Gullak Public-Release Audit
 
 Read-only audit of the working tree **and** full git history (`--all`) ahead of a

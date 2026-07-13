@@ -16,7 +16,7 @@ import '../../sync/changelog_writer.dart';
 import '../db/database.dart';
 import 'sms_background_parse_worker.dart';
 
-const String enrichmentTaskName = 'gullak.sms.enrich';
+const String enrichmentTaskName = 'chavanni.sms.enrich';
 
 /// Marked `vm:entry-point` so release tree-shaking doesn't drop this
 /// callback — WorkManager looks it up by symbol after a cold isolate spin-up.

@@ -1,3 +1,5 @@
+*The app described here has since been renamed **Chavanni** (formerly Gullak).*
+
 # Changelog
 
 All notable changes to Gullak are documented here.

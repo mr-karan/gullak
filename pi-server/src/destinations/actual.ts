@@ -17,7 +17,7 @@ import type {
  * `better-sqlite3`), so it is NOT a hard dependency of the server — it's
  * imported lazily and only when this destination is actually invoked. To enable
  * Actual: `bun add @actual-app/api` on a runtime that supports better-sqlite3
- * (or run it in a small Node sidecar), then set GULLAK_ACTUAL_SERVER_URL /
+ * (or run it in a small Node sidecar), then set CHAVANNI_ACTUAL_SERVER_URL /
  * _PASSWORD / _SYNC_ID. See docs/destinations.md (repo root).
  */
 /**
@@ -81,7 +81,7 @@ export class ActualDestination implements Destination {
         const accountId =
           a.accountId ?? (await api.getAccounts())?.[0]?.id;
         if (!accountId) {
-          throw new Error("no Actual account to import into (set GULLAK_ACTUAL_ACCOUNT_ID)");
+          throw new Error("no Actual account to import into (set CHAVANNI_ACTUAL_ACCOUNT_ID)");
         }
 
         // Best-effort category mapping by name; unmatched → uncategorised in Actual.

@@ -1,4 +1,4 @@
-# Contributing to Gullak
+# Contributing to Chavanni
 
 Thanks for your interest. Issues and pull requests are welcome.
 

@@ -1,3 +1,5 @@
+*The app described here has since been renamed **Chavanni** (formerly Gullak).*
+
 # Gullak F-Droid readiness audit
 
 Scope: `app/` (Flutter Android/iOS app) only — F-Droid distributes the Android

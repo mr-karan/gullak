@@ -1,4 +1,4 @@
-package dev.mrkaran.gullak
+package dev.mrkaran.chavanni
 
 import io.flutter.embedding.android.FlutterActivity
 

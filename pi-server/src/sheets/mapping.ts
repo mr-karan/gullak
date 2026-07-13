@@ -1,4 +1,4 @@
-// Bridges Gullak's category names onto the Finance Tracker sheet's canonical
+// Bridges Chavanni's category names onto the Finance Tracker sheet's canonical
 // category set (+ Need/Want/Saving type). Post-unification the two sets are the
 // SAME spend categories, so most entries here are identity — the legacy rows
 // (eating out, transport, fuel, …) are aliases kept so transactions captured
@@ -12,7 +12,7 @@
 // column is expense-only — those are structural, not category, decisions.)
 //
 // CANONICAL SET (each carries a fixed Type — single source of truth shared by
-// the LLM, the Gullak categories, and the sheet's Setup tab):
+// the LLM, the Chavanni categories, and the sheet's Setup tab):
 //   Need:   House Loan EMI, Rent, Groceries, Utilities & Bills, Household Help,
 //           Transport & Fuel, Health & Insurance
 //   Want:   Dining & Delivery, Shopping & Lifestyle, Alcohol, Travel & Trips
@@ -45,7 +45,7 @@ const MAP: Record<string, SheetCategory> = {
   "travel & trips": { category: "Travel & Trips", type: WANT },
   subscriptions: { category: "Subscriptions", type: WANT },
   "investments & savings": { category: "Investments & Savings", type: SAVING },
-  // ---- Legacy Gullak names (aliases) → canonical, for pre-migration rows ----
+  // ---- Legacy Chavanni names (aliases) → canonical, for pre-migration rows ----
   "daily living": { category: "Groceries", type: NEED },
   fuel: { category: "Transport & Fuel", type: NEED },
   transport: { category: "Transport & Fuel", type: NEED },
@@ -69,18 +69,18 @@ const MAP: Record<string, SheetCategory> = {
 };
 
 /**
- * Map a Gullak category onto a sheet category + Need/Want/Saving type.
+ * Map a Chavanni category onto a sheet category + Need/Want/Saving type.
  * Returns null when the category is unknown/unmapped (including null) — the
  * caller pushes the row anyway with a BLANK Category for the user to fill.
  * Nothing is dropped here: a real spend must never vanish just because its
  * category isn't in the canonical set.
  */
-export function mapCategory(gullakCategory: string | null): SheetCategory | null {
-  if (!gullakCategory) return null; // uncategorised → push blank
-  return MAP[gullakCategory.trim().toLowerCase()] ?? null; // unknown → push blank
+export function mapCategory(chavanniCategory: string | null): SheetCategory | null {
+  if (!chavanniCategory) return null; // uncategorised → push blank
+  return MAP[chavanniCategory.trim().toLowerCase()] ?? null; // unknown → push blank
 }
 
-/** Map a Gullak account kind onto the sheet's Payment Mode column. */
+/** Map a Chavanni account kind onto the sheet's Payment Mode column. */
 export function paymentModeForKind(kind: string | null | undefined): string {
   switch (kind) {
     case "credit_card":

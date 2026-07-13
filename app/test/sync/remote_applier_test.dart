@@ -1,7 +1,7 @@
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:gullak/data/db/database.dart';
-import 'package:gullak/sync/remote_applier.dart';
+import 'package:chavanni/data/db/database.dart';
+import 'package:chavanni/sync/remote_applier.dart';
 
 /// Direct coverage of the last-write-wins applier — the phone side of sync,
 /// previously untested. Applies raw server change-log maps to an in-memory DB.

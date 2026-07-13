@@ -2,7 +2,7 @@ set shell := ["bash", "-eu", "-o", "pipefail", "-c"]
 
 app-dir := "app"
 dist-dir := "app/dist"
-package := "dev.mrkaran.gullak"
+package := "dev.mrkaran.chavanni"
 apk-out := "app/build/app/outputs/flutter-apk/app-release.apk"
 aab-out := "app/build/app/outputs/bundle/release/app-release.aab"
 ipa-out := "app/build/ios/ipa"
@@ -28,28 +28,28 @@ gate:
     cd {{app-dir}} && scripts/pre-commit.sh
 
 # Build a release APK and copy it to {{dist-dir}}/ with a sha+timestamp
-# filename, plus a `gullak-latest.apk` symlink. Prints the artifact path.
+# filename, plus a `chavanni-latest.apk` symlink. Prints the artifact path.
 # Stamps the build with --dart-define so Settings → About can show
 # exactly which commit you're running.
 #
 # Pass `debuggable=true` to build a release APK with android:debuggable
-# flipped on, so `adb shell run-as dev.mrkaran.gullak` works for ad-hoc
+# flipped on, so `adb shell run-as dev.mrkaran.chavanni` works for ad-hoc
 # database pulls without flutter run / a separate debug build.
 apk debuggable="false":
     set -eu; \
       sha="$(git rev-parse --short HEAD)"; \
       ts="$(date +%Y%m%d-%H%M%S)"; \
-      cd {{app-dir}} && GULLAK_DEBUGGABLE={{debuggable}} flutter build apk --release \
-        --dart-define="GULLAK_BUILD_SHA=$sha" \
-        --dart-define="GULLAK_BUILD_AT=$ts"
+      cd {{app-dir}} && CHAVANNI_DEBUGGABLE={{debuggable}} flutter build apk --release \
+        --dart-define="CHAVANNI_BUILD_SHA=$sha" \
+        --dart-define="CHAVANNI_BUILD_AT=$ts"
     mkdir -p {{dist-dir}}
     set -eu; \
       sha="$(git rev-parse --short HEAD)"; \
       ts="$(date +%Y%m%d-%H%M%S)"; \
-      out="{{dist-dir}}/gullak-${sha}-${ts}.apk"; \
+      out="{{dist-dir}}/chavanni-${sha}-${ts}.apk"; \
       cp {{apk-out}} "$out"; \
-      ln -sfn "$(basename "$out")" {{dist-dir}}/gullak-latest.apk; \
-      ls -lh "$out" {{dist-dir}}/gullak-latest.apk
+      ln -sfn "$(basename "$out")" {{dist-dir}}/chavanni-latest.apk; \
+      ls -lh "$out" {{dist-dir}}/chavanni-latest.apk
 
 # Hot-reload dev loop on the connected Android device. Far faster
 # than `just install` for iterating on UI / logic — saves 60s per
@@ -61,7 +61,7 @@ run:
 # Pass `debuggable=true` to install a debuggable release build for
 # `adb shell run-as` access (see `apk` recipe).
 install debuggable="false": (apk debuggable)
-    adb install -r {{dist-dir}}/gullak-latest.apk
+    adb install -r {{dist-dir}}/chavanni-latest.apk
 
 # Build a release AAB (Android App Bundle) for Play Console uploads —
 # Internal App Sharing, Internal Testing, or eventual Production. Same
@@ -71,16 +71,16 @@ aab:
       sha="$(git rev-parse --short HEAD)"; \
       ts="$(date +%Y%m%d-%H%M%S)"; \
       cd {{app-dir}} && flutter build appbundle --release \
-        --dart-define="GULLAK_BUILD_SHA=$sha" \
-        --dart-define="GULLAK_BUILD_AT=$ts"
+        --dart-define="CHAVANNI_BUILD_SHA=$sha" \
+        --dart-define="CHAVANNI_BUILD_AT=$ts"
     mkdir -p {{dist-dir}}
     set -eu; \
       sha="$(git rev-parse --short HEAD)"; \
       ts="$(date +%Y%m%d-%H%M%S)"; \
-      out="{{dist-dir}}/gullak-${sha}-${ts}.aab"; \
+      out="{{dist-dir}}/chavanni-${sha}-${ts}.aab"; \
       cp {{aab-out}} "$out"; \
-      ln -sfn "$(basename "$out")" {{dist-dir}}/gullak-latest.aab; \
-      ls -lh "$out" {{dist-dir}}/gullak-latest.aab
+      ln -sfn "$(basename "$out")" {{dist-dir}}/chavanni-latest.aab; \
+      ls -lh "$out" {{dist-dir}}/chavanni-latest.aab
 
 # Wipe app data on the connected device. Forces re-onboarding next launch.
 clear-data:
@@ -141,10 +141,10 @@ ipa:
       sha="$(git rev-parse --short HEAD)"; \
       ts="$(date +%Y%m%d-%H%M%S)"; \
       src="$(ls -t {{ipa-out}}/*.ipa | head -1)"; \
-      out="{{dist-dir}}/gullak-${sha}-${ts}.ipa"; \
+      out="{{dist-dir}}/chavanni-${sha}-${ts}.ipa"; \
       cp "$src" "$out"; \
-      ln -sfn "$(basename "$out")" {{dist-dir}}/gullak-latest.ipa; \
-      ls -lh "$out" {{dist-dir}}/gullak-latest.ipa
+      ln -sfn "$(basename "$out")" {{dist-dir}}/chavanni-latest.ipa; \
+      ls -lh "$out" {{dist-dir}}/chavanni-latest.ipa
 
 # Upload the latest IPA to TestFlight via App Store Connect API.
 # Needs APP_STORE_CONNECT_API_KEY_ID + APP_STORE_CONNECT_API_ISSUER_ID
@@ -154,6 +154,6 @@ testflight: ipa
     set -eu; \
       : "${APP_STORE_CONNECT_API_KEY_ID:?set APP_STORE_CONNECT_API_KEY_ID in env}"; \
       : "${APP_STORE_CONNECT_API_ISSUER_ID:?set APP_STORE_CONNECT_API_ISSUER_ID in env}"; \
-      xcrun altool --upload-app -f {{dist-dir}}/gullak-latest.ipa --type ios \
+      xcrun altool --upload-app -f {{dist-dir}}/chavanni-latest.ipa --type ios \
         --apiKey "$APP_STORE_CONNECT_API_KEY_ID" \
         --apiIssuer "$APP_STORE_CONNECT_API_ISSUER_ID"

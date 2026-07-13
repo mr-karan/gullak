@@ -26,7 +26,7 @@ class BackupService {
         .replaceAll(':', '-')
         .split('.')
         .first;
-    final file = File(p.join(dir.path, 'gullak-backup-$stamp.json'));
+    final file = File(p.join(dir.path, 'chavanni-backup-$stamp.json'));
     await file.writeAsString(json, flush: true);
     await _db.kvSet(
       'backup.last_export_at',
@@ -84,7 +84,7 @@ class BackupService {
         .replaceAll(':', '-')
         .split('.')
         .first;
-    final file = File(p.join(dir.path, 'gullak-transactions-$stamp.csv'));
+    final file = File(p.join(dir.path, 'chavanni-transactions-$stamp.csv'));
     await file.writeAsString(buf.toString(), flush: true);
     return file;
   }

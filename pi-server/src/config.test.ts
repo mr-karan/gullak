@@ -5,15 +5,15 @@ import { loadConfig, summarizeConfig } from "./config.ts";
 // loadConfig reads process.env; snapshot and restore the keys we touch so tests
 // don't leak into each other.
 const KEYS = [
-  "GULLAK_PORT",
-  "GULLAK_HOST",
-  "GULLAK_HTTP_API_KEY",
-  "GULLAK_REQUIRE_AUTH",
-  "GULLAK_SHEETS_WEBAPP_URL",
-  "GULLAK_SHEETS_SECRET",
-  "GULLAK_SHEETS_SYNC_INTERVAL_MIN",
-  "GULLAK_ALLOW_AMBIENT_MODEL_KEYS",
-  "GULLAK_MODEL_API_KEY",
+  "CHAVANNI_PORT",
+  "CHAVANNI_HOST",
+  "CHAVANNI_HTTP_API_KEY",
+  "CHAVANNI_REQUIRE_AUTH",
+  "CHAVANNI_SHEETS_WEBAPP_URL",
+  "CHAVANNI_SHEETS_SECRET",
+  "CHAVANNI_SHEETS_SYNC_INTERVAL_MIN",
+  "CHAVANNI_ALLOW_AMBIENT_MODEL_KEYS",
+  "CHAVANNI_MODEL_API_KEY",
   "OPENROUTER_API_KEY",
   "OPENAI_API_KEY",
 ];
@@ -41,19 +41,19 @@ test("defaults load without any env", () => {
 });
 
 test("a malformed port fails fast", () => {
-  process.env.GULLAK_PORT = "not-a-number";
-  expect(() => loadConfig()).toThrow(/GULLAK_PORT must be an integer/);
+  process.env.CHAVANNI_PORT = "not-a-number";
+  expect(() => loadConfig()).toThrow(/CHAVANNI_PORT must be an integer/);
 });
 
 test("port out of range fails fast", () => {
-  process.env.GULLAK_PORT = "99999";
+  process.env.CHAVANNI_PORT = "99999";
   expect(() => loadConfig()).toThrow(/port/);
 });
 
 test("requireAuth without a key refuses to start", () => {
-  process.env.GULLAK_REQUIRE_AUTH = "true";
+  process.env.CHAVANNI_REQUIRE_AUTH = "true";
   expect(() => loadConfig()).toThrow(/refusing to start an unauthenticated/);
-  process.env.GULLAK_HTTP_API_KEY = "k";
+  process.env.CHAVANNI_HTTP_API_KEY = "k";
   expect(() => loadConfig()).not.toThrow();
 });
 
@@ -62,19 +62,19 @@ test("ambient model keys are only read when explicitly allowed", () => {
   // flag off → ambient key ignored, AI disabled
   expect(loadConfig().ai.enabled).toBe(false);
   // flag on → ambient key used, AI enabled
-  process.env.GULLAK_ALLOW_AMBIENT_MODEL_KEYS = "true";
+  process.env.CHAVANNI_ALLOW_AMBIENT_MODEL_KEYS = "true";
   expect(loadConfig().ai.enabled).toBe(true);
 });
 
 test("explicit model key enables AI regardless of ambient flag", () => {
-  process.env.GULLAK_MODEL_API_KEY = "explicit";
+  process.env.CHAVANNI_MODEL_API_KEY = "explicit";
   expect(loadConfig().ai.enabled).toBe(true);
 });
 
 test("sheets enabled only with both url and secret; summary redacts", () => {
-  process.env.GULLAK_SHEETS_WEBAPP_URL = "https://x/exec";
+  process.env.CHAVANNI_SHEETS_WEBAPP_URL = "https://x/exec";
   expect(summarizeConfig(loadConfig()).sheets).toEqual({ enabled: false });
-  process.env.GULLAK_SHEETS_SECRET = "shh";
+  process.env.CHAVANNI_SHEETS_SECRET = "shh";
   expect(summarizeConfig(loadConfig()).sheets).toEqual({
     enabled: true,
     intervalMin: 0,

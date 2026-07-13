@@ -13,7 +13,7 @@ export interface CanonicalExpense {
   /** Human-readable merchant/description; bank-alert boilerplate already stripped. */
   description: string;
   /**
-   * Raw Gullak category name, or null when uncategorised. Destinations map this
+   * Raw Chavanni category name, or null when uncategorised. Destinations map this
    * onto their own categories. Nothing is dropped here — an unknown/null
    * category is passed through (a destination decides how to surface it), never
    * silently swallowed.
@@ -23,15 +23,15 @@ export interface CanonicalExpense {
   amountMinor: number;
   /** True for spend. (Only debits are collected today.) */
   isOutflow: boolean;
-  /** Gullak account kind ("credit_card" | "cash" | "checking" | …). */
+  /** Chavanni account kind ("credit_card" | "cash" | "checking" | …). */
   accountKind: string | null;
   /** A real, human-written note, or null. */
   notes: string | null;
   /** Tag names attached to the transaction. */
   tags: string[];
   /**
-   * Gullak transaction id — the stable idempotency key every destination
-   * upserts on (the sheet's hidden gullak_id column, Actual's imported_id, …),
+   * Chavanni transaction id — the stable idempotency key every destination
+   * upserts on (the sheet's hidden chavanni_id column, Actual's imported_id, …),
    * so re-exporting a row updates rather than duplicates it.
    */
   sourceId: string;

@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "gullak-whatsapp-bridge",
+      "name": "chavanni-whatsapp-bridge",
       "dependencies": {
         "@hapi/boom": "^10.0.1",
         "@whiskeysockets/baileys": "7.0.0-rc.9",

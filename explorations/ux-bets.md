@@ -1,3 +1,5 @@
+*The app described here has since been renamed **Chavanni** (formerly Gullak).*
+
 # Gullak — UX bets (prioritized)
 
 > Deliverable of the exploration brief (`explore-brief.md`). Grounded in the

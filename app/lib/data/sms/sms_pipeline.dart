@@ -200,7 +200,7 @@ class SmsPipeline {
   }
 
   /// Background-isolate entry point: drains only the broadcast-receiver
-  /// queue (SharedPreferences-backed, populated by [gullakBackgroundSmsHandler])
+  /// queue (SharedPreferences-backed, populated by [chavanniBackgroundSmsHandler])
   /// and ingests those SMS. Deliberately does NOT query the telephony plugin,
   /// which isn't reliable off the main isolate — the periodic WorkManager
   /// task uses this so SMS received while the app is closed get parsed

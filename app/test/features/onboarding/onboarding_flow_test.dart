@@ -2,10 +2,10 @@ import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:gullak/core/prefs.dart';
-import 'package:gullak/data/db/database.dart';
-import 'package:gullak/features/onboarding/onboarding_flow.dart';
-import 'package:gullak/state/providers.dart';
+import 'package:chavanni/core/prefs.dart';
+import 'package:chavanni/data/db/database.dart';
+import 'package:chavanni/features/onboarding/onboarding_flow.dart';
+import 'package:chavanni/state/providers.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Smoke harness for the onboarding flow.
@@ -73,7 +73,7 @@ void main() {
     await bootstrap(tester);
 
     // Page 1: welcome + currency
-    expect(find.text('Gullak'), findsOneWidget);
+    expect(find.text('Chavanni'), findsOneWidget);
     expect(find.text('Continue'), findsOneWidget);
     await tester.tap(find.text('Continue'));
     await tester.pumpAndSettle();

@@ -1,6 +1,6 @@
 import 'package:another_telephony/telephony.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:gullak/data/sms/sms_reader.dart';
+import 'package:chavanni/data/sms/sms_reader.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
@@ -17,7 +17,7 @@ void main() {
       [SmsColumn.ID, SmsColumn.ADDRESS, SmsColumn.BODY, SmsColumn.DATE],
     );
 
-    await gullakBackgroundSmsHandler(sms);
+    await chavanniBackgroundSmsHandler(sms);
 
     final drained = await SmsReader.instance.drainBackgroundQueue();
     expect(drained, hasLength(1));

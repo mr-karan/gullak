@@ -2,14 +2,14 @@ import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:gullak/core/prefs.dart';
-import 'package:gullak/data/db/database.dart';
-import 'package:gullak/features/accounts/data/account_repository.dart';
-import 'package:gullak/features/categories/data/category_repository.dart';
-import 'package:gullak/features/entry/quick_entry_sheet.dart';
-import 'package:gullak/features/payees/data/payee_repository.dart';
-import 'package:gullak/features/transactions/data/transaction_repository.dart';
-import 'package:gullak/state/providers.dart';
+import 'package:chavanni/core/prefs.dart';
+import 'package:chavanni/data/db/database.dart';
+import 'package:chavanni/features/accounts/data/account_repository.dart';
+import 'package:chavanni/features/categories/data/category_repository.dart';
+import 'package:chavanni/features/entry/quick_entry_sheet.dart';
+import 'package:chavanni/features/payees/data/payee_repository.dart';
+import 'package:chavanni/features/transactions/data/transaction_repository.dart';
+import 'package:chavanni/state/providers.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {

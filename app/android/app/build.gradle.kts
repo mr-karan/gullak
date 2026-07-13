@@ -14,7 +14,7 @@ if (keystorePropertiesFile.exists()) {
 }
 
 android {
-    namespace = "dev.mrkaran.gullak"
+    namespace = "dev.mrkaran.chavanni"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -29,7 +29,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "dev.mrkaran.gullak"
+        applicationId = "dev.mrkaran.chavanni"
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
@@ -54,10 +54,10 @@ android {
                 signingConfigs.getByName("debug")
             }
             // Opt-in for ad-hoc SMS-DB pulls etc.: build with the env
-            // var GULLAK_DEBUGGABLE=true (or -Pdebuggable=true on a raw
+            // var CHAVANNI_DEBUGGABLE=true (or -Pdebuggable=true on a raw
             // gradle invocation). Flutter doesn't reliably propagate -P
             // through `flutter build apk`, so env wins.
-            isDebuggable = (System.getenv("GULLAK_DEBUGGABLE") == "true")
+            isDebuggable = (System.getenv("CHAVANNI_DEBUGGABLE") == "true")
                 || (project.findProperty("debuggable") as String?) == "true"
         }
     }

@@ -1,4 +1,4 @@
-# Gullak Acceptance Checklist
+# Chavanni Acceptance Checklist
 
 Run before shipping a release APK. These gates exist because emulator-only or
 analyze-only smoke missed real Android pitfalls in the past.
@@ -26,11 +26,11 @@ just android-smoke
 
 Expected:
 
-- Release APK signature matches `CN=Gullak Dev, O=Gullak, C=IN`.
+- Release APK signature matches `CN=Chavanni Dev, O=Chavanni, C=IN`.
 - Release APK manifest contains SMS, notification, and SMS receiver markers.
 - Release APK installs twice on the same Android target.
 - Integration test `integration_test/happy_path_test.dart` passes.
-- `/tmp/gullak-run.log` has no `EXCEPTION`, `Another exception`, `RenderFlex`, or `assertion`.
+- `/tmp/chavanni-run.log` has no `EXCEPTION`, `Another exception`, `RenderFlex`, or `assertion`.
 
 ## Live AI Acceptance
 
@@ -63,6 +63,6 @@ Expected:
 - Manual Quick Entry pass: 50 round-trips across FAB create, row tap edit, swipe edit, swipe delete + undo, AI Type, edit hydration, payee picker with keyboard, category picker, date picker, picker-back-save.
 - Manual AI pass: the four live AI acceptance phrases above work inside the app without manual tweaking.
 - Manual SMS pass: a real HDFC debit SMS lands in Inbox within 90 seconds; confirming it creates a transaction on the right account.
-- `/tmp/gullak-pixel.log` has no `EXCEPTION`, `Another exception`, `RenderFlex`, or `assertion`.
+- `/tmp/chavanni-pixel.log` has no `EXCEPTION`, `Another exception`, `RenderFlex`, or `assertion`.
 
 Do not ship the release APK until all sections above pass on real evidence.

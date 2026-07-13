@@ -72,7 +72,7 @@ export function sheetsSyncStatus(
  *  - **Incremental**: only transactions whose `updatedAt >= cursor` are sent
  *    (`cursor` is the high-water mark persisted after the last success). A
  *    re-categorised row bumps its `updatedAt` and re-enters the window, so
- *    edits propagate; the Apps Script upserts by `gullak_id`, so re-sending the
+ *    edits propagate; the Apps Script upserts by `chavanni_id`, so re-sending the
  *    boundary row is harmless. `replace: true` (manual full export) ignores the
  *    cursor and resends everything.
  *  - **Durable**: the cursor only advances after a successful POST, and the
@@ -91,7 +91,7 @@ export async function syncExpensesToSheet(
   const dest = new SheetsDestination(config);
   if (!dest.isEnabled()) {
     throw new Error(
-      "sheets sync not configured (GULLAK_SHEETS_WEBAPP_URL + GULLAK_SHEETS_SECRET)",
+      "sheets sync not configured (CHAVANNI_SHEETS_WEBAPP_URL + CHAVANNI_SHEETS_SECRET)",
     );
   }
 

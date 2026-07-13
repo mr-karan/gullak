@@ -11,10 +11,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/logger.dart';
 import 'sms_models.dart';
 
-const _backgroundSmsQueueKey = 'gullak.sms.backgroundQueue';
+const _backgroundSmsQueueKey = 'chavanni.sms.backgroundQueue';
 
 @pragma('vm:entry-point')
-Future<void> gullakBackgroundSmsHandler(SmsMessage message) async {
+Future<void> chavanniBackgroundSmsHandler(SmsMessage message) async {
   DartPluginRegistrant.ensureInitialized();
   final prefs = await SharedPreferences.getInstance();
   final queue = prefs.getStringList(_backgroundSmsQueueKey) ?? <String>[];
@@ -130,7 +130,7 @@ class SmsReader {
     _listening = true;
     t.listenIncomingSms(
       onNewMessage: (m) => ctrl.add(_mapMessage(m)),
-      onBackgroundMessage: gullakBackgroundSmsHandler,
+      onBackgroundMessage: chavanniBackgroundSmsHandler,
       listenInBackground: true,
     );
     return ctrl.stream;

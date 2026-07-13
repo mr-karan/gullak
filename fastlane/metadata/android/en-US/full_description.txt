@@ -1,4 +1,4 @@
-Gullak is a local-first expense tracker. Your ledger lives on your phone, not in someone else's cloud. It works fully offline, with no account and no server required. Sync and AI are optional extras that you run yourself.
+Chavanni is a local-first expense tracker. Your ledger lives on your phone, not in someone else's cloud. It works fully offline, with no account and no server required. Sync and AI are optional extras that you run yourself.
 
 <b>Fast to log</b>
 
@@ -10,10 +10,10 @@ Daily and monthly trends, spending by category, and a spend heatmap — drawn wi
 
 <b>Bank SMS become drafts you approve (optional)</b>
 
-Gullak can turn bank SMS into draft transactions you review and confirm in one tap. This is opt-in and requires the SMS permission. Please note:
+Chavanni can turn bank SMS into draft transactions you review and confirm in one tap. This is opt-in and requires the SMS permission. Please note:
 
 - The app works fully without it. If you never grant SMS access, nothing about SMS runs.
-- When enabled, messages are parsed on a sync server that YOU configure and control (self-hosted) using an AI model that YOU configure. There is no Gullak-operated cloud in this path.
+- When enabled, messages are parsed on a sync server that YOU configure and control (self-hosted) using an AI model that YOU configure. There is no Chavanni-operated cloud in this path.
 - Nothing is uploaded to any third party. There are no analytics or trackers.
 - You can disable SMS capture, or revoke the permission, at any time.
 
@@ -23,6 +23,6 @@ Run the open-source sync server on your own hardware to sync across devices, hol
 
 <b>Private by design</b>
 
-No trackers. No analytics. No ad networks. No cloud you didn't choose. Gullak is free and open source.
+No trackers. No analytics. No ad networks. No cloud you didn't choose. Chavanni is free and open source.
 
-Source and documentation: https://github.com/mr-karan/gullak
+Source and documentation: https://github.com/mr-karan/chavanni

@@ -1,11 +1,11 @@
 /**
- * Finance Tracker — automation + Gullak Capture endpoint.
+ * Finance Tracker — automation + Chavanni Capture endpoint.
  *
  * Paste this as the project's Code.gs (replaces the old version). Then:
- *   - Menu "Gullak" → "Enable auto-refresh on edit" (installs the debounced
+ *   - Menu "Chavanni" → "Enable auto-refresh on edit" (installs the debounced
  *     onEdit trigger; authorize once).
  *   - Deploy → New deployment → Web app (Execute as: Me, Access: Anyone) for
- *     the capture endpoint; put the /exec URL + GULLAK_SECRET into the app.
+ *     the capture endpoint; put the /exec URL + CHAVANNI_SECRET into the app.
  *
  * Key changes vs the old script:
  *   - onEdit no longer rebuilds the whole year on every keystroke: it's a
@@ -36,14 +36,14 @@ const COLORS = {
 
 const DEBOUNCE_MS = 4000;
 
-// ---- Gullak Capture endpoint ----
-// The shared secret authenticating inbound pushes from the Gullak sync server.
+// ---- Chavanni Capture endpoint ----
+// The shared secret authenticating inbound pushes from the Chavanni sync server.
 // NEVER hardcode it. Set it in the Apps Script editor: Project Settings →
-// Script properties → add `GULLAK_SECRET`. It must match the server's
-// GULLAK_SHEETS_SECRET. If it ever leaks, rotate both together.
-const GULLAK_SECRET =
-  PropertiesService.getScriptProperties().getProperty("GULLAK_SECRET") || "";
-const GULLAK_ID_COL = 8; // hidden gullak_id column (H)
+// Script properties → add `CHAVANNI_SECRET`. It must match the server's
+// CHAVANNI_SHEETS_SECRET. If it ever leaks, rotate both together.
+const CHAVANNI_SECRET =
+  PropertiesService.getScriptProperties().getProperty("CHAVANNI_SECRET") || "";
+const CHAVANNI_ID_COL = 8; // hidden chavanni_id column (H)
 
 // =====================================================================
 // Triggers / menu
@@ -51,7 +51,7 @@ const GULLAK_ID_COL = 8; // hidden gullak_id column (H)
 
 function onOpen() {
   SpreadsheetApp.getUi()
-    .createMenu("Gullak")
+    .createMenu("Chavanni")
     .addItem("Refresh Yearly Calendar", "menuRefreshCalendar")
     .addItem("Refresh Analysis", "menuRefreshAnalysis")
     .addSeparator()
@@ -584,13 +584,13 @@ function handleWeeklyModeUI() {
 }
 
 // =====================================================================
-// Gullak Capture web-app endpoint
+// Chavanni Capture web-app endpoint
 // =====================================================================
 
 // Columns whose in-sheet value must NOT be clobbered by a blank incoming
 // value (0-indexed): Category(2), Type(5), Notes(6), Tags(8). This lets the
 // user fill an uncategorised row's Category (or add Tags/Notes) directly in the
-// sheet without the next Gullak upsert blanking it back out.
+// sheet without the next Chavanni upsert blanking it back out.
 const PRESERVE_COLS = [2, 5, 6, 8];
 
 function doPost(e) {
@@ -600,23 +600,23 @@ function doPost(e) {
   lock.waitLock(30000);
   try {
     const body = JSON.parse(e.postData.contents);
-    if (body.secret !== GULLAK_SECRET)
-      return gullakJson({ error: "unauthorized" });
+    if (body.secret !== CHAVANNI_SECRET)
+      return chavanniJson({ error: "unauthorized" });
 
     const ss = SpreadsheetApp.getActive();
     const sheet = ss.getSheetByName(SHEETS.TRACKER);
-    if (!sheet) return gullakJson({ error: "tab not found" });
+    if (!sheet) return chavanniJson({ error: "tab not found" });
     const lastCol = sheet.getLastColumn();
 
-    // replace = "replace the Gullak-owned rows", NOT "wipe the tracker". Rows
-    // with a blank gullak_id are hand-entered (e.g. cash trips) and are
+    // replace = "replace the Chavanni-owned rows", NOT "wipe the tracker". Rows
+    // with a blank chavanni_id are hand-entered (e.g. cash trips) and are
     // preserved: keep them, clear the rest, rewrite the manual ones at the top.
     if (body.replace === true) {
       const lr = sheet.getLastRow();
       if (lr > 1) {
         const all = sheet.getRange(2, 1, lr - 1, lastCol).getValues();
         const manual = all.filter(function (row) {
-          return !row[GULLAK_ID_COL - 1];
+          return !row[CHAVANNI_ID_COL - 1];
         });
         sheet.getRange(2, 1, lr - 1, lastCol).clearContent();
         if (manual.length > 0)
@@ -624,7 +624,7 @@ function doPost(e) {
       }
     }
 
-    // Map existing gullak_id -> sheet row (and keep the existing row values so
+    // Map existing chavanni_id -> sheet row (and keep the existing row values so
     // we can preserve in-sheet edits on update).
     const lastRow = sheet.getLastRow();
     const idToRow = {};
@@ -632,7 +632,7 @@ function doPost(e) {
     if (lastRow > 1) {
       const data = sheet.getRange(2, 1, lastRow - 1, lastCol).getValues();
       for (let i = 0; i < data.length; i++) {
-        const id = data[i][GULLAK_ID_COL - 1];
+        const id = data[i][CHAVANNI_ID_COL - 1];
         if (id) {
           idToRow[id] = i + 2;
           existingById[id] = data[i];
@@ -656,7 +656,7 @@ function doPost(e) {
     (body.rows || []).forEach(function (r) {
       r[3] = Number(r[3]) || r[3];
       if (!r[5]) r[5] = typeMap[String(r[2]).trim()] || "";
-      const id = r[GULLAK_ID_COL - 1];
+      const id = r[CHAVANNI_ID_COL - 1];
       const rowNum = id ? idToRow[id] : null;
       if (rowNum && rowNum > 0) {
         const prev = existingById[id] || [];
@@ -703,15 +703,15 @@ function doPost(e) {
         buildWeeklyAnalysis();
       } catch (_) {}
     }
-    return gullakJson({ appended: toAppend.length, updated: updated });
+    return chavanniJson({ appended: toAppend.length, updated: updated });
   } catch (err) {
-    return gullakJson({ error: String(err) });
+    return chavanniJson({ error: String(err) });
   } finally {
     lock.releaseLock();
   }
 }
 
-function gullakJson(obj) {
+function chavanniJson(obj) {
   return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(
     ContentService.MimeType.JSON,
   );

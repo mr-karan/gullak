@@ -22,11 +22,11 @@ const WEBHOOK_URL = process.env.WEBHOOK_URL || "http://localhost:8787/v1/whatsap
 // Shared secret the server's webhook validates (when set). Same value both
 // containers get via the shared env file.
 const WEBHOOK_SECRET =
-  process.env.GULLAK_WHATSAPP_API_KEY || process.env.WEBHOOK_SECRET || "";
+  process.env.CHAVANNI_WHATSAPP_API_KEY || process.env.WEBHOOK_SECRET || "";
 // Single SQLite file owns auth state + the small caches the bridge
 // used to keep in memory. Survives restarts; no JSON files on disk.
 const STORE_DB_PATH = process.env.STORE_DB_PATH || "./data/whatsapp.db";
-const API_KEY = process.env.GULLAK_WHATSAPP_API_KEY || "";
+const API_KEY = process.env.CHAVANNI_WHATSAPP_API_KEY || "";
 const LOG_LEVEL = process.env.LOG_LEVEL || "warn";
 const VERSION = "1.0.0";
 
@@ -43,14 +43,14 @@ function getListEnv(...names) {
 
 // Allowed group names (comma-separated). If set, only messages from groups with these names are processed.
 // Example: "Family Budget,Household Expenses"
-const ALLOWED_GROUPS = getListEnv("ALLOWED_GROUPS", "GULLAK_WHATSAPP_ALLOWED_GROUPS")
+const ALLOWED_GROUPS = getListEnv("ALLOWED_GROUPS", "CHAVANNI_WHATSAPP_ALLOWED_GROUPS")
   .map((n) => n.toLowerCase());
 
 // Allowed phone numbers (comma-separated). If set, only DMs from these authors are processed.
 // Example: "919876543210,918851607899" (no @s.whatsapp.net suffix needed)
 const ALLOWED_PHONE_NUMBERS = getListEnv(
   "ALLOWED_PHONE_NUMBERS",
-  "GULLAK_WHATSAPP_ALLOWED_NUMBERS",
+  "CHAVANNI_WHATSAPP_ALLOWED_NUMBERS",
 );
 
 const LID_CACHE_TTL_MS = 2 * 60 * 60 * 1000; // 2 hours
@@ -143,7 +143,7 @@ async function connectWhatsApp() {
     version,
     logger,
     printQRInTerminal: false,
-    browser: ["Gullak", "Chrome", VERSION],
+    browser: ["Chavanni", "Chrome", VERSION],
     syncFullHistory: false,
     markOnlineOnConnect: false,
   });

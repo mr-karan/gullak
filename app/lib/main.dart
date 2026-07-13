@@ -30,8 +30,8 @@ import 'sync/sync_service.dart';
 import 'package:workmanager/workmanager.dart';
 import 'ui/theme.dart';
 
-const String _buildSha = String.fromEnvironment('GULLAK_BUILD_SHA');
-const String _buildAt = String.fromEnvironment('GULLAK_BUILD_AT');
+const String _buildSha = String.fromEnvironment('CHAVANNI_BUILD_SHA');
+const String _buildAt = String.fromEnvironment('CHAVANNI_BUILD_AT');
 
 final ValueNotifier<FlutterErrorDetails?> appErrorNotifier =
     ValueNotifier<FlutterErrorDetails?>(null);
@@ -77,7 +77,7 @@ Future<void> main() async {
 
   final db = AppDatabase();
   final prefs = await Prefs.load();
-  // Demo builds (--dart-define=GULLAK_DEMO=true) seed tasteful fake data on
+  // Demo builds (--dart-define=CHAVANNI_DEMO=true) seed tasteful fake data on
   // first launch so store/F-Droid screenshots look alive. Idempotent and
   // tree-shaken out of normal builds (kDemoMode is a const false there).
   if (kDemoMode) {
@@ -95,7 +95,7 @@ Future<void> main() async {
   // minimum periodic interval is 15 minutes. The worker itself no-ops when
   // SMS capture is disabled.
   await Workmanager().registerPeriodicTask(
-    'gullak.sms.parse.periodic',
+    'chavanni.sms.parse.periodic',
     backgroundParseTaskName,
     frequency: const Duration(minutes: 15),
     existingWorkPolicy: ExistingPeriodicWorkPolicy.keep,
@@ -108,19 +108,19 @@ Future<void> main() async {
         dbProvider.overrideWithValue(db),
         prefsProvider.overrideWithValue(prefs),
       ],
-      child: const GullakApp(),
+      child: const ChavanniApp(),
     ),
   );
 }
 
-class GullakApp extends ConsumerStatefulWidget {
-  const GullakApp({super.key});
+class ChavanniApp extends ConsumerStatefulWidget {
+  const ChavanniApp({super.key});
 
   @override
-  ConsumerState<GullakApp> createState() => _GullakAppState();
+  ConsumerState<ChavanniApp> createState() => _ChavanniAppState();
 }
 
-class _GullakAppState extends ConsumerState<GullakApp> {
+class _ChavanniAppState extends ConsumerState<ChavanniApp> {
   AppLifecycleListener? _lifecycle;
   final QuickActions _quickActions = const QuickActions();
 
@@ -254,7 +254,7 @@ class _GullakAppState extends ConsumerState<GullakApp> {
     });
 
     return MaterialApp.router(
-      title: 'Gullak',
+      title: 'Chavanni',
       debugShowCheckedModeBanner: false,
       themeMode: mode,
       theme: buildLightTheme(),
