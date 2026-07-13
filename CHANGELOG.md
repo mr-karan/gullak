@@ -6,7 +6,10 @@ All notable changes to Chavanni (formerly Gullak) are documented here.
 
 ## [Unreleased]
 
-## [0.3.0] — 2026-07-13
+## [0.4.0] — 2026-07-13
+
+_Version numbering jumps over 0.3.x: the pre-rewrite repository already
+published v0.3.0/v0.3.1 tags, and tags are forever._
 
 ### Changed
 
