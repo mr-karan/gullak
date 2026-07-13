@@ -1,0 +1,21 @@
+# Vendored, trimmed phosphor_flutter (upstream 2.1.0, MIT — see LICENSE).
+# Patched for Flutter 3.44+ final-class IconData; Regular style only.
+name: phosphor_flutter
+description: Vendored Phosphor icons (Regular) for Gullak, patched for Flutter 3.44+.
+version: 2.1.0+gullak.1
+publish_to: none
+
+environment:
+  sdk: ^3.5.0
+  flutter: ">=3.44.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+flutter:
+  fonts:
+    - family: PhosphorRegular
+      fonts:
+        - asset: lib/fonts/Phosphor.ttf
+          weight: 400

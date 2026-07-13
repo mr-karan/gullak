@@ -58,7 +58,11 @@ dependencies:
   quick_actions: ^1.0.7
   flutter_slidable: ^4.0.0
   flutter_local_notifications: ^21.0.0
-  phosphor_flutter: ^2.1.0
+# Vendored + patched: upstream subclasses IconData (final since Flutter
+  # 3.44) and ships no fixed release. Trimmed to the Regular style — the only
+  # one Gullak uses. See vendor/phosphor_flutter/pubspec.yaml.
+  phosphor_flutter:
+    path: vendor/phosphor_flutter
   # Runs the SMS enrichment HTTP call after a notification reply when
   # the app process may be dead — receivers can't block on network.
   workmanager: ^0.9.0+3

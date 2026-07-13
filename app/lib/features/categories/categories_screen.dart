@@ -290,9 +290,11 @@ class _CategoryTree extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 12),
       buildDefaultDragHandles: false,
       itemCount: nodes.length,
-      onReorder: (oldIndex, newIndex) {
+      // onReorderItem (Flutter 3.42+) pre-adjusts newIndex for the removed
+      // item, so the old `if (newIndex > oldIndex) newIndex -= 1` dance is
+      // gone.
+      onReorderItem: (oldIndex, newIndex) {
         final next = [...nodes];
-        if (newIndex > oldIndex) newIndex -= 1;
         final moved = next.removeAt(oldIndex);
         next.insert(newIndex, moved);
         onReorderParents([
