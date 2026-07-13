@@ -1,14 +1,36 @@
-# Self-hosting
+# Self-hosting the Gullak sync server
 
-The app works with no server at all. Run a server when you want sync across
-devices, server-side AI parsing, the WhatsApp bridge, or exports to Google
-Sheets / Actual Budget.
+The Gullak app works with **no server at all** — the phone owns your ledger and
+everything runs offline. You only need a server when you want:
 
-Everything below uses placeholders — substitute your own host, keys, and IDs.
+- **Sync** across multiple devices,
+- **Server-side AI** parsing (bank SMS, receipt photos, "describe it" text),
+- the **WhatsApp bridge** (chat to log/query expenses), or
+- **exports** to Google Sheets / Actual Budget.
 
-## pi-server
+The server (`pi-server`) is a merge point and the trusted place to hold your AI
+provider keys. The app never stores model credentials. If the server is down,
+the app keeps working — it re-syncs when the server comes back.
 
-Node ≥ 20. From `pi-server/`:
+Everything below uses placeholders. Substitute your own host, keys, and IDs.
+
+---
+
+## Requirements
+
+- **Node 20+** with `tsx` (the server runs the TypeScript sources directly — no
+  build step), **or**
+- **Docker** (recommended for production — the image handles the native
+  `better-sqlite3` build for you).
+
+Storage is a single SQLite file. A Raspberry Pi 4, a small VPS, or any
+always-on box is plenty.
+
+---
+
+## Quick start (Node)
+
+From `pi-server/`:
 
 ```bash
 cp .env.example .env        # all vars optional for local dev
@@ -16,52 +38,241 @@ npm install
 npm run dev                 # http://127.0.0.1:8787 (migrations run on boot)
 ```
 
-Production: `npm run start`. Migrations apply automatically at startup.
+Production: `npm run start`. Database migrations apply automatically at startup.
 
-### With Docker
+---
 
-```bash
-cd pi-server
-docker build -t gullak-server .
-docker run -d --name gullak \
-  -p 8787:8787 \
-  -v /srv/gullak:/data \
-  --env-file /srv/gullak/gullak.env \
-  gullak-server
+## Docker
+
+The repo ships a `whatsapp-bridge/Dockerfile`. For `pi-server`, add the
+`Dockerfile` below (native `better-sqlite3` needs a compile toolchain at
+install time, so `npm ci` runs with build deps present).
+
+### `pi-server/Dockerfile`
+
+```dockerfile
+# syntax=docker/dockerfile:1
+FROM node:22-slim
+
+# Build deps for the native better-sqlite3 addon. python3 + build-essential
+# are needed at `npm ci` time; ca-certificates for outbound HTTPS (model API).
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends \
+       python3 build-essential ca-certificates \
+  && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Install first (better layer caching). package-lock.json must be present so
+# `npm ci` is reproducible.
+COPY package.json package-lock.json ./
+RUN npm ci
+
+# App sources. The server runs TypeScript directly via tsx (no build step).
+COPY . .
+
+ENV NODE_ENV=production \
+    GULLAK_HOST=0.0.0.0 \
+    GULLAK_PORT=8787 \
+    GULLAK_DB_PATH=/data/gullak.db \
+    GULLAK_DATA_DIR=/data
+
+# SQLite DB, WAL/SHM, and any local caches live on the mounted volume.
+VOLUME ["/data"]
+EXPOSE 8787/tcp
+
+CMD ["npm", "run", "start"]
 ```
 
-The image runs the TypeScript sources with `tsx`; the SQLite DB and any local
-caches live under the mounted `/data` volume.
+> Bind to `0.0.0.0` **inside the container only** — the container port is then
+> published (or reverse-proxied) on the host. Never expose an unauthenticated
+> server to the public internet; set an API key (below).
 
-### Configuration
+### `docker-compose.yml`
 
-See [`pi-server/.env.example`](../pi-server/.env.example) for the full annotated
-list. The essentials:
+Put this at the repo root (or anywhere; adjust build contexts). The
+`whatsapp-bridge` service is optional — remove it if you don't want WhatsApp.
 
-| Variable | Purpose |
-| --- | --- |
-| `GULLAK_DB_PATH` | SQLite file path (default `../data/gullak.db`) |
-| `GULLAK_HOST`, `GULLAK_PORT` | HTTP bind (default `127.0.0.1:8787`) |
-| `GULLAK_HTTP_API_KEY` | Shared secret for the `x-api-key` header |
-| `GULLAK_REQUIRE_AUTH` | `true` refuses to boot without an API key |
-| `GULLAK_MODEL_BASE_URL` / `GULLAK_MODEL_ID` / `GULLAK_MODEL_API_KEY` | OpenAI-compatible model config |
-| `GULLAK_MODEL_TIMEOUT_MS` | Per-call LLM timeout (default `60000`) |
-| `GULLAK_AI_RATE_PER_MIN` / `GULLAK_WHATSAPP_RATE_PER_MIN` | Fixed-window req/min caps on `/v1/ai/*` + `/v1/messages` and the webhook (default `30` / `60`; `0` disables) |
-| `GULLAK_TRUST_PROXY` | `true` keys rate limits off `X-Forwarded-For` (only behind a trusted reverse proxy; default off keys off the socket address) |
-| `OPENROUTER_API_KEY` / `OPENAI_API_KEY` | Aliases that auto-default base URL + model |
+```yaml
+services:
+  pi-server:
+    build:
+      context: ./pi-server
+    restart: unless-stopped
+    ports:
+      - "8787:8787"          # or keep internal and reverse-proxy it
+    volumes:
+      - gullak-data:/data
+    environment:
+      GULLAK_HOST: "0.0.0.0"
+      GULLAK_PORT: "8787"
+      GULLAK_DB_PATH: "/data/gullak.db"
+      GULLAK_DATA_DIR: "/data"
+      GULLAK_TIMEZONE: "Asia/Kolkata"
+      GULLAK_DEFAULT_CURRENCY: "INR"
+      # Auth — set a strong secret and require it in production.
+      GULLAK_HTTP_API_KEY: "${GULLAK_HTTP_API_KEY}"
+      GULLAK_REQUIRE_AUTH: "true"
+      # AI (optional) — bring your own OpenAI-compatible provider.
+      GULLAK_MODEL_BASE_URL: "${GULLAK_MODEL_BASE_URL:-}"
+      GULLAK_MODEL_ID: "${GULLAK_MODEL_ID:-}"
+      GULLAK_MODEL_API_KEY: "${GULLAK_MODEL_API_KEY:-}"
+      # WhatsApp (optional) — must match the bridge's key.
+      GULLAK_WHATSAPP_BRIDGE_URL: "http://whatsapp-bridge:3000"
+      GULLAK_WHATSAPP_API_KEY: "${GULLAK_WHATSAPP_API_KEY:-}"
 
-`/v1/health` is public. The `/v1/whatsapp/webhook` is exempt from the global
-`x-api-key` gate (so the bridge can reach it) and is secured by a **dedicated**
-key: set `GULLAK_WHATSAPP_API_KEY` on both the server and the bridge to require
-it. Without that key the webhook is open (it does not accept the general
-`GULLAK_HTTP_API_KEY` — the bridge doesn't know it), so the process logs a
-warning at boot. Every other route requires `x-api-key` once
-`GULLAK_HTTP_API_KEY` is set. If no model key resolves, `/v1/ai/*` simply
-returns `503` — AI is off, the rest of the server still works.
+  # Optional. Delete this whole service if you don't use WhatsApp.
+  whatsapp-bridge:
+    build:
+      context: ./whatsapp-bridge
+    restart: unless-stopped
+    volumes:
+      - whatsapp-data:/data          # Baileys session state — do NOT delete
+    environment:
+      PORT: "3000"
+      WEBHOOK_URL: "http://pi-server:8787/v1/whatsapp/webhook"
+      AUTH_DIR: "/data/auth_state"
+      GULLAK_WHATSAPP_API_KEY: "${GULLAK_WHATSAPP_API_KEY:-}"
+      # Optional allowlists — empty means allow all.
+      ALLOWED_PHONE_NUMBERS: "${ALLOWED_PHONE_NUMBERS:-}"
+      ALLOWED_GROUPS: "${ALLOWED_GROUPS:-}"
+    # No public port — pi-server reaches it on the internal network.
 
-> **Expose it safely.** Put the server behind a reverse proxy with TLS, or keep
-> it on a private network / VPN. Always set `GULLAK_HTTP_API_KEY` (and
-> `GULLAK_REQUIRE_AUTH=true`) before exposing it beyond localhost.
+volumes:
+  gullak-data:
+  whatsapp-data:
+```
+
+Bring it up with `docker compose up -d`. Provide secrets via an `.env` file
+next to the compose file (compose reads it automatically) or your host's
+environment — do not commit real keys.
+
+---
+
+## Environment variables
+
+Every `GULLAK_*` variable the server reads, from `pi-server/src/config.ts`. All
+are optional; the defaults run a **local, no-auth dev server**. Harden auth and
+set a model key before exposing the server.
+
+### Storage
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `GULLAK_DATA_DIR` | `../data` | Base directory for the DB and local caches. |
+| `GULLAK_DB_PATH` | `${GULLAK_DATA_DIR}/gullak.db` | SQLite database file path. |
+| `GULLAK_TIMEZONE` | `Asia/Kolkata` | Server timezone for date bucketing. |
+| `GULLAK_DEFAULT_CURRENCY` | `INR` | Default currency code. |
+
+### HTTP & auth
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `GULLAK_HOST` | `127.0.0.1` | Bind address. Use `0.0.0.0` in a container. |
+| `GULLAK_PORT` | `8787` | Listen port. Must be a valid integer (fails fast otherwise). |
+| `GULLAK_HTTP_API_KEY` | *(unset)* | Shared secret for the `x-api-key` header. Unset = open server. |
+| `GULLAK_REQUIRE_AUTH` | `false` | `true` refuses to boot unless `GULLAK_HTTP_API_KEY` is set. Turn on in production. |
+| `GULLAK_TRUST_PROXY` | `false` | `true` keys rate limits off `X-Forwarded-For`. Only enable behind a trusted reverse proxy. |
+
+### AI model (optional)
+
+If no real key resolves, `/v1/ai/*` returns `503` — AI is simply disabled and
+the rest of the server still works. The provider must be OpenAI-compatible
+(OpenRouter, OpenAI, a local Ollama, etc.).
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `GULLAK_MODEL_BASE_URL` | `http://localhost:11434/v1`¹ | OpenAI-compatible base URL. |
+| `GULLAK_MODEL_ID` | `gpt-oss:20b`¹ | Model identifier passed to the provider. |
+| `GULLAK_MODEL_NAME` | `GPT-OSS 20B`¹ | Human-readable model name (display only). |
+| `GULLAK_MODEL_API_KEY` | *(unset)* | The model provider key. Enables AI when set. |
+| `GULLAK_MODEL_REASONING` | `true` | Whether to request reasoning from the model. |
+| `GULLAK_MODEL_THINKING_LEVEL` | `minimal` | One of `off`, `minimal`, `low`, `medium`, `high`, `xhigh`. |
+| `GULLAK_MODEL_TIMEOUT_MS` | `60000` | Per-call LLM request timeout in ms (vision calls are slow). |
+| `GULLAK_AI_RATE_PER_MIN` | `30` | Fixed-window req/min/IP cap on `/v1/ai/*` and `/v1/messages`. `0` disables. |
+| `GULLAK_ALLOW_AMBIENT_MODEL_KEYS` | `false` | When `true`, allow `OPENROUTER_API_KEY` / `OPENAI_API_KEY` from the ambient environment to be used as the model key. |
+| `OPENROUTER_API_KEY` | *(unset)* | Alias, only read when the ambient flag is on. Auto-defaults base URL to `https://openrouter.ai/api/v1` and model to `google/gemini-3-flash-preview`. |
+| `OPENAI_API_KEY` | *(unset)* | Alias, only read when the ambient flag is on. Auto-defaults base URL to `https://api.openai.com/v1` and model to `gpt-4.1-mini`. |
+
+¹ Defaults shift based on which key resolves: with `OPENROUTER_API_KEY` the base
+URL/model default to OpenRouter + Gemini; with `OPENAI_API_KEY`, to OpenAI +
+GPT-4.1 Mini; otherwise to a local Ollama. An explicit `GULLAK_MODEL_*` always
+wins.
+
+### WhatsApp bridge (optional)
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `GULLAK_WHATSAPP_BRIDGE_URL` | `http://localhost:3000` | Where the server reaches the bridge's HTTP API. |
+| `GULLAK_WHATSAPP_API_KEY` | *(unset)* | Shared secret for the webhook + bridge API. Set on **both** server and bridge. |
+| `GULLAK_WHATSAPP_ALLOWED_NUMBERS` | `[]` | Comma-separated or JSON-array allowlist of numbers. Empty = allow all. |
+| `GULLAK_WHATSAPP_GROUP_REQUIRE_MENTION` | `false` | `true` = only respond in groups when the bot is mentioned. |
+| `GULLAK_WHATSAPP_RATE_PER_MIN` | `60` | Fixed-window req/min/IP cap on the webhook. `0` disables. |
+
+### Exports (optional, opt-in, write-only)
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `GULLAK_SHEETS_WEBAPP_URL` | *(unset)* | Apps Script `/exec` URL bound to your sheet. |
+| `GULLAK_SHEETS_SECRET` | *(unset)* | Shared secret matching `GULLAK_SECRET` in the Apps Script. |
+| `GULLAK_SHEETS_SYNC_INTERVAL_MIN` | `0` | Periodic push cadence in minutes. `0` disables the timer (push still fires after each sync push). |
+| `GULLAK_ACTUAL_SERVER_URL` | *(unset)* | Actual Budget server URL. |
+| `GULLAK_ACTUAL_PASSWORD` | *(unset)* | Actual Budget password. |
+| `GULLAK_ACTUAL_SYNC_ID` | *(unset)* | The budget file's Sync ID (Actual → Settings → Advanced). |
+| `GULLAK_ACTUAL_ACCOUNT_ID` | *(unset)* | Account to import into. Defaults to the first account. |
+| `GULLAK_ACTUAL_DATA_DIR` | `${GULLAK_DATA_DIR}/.actual-cache` | Local cache dir the Actual API downloads the budget into. |
+
+Sheets is enabled when `GULLAK_SHEETS_WEBAPP_URL` **and** `GULLAK_SHEETS_SECRET`
+are both set. Actual is enabled when server URL + password + sync ID are all
+set. Enabled destinations fan out after each sync push and upsert by a stable
+id, so re-runs never duplicate.
+
+---
+
+## API key & reverse proxy
+
+`/v1/health` is public. `/v1/whatsapp/webhook` is exempt from the general
+`x-api-key` gate (so the bridge can reach it) and is instead secured by the
+**dedicated** `GULLAK_WHATSAPP_API_KEY`. Every other route requires `x-api-key`
+once `GULLAK_HTTP_API_KEY` is set.
+
+**Before exposing the server beyond localhost:**
+
+1. Set a strong `GULLAK_HTTP_API_KEY` and `GULLAK_REQUIRE_AUTH=true`.
+2. Terminate TLS at a reverse proxy (Caddy, nginx, Traefik) or keep the server
+   on a private network / VPN (e.g. Tailscale).
+3. If behind a proxy, set `GULLAK_TRUST_PROXY=true` so rate limits key off the
+   real client IP.
+
+Minimal Caddy example (automatic HTTPS):
+
+```
+gullak.example.com {
+    reverse_proxy 127.0.0.1:8787
+}
+```
+
+---
+
+## Backups
+
+The entire server state is one SQLite file (`GULLAK_DB_PATH`). Copy it while the
+server is idle, or use SQLite's online backup:
+
+```bash
+cp "$GULLAK_DB_PATH" "$GULLAK_DB_PATH.backup-$(date +%Y%m%d-%H%M%S)"
+```
+
+For continuous, point-in-time backups to object storage, run
+[**Litestream**](https://litestream.io) against the DB file — it streams the
+SQLite WAL to S3-compatible storage and restores on boot. It's the recommended
+setup for an always-on self-hosted server.
+
+Because the phone is the source of truth, a lost server can also re-populate
+from the next device sync — but a real backup is still worth having for the
+server-only state (sync changelog, feedback events).
+
+---
 
 ## Connect the app
 
@@ -70,48 +281,38 @@ In the app: **Settings → Sync server**
 - **Base URL** — e.g. `https://gullak.example.com`
 - **API key** — matches the server's `GULLAK_HTTP_API_KEY`
 
-The app pushes local changes, then pulls server changes, on foreground and after
-mutations. All AI calls round-trip through the server, so the app never holds
-provider credentials.
+The app pushes local changes, then pulls server changes. All AI calls
+round-trip through the server, so the app never holds provider credentials.
 
-## WhatsApp bridge (optional)
+---
 
-Relays WhatsApp messages into the agent. From `whatsapp-bridge/`, set
-`WEBHOOK_URL` to your server's `/v1/whatsapp/webhook` and an auth key that
-matches `GULLAK_WHATSAPP_API_KEY` on the server, then start it and scan the
-pairing QR once. Session state persists in a local SQLite DB — don't delete it
-unless you intend to re-pair.
+## WhatsApp bridge pairing
 
-## Exports: Google Sheets & Actual Budget (optional)
+The bridge relays WhatsApp messages into the conversational agent. Once it's
+running (see the compose service above), pair it once:
 
-Both are opt-in and write-only; enabling them mirrors categorised activity out
-without changing anything in Gullak. Full setup and behaviour:
-[destinations.md](destinations.md). In short:
+1. `POST /api/default/auth/start` to begin a session.
+2. `GET /api/default/auth/qr` returns a PNG QR code.
+3. Scan it from your phone: **WhatsApp → Linked Devices → Link a device**.
 
-- **Google Sheets** — deploy the bundled Apps Script as a web app, set a shared
-  secret, and configure `GULLAK_SHEETS_WEBAPP_URL` + `GULLAK_SHEETS_SECRET`.
-- **Actual Budget** — set `GULLAK_ACTUAL_SERVER_URL`, `GULLAK_ACTUAL_PASSWORD`,
-  and `GULLAK_ACTUAL_SYNC_ID` (plus optionally `GULLAK_ACTUAL_ACCOUNT_ID`).
+Session state persists under `AUTH_DIR` (a Baileys multi-file auth store on the
+mounted volume). **Do not delete it** unless you intend to re-pair. The session
+can expire if the phone is offline for ~14 days — re-scan the QR if so. Baileys
+is an unofficial WhatsApp Web client, so occasional breakage on WhatsApp updates
+is expected.
 
-Enabled destinations fan out after each sync push, and each upserts by a stable
-id so re-runs never duplicate.
+---
 
-## Backup & reset
+## Reset the server DB
 
-**Back up** by copying the SQLite file (the app can also export JSON/CSV):
-
-```bash
-cp "$GULLAK_DB_PATH" "$GULLAK_DB_PATH.backup-$(date +%Y%m%d-%H%M%S)"
-```
-
-**Reset the server DB** (back up first), then restart so migrations recreate an
-empty database:
+Back up first, then stop the server and remove the DB (and its WAL/SHM
+sidecars) so migrations recreate an empty database on the next boot:
 
 ```bash
 cd "$(dirname "$GULLAK_DB_PATH")"
-cp gullak.db gullak.db.backup-$(date +%Y%m%d-%H%M%S)
+cp gullak.db "gullak.db.backup-$(date +%Y%m%d-%H%M%S)"
 rm -f gullak.db gullak.db-wal gullak.db-shm
 ```
 
-Because the phone is the source of truth, a reset server re-populates from the
-next sync. Reset app state on Android with `just clear-data`.
+Do not remove the WhatsApp `auth_state` / `whatsapp.db` unless you specifically
+intend to reset WhatsApp pairing.

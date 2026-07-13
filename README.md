@@ -1,97 +1,107 @@
 # Gullak
 
-Gullak is a local-first mobile expense tracker. The phone owns the ledger
-(Drift + SQLite); an optional self-hosted server is the merge point for sync, the
-home for AI credentials, and an optional WhatsApp bridge. The app works fully
-offline — the server is a coordination peer, not a runtime dependency.
+**Your money stays on your phone.**
 
-- **[Goals](docs/goals.md)** — what Gullak is and why.
-- **[Architecture](docs/architecture.md)** — components, data model, sync, AI.
-- **[Self-hosting](docs/self-hosting.md)** — run the server, connect the app.
-- **[Destinations](docs/destinations.md)** — mirror activity to Sheets / Actual.
+Gullak is a local-first expense tracker. The phone owns your ledger — a Drift +
+SQLite database on your device — and everything works fully offline, with no
+account and no server. When you want sync across devices or AI-assisted entry,
+you run a small server yourself. There is no Gullak-operated cloud, no
+telemetry, and no third-party trackers.
 
-## What it does
+<!-- Screenshot strip. PNGs are dropped in by the screenshot pipeline. -->
+<p align="center">
+  <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/1.png" width="19%" alt="Home">
+  <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/2.png" width="19%" alt="Quick Entry">
+  <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/3.png" width="19%" alt="SMS Inbox">
+  <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/4.png" width="19%" alt="Insights">
+  <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/5.png" width="19%" alt="Budget">
+</p>
 
-- **Quick Entry** — manual, AI-from-text, and AI-from-receipt-image logging, plus
-  a share-sheet target. Splits, transfers, tags, and optional location capture.
-- **Activity & reports** — daily / weekly / calendar / monthly / summary views
-  with filters across account, category, tag, amount, date, origin, and status;
-  drill into a payee or category to see its transactions.
-- **SMS inbox (Android)** — bank SMS are parsed by the server LLM into draft
-  transactions you review and confirm in one tap.
+## Features
+
+- **Frictionless capture** — manual entry tuned for repeat payees (amount to
+  saved in three taps), AI "describe it" text entry, receipt-photo parsing, and
+  a system share-sheet target. Splits, transfers, and tags included.
+- **SMS inbox (Android, optional)** — bank SMS become draft transactions you
+  review and confirm in one tap. Parsing runs on *your* server, not ours.
+- **Insights & budgets** — trends, spending by category, and a spend heatmap
+  via an in-app chart kit; monthly budget envelopes with per-category rings.
 - **Sync** — bidirectional, offline-first, last-write-wins by `updatedAt`, and
   idempotent under retry.
-- **Rules** — synced payee/category mappings with priority and match history.
-- **Conversational agent** — log, edit, and query expenses via chat, in-app or
+- **Conversational agent** — log, edit, and query expenses by chat, in-app or
   over WhatsApp.
 - **Exports** — opt-in mirroring to Google Sheets and Actual Budget.
 - **Backup** — local JSON export, CSV export, and restore preview.
 
-## Layout
+## Architecture
 
 ```
-gullak/
-├── app/                 # Flutter (Android/iOS) — Riverpod, Drift, go_router
-│   └── lib/{core,data,features,sync}
-├── pi-server/           # Node + Hono + Drizzle + better-sqlite3 (run via tsx)
-│   └── src/{ai,agent,routes,repos,destinations,db}
-├── whatsapp-bridge/     # Baileys → POST /v1/whatsapp/webhook
-├── docs/                # goals, architecture, self-hosting, destinations
-├── CHANGELOG.md
-└── Justfile             # repo-wide recipes (apk, install, gate, …)
+┌─────────────┐        sync + AI         ┌──────────────┐
+│    App      │  ───────────────────────▶│  pi-server   │
+│  (phone)    │◀─────────────────────────│  (optional)  │
+│             │   source of truth here    │  Node+SQLite │
+└─────────────┘                          └──────┬───────┘
+   Flutter                                       │ webhook
+   Drift/SQLite                          ┌───────▼────────┐
+   works fully offline                   │ whatsapp-bridge│
+                                         │  (optional)    │
+                                         └────────────────┘
 ```
+
+- **`app/`** — Flutter (Android/iOS). Riverpod, Drift/SQLite, go_router. The
+  source of truth; works fully offline.
+- **`pi-server/`** — Node + Hono + Drizzle + better-sqlite3. Optional. A sync
+  merge point that also holds your AI provider keys and runs extraction/agent
+  calls. Bring your own OpenAI-compatible model.
+- **`whatsapp-bridge/`** — optional Baileys bridge that relays WhatsApp
+  messages to the server's agent.
+
+The app never stores model provider credentials — all AI round-trips through a
+server you control.
 
 ## Quick start
 
-**App** (Flutter SDK required):
+### Install the app
 
-```bash
-cd app
-flutter pub get
-dart run build_runner build --delete-conflicting-outputs
-flutter run           # or: just install   (build release + adb install)
-```
+Download the latest APK from
+**[GitHub Releases](https://github.com/mr-karan/gullak/releases)** and sideload
+it (F-Droid coming soon). See **[docs/install.md](docs/install.md)** for
+sideloading, building from source, and an honest explanation of the SMS
+permission.
 
-**Server** (Node ≥ 20 — optional; only needed for sync/AI/exports):
+### Self-host the server (optional)
 
 ```bash
 cd pi-server
 cp .env.example .env
 npm install
-npm run dev           # http://127.0.0.1:8787
+npm run dev            # http://127.0.0.1:8787
 ```
 
-Then point the app at the server in **Settings → Sync server**. See
-[self-hosting.md](docs/self-hosting.md) for production, Docker, and config.
+Then point the app at it in **Settings → Sync server**. For Docker,
+`docker-compose.yml`, the full environment reference, reverse-proxy, and backup
+guidance, see **[docs/self-hosting.md](docs/self-hosting.md)**.
 
-## HTTP API
+## Documentation
 
-`/v1/health` and `/v1/whatsapp/webhook` are public; everything else requires
-`x-api-key` when `GULLAK_HTTP_API_KEY` is set.
+- **[Install](docs/install.md)** — F-Droid, APK sideload, build from source, SMS permission.
+- **[Self-hosting](docs/self-hosting.md)** — run the sync server, Docker, env reference, backups.
+- **[Contributing](CONTRIBUTING.md)** — dev setup and conventions.
 
-```
-GET    /v1/health
-GET/POST/PATCH/DELETE  /v1/accounts /v1/category-groups /v1/categories
-                       /v1/payees /v1/transactions /v1/budgets /v1/recurrences
-GET    /v1/summary?startDate=&endDate=&accountId=
-GET    /v1/sync/changes?since=&limit=&clientId=      POST /v1/sync/push
-POST   /v1/messages                                  (agent; may write rows)
-POST   /v1/whatsapp/webhook                          (public; bridge → server)
-POST   /v1/ai/quick-entry/parse   /v1/ai/sms/parse   (draft-only; 503 w/o model key)
-POST   /v1/sheets/sync[?replace=true]                GET /v1/sheets/status
-POST   /v1/export[?target=&replace=]                 (fan out to destinations)
-POST   /v1/feedback                                  GET /v1/feedback?limit=
-```
+## Built for one, shared with everyone
 
-## Development
-
-```bash
-just gate                        # app: dart format --check + analyze + test
-cd pi-server && npm run typecheck && npm test
-```
-
-See [`app/ACCEPTANCE.md`](app/ACCEPTANCE.md) for the pre-release checklist.
+Gullak started as a tool for one person's actual finances, then got cleaned up
+enough to share. That shapes it: opinionated defaults (₹, `Asia/Kolkata`, UPI
+SMS formats), a homelab-first server, and features that exist because they were
+needed, not because a roadmap demanded them. It's shared in the hope it's useful
+to you too — issues and pull requests are welcome.
 
 ## License
 
-[AGPL v3](./LICENSE)
+
+- **`app/`** — MIT.
+- **`pi-server/`** and **`whatsapp-bridge/`** — AGPL-3.0.
+
+Self-hosting costs you nothing under either license. The AGPL on the server
+means anyone who offers a *hosted* version of it to others must publish their
+changes. See the per-component `LICENSE` files.

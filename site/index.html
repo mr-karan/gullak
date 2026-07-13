@@ -1,0 +1,575 @@
+<!doctype html>
+<!--
+  Gullak — landing page. Self-contained static file: inline CSS, no external
+  requests, tiny vanilla JS only. Fonts are the app's bundled OFL faces,
+  served locally from assets/fonts (never hotlinked).
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gullak — your money stays on your phone</title>
+<meta name="description" content="Gullak is a local-first expense tracker. Your ledger lives on your phone. Optional self-hosted sync and AI. No trackers, no cloud you didn't choose.">
+<meta property="og:title" content="Gullak — your money stays on your phone">
+<meta property="og:description" content="A local-first expense tracker. The phone owns your data. Sync and AI are optional and self-hosted.">
+<meta property="og:type" content="website">
+
+<style>
+  /* Fonts — bundled OFL faces, variable TTFs, one file per family. */
+  @font-face {
+    font-family: "Fraunces";
+    src: url("assets/fonts/Fraunces.ttf") format("truetype");
+    font-weight: 100 900;
+    font-display: swap;
+  }
+  @font-face {
+    font-family: "Inter";
+    src: url("assets/fonts/Inter.ttf") format("truetype");
+    font-weight: 100 900;
+    font-display: swap;
+  }
+  @font-face {
+    font-family: "JetBrains Mono";
+    src: url("assets/fonts/JetBrainsMono.ttf") format("truetype");
+    font-weight: 100 800;
+    font-display: swap;
+  }
+
+  :root {
+    /* Editorial identity — mirrors the app's light palette (ui/theme.dart). */
+    --serif: "Fraunces", "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+    --sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --mono: "JetBrains Mono", ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+
+    --surface: #FCFCFD;
+    --surface-dim: #EFF1F4;
+    --surface-container: #F4F5F7;
+    --on-surface: #1A1D22;
+    --on-surface-variant: #5B6472;
+    --outline: #C7CBD1;
+    --outline-variant: #E5E7EB;
+
+    --primary: #0A6E58;
+    --on-primary: #FFFFFF;
+    --primary-container: #D7EFE6;
+    --on-primary-container: #033E30;
+    --accent: #1B8A5A;        /* income green */
+
+    --radius-card: 14px;
+    --radius-chip: 10px;
+    --gutter: 20px;
+    --maxw: 960px;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --surface: #121417;
+      --surface-dim: #0D0F11;
+      --surface-container: #1A1D21;
+      --on-surface: #E6E8EC;
+      --on-surface-variant: #9AA0AA;
+      --outline: #4A4F57;
+      --outline-variant: #2E333A;
+
+      --primary: #46C2A2;
+      --on-primary: #003225;
+      --primary-container: #0E5544;
+      --on-primary-container: #B6E8D6;
+      --accent: #46C28A;
+    }
+  }
+
+  * { box-sizing: border-box; }
+
+  html { -webkit-text-size-adjust: 100%; }
+
+  body {
+    margin: 0;
+    font-family: var(--sans);
+    font-size: 17px;
+    line-height: 1.6;
+    color: var(--on-surface);
+    background: var(--surface);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    overflow-x: hidden;
+  }
+
+  .wrap {
+    max-width: var(--maxw);
+    margin: 0 auto;
+    padding: 0 var(--gutter);
+  }
+
+  a { color: var(--primary); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  h1, h2, h3 {
+    font-family: var(--serif);
+    font-weight: 500;
+    line-height: 1.15;
+    letter-spacing: -0.01em;
+    margin: 0 0 0.4em;
+  }
+
+  .eyebrow {
+    font-family: var(--sans);
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--primary);
+    margin: 0 0 12px;
+  }
+
+  .money { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+
+  /* ── Top bar ─────────────────────────────────────────────── */
+  header.bar {
+    border-bottom: 1px solid var(--outline-variant);
+    background: var(--surface);
+  }
+  .bar .wrap {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 60px;
+  }
+  .brand {
+    font-family: var(--serif);
+    font-size: 22px;
+    font-weight: 600;
+    color: var(--on-surface);
+    letter-spacing: -0.02em;
+  }
+  .brand .dot { color: var(--primary); }
+  .bar nav a {
+    margin-left: 22px;
+    font-size: 15px;
+    color: var(--on-surface-variant);
+  }
+  .bar nav a:hover { color: var(--on-surface); text-decoration: none; }
+  @media (max-width: 620px) {
+    .bar nav a:not(.src) { display: none; }
+  }
+
+  /* ── Hero ────────────────────────────────────────────────── */
+  .hero { padding: 72px 0 48px; }
+  .hero-grid {
+    display: grid;
+    grid-template-columns: 1.1fr 0.9fr;
+    gap: 48px;
+    align-items: center;
+  }
+  .hero h1 {
+    font-size: clamp(38px, 6vw, 62px);
+    font-weight: 400;
+    margin-bottom: 20px;
+  }
+  .hero p.lede {
+    font-size: 19px;
+    color: var(--on-surface-variant);
+    max-width: 34ch;
+    margin: 0 0 28px;
+  }
+  .cta-row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-family: var(--sans);
+    font-size: 15px;
+    font-weight: 600;
+    padding: 12px 20px;
+    border-radius: var(--radius-chip);
+    border: 1px solid transparent;
+    cursor: pointer;
+  }
+  .btn-primary { background: var(--primary); color: var(--on-primary); }
+  .btn-primary:hover { text-decoration: none; opacity: 0.92; }
+  .btn-ghost {
+    background: transparent;
+    color: var(--on-surface);
+    border-color: var(--outline);
+  }
+  .btn-ghost:hover { text-decoration: none; background: var(--surface-container); }
+
+  /* F-Droid badge placeholder — swap for the real SVG badge when live. */
+  .badge-fdroid {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 16px;
+    border: 1px dashed var(--outline);
+    border-radius: var(--radius-chip);
+    font-size: 13px;
+    color: var(--on-surface-variant);
+    background: var(--surface-container);
+  }
+
+  .phone-shot {
+    display: block;
+    width: 100%;
+    max-width: 320px;
+    margin: 0 auto;
+    border-radius: 28px;
+    border: 1px solid var(--outline-variant);
+    background: var(--surface-container);
+    /* placeholder aspect until the screenshot agent drops the PNG */
+    aspect-ratio: 9 / 19;
+    object-fit: cover;
+  }
+
+  @media (max-width: 760px) {
+    .hero { padding: 44px 0 32px; }
+    .hero-grid { grid-template-columns: 1fr; gap: 32px; }
+    .hero p.lede { max-width: none; }
+    .phone-shot { max-width: 260px; }
+  }
+
+  /* ── Feature sections ────────────────────────────────────── */
+  section.feature { padding: 56px 0; border-top: 1px solid var(--outline-variant); }
+  .feature-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 40px;
+    align-items: center;
+  }
+  .feature.reverse .feature-grid { direction: rtl; }
+  .feature.reverse .feature-grid > * { direction: ltr; }
+  .feature h2 { font-size: clamp(26px, 3.4vw, 34px); }
+  .feature p { color: var(--on-surface-variant); margin: 0 0 14px; }
+  .feature ul {
+    list-style: none;
+    padding: 0;
+    margin: 16px 0 0;
+    color: var(--on-surface-variant);
+  }
+  .feature li { padding-left: 22px; position: relative; margin-bottom: 8px; }
+  .feature li::before {
+    content: "";
+    position: absolute;
+    left: 2px;
+    top: 11px;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--primary);
+  }
+  .shot-card {
+    border: 1px solid var(--outline-variant);
+    border-radius: 28px;
+    overflow: hidden;
+    background: var(--surface-container);
+  }
+  .shot-card img {
+    display: block;
+    width: 100%;
+    aspect-ratio: 9 / 19;
+    object-fit: cover;
+  }
+  @media (max-width: 760px) {
+    section.feature { padding: 40px 0; }
+    .feature-grid { grid-template-columns: 1fr; gap: 24px; }
+    .feature.reverse .feature-grid { direction: ltr; }
+    .shot-card { max-width: 300px; margin: 0 auto; }
+  }
+
+  /* ── Private by design ───────────────────────────────────── */
+  .private {
+    padding: 64px 0;
+    border-top: 1px solid var(--outline-variant);
+    background: var(--surface-container);
+  }
+  .private h2 { font-size: clamp(28px, 4vw, 40px); max-width: 20ch; }
+  .principles {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 28px;
+    margin-top: 36px;
+  }
+  .principles h3 { font-size: 19px; font-family: var(--sans); font-weight: 600; }
+  .principles p { color: var(--on-surface-variant); margin: 0; font-size: 15px; }
+  @media (max-width: 720px) {
+    .principles { grid-template-columns: 1fr; gap: 24px; }
+  }
+
+  /* ── Install ─────────────────────────────────────────────── */
+  .install { padding: 64px 0; border-top: 1px solid var(--outline-variant); text-align: center; }
+  .install h2 { font-size: clamp(28px, 4vw, 40px); }
+  .install p { color: var(--on-surface-variant); max-width: 52ch; margin: 0 auto 28px; }
+  .install .cta-row { justify-content: center; }
+  .install small { display: block; margin-top: 20px; color: var(--on-surface-variant); font-size: 13px; }
+
+  /* ── Self-host teaser ────────────────────────────────────── */
+  .selfhost {
+    padding: 56px 0;
+    border-top: 1px solid var(--outline-variant);
+  }
+  .selfhost-card {
+    border: 1px solid var(--outline-variant);
+    border-radius: var(--radius-card);
+    padding: 32px;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 24px;
+    align-items: center;
+  }
+  .selfhost-card p { margin: 8px 0 0; color: var(--on-surface-variant); }
+  pre.snippet {
+    font-family: var(--mono);
+    font-size: 13px;
+    line-height: 1.7;
+    background: var(--surface-dim);
+    border: 1px solid var(--outline-variant);
+    border-radius: var(--radius-chip);
+    padding: 16px 18px;
+    overflow-x: auto;
+    margin: 0;
+    color: var(--on-surface);
+  }
+  @media (max-width: 720px) {
+    .selfhost-card { grid-template-columns: 1fr; }
+  }
+
+  /* ── Footer ──────────────────────────────────────────────── */
+  footer.foot {
+    padding: 40px 0;
+    border-top: 1px solid var(--outline-variant);
+    color: var(--on-surface-variant);
+    font-size: 14px;
+  }
+  .foot .wrap {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px 28px;
+    justify-content: space-between;
+    align-items: baseline;
+  }
+  .foot a { color: var(--on-surface-variant); }
+  .foot a:hover { color: var(--on-surface); }
+</style>
+</head>
+<body>
+
+<header class="bar">
+  <div class="wrap">
+    <span class="brand">Gullak<span class="dot">.</span></span>
+    <nav>
+      <a href="#features">Features</a>
+      <a href="#private">Privacy</a>
+      <a href="#install">Install</a>
+      <a href="#selfhost">Self-host</a>
+      <a class="src" href="https://github.com/mr-karan/gullak">Source</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <!-- HERO -->
+  <section class="hero">
+    <div class="wrap hero-grid">
+      <div>
+        <p class="eyebrow">Local-first expense tracker</p>
+        <h1>Your money stays on your phone.</h1>
+        <p class="lede">
+          Gullak keeps your ledger on your device, not in someone else's cloud.
+          Log an expense in three taps. Sync and AI are optional — and when you
+          want them, you run the server.
+        </p>
+        <div class="cta-row">
+          <a class="btn btn-primary" href="#install">Get the app</a>
+          <a class="btn btn-ghost" href="https://github.com/mr-karan/gullak">View source</a>
+        </div>
+      </div>
+      <div>
+        <img class="phone-shot" src="assets/screens/01_home.png"
+             alt="Gullak home screen: spend this month with a 30-day sparkline">
+      </div>
+    </div>
+  </section>
+
+  <!-- FEATURES -->
+  <div id="features"></div>
+
+  <section class="feature">
+    <div class="wrap feature-grid">
+      <div>
+        <p class="eyebrow">Frictionless capture</p>
+        <h2>Log it before you forget it.</h2>
+        <p>
+          Type an amount and save. Or describe the spend in plain words — "450
+          groceries at the market" — and let AI fill the fields. Snap a receipt
+          and it reads the total for you.
+        </p>
+        <ul>
+          <li>Manual entry tuned for repeat payees: amount to saved in three taps</li>
+          <li>Describe-in-text and scan-a-receipt parsing (runs on your server)</li>
+          <li>Splits, transfers, tags, and a system share-sheet target</li>
+        </ul>
+      </div>
+      <div class="shot-card">
+        <img src="assets/screens/02_quick_entry.png"
+             alt="Quick Entry sheet with amount keypad and category chips">
+      </div>
+    </div>
+  </section>
+
+  <section class="feature reverse">
+    <div class="wrap feature-grid">
+      <div>
+        <p class="eyebrow">SMS inbox</p>
+        <h2>Bank texts become drafts you approve.</h2>
+        <p>
+          On Android, Gullak reads your bank SMS, sends them to your own server
+          to parse, and hands you a review queue. Each message becomes a draft
+          transaction — confirm the right ones with a single tap.
+        </p>
+        <ul>
+          <li>All parsing happens on a server you control — nothing is sent to a third party</li>
+          <li>Triage by bucket, expand any message to see the original text</li>
+          <li>Learned payee-to-category mappings get better as you confirm</li>
+        </ul>
+      </div>
+      <div class="shot-card">
+        <img src="assets/screens/03_inbox.png"
+             alt="SMS inbox with parsed bank messages ready to confirm">
+      </div>
+    </div>
+  </section>
+
+  <section class="feature">
+    <div class="wrap feature-grid">
+      <div>
+        <p class="eyebrow">Insights &amp; budgets</p>
+        <h2>Answer &ldquo;where did my money go?&rdquo; in one screen.</h2>
+        <p>
+          Trends, spending by category, and a spend heatmap — drawn with a
+          hand-rolled chart kit, no bloated dependency. Set monthly envelopes
+          and watch category rings fill as you spend.
+        </p>
+        <ul>
+          <li>Daily bars, category breakdown, six-month trend, and a day heatmap</li>
+          <li>Monthly budget envelopes with per-category progress rings</li>
+          <li>Every chart is paired with the numbers as text — accessible by default</li>
+        </ul>
+      </div>
+      <div class="shot-card">
+        <img src="assets/screens/04_insights.png"
+             alt="Insights screen with category bars and a spend heatmap">
+      </div>
+    </div>
+  </section>
+
+  <section class="feature reverse">
+    <div class="wrap feature-grid">
+      <div>
+        <p class="eyebrow">Optional &amp; self-hosted</p>
+        <h2>Sync your devices and chat over WhatsApp.</h2>
+        <p>
+          Run the sync server on a Raspberry Pi, a VPS, or anywhere Docker runs.
+          It merges changes across devices, holds your AI keys, and can bridge a
+          conversational assistant to WhatsApp. Bring your own model provider.
+        </p>
+        <ul>
+          <li>Bidirectional, offline-first sync — last-write-wins, idempotent on retry</li>
+          <li>Log, edit, and query expenses by chat, in-app or over WhatsApp</li>
+          <li>Opt-in mirroring to Google Sheets and Actual Budget</li>
+        </ul>
+      </div>
+      <div class="shot-card">
+        <img src="assets/screens/05_agent.png"
+             alt="Conversational agent logging an expense from a chat message">
+      </div>
+    </div>
+  </section>
+
+  <!-- PRIVATE BY DESIGN -->
+  <section class="private" id="private">
+    <div class="wrap">
+      <p class="eyebrow">Private by design</p>
+      <h2>No trackers. No analytics. No cloud you didn't choose.</h2>
+      <div class="principles">
+        <div>
+          <h3>Local-first</h3>
+          <p>The phone is the source of truth. Your data works fully offline and never
+             needs a server to be useful.</p>
+        </div>
+        <div>
+          <h3>Your server, your keys</h3>
+          <p>Sync and AI run on infrastructure you own. The app never stores model
+             provider credentials.</p>
+        </div>
+        <div>
+          <h3>Nothing phoned home</h3>
+          <p>No third-party SDKs, no ad networks, no telemetry. Crash reporting, if it
+             ever ships, is strictly opt-in.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- INSTALL -->
+  <section class="install" id="install">
+    <div class="wrap">
+      <p class="eyebrow">Install</p>
+      <h2>Get Gullak</h2>
+      <p>
+        Android today. The full-featured build (with SMS capture) is on GitHub
+        Releases; F-Droid is on the way.
+      </p>
+      <div class="cta-row">
+        <a class="btn btn-primary" href="https://github.com/mr-karan/gullak/releases">
+          Download APK &middot; GitHub Releases
+        </a>
+        <span class="badge-fdroid" title="F-Droid listing coming soon">
+          F-Droid &middot; coming soon
+        </span>
+      </div>
+      <small>
+        See the <a href="../docs/install.md">install guide</a> for sideloading,
+        building from source, and how the SMS permission works.
+      </small>
+    </div>
+  </section>
+
+  <!-- SELF-HOST TEASER -->
+  <section class="selfhost" id="selfhost">
+    <div class="wrap">
+      <div class="selfhost-card">
+        <div>
+          <p class="eyebrow">Self-host the server</p>
+          <h2 style="font-size:26px;margin:0;">One container, one volume.</h2>
+          <p>
+            The sync server is a small Node service backed by SQLite. Point the
+            app at it in Settings &rarr; Sync server and you're synced. Full
+            Docker, env, and reverse-proxy docs are in the
+            <a href="../docs/self-hosting.md">self-hosting guide</a>.
+          </p>
+        </div>
+        <pre class="snippet">docker compose up -d
+# app &rarr; Settings &rarr; Sync server
+#   https://gullak.example.com</pre>
+      </div>
+    </div>
+  </section>
+</main>
+
+<!-- FOOTER -->
+<footer class="foot">
+  <div class="wrap">
+    <span>
+      Built for one, shared with everyone.
+      App under MIT; server &amp; bridge under AGPL-3.0.
+    </span>
+    <span>
+      <a href="https://github.com/mr-karan/gullak">github.com/mr-karan/gullak</a>
+      &nbsp;&middot;&nbsp;
+      <a href="../docs/self-hosting.md">Docs</a>
+    </span>
+  </div>
+</footer>
+
+</body>
+</html>

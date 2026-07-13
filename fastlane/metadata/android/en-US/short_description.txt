@@ -1,0 +1,1 @@
+Private, local-first expense tracker. Your money stays on your phone.
