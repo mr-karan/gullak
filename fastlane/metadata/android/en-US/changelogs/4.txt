@@ -1,0 +1,5 @@
+First public release as Chavanni (formerly Gullak).
+• Local-first expense tracking: quick keypad entry, budgets, insights
+• Android SMS inbox: bank/UPI messages become drafts you confirm
+• Optional self-hosted sync server with AI describe/scan capture
+• MIT/AGPL licensed; no trackers, no third-party cloud

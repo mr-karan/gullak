@@ -53,6 +53,10 @@ android {
             } else {
                 signingConfigs.getByName("debug")
             }
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+            )
             // Opt-in for ad-hoc SMS-DB pulls etc.: build with the env
             // var CHAVANNI_DEBUGGABLE=true (or -Pdebuggable=true on a raw
             // gradle invocation). Flutter doesn't reliably propagate -P
@@ -69,4 +73,12 @@ flutter {
 
 dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
+}
+
+// F-Droid: strip the non-free Google Play Services location artifact that
+// geolocator_android declares. The Dart side forces the platform
+// LocationManager (AndroidSettings(forceLocationManager: true)), so the
+// fused-provider code path that needs GMS is never taken.
+configurations.all {
+    exclude(group = "com.google.android.gms", module = "play-services-location")
 }

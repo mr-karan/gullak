@@ -1,3 +1,5 @@
+import 'dart:io' show Platform;
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geocoding/geocoding.dart' as geo;
 import 'package:geolocator/geolocator.dart';
@@ -33,15 +35,28 @@ class LocationService {
   Future<CapturedLocation?> capture() async {
     try {
       if (!await canCapture()) return null;
-      var pos = await Geolocator.getLastKnownPosition();
+      var pos = await Geolocator.getLastKnownPosition(
+        forceAndroidLocationManager: true,
+      );
       final fresh =
           pos != null && DateTime.now().difference(pos.timestamp).inMinutes < 2;
       if (!fresh) {
+        // On Android we force the platform LocationManager instead of the
+        // Play-Services fused provider: the GMS artifact is excluded at the
+        // Gradle level (F-Droid forbids non-free deps), so the fused path
+        // must never be taken. Accuracy is slightly worse; for tagging an
+        // expense with a neighbourhood, it doesn't matter.
         pos = await Geolocator.getCurrentPosition(
-          locationSettings: const LocationSettings(
-            accuracy: LocationAccuracy.medium,
-            timeLimit: Duration(seconds: 8),
-          ),
+          locationSettings: Platform.isAndroid
+              ? AndroidSettings(
+                  forceLocationManager: true,
+                  accuracy: LocationAccuracy.medium,
+                  timeLimit: const Duration(seconds: 8),
+                )
+              : const LocationSettings(
+                  accuracy: LocationAccuracy.medium,
+                  timeLimit: Duration(seconds: 8),
+                ),
         );
       }
       return CapturedLocation(
