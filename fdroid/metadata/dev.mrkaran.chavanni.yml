@@ -1,0 +1,59 @@
+# DRAFT fdroiddata recipe for Chavanni.
+#
+# This file lives here for review/versioning only — the real copy goes into
+# https://gitlab.com/fdroid/fdroiddata as metadata/dev.mrkaran.chavanni.yml
+# when the RFP is submitted (after the GitHub next→main flip and the v0.3.0
+# tag). Expect the fdroiddata reviewers to request tweaks; keep both copies
+# in sync.
+#
+# Build-from-source notes for reviewers:
+# - SQLite is compiled from the vendored public-domain amalgamation
+#   (app/vendor/sqlite3, SHA3-256 pinned in its README) via the sqlite3
+#   package's build hook — no prebuilt binaries are downloaded.
+# - geolocator_android is a vendored, GMS-free fork (app/vendor/
+#   geolocator_android) — play-services-location is not in the build graph.
+# - phosphor_flutter is vendored (MIT) with a Flutter 3.44 compatibility
+#   patch; provenance in app/vendor/phosphor_flutter/README.md.
+
+Categories:
+  - Money
+License: MIT
+AuthorName: Karan Sharma
+AuthorWebSite: https://mrkaran.dev
+SourceCode: https://github.com/mr-karan/chavanni
+IssueTracker: https://github.com/mr-karan/chavanni/issues
+Changelog: https://github.com/mr-karan/chavanni/blob/main/CHANGELOG.md
+
+AutoName: Chavanni
+
+RepoType: git
+Repo: https://github.com/mr-karan/chavanni
+
+Builds:
+  - versionName: 0.3.0
+    versionCode: 4
+    commit: v0.3.0
+    subdir: app
+    sudo:
+      - apt-get update
+      - apt-get install -y --no-install-recommends openjdk-17-jdk-headless
+      - update-alternatives --auto java
+    init:
+      # Keep the scanner/build surface to the app: the AGPL server, bridge,
+      # and site are not part of the Android build.
+      - rm -rf ../pi-server ../whatsapp-bridge ../site ../explorations
+    output: build/app/outputs/flutter-apk/app-release.apk
+    srclibs:
+      - flutter@3.44.5
+    prebuild:
+      - export PUB_CACHE=$(pwd)/.pub_cache
+      - $$flutter$$/bin/flutter config --no-enable-analytics
+      - $$flutter$$/bin/flutter pub get
+    build:
+      - export PUB_CACHE=$(pwd)/.pub_cache
+      - $$flutter$$/bin/flutter build apk --release
+
+AutoUpdateMode: Version
+UpdateCheckMode: Tags ^v[0-9]+\.[0-9]+\.[0-9]+$
+CurrentVersion: 0.3.0
+CurrentVersionCode: 4

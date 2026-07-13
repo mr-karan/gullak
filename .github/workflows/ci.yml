@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  push:
+    branches: [main, next]
+  pull_request:
+
+jobs:
+  app:
+    name: App (format + analyze + test)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.44.5"
+          cache: true
+      - name: Gate (mirrors `just gate`)
+        working-directory: app
+        run: |
+          flutter pub get
+          scripts/pre-commit.sh
+
+  server:
+    name: Server (typecheck + test)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: pi-server/package-lock.json
+      - name: Typecheck + test
+        working-directory: pi-server
+        run: |
+          npm ci
+          npm run typecheck
+          npm test
