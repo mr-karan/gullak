@@ -1,6 +1,3 @@
-# F-Droid: play-services-location is excluded from the dependency graph
-# (see build.gradle.kts). geolocator's Java code still *references* GMS
-# classes on its fused-provider path, which we never execute (the Dart side
-# forces the platform LocationManager). Tell R8 not to fail on those
-# compile-time-only references.
--dontwarn com.google.android.gms.**
+# App-specific R8/ProGuard rules. Currently none needed: the vendored
+# GMS-free geolocator_android (vendor/geolocator_android/) removed the last
+# missing-class source. Kept wired in build.gradle.kts for future use.

@@ -75,10 +75,7 @@ dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
 }
 
-// F-Droid: strip the non-free Google Play Services location artifact that
-// geolocator_android declares. The Dart side forces the platform
-// LocationManager (AndroidSettings(forceLocationManager: true)), so the
-// fused-provider code path that needs GMS is never taken.
-configurations.all {
-    exclude(group = "com.google.android.gms", module = "play-services-location")
-}
+// F-Droid note: no GMS exclude is needed here — the vendored
+// geolocator_android (see vendor/geolocator_android/) removes the
+// play-services-location dependency at the source level, so Google Play
+// Services never enters the build graph at all.

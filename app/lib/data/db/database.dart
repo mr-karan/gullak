@@ -2,10 +2,10 @@ import 'dart:io';
 
 import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
-// sqlite3_flutter_libs is required at link time so Drift can find
-// sqlite3 on Android; we don't import any symbols from it directly.
-// ignore: unused_import
-import 'package:sqlite3_flutter_libs/sqlite3_flutter_libs.dart';
+// The native sqlite3 library is provided by the sqlite3 package's build
+// hook, compiled from the vendored amalgamation (see vendor/sqlite3/ and
+// the `hooks:` section in pubspec.yaml). The old sqlite3_flutter_libs
+// link-time shim is EOL and no longer needed.
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
