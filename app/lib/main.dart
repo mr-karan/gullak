@@ -13,6 +13,7 @@ import 'core/notification_service.dart';
 import 'core/prefs.dart';
 import 'core/secure_store.dart';
 import 'core/snackbars.dart';
+import 'data/demo_seed.dart';
 import 'features/recurrences/data/recurrence_repository.dart';
 import 'data/ai/pi_ai_client.dart';
 import 'data/db/database.dart';
@@ -76,6 +77,12 @@ Future<void> main() async {
 
   final db = AppDatabase();
   final prefs = await Prefs.load();
+  // Demo builds (--dart-define=GULLAK_DEMO=true) seed tasteful fake data on
+  // first launch so store/F-Droid screenshots look alive. Idempotent and
+  // tree-shaken out of normal builds (kDemoMode is a const false there).
+  if (kDemoMode) {
+    await seedDemoData(db, prefs);
+  }
   await NotificationService.instance.init();
   // WorkManager dispatcher needs to be initialised every cold start so
   // background-enqueued enrichment jobs (from notification replies the
