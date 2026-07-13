@@ -126,3 +126,13 @@ flutter_launcher_icons:
     generate: false
   macos:
     generate: false
+
+# F-Droid: the sqlite3 package's build hook defaults to DOWNLOADING prebuilt
+# libsqlite3 binaries from GitHub releases at build time. Force it to compile
+# the vendored public-domain amalgamation (vendor/sqlite3/) with the platform
+# toolchain instead — same compile defines, zero build-time network fetches.
+hooks:
+  user_defines:
+    sqlite3:
+      source: source
+      path: vendor/sqlite3/sqlite3.c
