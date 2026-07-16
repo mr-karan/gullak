@@ -126,4 +126,23 @@ void main() {
       reason: layoutErrors.map((e) => e.exceptionAsString()).join('\n---\n'),
     );
   });
+
+  testWidgets('welcome page offers a restore path with URL + key fields', (
+    tester,
+  ) async {
+    await bootstrap(tester);
+
+    final restore = find.text('Already have a sync server? Restore');
+    expect(restore, findsOneWidget);
+
+    await tester.tap(restore);
+    await tester.pumpAndSettle();
+
+    // The restore dialog collects a server URL and an API key, and explicitly
+    // does not create a new account.
+    expect(find.text('Restore from server'), findsOneWidget);
+    expect(find.widgetWithText(TextField, 'Server URL'), findsOneWidget);
+    expect(find.widgetWithText(TextField, 'API key'), findsOneWidget);
+    expect(find.text('Connect & restore'), findsOneWidget);
+  });
 }

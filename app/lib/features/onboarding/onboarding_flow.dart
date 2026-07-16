@@ -68,18 +68,44 @@ class _OnboardingFlowState extends ConsumerState<OnboardingFlow> {
     curve: Curves.easeOut,
   );
 
-  Future<void> _finish({String? syncBaseUrl, String? syncApiKey}) async {
+  /// Returning-device path: collect an existing server's URL + key, then finish
+  /// in restore mode (no local account/seed) so the first sync pulls the real
+  /// data down without pushing duplicates up.
+  Future<void> _startRestore() async {
+    final creds = await showDialog<({String url, String key})>(
+      context: context,
+      builder: (_) => const _RestoreDialog(),
+    );
+    if (creds == null) return;
+    await _finish(
+      syncBaseUrl: creds.url,
+      syncApiKey: creds.key,
+      restore: true,
+    );
+  }
+
+  /// [restore] connects to an existing sync server and pulls its data instead
+  /// of starting fresh. In that mode we must NOT create a first account or seed
+  /// default categories — the server already holds the real ones, and creating
+  /// local rows here would push duplicates up on the first sync.
+  Future<void> _finish({
+    String? syncBaseUrl,
+    String? syncApiKey,
+    bool restore = false,
+  }) async {
     if (_finishing) return;
     setState(() => _finishing = true);
     try {
-      await ref
-          .read(accountRepoProvider)
-          .create(
-            name: _accountName.trim(),
-            kind: _kind,
-            openingBalanceCents: _openingBalanceCents,
-          );
-      await _seedDefaults(ref);
+      if (!restore) {
+        await ref
+            .read(accountRepoProvider)
+            .create(
+              name: _accountName.trim(),
+              kind: _kind,
+              openingBalanceCents: _openingBalanceCents,
+            );
+        await _seedDefaults(ref);
+      }
       final prefs = ref.read(prefsProvider);
       await prefs.setCurrencySymbol(_symbol);
       await prefs.setCurrencyMinorDigits(_minorDigits);
@@ -126,6 +152,7 @@ class _OnboardingFlowState extends ConsumerState<OnboardingFlow> {
                     _minorDigits = d;
                   }),
                   onNext: _next,
+                  onRestore: _startRestore,
                 ),
                 _FirstAccount(
                   symbol: _symbol,
@@ -222,18 +249,90 @@ class _OnboardingPageShell extends StatelessWidget {
 /// Combined welcome + currency picker — saves a screen by merging
 /// branding and the currency choice. Branding sits at the top, a
 /// chip strip lets the user pick currency, Continue advances.
+/// Collects an existing sync server's URL + API key for the restore path.
+/// Returns null on cancel, or (url, key) on connect.
+class _RestoreDialog extends StatefulWidget {
+  const _RestoreDialog();
+
+  @override
+  State<_RestoreDialog> createState() => _RestoreDialogState();
+}
+
+class _RestoreDialogState extends State<_RestoreDialog> {
+  final _url = TextEditingController();
+  final _key = TextEditingController();
+
+  @override
+  void dispose() {
+    _url.dispose();
+    _key.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Restore from server'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Text(
+            'Connect to your existing sync server and pull your data. No new '
+            'account is created.',
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            controller: _url,
+            autocorrect: false,
+            keyboardType: TextInputType.url,
+            decoration: const InputDecoration(
+              labelText: 'Server URL',
+              hintText: 'https://…',
+            ),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _key,
+            autocorrect: false,
+            obscureText: true,
+            decoration: const InputDecoration(labelText: 'API key'),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () {
+            final url = _url.text.trim();
+            if (url.isEmpty) return;
+            Navigator.of(
+              context,
+            ).pop((url: url, key: _key.text.trim()));
+          },
+          child: const Text('Connect & restore'),
+        ),
+      ],
+    );
+  }
+}
+
 class _WelcomeAndCurrency extends StatelessWidget {
   const _WelcomeAndCurrency({
     required this.symbol,
     required this.minorDigits,
     required this.onChange,
     required this.onNext,
+    required this.onRestore,
   });
 
   final String symbol;
   final int minorDigits;
   final void Function(String symbol, int minorDigits) onChange;
   final VoidCallback onNext;
+  final VoidCallback onRestore;
 
   static const _options = <(String label, String symbol, int digits)>[
     ('₹ INR', '₹', 2),
@@ -292,9 +391,21 @@ class _WelcomeAndCurrency extends StatelessWidget {
           ),
         ],
       ),
-      footer: SizedBox(
-        width: double.infinity,
-        child: FilledButton(onPressed: onNext, child: const Text('Continue')),
+      footer: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton(
+              onPressed: onNext,
+              child: const Text('Continue'),
+            ),
+          ),
+          TextButton(
+            onPressed: onRestore,
+            child: const Text('Already have a sync server? Restore'),
+          ),
+        ],
       ),
     );
   }
