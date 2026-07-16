@@ -6,6 +6,17 @@ import type { AppConfig } from "../config.ts";
 /// box that holds the API key and decides which model to use, so this
 /// file is the only place the actual fetch lives.
 
+/// Thrown when the model's HTTP call succeeded but its body wasn't usable
+/// JSON. Callers (e.g. the SMS parser) catch this specifically to retry with a
+/// corrective nudge — as opposed to transport/timeout errors, which shouldn't
+/// be re-prompted.
+export class LlmOutputError extends Error {
+  constructor(message: string, options?: ErrorOptions) {
+    super(message, options);
+    this.name = "LlmOutputError";
+  }
+}
+
 export interface ChatJsonOptions {
   system: string;
   user: string;
@@ -81,9 +92,16 @@ function parseJsonObject<T>(raw: string): T {
   const start = text.indexOf("{");
   const end = text.lastIndexOf("}");
   if (start < 0 || end <= start) {
-    throw new Error(`LLM returned non-JSON: ${text.slice(0, 120)}`);
+    throw new LlmOutputError(`LLM returned non-JSON: ${text.slice(0, 120)}`);
   }
-  return JSON.parse(text.slice(start, end + 1)) as T;
+  try {
+    return JSON.parse(text.slice(start, end + 1)) as T;
+  } catch (cause) {
+    // Malformed JSON (e.g. an Indian-comma number like 6,275) is recoverable:
+    // the parser re-prompts on LlmOutputError. We deliberately do NOT hand-
+    // repair it — silently rewriting 6,275→6275 could log a wrong amount.
+    throw new LlmOutputError("LLM returned malformed JSON", { cause });
+  }
 }
 
 function stripTrailingSlash(s: string): string {

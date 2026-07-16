@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 import type { AppConfig } from "../config.ts";
-import { chatJson } from "../llm/client.ts";
+import { chatJson, LlmOutputError } from "../llm/client.ts";
 
 /// SMS → structured expense parser.
 ///
@@ -51,6 +51,11 @@ Direction rules:
   "used at" → is_income=false.
 - amount_cents is positive integer minor units. Direction is carried in
   is_income; never negate amount_cents.
+- Use the SPENT/RECEIVED amount, never an "Avl Bal", "Avl Limit", or available
+  balance/limit that appears in the same SMS.
+- Emit plain JSON: numbers with no grouping commas, no quotes, no currency
+  symbol (INR 6,275.00 → amount_cents 627500); booleans as true/false, not
+  "true"/"false".
 
 is_transaction:
 - false ONLY for pure OTPs, marketing, balance/limit reminders with no spend,
@@ -96,17 +101,38 @@ bank_ref: UPI Ref / Reference No / RRN style identifier when present.
 confidence: 0.9+ when unambiguous; 0.7 when one field had to be guessed; <=0.5
   when fields are unclear.`;
 
+// Be tolerant of a well-meaning model that returns numbers/booleans as
+// strings ("74200", "true") — accept the value rather than throwing the whole
+// parse away. But ONLY unambiguous, lossless forms: a comma'd/currency string
+// is left as-is so it fails validation and triggers a re-prompt, never a
+// silent (and financially wrong) coercion. Never JS-truthy boolean coercion
+// ("false" is truthy) — that could flip a debit into income.
+function coerceExactBoolean(v: unknown): unknown {
+  if (typeof v !== "string") return v;
+  const s = v.trim().toLowerCase();
+  return s === "true" ? true : s === "false" ? false : v;
+}
+function coerceExactNumber(v: unknown): unknown {
+  if (typeof v !== "string") return v;
+  const s = v.trim();
+  return /^-?\d+(?:\.\d+)?$/.test(s) ? Number(s) : v; // rejects commas, symbols, ""
+}
+
+const llmBool = z.preprocess(coerceExactBoolean, z.boolean());
+const llmInt = z.preprocess(coerceExactNumber, z.number().finite().int());
+const llmNum = z.preprocess(coerceExactNumber, z.number().finite());
+
 const llmResponse = z.object({
-  is_transaction: z.boolean().optional(),
-  amount_cents: z.number().nullish(),
-  is_income: z.boolean().optional(),
+  is_transaction: llmBool.optional(),
+  amount_cents: llmInt.nullish(),
+  is_income: llmBool.optional(),
   currency: z.string().nullish(),
   payee: z.string().nullish(),
   account_hint: z.string().nullish(),
   category_hint: z.string().nullish(),
   date: z.string().nullish(),
   bank_ref: z.string().nullish(),
-  confidence: z.number().nullish(),
+  confidence: llmNum.nullish(),
 });
 
 export interface SmsCandidate {
@@ -148,20 +174,43 @@ export interface SmsParseRequest {
   payees?: { id: string; name: string; categoryId?: string | null }[];
 }
 
-const PARSER_VERSION = 4;
+const PARSER_VERSION = 5;
+
+// Re-prompt used when the model's FIRST answer couldn't be decoded (malformed
+// JSON or a value we won't guess at, e.g. a comma'd amount). We ask it to fix
+// its own output rather than policing it ourselves.
+const DECODE_RETRY_HINT =
+  "your previous answer could not be decoded: return exactly one JSON object, " +
+  "use real true/false booleans, and amount_cents must be an unquoted integer " +
+  "with no grouping commas (INR 6,275.00 → 627500) taken from the transaction " +
+  "amount, never an available balance or limit";
 
 export async function parseSms(
   config: AppConfig,
   req: SmsParseRequest,
 ): Promise<SmsParseResult> {
   try {
-    const first = await callModel(config, req, null);
+    let first: RawCandidate | null;
+    try {
+      first = await callModel(config, req, null);
+    } catch (e) {
+      // A malformed/undecodable model answer is recoverable — give the model
+      // one more shot with a corrective nudge before surfacing parse_failed.
+      // Transport/timeout errors are NOT LlmOutputError/ZodError, so they
+      // propagate to the outer catch untouched.
+      if (!(e instanceof LlmOutputError) && !(e instanceof z.ZodError)) throw e;
+      first = await callModel(config, req, DECODE_RETRY_HINT);
+    }
     const firstIssue = first ? validateCandidate(first.payee) : null;
     if (!firstIssue || !first) {
       return first ? finalize(first, req) : notATxn();
     }
     // One retry with a corrective hint when payee leakage is detected.
-    const retry = await callModel(config, req, firstIssue);
+    const retry = await callModel(
+      config,
+      req,
+      `the payee failed validation — ${firstIssue}; re-read the payee extraction rules`,
+    );
     if (!retry) return notATxn();
     const retryIssue = validateCandidate(retry.payee);
     if (retryIssue) {
@@ -214,9 +263,7 @@ async function callModel(
     `<body>: ${req.body}`,
   ];
   if (correctiveHint) {
-    userLines.push(
-      `<reminder>: your previous answer for this SMS failed validation — ${correctiveHint}. Reread the payee extraction rules and respond again.`,
-    );
+    userLines.push(`<reminder>: ${correctiveHint}. Respond again.`);
   }
   const raw = await chatJson<unknown>(config, {
     system: SYSTEM,
@@ -225,7 +272,14 @@ async function callModel(
   const parsed = llmResponse.parse(raw);
   if (parsed.is_transaction !== true) return null;
   const amountCents = Math.trunc(parsed.amount_cents ?? 0);
-  if (amountCents <= 0) return null;
+  // A transaction with no usable amount is a decode miss (e.g. the model put a
+  // comma'd value we refused to coerce), not a "not a transaction" — throw so
+  // the caller re-prompts instead of silently dropping a real spend.
+  if (amountCents <= 0) {
+    throw new LlmOutputError(
+      "model flagged a transaction but returned no positive amount_cents",
+    );
+  }
   const dateStr = isYmd(parsed.date) ? parsed.date! : ymd(new Date(req.receivedAt));
   return {
     amountCents,

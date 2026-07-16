@@ -1,6 +1,77 @@
-import { expect, test } from "vitest";
+import { afterEach, expect, test, vi } from "vitest";
 
-import { validateCandidate } from "./sms_parser.ts";
+// Mock only the LLM network call; keep LlmOutputError real so the retry-on-
+// undecodable path is exercised end to end.
+vi.mock("../llm/client.ts", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../llm/client.ts")>()),
+  chatJson: vi.fn(),
+}));
+
+import type { AppConfig } from "../config.ts";
+import { chatJson, LlmOutputError } from "../llm/client.ts";
+import { parseSms, validateCandidate } from "./sms_parser.ts";
+
+const mockChat = vi.mocked(chatJson);
+const cfg = {} as unknown as AppConfig; // chatJson is mocked; config is unused
+const req = {
+  sender: "JM-ICICIT-S",
+  body: "INR 742.00 spent using ICICI Bank Card XX6001 on 16-Jul-26 on Etsy.",
+  receivedAt: 1_789_000_000_000,
+};
+
+afterEach(() => vi.clearAllMocks());
+
+test("coerces a stringified amount instead of parse_failed", async () => {
+  mockChat.mockResolvedValue({
+    is_transaction: true,
+    amount_cents: "74200", // model stringified the number — must be accepted
+    is_income: "false", // and the boolean
+    payee: "Etsy",
+    confidence: "0.9",
+  });
+  const r = await parseSms(cfg, req);
+  expect(r.status).toBe("transaction");
+  expect(r.candidate?.amountCents).toBe(74200);
+  expect(r.candidate?.isIncome).toBe(false);
+  expect(mockChat).toHaveBeenCalledTimes(1); // no retry needed
+});
+
+test("re-prompts once when the first answer is undecodable, then succeeds", async () => {
+  mockChat
+    .mockRejectedValueOnce(new LlmOutputError("malformed JSON"))
+    .mockResolvedValueOnce({
+      is_transaction: true,
+      amount_cents: 627500,
+      is_income: false,
+      payee: "Payu Retail",
+    });
+  const r = await parseSms(cfg, req);
+  expect(r.status).toBe("transaction");
+  expect(r.candidate?.amountCents).toBe(627500);
+  expect(mockChat).toHaveBeenCalledTimes(2);
+});
+
+test("a transaction with no usable amount re-prompts, not silently dropped", async () => {
+  mockChat
+    .mockResolvedValueOnce({ is_transaction: true, amount_cents: null, payee: "X" })
+    .mockResolvedValueOnce({
+      is_transaction: true,
+      amount_cents: 5000,
+      is_income: false,
+      payee: "X",
+    });
+  const r = await parseSms(cfg, req);
+  expect(r.status).toBe("transaction");
+  expect(r.candidate?.amountCents).toBe(5000);
+  expect(mockChat).toHaveBeenCalledTimes(2);
+});
+
+test("parse_failed only after the retry also fails", async () => {
+  mockChat.mockRejectedValue(new LlmOutputError("still bad"));
+  const r = await parseSms(cfg, req);
+  expect(r.status).toBe("parse_failed");
+  expect(mockChat).toHaveBeenCalledTimes(2);
+});
 
 // The full parse path is LLM-only as of parserVersion 4 — see sms_parser.ts
 // for the rationale. Integration tests for parseSms() would need a mocked
