@@ -84,7 +84,7 @@ class SettingsScreen extends ConsumerWidget {
               leading: const Icon(Icons.refresh),
               title: const Text('Re-scan SMS inbox'),
               subtitle: const Text(
-                'Drops cached parses and re-processes the last 7 days '
+                'Drops cached parses and re-processes the last 30 days '
                 'in the background. Pending Inbox candidates survive — '
                 'rows already accepted as transactions are unaffected.',
               ),
@@ -322,7 +322,7 @@ class SettingsScreen extends ConsumerWidget {
       // past parser failures into permanent `error`/`none` rows.
       final added = await ref
           .read(smsPipelineProvider)
-          .retryFailedBackfill(window: const Duration(days: 7));
+          .retryFailedBackfill(window: const Duration(days: 30));
       if (!context.mounted) return;
       showTimedSnackBar(
         messenger,

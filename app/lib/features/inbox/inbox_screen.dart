@@ -228,7 +228,7 @@ class _InboxScreenState extends ConsumerState<InboxScreen> {
     );
     ref
         .read(smsPipelineProvider)
-        .retryFailedBackfill()
+        .retryFailedBackfill(window: const Duration(days: 30))
         .then((added) {
           if (!mounted) return;
           setState(() => _scanning = false);
