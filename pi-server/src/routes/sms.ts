@@ -9,6 +9,7 @@ import {
   payees,
   smsMessages,
   transactions,
+  whatsappInboxCandidates,
   type NewSmsMessage,
   type SmsMessage,
 } from "../db/schema.ts";
@@ -33,6 +34,72 @@ const ingestItem = z.object({
 
 const ingestBody = z.object({
   items: z.array(ingestItem).min(1).max(200),
+});
+
+// --- POST /v1/sms/ingest ----------------------------------------------------
+// Single inbound bank SMS, parsed server-side and queued for the phone's Inbox.
+// This is the iOS auto-capture path: iOS has no SMS-read API, so a Shortcuts
+// automation ("When I get a Message from <bank>") POSTs the body here. We run
+// the SAME parser the Android path uses, and — like the WhatsApp path — queue a
+// reviewable candidate the phone imports on its next sync. It never writes a
+// transaction; the user still confirms it in the Inbox. Draft-safe by design.
+const singleSmsBody = z.object({
+  sender: z.string().min(1).max(64),
+  body: z.string().min(1).max(4000),
+  // Optional: iOS Shortcuts can't always supply a timestamp; default to now.
+  receivedAt: z.number().int().nonnegative().optional(),
+});
+
+smsRouter.post("/ingest", async (c) => {
+  const db = c.get("db");
+  const config = c.get("config");
+  const { sender, body, receivedAt } = singleSmsBody.parse(await c.req.json());
+  const at = receivedAt ?? nowMs();
+
+  // The model needs the user's category list so the category hint resolves to
+  // a real category id (mirrors the reprocess/enrich path).
+  const allCategories = db
+    .select({ id: categories.id, name: categories.name })
+    .from(categories)
+    .all();
+  const knownPayees = db
+    .select({ id: payees.id, name: payees.name })
+    .from(payees)
+    .all();
+
+  const result = await parseSms(config, {
+    sender,
+    body,
+    receivedAt: at,
+    categories: allCategories,
+    payees: knownPayees,
+  });
+
+  // Not a transaction (OTP, promo, balance alert, or unparseable): ack quietly
+  // so the Shortcut doesn't retry. Nothing is queued.
+  if (result.status !== "transaction" || !result.candidate) {
+    return c.json({ status: result.status, ignored: true });
+  }
+
+  const id = newId();
+  db.insert(whatsappInboxCandidates)
+    .values({
+      id,
+      source: "sms",
+      sourceUser: sender,
+      itemIndex: 0,
+      body,
+      receivedAt: at,
+      candidateJson: JSON.stringify(result.candidate),
+      status: "pending",
+      createdAt: nowMs(),
+    })
+    .run();
+
+  // No recordChange: the candidate is a review-queue entry, not a financial
+  // row. It reaches the phone via the inbox-candidates poll (same as WhatsApp),
+  // and only becomes a transaction when the user confirms it on-device.
+  return c.json({ status: "transaction", id, candidate: result.candidate });
 });
 
 smsRouter.post("/bulk-ingest", async (c) => {

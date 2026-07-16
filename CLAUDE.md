@@ -58,6 +58,8 @@ GET    /v1/sync/changes?since=<id>&limit=<n>&clientId=<uuid>
 POST   /v1/sync/push
 POST   /v1/messages
 POST   /v1/whatsapp/webhook
+GET    /v1/whatsapp/inbox-candidates   POST .../ack   (phone poll + ack of queued drafts)
+POST   /v1/sms/ingest                  (iOS Shortcut → parse → queue draft, no txn write)
 POST   /v1/ai/sms/parse
 POST   /v1/ai/quick-entry/parse
 POST   /v1/feedback
@@ -179,6 +181,11 @@ tea release create --repo mr-karan/chavanni --tag v0.1.0 --title "Chavanni 0.1.0
 
 All LLM work runs on pi-server. The app posts over its sync URL/API key:
 
+- `POST /v1/sms/ingest` — single bank SMS (iOS Shortcuts auto-capture; iOS has
+  no SMS-read API). Parses server-side and queues a draft into the shared
+  `whatsapp_inbox_candidates` table with `source='sms'`; the phone polls
+  `/v1/whatsapp/inbox-candidates` and imports it into the Inbox. Never writes a
+  transaction. See `website/docs/sms-capture.md`.
 - `POST /v1/ai/sms/parse` — classifier-positive bank SMS → `SmsCandidate`.
 - `POST /v1/ai/quick-entry/parse` — text or receipt image → parsed expense.
 - `POST /v1/messages` — multi-turn assistant.

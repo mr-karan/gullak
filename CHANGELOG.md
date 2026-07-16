@@ -6,6 +6,16 @@ All notable changes to Chavanni (formerly Gullak) are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- **iOS SMS auto-capture** via `POST /v1/sms/ingest`. iOS has no SMS-read API,
+  so a Shortcuts personal automation forwards bank/UPI messages to the server,
+  which parses them with the same engine as Android and queues a reviewable
+  draft into the phone's Inbox (never auto-writes a transaction). The inbox
+  delivery queue gained a `source` column so drafts label as SMS vs WhatsApp.
+- **End-user documentation site** built with Zensical (`website/`): home,
+  install, SMS capture (incl. the iOS Shortcut recipe), and self-hosting.
+
 ## [0.4.0] — 2026-07-13
 
 _Version numbering jumps over 0.3.x: the pre-rewrite repository already

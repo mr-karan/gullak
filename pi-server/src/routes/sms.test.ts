@@ -147,3 +147,52 @@ test("reprocess refuses to clobber a transaction edited after confirm", async ()
     .get();
   expect(sms?.status).toBe("stale_skipped");
 });
+
+// --- POST /v1/sms/ingest (iOS auto-capture path) ----------------------------
+
+function ingest(app: ReturnType<typeof makeApp>["app"], body: string) {
+  return app.request("/v1/sms/ingest", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ sender: "HDFCBK", body, receivedAt: 1_700_000_000_000 }),
+  });
+}
+
+test("ingest queues a reviewable candidate for a bank SMS (no txn written)", async () => {
+  const { app, db } = makeApp();
+  mockParseSms.mockResolvedValue(candidate());
+
+  const res = await ingest(app, "Spent Rs 480 at Blinkit via HDFC");
+  expect(res.status).toBe(200);
+  const body = (await res.json()) as { status: string; id: string };
+  expect(body.status).toBe("transaction");
+  expect(body.id).toBeTruthy();
+
+  // A candidate row is queued for the phone to import, tagged source=sms.
+  const rows = db.select().from(schema.whatsappInboxCandidates).all();
+  expect(rows).toHaveLength(1);
+  expect(rows[0]!.source).toBe("sms");
+  expect(rows[0]!.sourceUser).toBe("HDFCBK");
+  expect(rows[0]!.status).toBe("pending");
+  expect(JSON.parse(rows[0]!.candidateJson).payee).toBe("Blinkit");
+
+  // Draft-safe: no financial row is written.
+  expect(db.select().from(schema.transactions).all()).toHaveLength(0);
+  // Not a financial mutation → no change_log entry.
+  expect(db.select().from(schema.changeLog).all()).toHaveLength(0);
+});
+
+test("ingest ignores a non-transaction SMS without queuing anything", async () => {
+  const { app, db } = makeApp();
+  mockParseSms.mockResolvedValue({
+    status: "not_a_txn",
+    isTransaction: false,
+    candidate: null,
+  } as unknown as Awaited<ReturnType<typeof parseSms>>);
+
+  const res = await ingest(app, "Your OTP is 123456");
+  expect(res.status).toBe(200);
+  const body = (await res.json()) as { status: string; ignored: boolean };
+  expect(body.ignored).toBe(true);
+  expect(db.select().from(schema.whatsappInboxCandidates).all()).toHaveLength(0);
+});

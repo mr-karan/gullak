@@ -151,6 +151,7 @@ whatsappInboxRouter.get("/", async (c) => {
   return c.json({
     items: rows.map((r) => ({
       id: r.id,
+      source: r.source,
       sourceUser: r.sourceUser,
       pushName: r.pushName,
       chatId: r.chatId,

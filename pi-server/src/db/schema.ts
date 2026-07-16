@@ -192,11 +192,18 @@ export const agentTurns = sqliteTable("agent_turns", {
 // one-way delivery queue, intentionally outside `change_log` because the
 // review lifecycle (accepted/dismissed/duplicate) lives on the phone, not
 // on the server.
+// Delivery queue for inbound message candidates the phone can't capture
+// natively: WhatsApp messages, and — on iOS, which has no SMS-read API — bank
+// SMS forwarded by a Shortcuts automation to POST /v1/sms/ingest. The server
+// parses them and queues a candidate here; the phone polls, imports into its
+// local Inbox, and acks. (Table name is historical; `source` disambiguates.)
 export const whatsappInboxCandidates = sqliteTable(
   "whatsapp_inbox_candidates",
   {
     id: text("id").primaryKey(),
-    sourceUser: text("source_user"), // phone number / chat id
+    // 'whatsapp' | 'sms' — drives how the phone labels the Inbox row.
+    source: text("source").notNull().default("whatsapp"),
+    sourceUser: text("source_user"), // phone number / chat id / SMS sender id
     pushName: text("push_name"),
     chatId: text("chat_id"),
     messageId: text("message_id"), // WhatsApp message id; same across items

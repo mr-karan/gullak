@@ -65,7 +65,7 @@ server you control.
 
 Download the latest APK from
 **[GitHub Releases](https://github.com/mr-karan/chavanni/releases)** and sideload
-it (F-Droid coming soon). See **[docs/install.md](docs/install.md)** for
+it (F-Droid coming soon). See **[website/docs/install.md](website/docs/install.md)** for
 sideloading, building from source, and an honest explanation of the SMS
 permission.
 
@@ -80,12 +80,12 @@ npm run dev            # http://127.0.0.1:8787
 
 Then point the app at it in **Settings → Sync server**. For Docker,
 `docker-compose.yml`, the full environment reference, reverse-proxy, and backup
-guidance, see **[docs/self-hosting.md](docs/self-hosting.md)**.
+guidance, see **[website/docs/self-hosting.md](website/docs/self-hosting.md)**.
 
 ## Documentation
 
-- **[Install](docs/install.md)** — F-Droid, APK sideload, build from source, SMS permission.
-- **[Self-hosting](docs/self-hosting.md)** — run the sync server, Docker, env reference, backups.
+- **[Install](website/docs/install.md)** — F-Droid, APK sideload, build from source, SMS permission.
+- **[Self-hosting](website/docs/self-hosting.md)** — run the sync server, Docker, env reference, backups.
 - **[Contributing](CONTRIBUTING.md)** — dev setup and conventions.
 
 ## Built for one, shared with everyone

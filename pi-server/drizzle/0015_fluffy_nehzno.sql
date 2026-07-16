@@ -1,0 +1,1 @@
+ALTER TABLE `whatsapp_inbox_candidates` ADD `source` text DEFAULT 'whatsapp' NOT NULL;

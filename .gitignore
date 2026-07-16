@@ -40,3 +40,8 @@ bun.lockb
 app/android/key.properties
 *.jks
 *.keystore
+
+# Zensical build output + cache
+website/site/
+website/.zensical/
+.venv/

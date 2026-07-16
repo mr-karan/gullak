@@ -190,7 +190,12 @@ class SyncService {
       if (raw is! Map<String, dynamic>) continue;
       final id = raw['id'] as String?;
       if (id == null || id.isEmpty) continue;
-      final androidId = 'whatsapp:$id';
+      // 'whatsapp' (default) or 'sms' (iOS Shortcuts → /v1/sms/ingest). The
+      // source namespaces the local dedupe id and drives the Inbox label.
+      final source = (raw['source'] as String?)?.trim().isNotEmpty == true
+          ? (raw['source'] as String).trim()
+          : 'whatsapp';
+      final androidId = '$source:$id';
 
       // Idempotency: skip if we've already imported this exact row.
       final existing =
@@ -214,11 +219,13 @@ class SyncService {
       final candidateJson = raw['candidateJson'] as String?;
       final pushName = (raw['pushName'] as String?)?.trim();
       final sourceUser = (raw['sourceUser'] as String?)?.trim();
-      final address = (pushName != null && pushName.isNotEmpty)
-          ? 'WhatsApp · $pushName'
+      final label = source == 'sms' ? 'SMS' : 'WhatsApp';
+      final who = (pushName != null && pushName.isNotEmpty)
+          ? pushName
           : (sourceUser != null && sourceUser.isNotEmpty)
-          ? 'WhatsApp · $sourceUser'
-          : 'WhatsApp';
+          ? sourceUser
+          : null;
+      final address = who != null ? '$label · $who' : label;
 
       await _db
           .into(_db.smsMessages)
