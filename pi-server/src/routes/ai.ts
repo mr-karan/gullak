@@ -8,6 +8,7 @@ import {
   quickEntryRequest,
 } from "../ai/quick_entry_parser.ts";
 import type { AppEnv } from "../app.ts";
+import { recordParseFailure } from "../repos/feedback.ts";
 
 export const aiRouter = new Hono<AppEnv>();
 
@@ -25,9 +26,34 @@ const smsBody = z.object({
 
 aiRouter.post("/sms/parse", async (c) => {
   const config = c.get("config");
+  const db = c.get("db");
   const parsed = smsBody.parse(await c.req.json());
-  const result = await parseSms(config, parsed);
-  return c.json(result);
+  try {
+    const result = await parseSms(config, parsed);
+    if (result.status === "parse_failed") {
+      // Terminal content failure — auto-capture so it's diagnosable without a
+      // manual "Send feedback" tap.
+      recordParseFailure(db, {
+        sender: parsed.sender,
+        body: parsed.body,
+        error: result.error ?? "parse_failed",
+        operational: false,
+      });
+    }
+    return c.json(result);
+  } catch (e) {
+    // Operational failure (LLM 402/5xx, timeout, network). Auto-capture it and
+    // reply 503 so the phone keeps the SMS queued and retries — the model never
+    // judged it, so it must NOT be recorded as a bad message.
+    const error = e instanceof Error ? e.message : String(e);
+    recordParseFailure(db, {
+      sender: parsed.sender,
+      body: parsed.body,
+      error,
+      operational: true,
+    });
+    return c.json({ status: "unavailable", error, retryable: true }, 503);
+  }
 });
 
 aiRouter.post("/quick-entry/parse", async (c) => {

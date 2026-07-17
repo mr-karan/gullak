@@ -17,6 +17,20 @@ export class LlmOutputError extends Error {
   }
 }
 
+/// Thrown when the LLM endpoint returns a non-2xx (402 out-of-credits, 429,
+/// 5xx, …). Distinct from LlmOutputError: the model never judged the input, so
+/// callers treat it as OPERATIONAL/retryable (keep the SMS queued) rather than
+/// a terminal content failure.
+export class LlmHttpError extends Error {
+  constructor(
+    readonly status: number,
+    message: string,
+  ) {
+    super(message);
+    this.name = "LlmHttpError";
+  }
+}
+
 export interface ChatJsonOptions {
   system: string;
   user: string;
@@ -89,7 +103,7 @@ export async function chatJson<T = unknown>(
   }
   if (!r.ok) {
     const body = await r.text();
-    throw new Error(`LLM ${r.status}: ${body.slice(0, 200)}`);
+    throw new LlmHttpError(r.status, `LLM ${r.status}: ${body.slice(0, 200)}`);
   }
   const json = (await r.json()) as {
     choices?: { message?: { content?: string } }[];

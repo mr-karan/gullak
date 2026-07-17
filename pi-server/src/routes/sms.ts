@@ -14,6 +14,7 @@ import {
   type SmsMessage,
 } from "../db/schema.ts";
 import { newId, nowMs, recordChange } from "../repos/changelog.ts";
+import { recordParseFailure } from "../repos/feedback.ts";
 
 export const smsRouter = new Hono<AppEnv>();
 
@@ -67,17 +68,34 @@ smsRouter.post("/ingest", async (c) => {
     .from(payees)
     .all();
 
-  const result = await parseSms(config, {
-    sender,
-    body,
-    receivedAt: at,
-    categories: allCategories,
-    payees: knownPayees,
-  });
+  let result;
+  try {
+    result = await parseSms(config, {
+      sender,
+      body,
+      receivedAt: at,
+      categories: allCategories,
+      payees: knownPayees,
+    });
+  } catch (e) {
+    // Operational failure (LLM 402/5xx, timeout). Auto-capture + 503 so the
+    // Shortcut/automation can retry later; nothing is queued.
+    const error = e instanceof Error ? e.message : String(e);
+    recordParseFailure(db, { sender, body, error, operational: true });
+    return c.json({ status: "unavailable", error, retryable: true }, 503);
+  }
 
   // Not a transaction (OTP, promo, balance alert, or unparseable): ack quietly
   // so the Shortcut doesn't retry. Nothing is queued.
   if (result.status !== "transaction" || !result.candidate) {
+    if (result.status === "parse_failed") {
+      recordParseFailure(db, {
+        sender,
+        body,
+        error: result.error ?? "parse_failed",
+        operational: false,
+      });
+    }
     return c.json({ status: result.status, ignored: true });
   }
 

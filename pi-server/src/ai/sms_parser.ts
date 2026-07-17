@@ -225,21 +225,25 @@ export async function parseSms(
     // model can't handle. (A true network failure happens app-side, before
     // this ever runs, and keeps the SMS queued.)
     const msg = e instanceof Error ? e.message : String(e);
-    // Log server-side so failures are visible in `docker logs` immediately —
-    // an LLM 402/credit issue, a bad-JSON decode, etc. — instead of only
-    // surfacing as an app-submitted feedback event. The error carries the
-    // cause (e.g. "LLM 402: ...") and, for decode failures, a raw-output
-    // snippet. Sender + a short body slice give context; we don't log the
-    // full body to keep logs lean.
+    // Log server-side so failures are visible in `docker logs` immediately.
     console.warn(
-      `[sms-parse] parse_failed sender=${req.sender} err=${msg} body=${JSON.stringify(req.body.slice(0, 120))}`,
+      `[sms-parse] failed sender=${req.sender} err=${msg} body=${JSON.stringify(req.body.slice(0, 120))}`,
     );
-    return {
-      status: "parse_failed",
-      isTransaction: false,
-      candidate: null,
-      error: msg,
-    };
+    // Content failure (model returned undecodable output after a retry) is
+    // TERMINAL → parse_failed, surfaced for review. Anything else — an LLM
+    // HTTP error (402 out-of-credits, 429, 5xx), a timeout, a network blip —
+    // is OPERATIONAL: the SMS was never judged. Re-throw so the route responds
+    // non-2xx and the phone keeps the SMS queued to retry, instead of burning
+    // it as a bad message (the bug that made a 402 look like "can't parse").
+    if (e instanceof LlmOutputError || e instanceof z.ZodError) {
+      return {
+        status: "parse_failed",
+        isTransaction: false,
+        candidate: null,
+        error: msg,
+      };
+    }
+    throw e;
   }
 }
 

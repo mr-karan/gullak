@@ -196,3 +196,26 @@ test("ingest ignores a non-transaction SMS without queuing anything", async () =
   expect(body.ignored).toBe(true);
   expect(db.select().from(schema.whatsappInboxCandidates).all()).toHaveLength(0);
 });
+
+test("ingest auto-captures a content parse_failed as feedback (nothing queued)", async () => {
+  const { app, db } = makeApp();
+  mockParseSms.mockResolvedValue({
+    status: "parse_failed",
+    isTransaction: false,
+    candidate: null,
+    error: "no candidate",
+  } as unknown as Awaited<ReturnType<typeof parseSms>>);
+
+  const res = await ingest(app, "garbled non-transaction text");
+  expect(res.status).toBe(200);
+  const body = (await res.json()) as { status: string; ignored: boolean };
+  expect(body.ignored).toBe(true);
+
+  // No candidate queued ...
+  expect(db.select().from(schema.whatsappInboxCandidates).all()).toHaveLength(0);
+  // ... but the failure is auto-captured (no manual "Send feedback" needed).
+  const fb = db.select().from(schema.feedbackEvents).all();
+  expect(fb).toHaveLength(1);
+  expect(fb[0]!.kind).toBe("sms_parse_failure");
+  expect(JSON.parse(fb[0]!.payload).operational).toBe(false);
+});

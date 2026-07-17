@@ -8,7 +8,7 @@ vi.mock("../llm/client.ts", async (importOriginal) => ({
 }));
 
 import type { AppConfig } from "../config.ts";
-import { chatJson, LlmOutputError } from "../llm/client.ts";
+import { chatJson, LlmHttpError, LlmOutputError } from "../llm/client.ts";
 import { parseSms, validateCandidate } from "./sms_parser.ts";
 
 const mockChat = vi.mocked(chatJson);
@@ -71,6 +71,14 @@ test("parse_failed only after the retry also fails", async () => {
   const r = await parseSms(cfg, req);
   expect(r.status).toBe("parse_failed");
   expect(mockChat).toHaveBeenCalledTimes(2);
+});
+
+test("an operational LLM error (402) throws — retryable, not parse_failed", async () => {
+  // The model never judged the SMS, so it must NOT be burned as parse_failed.
+  // parseSms throws so the route replies 503 and the phone keeps it queued.
+  mockChat.mockRejectedValue(new LlmHttpError(402, "LLM 402: out of credits"));
+  await expect(parseSms(cfg, req)).rejects.toBeInstanceOf(LlmHttpError);
+  expect(mockChat).toHaveBeenCalledTimes(1); // no content-retry on operational
 });
 
 // The full parse path is LLM-only as of parserVersion 4 — see sms_parser.ts
