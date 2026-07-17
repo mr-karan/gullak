@@ -259,7 +259,8 @@ class _RestoreDialog extends StatefulWidget {
 }
 
 class _RestoreDialogState extends State<_RestoreDialog> {
-  final _url = TextEditingController();
+  // Prefill the scheme so the user only types the host, not "https://".
+  final _url = TextEditingController(text: 'https://');
   final _key = TextEditingController();
 
   @override

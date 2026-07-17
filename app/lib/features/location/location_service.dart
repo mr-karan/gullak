@@ -2,6 +2,7 @@ import 'dart:io' show Platform;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geocoding/geocoding.dart' as geo;
+import 'package:permission_handler/permission_handler.dart' as ph;
 import 'package:geolocator/geolocator.dart';
 
 class CapturedLocation {
@@ -93,14 +94,26 @@ class LocationService {
   /// the user opts in — not silently deferred to the first save. Returns the
   /// resulting permission so the UI can warn on denial.
   Future<LocationPermission> ensurePermission() async {
-    var p = await Geolocator.checkPermission();
-    if (p == LocationPermission.denied) {
-      p = await Geolocator.requestPermission();
+    // Request via permission_handler, NOT Geolocator.requestPermission().
+    // Both plugins register an onRequestPermissionsResult listener; geolocator's
+    // request then double-replies to the platform channel → a native
+    // "Reply already submitted" crash. The app already routes SMS permission
+    // through permission_handler, so keep all requests on that one path.
+    // Geolocator is still used for the location *fetch* (no permission request).
+    final current = await Geolocator.checkPermission();
+    if (current == LocationPermission.always ||
+        current == LocationPermission.whileInUse) {
+      return current;
     }
-    return p;
+    final status = await ph.Permission.locationWhenInUse.request();
+    if (status.isGranted || status.isLimited) {
+      return LocationPermission.whileInUse;
+    }
+    if (status.isPermanentlyDenied) return LocationPermission.deniedForever;
+    return LocationPermission.denied;
   }
 
-  Future<bool> openSystemSettings() => Geolocator.openAppSettings();
+  Future<bool> openSystemSettings() => ph.openAppSettings();
 }
 
 final locationServiceProvider = Provider<LocationService>(
