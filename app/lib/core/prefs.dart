@@ -11,20 +11,20 @@ class Prefs {
     return Prefs._(p);
   }
 
-  static const _kCurrencyMinorDigits = 'chavanni.currency.minorDigits';
-  static const _kCurrencySymbol = 'chavanni.currency.symbol';
-  static const _kThemeMode = 'chavanni.theme';
-  static const _kDefaultAccountId = 'chavanni.default.account';
-  static const _kLastPullDate = 'chavanni.sync.lastPull';
-  static const _kQuickEntryTab = 'chavanni.entry.tab';
-  static const _kSmsEnabled = 'chavanni.sms.enabled';
-  static const _kLastAccountId = 'chavanni.entry.lastAccountId';
-  static const _kActiveTagId = 'chavanni.tags.activeTagId';
-  static const _kLocationCaptureEnabled = 'chavanni.location.captureEnabled';
+  static const _kCurrencyMinorDigits = 'gullak.currency.minorDigits';
+  static const _kCurrencySymbol = 'gullak.currency.symbol';
+  static const _kThemeMode = 'gullak.theme';
+  static const _kDefaultAccountId = 'gullak.default.account';
+  static const _kLastPullDate = 'gullak.sync.lastPull';
+  static const _kQuickEntryTab = 'gullak.entry.tab';
+  static const _kSmsEnabled = 'gullak.sms.enabled';
+  static const _kLastAccountId = 'gullak.entry.lastAccountId';
+  static const _kActiveTagId = 'gullak.tags.activeTagId';
+  static const _kLocationCaptureEnabled = 'gullak.location.captureEnabled';
   // Persisted as JSON: { "<payeeId>": "<accountId>" }
-  static const _kPayeeAccountHints = 'chavanni.entry.payeeAccountHints';
+  static const _kPayeeAccountHints = 'gullak.entry.payeeAccountHints';
   // Persisted as JSON: { "<payeeId>": "<categoryId>" }
-  static const _kPayeeCategoryHints = 'chavanni.entry.payeeCategoryHints';
+  static const _kPayeeCategoryHints = 'gullak.entry.payeeCategoryHints';
 
   int get currencyMinorDigits => _inner.getInt(_kCurrencyMinorDigits) ?? 2;
   Future<void> setCurrencyMinorDigits(int v) =>
@@ -56,9 +56,9 @@ class Prefs {
   bool get smsEnabled => _inner.getBool(_kSmsEnabled) ?? false;
   Future<void> setSmsEnabled(bool v) => _inner.setBool(_kSmsEnabled, v);
 
-  static const _kSyncCursor = 'chavanni.sync.cursor';
-  static const _kSyncLastAt = 'chavanni.sync.lastAt';
-  static const _kSyncQuarantined = 'chavanni.sync.quarantined';
+  static const _kSyncCursor = 'gullak.sync.cursor';
+  static const _kSyncLastAt = 'gullak.sync.lastAt';
+  static const _kSyncQuarantined = 'gullak.sync.quarantined';
 
   int get syncCursor => _inner.getInt(_kSyncCursor) ?? 0;
   Future<void> setSyncCursor(int v) => _inner.setInt(_kSyncCursor, v);

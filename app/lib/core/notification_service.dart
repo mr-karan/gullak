@@ -31,7 +31,7 @@ class NotificationService {
   static const String smsCandidatesChannelId = 'sms_candidates';
   static const String smsNoteReplyActionId = 'sms_note_reply';
   static const String smsCandidatesGroupKey =
-      'dev.mrkaran.chavanni.sms_candidates';
+      'dev.mrkaran.gullak.sms_candidates';
 
   static const _inlineReplyAction = AndroidNotificationAction(
     smsNoteReplyActionId,

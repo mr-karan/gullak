@@ -18,13 +18,13 @@ one pluggable abstraction.
 interface CanonicalExpense {
   date: string;            // YYYY-MM-DD
   description: string;     // merchant/payee, bank boilerplate stripped
-  category: string | null; // raw Chavanni category; the destination maps it
+  category: string | null; // raw Gullak category; the destination maps it
   amountMinor: number;     // positive magnitude (paise)
   isOutflow: boolean;
   accountKind: string | null;
   notes: string | null;
   tags: string[];
-  sourceId: string;        // Chavanni txn id — the idempotency/upsert key
+  sourceId: string;        // Gullak txn id — the idempotency/upsert key
 }
 
 interface Destination {
@@ -58,12 +58,12 @@ Posts rows to a bound Apps Script web app (no service account). Opt-in:
 
 | Env | Meaning |
 | --- | --- |
-| `CHAVANNI_SHEETS_WEBAPP_URL` | Apps Script `/exec` URL |
-| `CHAVANNI_SHEETS_SECRET` | Shared secret; must equal the `CHAVANNI_SECRET` script property |
-| `CHAVANNI_SHEETS_SYNC_INTERVAL_MIN` | Periodic cadence; 0 = only after each `/v1/sync/push` |
+| `GULLAK_SHEETS_WEBAPP_URL` | Apps Script `/exec` URL |
+| `GULLAK_SHEETS_SECRET` | Shared secret; must equal the `GULLAK_SECRET` script property |
+| `GULLAK_SHEETS_SYNC_INTERVAL_MIN` | Periodic cadence; 0 = only after each `/v1/sync/push` |
 
 Endpoint: `POST /v1/sheets/sync[?replace=true]`. The Apps Script upserts by the
-hidden `chavanni_id` column; `replace=true` clears + rewrites (preserving manual,
+hidden `gullak_id` column; `replace=true` clears + rewrites (preserving manual,
 id-less rows). Soft failures (`{error}` on HTTP 200) are detected and abort the
 cursor advance so nothing is silently lost.
 
@@ -76,11 +76,11 @@ negative). Enabled when SERVER_URL + PASSWORD + SYNC_ID are all set:
 
 | Env | Meaning |
 | --- | --- |
-| `CHAVANNI_ACTUAL_SERVER_URL` | e.g. `https://budget.example.com` |
-| `CHAVANNI_ACTUAL_PASSWORD` | Actual server login password (UI-set; not derivable) |
-| `CHAVANNI_ACTUAL_SYNC_ID` | the budget file's Sync ID |
-| `CHAVANNI_ACTUAL_ACCOUNT_ID` | account to import into; defaults to the first account |
-| `CHAVANNI_ACTUAL_DATA_DIR` | local budget cache dir; defaults to `<data>/.actual-cache` |
+| `GULLAK_ACTUAL_SERVER_URL` | e.g. `https://budget.example.com` |
+| `GULLAK_ACTUAL_PASSWORD` | Actual server login password (UI-set; not derivable) |
+| `GULLAK_ACTUAL_SYNC_ID` | the budget file's Sync ID |
+| `GULLAK_ACTUAL_ACCOUNT_ID` | account to import into; defaults to the first account |
+| `GULLAK_ACTUAL_DATA_DIR` | local budget cache dir; defaults to `<data>/.actual-cache` |
 
 Runtime note: `@actual-app/api` pulls `better-sqlite3` (native). It is a regular
 dependency and runs in-process. The server runs on **Node**, which loads that
@@ -105,5 +105,5 @@ destination's cursor only on success — recording the error otherwise.
 
 Edits made directly in the Sheet are **not** part of the change-log/`updatedAt`
 sync. To pull them back, an import must go through the server's normal write
-path (`recordChange` + a fresh `updatedAt`, keyed by `chavanni_id`) so the phone
+path (`recordChange` + a fresh `updatedAt`, keyed by `gullak_id`) so the phone
 pulls them — never a raw write that bypasses the change log.

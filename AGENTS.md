@@ -1,6 +1,6 @@
-# Chavanni — Agent Knowledge Base
+# Gullak — Agent Knowledge Base
 
-Chavanni is a local-first mobile expense tracker with an optional self-hosted
+Gullak is a local-first mobile expense tracker with an optional self-hosted
 sync/AI server and WhatsApp bridge. The phone is the source of truth; the server
 is a merge point and trusted place to hold model credentials.
 
@@ -18,7 +18,7 @@ is a merge point and trusted place to hold model credentials.
 ## Layout
 
 ```
-chavanni/
+gullak/
 ├── app/                     # Flutter app — UI, Drift, SMS, sync client
 │   ├── lib/core/            # money, prefs, snackbars, secure storage
 │   ├── lib/data/            # db, SMS, AI client
@@ -39,8 +39,8 @@ chavanni/
 └── Justfile
 ```
 
-`data/chavanni.db` is local pi-server persistence (gitignored); production sets
-`CHAVANNI_DB_PATH` to a path on the server's mounted data volume.
+`data/gullak.db` is local pi-server persistence (gitignored); production sets
+`GULLAK_DB_PATH` to a path on the server's mounted data volume.
 
 ## pi-server endpoints
 
@@ -65,10 +65,10 @@ GET    /v1/feedback?limit=<n>
 ```
 
 Auth: `x-api-key` header. `/v1/health` and `/v1/whatsapp/webhook` are exempt.
-Set `CHAVANNI_HTTP_API_KEY` to enable the gate.
+Set `GULLAK_HTTP_API_KEY` to enable the gate.
 
 The pi-server holds OpenRouter/OpenAI/local-Ollama credentials. Configure via
-`CHAVANNI_MODEL_BASE_URL`, `CHAVANNI_MODEL_ID`, `CHAVANNI_MODEL_API_KEY`, or aliases
+`GULLAK_MODEL_BASE_URL`, `GULLAK_MODEL_ID`, `GULLAK_MODEL_API_KEY`, or aliases
 `OPENROUTER_API_KEY` / `OPENAI_API_KEY`. The Flutter app never stores model
 provider keys.
 
@@ -151,7 +151,7 @@ npm run dev
 npm run start
 npm run typecheck
 npm test
-CHAVANNI_DB_PATH=/path/chavanni.db npm run start
+GULLAK_DB_PATH=/path/gullak.db npm run start
 ```
 
 ### Release
@@ -160,7 +160,7 @@ CHAVANNI_DB_PATH=/path/chavanni.db npm run start
 just apk
 git tag v0.1.0
 git push origin main v0.1.0
-tea release create --repo mr-karan/chavanni --tag v0.1.0 --title "Chavanni 0.1.0" --note-file CHANGELOG.md --asset app/dist/chavanni-latest.apk
+tea release create --repo mr-karan/gullak --tag v0.1.0 --title "Gullak 0.1.0" --note-file CHANGELOG.md --asset app/dist/gullak-latest.apk
 ```
 
 ## Sync model
@@ -203,7 +203,7 @@ Server DB reset: back up first, stop/remove DB/WAL/SHM, restart the stack so
 migrations recreate an empty DB. Do not remove `whatsapp.db` unless explicitly
 resetting WhatsApp pairing.
 
-Android app state reset: `just clear-data` (`adb shell pm clear dev.mrkaran.chavanni`).
+Android app state reset: `just clear-data` (`adb shell pm clear dev.mrkaran.gullak`).
 
 ## Outstanding work
 

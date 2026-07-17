@@ -1,8 +1,7 @@
-*The app described here has since been renamed **Chavanni** (formerly Gullak).*
 
 # Changelog
 
-All notable changes to Chavanni (formerly Gullak) are documented here.
+All notable changes to Gullak are documented here.
 
 ## [Unreleased]
 
@@ -23,15 +22,11 @@ published v0.3.0/v0.3.1 tags, and tags are forever._
 
 ### Changed
 
-- **Renamed: Gullak → Chavanni** (चवन्नी, the 25-paise coin) ahead of the
-  public FOSS release, with a new coin launcher icon. New application id
-  `dev.mrkaran.chavanni` — existing installs migrate via JSON export/import.
-  Server env vars are now `CHAVANNI_*`.
 - **Free and open source.** MIT (app) / AGPL-3.0 (server, bridge); public
   repository, landing page, self-hosting guide, and F-Droid metadata.
 
 _Everything below shipped in the 0.2.x self-use builds and lands publicly
-with 0.3.0:_
+with 0.4.0:_
 
 ### Added
 

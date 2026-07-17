@@ -29,7 +29,7 @@ class _DescribeSheetState extends ConsumerState<_DescribeSheet> {
   @override
   void initState() {
     super.initState();
-    // If the user got here by sharing an image into Chavanni, the bytes
+    // If the user got here by sharing an image into Gullak, the bytes
     // are already sitting in the provider — consume them and fire the
     // vision parse without making them tap anything.
     final share = ref.read(pendingShareProvider);

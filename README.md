@@ -1,11 +1,11 @@
-# Chavanni
+# Gullak
 
 **Your money stays on your phone.**
 
-Chavanni is a local-first expense tracker. The phone owns your ledger — a Drift +
+Gullak is a local-first expense tracker. The phone owns your ledger — a Drift +
 SQLite database on your device — and everything works fully offline, with no
 account and no server. When you want sync across devices or AI-assisted entry,
-you run a small server yourself. There is no Chavanni-operated cloud, no
+you run a small server yourself. There is no Gullak-operated cloud, no
 telemetry, and no third-party trackers.
 
 <!-- Screenshot strip. PNGs are dropped in by the screenshot pipeline. -->
@@ -64,7 +64,7 @@ server you control.
 ### Install the app
 
 Download the latest APK from
-**[GitHub Releases](https://github.com/mr-karan/chavanni/releases)** and sideload
+**[GitHub Releases](https://github.com/mr-karan/gullak/releases)** and sideload
 it (F-Droid coming soon). See **[website/docs/install.md](website/docs/install.md)** for
 sideloading, building from source, and an honest explanation of the SMS
 permission.
@@ -90,7 +90,7 @@ guidance, see **[website/docs/self-hosting.md](website/docs/self-hosting.md)**.
 
 ## Built for one, shared with everyone
 
-Chavanni started as a tool for one person's actual finances, then got cleaned up
+Gullak started as a tool for one person's actual finances, then got cleaned up
 enough to share. That shapes it: opinionated defaults (₹, `Asia/Kolkata`, UPI
 SMS formats), a homelab-first server, and features that exist because they were
 needed, not because a roadmap demanded them. It's shared in the hope it's useful

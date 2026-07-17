@@ -1,7 +1,7 @@
-# DRAFT fdroiddata recipe for Chavanni.
+# DRAFT fdroiddata recipe for Gullak.
 #
 # This file lives here for review/versioning only — the real copy goes into
-# https://gitlab.com/fdroid/fdroiddata as metadata/dev.mrkaran.chavanni.yml
+# https://gitlab.com/fdroid/fdroiddata as metadata/dev.mrkaran.gullak.yml
 # when the RFP is submitted (after the GitHub next→main flip and the v0.4.0
 # tag). Expect the fdroiddata reviewers to request tweaks; keep both copies
 # in sync.
@@ -20,14 +20,14 @@ Categories:
 License: MIT
 AuthorName: Karan Sharma
 AuthorWebSite: https://mrkaran.dev
-SourceCode: https://github.com/mr-karan/chavanni
-IssueTracker: https://github.com/mr-karan/chavanni/issues
-Changelog: https://github.com/mr-karan/chavanni/blob/main/CHANGELOG.md
+SourceCode: https://github.com/mr-karan/gullak
+IssueTracker: https://github.com/mr-karan/gullak/issues
+Changelog: https://github.com/mr-karan/gullak/blob/main/CHANGELOG.md
 
-AutoName: Chavanni
+AutoName: Gullak
 
 RepoType: git
-Repo: https://github.com/mr-karan/chavanni
+Repo: https://github.com/mr-karan/gullak
 
 Builds:
   - versionName: 0.4.0

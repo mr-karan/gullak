@@ -1,8 +1,8 @@
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:chavanni/features/budgets/data/budget_repository.dart';
-import 'package:chavanni/features/categories/data/category_repository.dart';
-import 'package:chavanni/data/db/database.dart';
+import 'package:gullak/features/budgets/data/budget_repository.dart';
+import 'package:gullak/features/categories/data/category_repository.dart';
+import 'package:gullak/data/db/database.dart';
 
 void main() {
   test('copies previous month targets into current month', () async {

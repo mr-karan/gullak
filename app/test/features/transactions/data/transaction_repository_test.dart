@@ -1,11 +1,11 @@
 import 'package:drift/drift.dart' hide isNotNull, isNull;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:chavanni/data/db/database.dart';
-import 'package:chavanni/features/accounts/data/account_repository.dart';
-import 'package:chavanni/features/categories/data/category_repository.dart';
-import 'package:chavanni/features/payees/data/payee_repository.dart';
-import 'package:chavanni/features/transactions/data/transaction_repository.dart';
+import 'package:gullak/data/db/database.dart';
+import 'package:gullak/features/accounts/data/account_repository.dart';
+import 'package:gullak/features/categories/data/category_repository.dart';
+import 'package:gullak/features/payees/data/payee_repository.dart';
+import 'package:gullak/features/transactions/data/transaction_repository.dart';
 
 void main() {
   late AppDatabase db;

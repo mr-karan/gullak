@@ -26,7 +26,7 @@ whatsapp-bridge/
 | `PORT` | `3000` | HTTP listen port |
 | `WEBHOOK_URL` | `http://localhost:8787/v1/whatsapp/webhook` | Where to forward inbound messages |
 | `AUTH_DIR` | `./auth_state` | Baileys multi-file auth state dir |
-| `CHAVANNI_WHATSAPP_API_KEY` | – | Shared secret; required on `/api/*` calls when set |
+| `GULLAK_WHATSAPP_API_KEY` | – | Shared secret; required on `/api/*` calls when set |
 | `ALLOWED_PHONE_NUMBERS` | – | Comma-separated allowlist for DMs. Empty = allow all. |
 | `ALLOWED_GROUPS` | – | Comma-separated group-name allowlist. Empty = allow all. |
 | `LOG_LEVEL` | `warn` | pino level |

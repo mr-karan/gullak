@@ -1,8 +1,8 @@
-# Chavanni
+# Gullak
 
 **A local-first expense tracker. Your money stays on your phone.**
 
-Chavanni logs expenses in seconds, reads your bank/UPI SMS into reviewable
+Gullak logs expenses in seconds, reads your bank/UPI SMS into reviewable
 drafts, and answers "where did my money go?" — all offline-first. There is no
 account to create and nothing leaves your device unless *you* point it at a
 sync server you run.

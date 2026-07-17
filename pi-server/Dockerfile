@@ -21,9 +21,9 @@ RUN apt-get update \
 WORKDIR /app
 
 ENV NODE_ENV=production \
-  CHAVANNI_HOST=0.0.0.0 \
-  CHAVANNI_PORT=8787 \
-  CHAVANNI_DB_PATH=/data/chavanni.db
+  GULLAK_HOST=0.0.0.0 \
+  GULLAK_PORT=8787 \
+  GULLAK_DB_PATH=/data/gullak.db
 
 COPY --from=install /app/node_modules ./node_modules
 COPY package.json drizzle.config.ts tsconfig.json ./

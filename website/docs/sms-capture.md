@@ -1,6 +1,6 @@
 # SMS capture
 
-Chavanni turns bank and UPI transaction messages into **reviewable expense
+Gullak turns bank and UPI transaction messages into **reviewable expense
 drafts** — you confirm each one in the Inbox before it becomes a transaction.
 Parsing always happens on **your** sync server (see [Self-hosting](self-hosting.md)),
 never on a third party. So SMS capture needs a sync server configured first.
@@ -14,7 +14,7 @@ Android lets an app read transactional SMS directly, so there's nothing to wire
 up:
 
 1. Settings → **Read transactional SMS** → enable (grant the permission).
-2. Chavanni forwards each bank/UPI message to your sync server, which parses it
+2. Gullak forwards each bank/UPI message to your sync server, which parses it
    and drops a draft into the **Inbox**.
 3. Review and confirm. Old messages from the last few days are swept in on first
    enable.
@@ -25,14 +25,14 @@ turn it off any time.
 ## iOS — via a Shortcut
 
 **iOS gives no app access to your SMS inbox — there is no API for it, by design.**
-So Chavanni can't read messages directly the way the Android app does. The
+So Gullak can't read messages directly the way the Android app does. The
 supported path is a one-time **Shortcuts personal automation** that forwards
 matching messages to your server's ingest endpoint. It runs on-device,
 automatically, with nothing to install beyond the stock Shortcuts app.
 
 !!! info "What you'll need"
     Your **sync server URL** and **API key** (the same ones you enter in
-    Chavanni → Settings → Sync server).
+    Gullak → Settings → Sync server).
 
 ### Set up the automation
 
@@ -51,12 +51,12 @@ automatically, with nothing to install beyond the stock Shortcuts app.
          - `body` → (Shortcuts variable) **Message**
 4. Tap **Next**, then turn **Run Immediately** ON and **Notify When Run** OFF so
    it fires silently.
-5. **Done.** New matching messages now appear as drafts in Chavanni's Inbox
+5. **Done.** New matching messages now appear as drafts in Gullak's Inbox
    after the next sync.
 
 !!! tip "Test it"
     Send yourself a text from one of the configured senders (or temporarily add
-    your own number as a sender), then pull-to-sync in Chavanni. A draft should
+    your own number as a sender), then pull-to-sync in Gullak. A draft should
     appear in the Inbox.
 
 ### What the endpoint does

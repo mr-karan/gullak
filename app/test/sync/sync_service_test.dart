@@ -3,11 +3,11 @@ import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:chavanni/core/prefs.dart';
-import 'package:chavanni/core/secure_store.dart';
-import 'package:chavanni/data/db/database.dart';
-import 'package:chavanni/sync/remote_applier.dart';
-import 'package:chavanni/sync/sync_service.dart';
+import 'package:gullak/core/prefs.dart';
+import 'package:gullak/core/secure_store.dart';
+import 'package:gullak/data/db/database.dart';
+import 'package:gullak/sync/remote_applier.dart';
+import 'package:gullak/sync/sync_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Records pushed bodies and replays canned pull pages so we can assert
@@ -71,8 +71,8 @@ void main() {
   setUp(() async {
     SharedPreferences.setMockInitialValues({});
     FlutterSecureStorage.setMockInitialValues({
-      'chavanni.sync.baseUrl': 'http://server.test',
-      'chavanni.sync.apiKey': 'k',
+      'gullak.sync.baseUrl': 'http://server.test',
+      'gullak.sync.apiKey': 'k',
     });
     db = AppDatabase.forTesting(NativeDatabase.memory());
     secure = SecureStore();

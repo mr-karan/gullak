@@ -10,10 +10,10 @@ import '../features/payees/data/payee_repository.dart';
 import '../features/transactions/data/transaction_repository.dart';
 import 'db/database.dart';
 
-/// Compile-time demo flag. Builds with `--dart-define=CHAVANNI_DEMO=true`
+/// Compile-time demo flag. Builds with `--dart-define=GULLAK_DEMO=true`
 /// seed tasteful fake data on first launch (see [seedDemoData]); normal
 /// builds leave this `false` and the tree-shaker drops the seed entirely.
-const bool kDemoMode = bool.fromEnvironment('CHAVANNI_DEMO');
+const bool kDemoMode = bool.fromEnvironment('GULLAK_DEMO');
 
 /// Populate an empty database with a believable expense history so
 /// store/F-Droid screenshots look alive without needing a real device or

@@ -67,7 +67,7 @@ public class GeolocationManager
     locationClient.stopPositionUpdates();
   }
 
-  // Chavanni/F-Droid patch: the fused (Google Play Services) location client
+  // Gullak/F-Droid patch: the fused (Google Play Services) location client
   // and its availability check are removed entirely — this build has no GMS
   // dependency, so the platform LocationManager is always used.
   public LocationClient createLocationClient(

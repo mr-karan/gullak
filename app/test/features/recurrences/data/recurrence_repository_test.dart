@@ -1,8 +1,8 @@
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:chavanni/data/db/database.dart';
-import 'package:chavanni/features/accounts/data/account_repository.dart';
-import 'package:chavanni/features/recurrences/data/recurrence_repository.dart';
+import 'package:gullak/data/db/database.dart';
+import 'package:gullak/features/accounts/data/account_repository.dart';
+import 'package:gullak/features/recurrences/data/recurrence_repository.dart';
 
 void main() {
   late AppDatabase db;

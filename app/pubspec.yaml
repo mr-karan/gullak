@@ -1,5 +1,5 @@
-name: chavanni
-description: "Chavanni — local-first mobile expense tracker."
+name: gullak
+description: "Gullak — local-first mobile expense tracker."
 publish_to: 'none'
 version: 0.4.0+5
 
@@ -59,7 +59,7 @@ dependencies:
   flutter_local_notifications: ^21.0.0
 # Vendored + patched: upstream subclasses IconData (final since Flutter
   # 3.44) and ships no fixed release. Trimmed to the Regular style — the only
-  # one Chavanni uses. See vendor/phosphor_flutter/pubspec.yaml.
+  # one Gullak uses. See vendor/phosphor_flutter/pubspec.yaml.
   phosphor_flutter:
     path: vendor/phosphor_flutter
   # Runs the SMS enrichment HTTP call after a notification reply when

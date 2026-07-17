@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:chavanni/core/money.dart';
+import 'package:gullak/core/money.dart';
 
 void main() {
   group('Money.parseToMinor', () {

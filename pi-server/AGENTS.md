@@ -36,7 +36,7 @@ POST /v1/ai/sms/parse          # bank/transaction SMS → SmsCandidate
 POST /v1/ai/quick-entry/parse  # one-line note (or imageBase64) → ParsedExpense
 ```
 
-`x-api-key` header required on every route except `/v1/health` and `/v1/whatsapp/webhook`. Configure via `CHAVANNI_HTTP_API_KEY`.
+`x-api-key` header required on every route except `/v1/health` and `/v1/whatsapp/webhook`. Configure via `GULLAK_HTTP_API_KEY`.
 
 ## Where to look
 
@@ -65,7 +65,7 @@ POST /v1/ai/quick-entry/parse  # one-line note (or imageBase64) → ParsedExpens
 ## Model config
 
 `config.ts` reads in priority order:
-- `CHAVANNI_MODEL_BASE_URL` / `CHAVANNI_MODEL_ID` / `CHAVANNI_MODEL_API_KEY`
+- `GULLAK_MODEL_BASE_URL` / `GULLAK_MODEL_ID` / `GULLAK_MODEL_API_KEY`
 - `OPENROUTER_API_KEY` → defaults to OpenRouter + Gemini 3 Flash
 - `OPENAI_API_KEY` → defaults to OpenAI + GPT-4.1 Mini
 - otherwise local Ollama (`http://localhost:11434/v1` + `gpt-oss:20b`)
@@ -82,7 +82,7 @@ bun run dev             # hot-reload server on :8787
 bun run start
 bun run typecheck
 bun test
-CHAVANNI_DB_PATH=/path/chavanni.db bun run start
+GULLAK_DB_PATH=/path/gullak.db bun run start
 ```
 
 ## Editing guidance

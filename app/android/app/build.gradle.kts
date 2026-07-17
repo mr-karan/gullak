@@ -14,7 +14,7 @@ if (keystorePropertiesFile.exists()) {
 }
 
 android {
-    namespace = "dev.mrkaran.chavanni"
+    namespace = "dev.mrkaran.gullak"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -29,7 +29,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "dev.mrkaran.chavanni"
+        applicationId = "dev.mrkaran.gullak"
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
@@ -58,10 +58,10 @@ android {
                 "proguard-rules.pro",
             )
             // Opt-in for ad-hoc SMS-DB pulls etc.: build with the env
-            // var CHAVANNI_DEBUGGABLE=true (or -Pdebuggable=true on a raw
+            // var GULLAK_DEBUGGABLE=true (or -Pdebuggable=true on a raw
             // gradle invocation). Flutter doesn't reliably propagate -P
             // through `flutter build apk`, so env wins.
-            isDebuggable = (System.getenv("CHAVANNI_DEBUGGABLE") == "true")
+            isDebuggable = (System.getenv("GULLAK_DEBUGGABLE") == "true")
                 || (project.findProperty("debuggable") as String?) == "true"
         }
     }

@@ -9,13 +9,13 @@ import type {
 /**
  * Google Sheets export via the sheet's bound Apps Script web app (no service
  * account, no Sheets API). Maps each {@link CanonicalExpense} onto the sheet's
- * columns and POSTs them for the Apps Script to upsert by chavanni_id.
+ * columns and POSTs them for the Apps Script to upsert by gullak_id.
  *
  * Columns: A Date, B Description, C Category, D Amount, E Payment Mode,
- * F Type, G Notes, H chavanni_id (hidden upsert key), I Tags.
+ * F Type, G Notes, H gullak_id (hidden upsert key), I Tags.
  *
- * Opt-in: enabled only when both CHAVANNI_SHEETS_WEBAPP_URL and
- * CHAVANNI_SHEETS_SECRET are set.
+ * Opt-in: enabled only when both GULLAK_SHEETS_WEBAPP_URL and
+ * GULLAK_SHEETS_SECRET are set.
  */
 export class SheetsDestination implements Destination {
   readonly name = "sheets";
@@ -33,12 +33,12 @@ export class SheetsDestination implements Destination {
     const { webAppUrl, secret } = this.config.sheets;
     if (!webAppUrl || !secret) {
       throw new Error(
-        "sheets destination not configured (CHAVANNI_SHEETS_WEBAPP_URL + CHAVANNI_SHEETS_SECRET)",
+        "sheets destination not configured (GULLAK_SHEETS_WEBAPP_URL + GULLAK_SHEETS_SECRET)",
       );
     }
 
     const out = rows.map((r) => {
-      // Each destination maps the raw Chavanni category onto its own taxonomy.
+      // Each destination maps the raw Gullak category onto its own taxonomy.
       // null/unknown → blank Category for the user to fill in-sheet (never dropped).
       const mapped = mapCategory(r.category);
       return [

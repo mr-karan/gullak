@@ -3,13 +3,13 @@ import 'dart:io';
 
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:chavanni/data/ai/pi_ai_client.dart';
-import 'package:chavanni/data/db/database.dart';
-import 'package:chavanni/features/accounts/data/account_repository.dart';
-import 'package:chavanni/features/categories/data/category_repository.dart';
-import 'package:chavanni/features/entry/ai_extractor.dart';
-import 'package:chavanni/features/payees/data/payee_repository.dart';
-import 'package:chavanni/features/rules/data/rule_repository.dart';
+import 'package:gullak/data/ai/pi_ai_client.dart';
+import 'package:gullak/data/db/database.dart';
+import 'package:gullak/features/accounts/data/account_repository.dart';
+import 'package:gullak/features/categories/data/category_repository.dart';
+import 'package:gullak/features/entry/ai_extractor.dart';
+import 'package:gullak/features/payees/data/payee_repository.dart';
+import 'package:gullak/features/rules/data/rule_repository.dart';
 
 /// The Flutter app no longer talks to OpenRouter — it posts the
 /// QuickEntry note (and the user's library) to pi-server's

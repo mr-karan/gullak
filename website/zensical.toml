@@ -5,10 +5,10 @@
 # is for people installing and self-hosting the app.
 
 [project]
-site_name = "Chavanni"
+site_name = "Gullak"
 site_description = "A local-first, private expense tracker. Your money stays on your phone; sync and AI are optional and self-hosted."
 site_author = "Karan Sharma"
-# site_url = "https://docs.chavanni.app/"   # set once the domain is live
+# site_url = "https://docs.gullak.app/"   # set once the domain is live
 copyright = "Copyright &copy; 2026 Karan Sharma — app MIT, server AGPL-3.0"
 
 nav = [

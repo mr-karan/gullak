@@ -15,8 +15,8 @@ class SecureStore {
 
   final FlutterSecureStorage _storage;
 
-  static const _kSyncBaseUrl = 'chavanni.sync.baseUrl';
-  static const _kSyncApiKey = 'chavanni.sync.apiKey';
+  static const _kSyncBaseUrl = 'gullak.sync.baseUrl';
+  static const _kSyncApiKey = 'gullak.sync.apiKey';
 
   Future<String?> _read(String key) async {
     try {

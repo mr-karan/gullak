@@ -1,4 +1,3 @@
-*The app described here has since been renamed **Chavanni** (formerly Gullak).*
 
 # Gullak — public release & monetization plan
 

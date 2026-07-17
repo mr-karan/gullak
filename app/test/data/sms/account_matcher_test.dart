@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:chavanni/data/sms/account_matcher.dart';
+import 'package:gullak/data/sms/account_matcher.dart';
 
 void main() {
   // Mirrors the user's real 8 accounts.

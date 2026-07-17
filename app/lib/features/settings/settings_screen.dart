@@ -259,7 +259,7 @@ class SettingsScreen extends ConsumerWidget {
             subtitle: const Text('Bundled fonts and packages'),
             onTap: () => showLicensePage(
               context: context,
-              applicationName: 'Chavanni',
+              applicationName: 'Gullak',
               applicationVersion: 'v$buildVersion',
             ),
           ),
@@ -525,9 +525,9 @@ class SettingsScreen extends ConsumerWidget {
       if (!context.mounted) return;
       await Share.shareXFiles(
         [XFile(file.path, mimeType: 'application/json')],
-        subject: 'Chavanni backup',
+        subject: 'Gullak backup',
         text:
-            'Chavanni backup ${DateTime.now().toIso8601String().split('T').first}',
+            'Gullak backup ${DateTime.now().toIso8601String().split('T').first}',
       );
     } catch (e) {
       if (!context.mounted) return;
@@ -546,8 +546,8 @@ class SettingsScreen extends ConsumerWidget {
       if (!context.mounted) return;
       await Share.shareXFiles(
         [XFile(file.path, mimeType: 'text/csv')],
-        subject: 'Chavanni transactions CSV',
-        text: 'Chavanni transactions export',
+        subject: 'Gullak transactions CSV',
+        text: 'Gullak transactions export',
       );
     } catch (e) {
       if (!context.mounted) return;
@@ -650,7 +650,7 @@ class SettingsScreen extends ConsumerWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
-                      'Optional. Point at a self-hosted Chavanni server to '
+                      'Optional. Point at a self-hosted Gullak server to '
                       'merge data across devices. The phone keeps working '
                       'offline either way.',
                       style: Theme.of(dialogCtx).textTheme.bodyMedium?.copyWith(

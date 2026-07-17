@@ -1,6 +1,6 @@
-# Chavanni pi-server
+# Gullak pi-server
 
-The self-hosted sync + AI server for [Chavanni](../README.md). The phone app is the
+The self-hosted sync + AI server for [Gullak](../README.md). The phone app is the
 source of truth; this server is the merge point for sync, the trusted home for
 model credentials, and the runtime for SMS/quick-entry extraction, the multi-turn
 agent, and exports to external destinations (Google Sheets, Actual Budget).
@@ -45,16 +45,16 @@ POST   /v1/export[?target=&replace=]    (fan out to enabled destinations)
 POST   /v1/feedback                     GET /v1/feedback?limit=
 ```
 
-Auth: send `x-api-key: <CHAVANNI_HTTP_API_KEY>`. `/v1/health` and
-`/v1/whatsapp/webhook` are exempt. Set `CHAVANNI_REQUIRE_AUTH=true` to refuse
+Auth: send `x-api-key: <GULLAK_HTTP_API_KEY>`. `/v1/health` and
+`/v1/whatsapp/webhook` are exempt. Set `GULLAK_REQUIRE_AUTH=true` to refuse
 booting without a key. Request bodies are capped (15 MB); `/v1/ai/*` returns 503
 when no real model key is configured.
 
 ## Configuration
 
 See [`.env.example`](.env.example) for the full, annotated list: storage
-(`CHAVANNI_DB_PATH`), auth (`CHAVANNI_HTTP_API_KEY`, `CHAVANNI_REQUIRE_AUTH`), model
-(`CHAVANNI_MODEL_*` + `CHAVANNI_ALLOW_AMBIENT_MODEL_KEYS`), WhatsApp, and the opt-in
+(`GULLAK_DB_PATH`), auth (`GULLAK_HTTP_API_KEY`, `GULLAK_REQUIRE_AUTH`), model
+(`GULLAK_MODEL_*` + `GULLAK_ALLOW_AMBIENT_MODEL_KEYS`), WhatsApp, and the opt-in
 exports (Google Sheets + Actual Budget).
 
 ## Sync model

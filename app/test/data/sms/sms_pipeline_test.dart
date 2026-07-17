@@ -3,12 +3,12 @@ import 'dart:async';
 import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:chavanni/data/db/database.dart';
-import 'package:chavanni/data/sms/parser_registry.dart';
-import 'package:chavanni/data/sms/sms_models.dart';
-import 'package:chavanni/data/sms/sms_parser.dart';
-import 'package:chavanni/data/sms/sms_pipeline.dart';
-import 'package:chavanni/data/sms/sms_reader.dart';
+import 'package:gullak/data/db/database.dart';
+import 'package:gullak/data/sms/parser_registry.dart';
+import 'package:gullak/data/sms/sms_models.dart';
+import 'package:gullak/data/sms/sms_parser.dart';
+import 'package:gullak/data/sms/sms_pipeline.dart';
+import 'package:gullak/data/sms/sms_reader.dart';
 
 // The pipeline is now capture-only: _ingest queues a transactional SMS as
 // `pending_parse`, and drainPendingParses() (invoked at the end of backfill /

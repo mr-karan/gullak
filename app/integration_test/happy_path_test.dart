@@ -3,7 +3,7 @@ import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 
-import 'package:chavanni/main.dart' as app;
+import 'package:gullak/main.dart' as app;
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
@@ -14,7 +14,7 @@ void main() {
     app.main();
     await tester.pumpAndSettle(const Duration(seconds: 2));
 
-    if (find.text('Chavanni').evaluate().isNotEmpty &&
+    if (find.text('Gullak').evaluate().isNotEmpty &&
         find.text('Continue').evaluate().isNotEmpty) {
       await tester.tap(find.text('Continue'));
       await tester.pumpAndSettle();

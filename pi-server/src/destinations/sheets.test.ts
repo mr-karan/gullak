@@ -65,7 +65,7 @@ test("maps canonical rows to sheet columns and POSTs with secret + replace", asy
   expect(res.sent).toBe(2);
   expect(body!.secret).toBe("s3cr3t");
   expect(body!.replace).toBe(true);
-  // [Date, Description, Category, Amount, Payment Mode, Type, Notes, chavanni_id, Tags]
+  // [Date, Description, Category, Amount, Payment Mode, Type, Notes, gullak_id, Tags]
   expect(body!.rows[0]).toEqual([
     "2026-06-30",
     "Blinkit",
