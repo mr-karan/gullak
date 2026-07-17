@@ -14,9 +14,20 @@ import {
   payees,
   transactions,
 } from "../db/schema.ts";
-import { chatJson } from "../llm/client.ts";
+import {
+  chatJson,
+  chatTools,
+  LlmHttpError,
+  type ChatToolCall,
+} from "../llm/client.ts";
 import { newId, nowMs, recordChange } from "../repos/changelog.ts";
-import { runAskTool, type AskToolCall, type AskToolName } from "./ask_tools.ts";
+import {
+  ASK_TOOL_NAMES,
+  ASK_TOOL_SCHEMAS,
+  runAskTool,
+  type AskToolCall,
+  type AskToolName,
+} from "./ask_tools.ts";
 
 /// Conversational entry point used by /v1/messages and the WhatsApp
 /// webhook. Splits into:
@@ -56,29 +67,6 @@ const classifierSchema = z.object({
   confidence: z.number().nullish(),
 });
 
-const askToolSchema = z.object({
-  tool: z.enum([
-    "month_spend",
-    "category_spend",
-    "recent_transactions",
-    "budget_status",
-    "account_balances",
-  ]),
-  params: z
-    .object({
-      month: z.string().nullish(),
-      startDate: z.string().nullish(),
-      endDate: z.string().nullish(),
-      accountId: z.string().nullish(),
-      accountName: z.string().nullish(),
-      categoryId: z.string().nullish(),
-      categoryName: z.string().nullish(),
-      payee: z.string().nullish(),
-      limit: z.number().nullish(),
-    })
-    .nullish(),
-});
-
 const CLASSIFIER_SYSTEM = `You classify a personal-finance message into
 ONE of these modes:
 
@@ -95,51 +83,27 @@ ONE of these modes:
 Output ONLY a single JSON object: {"mode": "<one of the above>", "confidence": 0.0–1.0}.
 No prose.`;
 
-const ASK_TOOL_SYSTEM = `You are picking ONE database tool to answer a
-finance question. Output ONLY a single JSON object:
+const ASK_AGENT_SYSTEM = `You are Gullak, a friendly personal-finance
+assistant answering questions about the user's own transaction data over
+WhatsApp / in-app chat.
 
-{
-  "tool": "month_spend" | "category_spend" | "recent_transactions" | "budget_status" | "account_balances",
-  "params": {
-    "month": "YYYY-MM"|null,
-    "startDate": "YYYY-MM-DD"|null,
-    "endDate": "YYYY-MM-DD"|null,
-    "accountId": string|null,
-    "accountName": string|null,
-    "categoryId": string|null,
-    "categoryName": string|null,
-    "payee": string|null,
-    "limit": integer|null
-  }
-}
+You have TOOLS that run real SQL over the user's database. To answer any
+question about spending, income, balances, budgets, or specific
+transactions, you MUST call the relevant tool(s) — never invent numbers.
+Call more than one tool when a question needs it (e.g. "how does this
+month compare to last month?" → call summary twice with different months).
 
-Tool guide:
-- month_spend: total spent + earned in a month. Use for "how much did
-  I spend this month", "spending in April", "income this month".
-- category_spend: total in a category over a range. Use for "how much
-  did I spend on groceries", "food spending this month", or general
-  category breakdowns when no specific category is named (returns top 5).
-- recent_transactions: most recent transactions (optionally filtered).
-  Use for "show last 5 expenses", "what were my recent groceries".
-- budget_status: how much budget is left in a category or all.
-  Use for "budget left for food", "how am I doing on budget".
-- account_balances: balance per account.
+Resolving dates:
+- The current date and the user's accounts/categories are in the first
+  user message.
+- "this month" = the current YYYY-MM. "last month" = the previous one.
+- Pass a category or account by NAME (categoryName/accountName); the
+  server matches it.
 
-Notes:
-- Today's date is supplied in <today>. If the user says "this month",
-  use today's YYYY-MM as the month.
-- Resolve category/account by name when the user names them — pass it
-  in categoryName or accountName.
-- limit defaults to 5 for recent_transactions; cap by 15.
-- Output ONLY the JSON. No prose.`;
-
-const REPLY_SYSTEM = `You write a SHORT, friendly WhatsApp reply
-combining the supplied facts. Plain text only — no JSON, no markdown
-tables, no code fences. Use the symbol ₹ for rupees. Keep it under 2
-short sentences unless the facts have a bulleted breakdown — then
-output the breakdown verbatim and one wrapping line.
-
-Output ONLY the reply text. No prose framing like "Here you go:".`;
+When you have the numbers, write a SHORT, warm reply in plain text.
+Use the ₹ symbol for rupees. If a tool returned a bulleted breakdown,
+keep the bullets. No JSON, no markdown tables, no code fences. Keep it to
+1–2 sentences plus any bullets.`;
 
 export async function handleMessage(
   db: Db,
@@ -406,58 +370,104 @@ async function handleAsk(
   threadId: string,
   text: string,
 ): Promise<AgentResponse> {
+  // No model configured → the tool-calling loop can't run. Answer honestly
+  // rather than firing a doomed request with the dummy key.
+  if (!config.ai.enabled) {
+    const reply =
+      "The assistant isn't configured with a model right now, so I can't answer questions yet. You can still log expenses (e.g. \"480 groceries\").";
+    appendTurn(db, threadId, "assistant", reply);
+    return { threadId, reply };
+  }
   const today = todayIso();
   const history = recentHistory(db, threadId);
-  const categoryList = db.select({ id: categories.id, name: categories.name }).from(categories).all();
-  const accountList = db.select({ id: accounts.id, name: accounts.name }).from(accounts).all();
+  const categoryList = db
+    .select({ id: categories.id, name: categories.name })
+    .from(categories)
+    .all();
+  const accountList = db
+    .select({ id: accounts.id, name: accounts.name })
+    .from(accounts)
+    .all();
   const toolUser = [
-    `<today>: ${today}`,
-    `<accounts>: ${accountList.map((a) => a.name).join(", ") || "(none)"}`,
-    `<categories>: ${categoryList.map((c) => c.name).join(", ") || "(none)"}`,
+    `Today's date: ${today}. Currency: ${config.defaultCurrency}.`,
+    `Accounts: ${accountList.map((a) => a.name).join(", ") || "(none)"}`,
+    `Categories: ${categoryList.map((c) => c.name).join(", ") || "(none)"}`,
     "",
     `Question: ${text}`,
   ].join("\n");
 
-  let toolCall: AskToolCall;
+  // Track which tool(s) the model invoked so /v1/messages can echo the last
+  // one back (kept for response-shape compatibility with the app/web chat).
+  let lastTool: AskToolName | undefined;
+
   try {
-    const raw = await chatJson<unknown>(config, {
-      system: ASK_TOOL_SYSTEM,
+    const answer = await chatTools(config, {
+      system: ASK_AGENT_SYSTEM,
       user: toolUser,
       history,
       temperature: 0,
+      tools: ASK_TOOL_SCHEMAS,
+      runTool: (call: ChatToolCall) =>
+        runAskToolCall(db, call, (name) => {
+          lastTool = name;
+        }),
     });
-    const parsed = askToolSchema.parse(raw);
-    toolCall = {
-      tool: parsed.tool,
-      params: parsed.params
-        ? {
-            month: toStr(parsed.params.month),
-            startDate: toStr(parsed.params.startDate),
-            endDate: toStr(parsed.params.endDate),
-            accountId: toStr(parsed.params.accountId),
-            accountName: toStr(parsed.params.accountName),
-            categoryId: toStr(parsed.params.categoryId),
-            categoryName: toStr(parsed.params.categoryName),
-            payee: toStr(parsed.params.payee),
-            limit: toNum(parsed.params.limit),
-          }
-        : undefined,
-    };
-  } catch {
-    const reply =
-      "I couldn't figure out which numbers you wanted. Try \"how much did I spend this month?\" or \"recent groceries\".";
+    const reply = sanitizeReply(answer.trim());
     appendTurn(db, threadId, "assistant", reply);
-    return { threadId, reply };
+    return { threadId, reply, tool: lastTool };
+  } catch (err) {
+    // 402 (out of credits) / 503 / network → assistant unavailable, but never
+    // crash the request. LlmHttpError specifically covers the provider gate.
+    if (err instanceof LlmHttpError) {
+      const reply =
+        "The assistant is temporarily unavailable — I couldn't reach the model. You can still log expenses (e.g. \"480 groceries\") and I'll book them.";
+      appendTurn(db, threadId, "assistant", reply);
+      return { threadId, reply };
+    }
+    throw err;
   }
+}
 
-  const result = runAskTool(db, toolCall);
-  // For tools that already produce a complete, formatted answer we send
-  // the facts as-is. We don't run a second LLM pass for the bulleted
-  // tools — keeps things fast and never re-introduces JSON leakage.
-  const formatted = result.formatted.trim();
-  const reply = sanitizeReply(formatted);
-  appendTurn(db, threadId, "assistant", reply);
-  return { threadId, reply, tool: toolCall.tool };
+/// Adapt one raw model tool_call into an AskToolCall, run it, and return the
+/// formatted string fed back to the model. Unknown tool names get a clear
+/// message instead of throwing so the loop keeps going. Args that fail to parse
+/// degrade to defaults (empty params) rather than crashing.
+function runAskToolCall(
+  db: Db,
+  call: ChatToolCall,
+  onTool: (name: AskToolName) => void,
+): string {
+  if (!ASK_TOOL_NAMES.has(call.name)) {
+    return `Unknown tool "${call.name}". Available: ${[...ASK_TOOL_NAMES].join(", ")}.`;
+  }
+  const tool = call.name as AskToolName;
+  onTool(tool);
+  let args: Record<string, unknown> = {};
+  try {
+    const parsed = JSON.parse(call.arguments || "{}");
+    if (parsed && typeof parsed === "object") {
+      args = parsed as Record<string, unknown>;
+    }
+  } catch {
+    // Malformed args JSON — run with defaults; most tools have a sensible
+    // current-month fallback.
+  }
+  const result = runAskTool(db, {
+    tool,
+    params: {
+      month: toStr(args.month),
+      startDate: toStr(args.startDate),
+      endDate: toStr(args.endDate),
+      accountId: toStr(args.accountId),
+      accountName: toStr(args.accountName),
+      categoryId: toStr(args.categoryId),
+      categoryName: toStr(args.categoryName),
+      payee: toStr(args.payee),
+      query: toStr(args.query),
+      limit: toNum(args.limit),
+    },
+  });
+  return result.formatted;
 }
 
 function composeBookedReply(booked: BookedExpense[]): string {

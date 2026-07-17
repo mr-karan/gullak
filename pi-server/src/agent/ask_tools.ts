@@ -18,7 +18,11 @@ export type AskToolName =
   | "category_spend"
   | "recent_transactions"
   | "budget_status"
-  | "account_balances";
+  | "account_balances"
+  | "summary"
+  | "spend_by_category"
+  | "top_payees"
+  | "search_transactions";
 
 export interface AskToolCall {
   tool: AskToolName;
@@ -31,6 +35,7 @@ export interface AskToolCall {
     categoryId?: string;
     categoryName?: string;
     payee?: string;
+    query?: string;
     limit?: number;
   };
 }
@@ -41,6 +46,124 @@ export interface AskToolResult {
   // wrapping reply if needed. The model receives only `formatted`.
   resolved?: Record<string, unknown>;
 }
+
+/// OpenAI-compatible function schemas for the read-only ask tools, handed to
+/// the model in the tool-calling loop. Descriptions steer tool selection; the
+/// model fills params, we resolve names→ids and run real SQL.
+export interface OpenAiToolSchema {
+  name: string;
+  description: string;
+  parameters: Record<string, unknown>;
+}
+
+const RANGE_PROPS = {
+  month: { type: "string", description: "YYYY-MM. Use for a whole month." },
+  startDate: { type: "string", description: "YYYY-MM-DD range start." },
+  endDate: { type: "string", description: "YYYY-MM-DD range end." },
+};
+
+export const ASK_TOOL_SCHEMAS: OpenAiToolSchema[] = [
+  {
+    name: "summary",
+    description:
+      "Income, expense, and net for a month or date range (optionally one account). Use for 'how much did I spend this month', 'income in June', 'net this month'.",
+    parameters: {
+      type: "object",
+      properties: {
+        ...RANGE_PROPS,
+        accountName: { type: "string", description: "Account name to scope to." },
+      },
+    },
+  },
+  {
+    name: "category_spend",
+    description:
+      "Total spent in ONE named category over a month/range. Use for 'how much on dining this month', 'groceries in June'.",
+    parameters: {
+      type: "object",
+      properties: {
+        ...RANGE_PROPS,
+        categoryName: {
+          type: "string",
+          description: "Category name, e.g. 'Dining', 'Groceries'.",
+        },
+      },
+    },
+  },
+  {
+    name: "spend_by_category",
+    description:
+      "Full per-category expense breakdown over a month/range. Use for 'where did my money go', 'break down my spending'.",
+    parameters: {
+      type: "object",
+      properties: {
+        ...RANGE_PROPS,
+        limit: { type: "integer", description: "Max categories (default 8)." },
+      },
+    },
+  },
+  {
+    name: "top_payees",
+    description:
+      "Biggest merchants/payees by spend over a month/range. Use for 'top merchants this month', 'who did I pay the most'.",
+    parameters: {
+      type: "object",
+      properties: {
+        ...RANGE_PROPS,
+        limit: { type: "integer", description: "Max merchants (default 5)." },
+      },
+    },
+  },
+  {
+    name: "account_balances",
+    description:
+      "Computed balance per account. Use for 'balances', 'what's my HDFC balance', 'how much is in my accounts'.",
+    parameters: { type: "object", properties: {} },
+  },
+  {
+    name: "recent_transactions",
+    description:
+      "Most recent transactions, optionally filtered by category or payee. Use for 'show my last 5 expenses', 'recent groceries'.",
+    parameters: {
+      type: "object",
+      properties: {
+        categoryName: { type: "string" },
+        payee: { type: "string" },
+        startDate: { type: "string", description: "YYYY-MM-DD." },
+        endDate: { type: "string", description: "YYYY-MM-DD." },
+        limit: { type: "integer", description: "Default 5, max 15." },
+      },
+    },
+  },
+  {
+    name: "search_transactions",
+    description:
+      "Search transactions by free text (payee, notes, or category) and/or date range. Use for 'did my rent go out this month', 'find my swiggy charges', 'biggest expenses' (with a range).",
+    parameters: {
+      type: "object",
+      properties: {
+        query: { type: "string", description: "Free text to match." },
+        startDate: { type: "string", description: "YYYY-MM-DD." },
+        endDate: { type: "string", description: "YYYY-MM-DD." },
+        limit: { type: "integer", description: "Default 10, max 25." },
+      },
+    },
+  },
+  {
+    name: "budget_status",
+    description:
+      "Budget vs actual for a month, all categories or one. Use for 'how am I doing on budget', 'budget left for food'.",
+    parameters: {
+      type: "object",
+      properties: {
+        month: { type: "string", description: "YYYY-MM." },
+        categoryName: { type: "string" },
+      },
+    },
+  },
+];
+
+export const ASK_TOOL_NAMES = new Set<string>(ASK_TOOL_SCHEMAS.map((s) => s.name));
 
 export function runAskTool(
   db: Db,
@@ -58,9 +181,205 @@ export function runAskTool(
       return budgetStatus(db, call.params ?? {}, symbol);
     case "account_balances":
       return accountBalances(db, symbol);
+    case "summary":
+      return summary(db, call.params ?? {}, symbol);
+    case "spend_by_category":
+      return spendByCategory(db, call.params ?? {}, symbol);
+    case "top_payees":
+      return topPayees(db, call.params ?? {}, symbol);
+    case "search_transactions":
+      return searchTransactions(db, call.params ?? {}, symbol);
     default:
       return { formatted: "I don't know how to answer that yet." };
   }
+}
+
+/// income / expense / net over a range (or account). Mirrors GET /v1/summary.
+function summary(
+  db: Db,
+  params: NonNullable<AskToolCall["params"]>,
+  symbol: string,
+): AskToolResult {
+  const [start, end] = rangeFrom(params);
+  const accountId = resolveAccount(db, params);
+  const conditions = [
+    gte(transactions.date, start),
+    lte(transactions.date, end),
+    sql`${transactions.parentId} IS NULL`,
+    sql`${transactions.transferGroupId} IS NULL`,
+  ];
+  if (accountId) conditions.push(eq(transactions.accountId, accountId));
+  const row = db
+    .select({
+      income: sql<number>`COALESCE(SUM(CASE WHEN ${transactions.amountCents} > 0 THEN ${transactions.amountCents} ELSE 0 END), 0)`,
+      expense: sql<number>`COALESCE(SUM(CASE WHEN ${transactions.amountCents} < 0 THEN -${transactions.amountCents} ELSE 0 END), 0)`,
+      net: sql<number>`COALESCE(SUM(${transactions.amountCents}), 0)`,
+    })
+    .from(transactions)
+    .where(and(...conditions))
+    .get() ?? { income: 0, expense: 0, net: 0 };
+  const scope = accountId ? ` on ${nameOfAccount(db, accountId)}` : "";
+  const netLabel =
+    row.net >= 0
+      ? `net +${formatMoney(row.net, symbol)}`
+      : `net -${formatMoney(-row.net, symbol)}`;
+  return {
+    formatted: `${rangeLabelCap(start, end)}${scope}: income ${formatMoney(row.income, symbol)}, spent ${formatMoney(row.expense, symbol)}, ${netLabel}.`,
+    resolved: {
+      startDate: start,
+      endDate: end,
+      incomeCents: row.income,
+      expenseCents: row.expense,
+      netCents: row.net,
+    },
+  };
+}
+
+/// Full per-category expense breakdown over a range (top `limit`, default 8).
+function spendByCategory(
+  db: Db,
+  params: NonNullable<AskToolCall["params"]>,
+  symbol: string,
+): AskToolResult {
+  const [start, end] = rangeFrom(params);
+  const limit = Math.min(Math.max(params.limit ?? 8, 1), 25);
+  const rows = db
+    .select({
+      categoryName: categories.name,
+      spent: sql<number>`COALESCE(SUM(-${transactions.amountCents}), 0)`,
+    })
+    .from(transactions)
+    .leftJoin(categories, eq(transactions.categoryId, categories.id))
+    .where(
+      and(
+        gte(transactions.date, start),
+        lte(transactions.date, end),
+        sql`${transactions.amountCents} < 0`,
+        sql`${transactions.parentId} IS NULL`,
+        sql`${transactions.transferGroupId} IS NULL`,
+      ),
+    )
+    .groupBy(transactions.categoryId)
+    .orderBy(sql`SUM(-${transactions.amountCents}) DESC`)
+    .limit(limit)
+    .all()
+    .filter((r) => r.spent > 0);
+  if (rows.length === 0) {
+    return { formatted: `Nothing spent ${rangeLabel(start, end)}.` };
+  }
+  const lines = rows.map(
+    (r) => `  • ${r.categoryName ?? "Uncategorised"} — ${formatMoney(r.spent, symbol)}`,
+  );
+  return {
+    formatted: `Spend by category ${rangeLabel(start, end)}:\n${lines.join("\n")}`,
+    resolved: {
+      startDate: start,
+      endDate: end,
+      categories: rows.map((r) => ({
+        name: r.categoryName ?? "Uncategorised",
+        spentCents: r.spent,
+      })),
+    },
+  };
+}
+
+/// Biggest merchants (payees) by expense over a range.
+function topPayees(
+  db: Db,
+  params: NonNullable<AskToolCall["params"]>,
+  symbol: string,
+): AskToolResult {
+  const [start, end] = rangeFrom(params);
+  const limit = Math.min(Math.max(params.limit ?? 5, 1), 15);
+  const rows = db
+    .select({
+      payeeName: transactions.payeeName,
+      spent: sql<number>`COALESCE(SUM(-${transactions.amountCents}), 0)`,
+    })
+    .from(transactions)
+    .where(
+      and(
+        gte(transactions.date, start),
+        lte(transactions.date, end),
+        sql`${transactions.amountCents} < 0`,
+        sql`${transactions.payeeName} IS NOT NULL`,
+        sql`${transactions.parentId} IS NULL`,
+        sql`${transactions.transferGroupId} IS NULL`,
+      ),
+    )
+    .groupBy(transactions.payeeName)
+    .orderBy(sql`SUM(-${transactions.amountCents}) DESC`)
+    .limit(limit)
+    .all()
+    .filter((r) => r.spent > 0 && r.payeeName);
+  if (rows.length === 0) {
+    return { formatted: `No merchant spend ${rangeLabel(start, end)}.` };
+  }
+  const lines = rows.map(
+    (r) => `  • ${r.payeeName} — ${formatMoney(r.spent, symbol)}`,
+  );
+  return {
+    formatted: `Top merchants ${rangeLabel(start, end)}:\n${lines.join("\n")}`,
+    resolved: {
+      startDate: start,
+      endDate: end,
+      payees: rows.map((r) => ({ name: r.payeeName, spentCents: r.spent })),
+    },
+  };
+}
+
+/// Free-text/merchant/date search over transactions. Unlike
+/// recent_transactions, `query` matches payee OR notes OR category name.
+function searchTransactions(
+  db: Db,
+  params: NonNullable<AskToolCall["params"]>,
+  symbol: string,
+): AskToolResult {
+  const limit = Math.min(Math.max(params.limit ?? 10, 1), 25);
+  const conditions = [
+    sql`${transactions.parentId} IS NULL`,
+    sql`${transactions.transferGroupId} IS NULL`,
+  ];
+  const q = params.query?.trim() ?? params.payee?.trim();
+  if (q) {
+    const lower = `%${q.toLowerCase()}%`;
+    conditions.push(
+      sql`(LOWER(${transactions.payeeName}) LIKE ${lower} OR LOWER(${transactions.notes}) LIKE ${lower} OR LOWER(${categories.name}) LIKE ${lower})`,
+    );
+  }
+  if (params.startDate) conditions.push(gte(transactions.date, params.startDate));
+  if (params.endDate) conditions.push(lte(transactions.date, params.endDate));
+  const rows = db
+    .select({
+      amountCents: transactions.amountCents,
+      date: transactions.date,
+      payeeName: transactions.payeeName,
+      categoryName: categories.name,
+    })
+    .from(transactions)
+    .leftJoin(categories, eq(transactions.categoryId, categories.id))
+    .where(and(...conditions))
+    .orderBy(desc(transactions.date), desc(transactions.createdAt))
+    .limit(limit)
+    .all();
+  if (rows.length === 0) {
+    return { formatted: "No matching transactions." };
+  }
+  const lines = rows.map((r) => {
+    const sign = r.amountCents < 0 ? "-" : "+";
+    const amount = formatMoney(Math.abs(r.amountCents), symbol);
+    const label = r.payeeName ?? r.categoryName ?? "Uncategorised";
+    return `  • ${r.date} ${sign}${amount} — ${label}`;
+  });
+  return {
+    formatted: `Matches:\n${lines.join("\n")}`,
+    resolved: { limit, query: q ?? null },
+  };
+}
+
+function rangeLabelCap(start: string, end: string): string {
+  const label = rangeLabel(start, end);
+  return label.charAt(0).toUpperCase() + label.slice(1);
 }
 
 function monthSpend(
