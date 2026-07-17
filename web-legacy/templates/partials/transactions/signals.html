@@ -1,0 +1,111 @@
+<div class="card-elevated p-4 md:p-5">
+    <div class="flex items-center justify-between mb-3">
+        <div class="text-[10px] font-semibold uppercase tracking-wider text-base-content/50">Cut-down Cues</div>
+        <div class="text-[10px] text-base-content/40">Focus this period</div>
+    </div>
+
+    <div class="space-y-4">
+        <div>
+            <div class="text-[10px] font-semibold uppercase tracking-wider text-base-content/40 mb-2">Budgets at risk</div>
+            <div class="space-y-3" x-show="budgetAlerts.length">
+                <template x-for="budget in budgetAlerts" :key="budget.account">
+                    <div class="space-y-1">
+                        <div class="flex items-center justify-between">
+                            <span class="text-sm font-medium truncate" x-text="budget.account.replace('Expenses:', '')"></span>
+                            <span class="text-xs font-mono text-base-content/50"
+                                  x-text="formatCurrency(budget.actual, budget.currency) + ' / ' + formatCurrency(budget.amount, budget.currency)"></span>
+                        </div>
+                        <div class="h-1.5 bg-base-200/70 rounded-full overflow-hidden">
+                            <div class="h-full rounded-full"
+                                 :class="budget.status === 'over' ? 'bg-error' : 'bg-warning'"
+                                 :style="`width:${Math.min(100, budget.progress * 100)}%`"></div>
+                        </div>
+                        <div class="flex items-center justify-between text-[10px] text-base-content/40">
+                            <span x-text="budget.status === 'over' ? 'Over budget' : 'At risk'"></span>
+                            <span x-text="formatCurrency(budget.remaining, budget.currency) + ' left'"></span>
+                        </div>
+                        <div class="text-[10px] text-base-content/40"
+                             x-show="budget.projected_over"
+                             x-text="`Projected: ${formatCurrency(budget.projected, budget.currency)}`"></div>
+                    </div>
+                </template>
+            </div>
+            <div x-show="!budgetAlerts.length" class="text-sm text-base-content/40">No budget alerts</div>
+        </div>
+
+        <div>
+            <div class="text-[10px] font-semibold uppercase tracking-wider text-base-content/40 mb-2">Repeat payees</div>
+            <div class="space-y-2">
+                <template x-for="payee in ($store.transactions.activeStats.repeat_payees || [])" :key="payee.name">
+                    <button class="w-full flex items-center justify-between px-2 py-1.5 rounded-lg hover:bg-base-200/60 transition-colors"
+                            @click="selectPayee(payee.name)">
+                        <div class="flex flex-col text-left min-w-0">
+                            <span class="text-sm font-medium truncate" x-text="payee.name"></span>
+                            <span class="text-[10px] text-base-content/40"
+                                  x-text="`${payee.count} txns · avg ${formatCurrency(payee.average, $store.transactions.activeStats.currency)}`"></span>
+                        </div>
+                        <span class="text-xs font-mono text-base-content/50"
+                              x-text="formatCurrency(payee.amount, $store.transactions.activeStats.currency)"></span>
+                    </button>
+                </template>
+                <div x-show="!$store.transactions.activeStats.repeat_payees?.length" class="text-sm text-base-content/40">No repeat payees</div>
+            </div>
+        </div>
+
+        <div>
+            <div class="text-[10px] font-semibold uppercase tracking-wider text-base-content/40 mb-2">One-off spikes</div>
+            <div class="space-y-2">
+                <template x-for="txn in ($store.transactions.activeStats.one_offs || [])" :key="txn.id">
+                    <button class="w-full flex items-center justify-between px-2 py-1.5 rounded-lg hover:bg-base-200/60 transition-colors"
+                            @click="selectPayee(txn.payee)">
+                        <div class="flex flex-col text-left min-w-0">
+                            <span class="text-sm font-medium truncate" x-text="txn.payee"></span>
+                            <span class="text-[10px] text-base-content/40" x-text="txn.date"></span>
+                        </div>
+                        <span class="text-xs font-mono text-base-content/50"
+                              x-text="formatCurrency(txn.amount, txn.currency)"></span>
+                    </button>
+                </template>
+                <div x-show="!$store.transactions.activeStats.one_offs?.length" class="text-sm text-base-content/40">No one-off spikes</div>
+            </div>
+        </div>
+
+        <div>
+            <div class="text-[10px] font-semibold uppercase tracking-wider text-base-content/40 mb-2">Largest transactions</div>
+            <div class="space-y-2">
+                <template x-for="txn in ($store.transactions.activeStats.largest_transactions || [])" :key="txn.id">
+                    <button class="w-full flex items-center justify-between px-2 py-1.5 rounded-lg hover:bg-base-200/60 transition-colors"
+                            @click="selectPayee(txn.payee)">
+                        <div class="flex flex-col text-left min-w-0">
+                            <span class="text-sm font-medium truncate" x-text="txn.payee"></span>
+                            <span class="text-[10px] text-base-content/40" x-text="txn.date"></span>
+                        </div>
+                        <span class="text-xs font-mono text-base-content/50"
+                              x-text="formatCurrency(txn.amount, txn.currency)"></span>
+                    </button>
+                </template>
+                <div x-show="!$store.transactions.activeStats.largest_transactions?.length" class="text-sm text-base-content/40">No data available</div>
+            </div>
+        </div>
+
+        <div>
+            <div class="text-[10px] font-semibold uppercase tracking-wider text-base-content/40 mb-2">Category shifts</div>
+            <div class="space-y-2">
+                <template x-for="delta in ($store.transactions.activeStats.category_deltas || [])" :key="delta.name">
+                    <button class="w-full flex items-center justify-between px-2 py-1.5 rounded-lg hover:bg-base-200/60 transition-colors"
+                            @click="selectCategory(delta.name)">
+                        <div class="flex flex-col text-left min-w-0">
+                            <span class="text-sm font-medium truncate" x-text="delta.name"></span>
+                            <span class="text-[10px] text-base-content/40"
+                                  x-text="delta.delta_percent !== null ? `${delta.delta_percent.toFixed(1)}% vs prev` : 'No prior baseline'"></span>
+                        </div>
+                        <span class="text-xs font-mono"
+                              :class="delta.delta_amount >= 0 ? 'text-error' : 'text-success'"
+                              x-text="formatCurrency(delta.delta_amount, $store.transactions.activeStats.currency)"></span>
+                    </button>
+                </template>
+                <div x-show="!$store.transactions.activeStats.category_deltas?.length" class="text-sm text-base-content/40">No category shifts</div>
+            </div>
+        </div>
+    </div>
+</div>

@@ -1,0 +1,226 @@
+<!-- Loading State -->
+<template x-if="store.loading && !data">
+    <div class="flex items-center justify-center h-64">
+        <span class="loading loading-spinner text-primary"></span>
+    </div>
+</template>
+
+<!-- Empty State -->
+<template x-if="!store.loading && data && data.categories.length === 0">
+    <div class="flex flex-col items-center justify-center h-64 text-base-content/40">
+        <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="mb-4 opacity-40"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+        <p class="text-sm">No expense data for <span x-text="store.year"></span></p>
+    </div>
+</template>
+
+<!-- Grid -->
+<template x-if="data && data.categories.length > 0">
+    <div class="reports-grid-wrapper card-elevated overflow-hidden">
+        <div class="reports-grid-scroll overflow-x-auto custom-scrollbar">
+            <table class="reports-grid w-full">
+                <!-- Header -->
+                <thead>
+                    <tr class="reports-grid-header">
+                        <th class="reports-grid-sticky-col text-left py-3 px-4 text-xs font-semibold uppercase tracking-wider text-base-content/50">
+                            Category
+                        </th>
+                        <template x-for="(month, i) in data.months" :key="i">
+                            <th class="py-3 px-3 text-right text-xs font-semibold uppercase tracking-wider text-base-content/50 whitespace-nowrap"
+                                x-text="month"></th>
+                        </template>
+                        <th class="py-3 px-3 text-right text-xs font-semibold uppercase tracking-wider text-base-content/40 whitespace-nowrap">Avg</th>
+                        <th class="py-3 px-3 text-right text-xs font-semibold uppercase tracking-wider text-primary whitespace-nowrap">Total</th>
+                    </tr>
+                </thead>
+
+                <!-- Each category gets its own tbody (valid HTML, avoids nesting) -->
+                <template x-for="cat in data.categories" :key="cat.name">
+                    <tbody>
+                        <!-- Category Row -->
+                        <tr class="reports-grid-cat-row cursor-pointer transition-colors"
+                            @click="store.toggleCategory(cat.name)">
+                            <td class="reports-grid-sticky-col py-2.5 px-4">
+                                <div class="flex items-center gap-2">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24"
+                                         fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                                         class="text-base-content/30 transition-transform duration-200 flex-shrink-0"
+                                         :class="store.expandedCategories[cat.name] && 'rotate-90'">
+                                            <polyline points="9 18 15 12 9 6"/>
+                                    </svg>
+                                    <span class="text-sm font-semibold text-base-content truncate" x-text="cat.name"></span>
+                                </div>
+                            </td>
+                            <template x-for="(val, mi) in cat.months" :key="mi">
+                                <td class="py-2.5 px-3 text-right font-mono text-sm whitespace-nowrap"
+                                    :class="[
+                                        val > 0 ? 'text-base-content reports-grid-cell-clickable' : 'text-base-content/20',
+                                        (store.drawer.open && store.drawer.category === cat.name && !store.drawer.subcategory && store.drawer.monthIndex === mi) ? 'reports-grid-cell-active' : ''
+                                    ]"
+                                    @click.stop="val > 0 && store.openDrawer(cat.name, '', mi, val)">
+                                    <span x-text="val > 0 ? fmtCompact(val) : '—'"></span>
+                                </td>
+                            </template>
+                            <td class="py-2.5 px-3 text-right font-mono text-sm text-base-content/50 whitespace-nowrap"
+                                x-text="fmtCompact(cat.average) || '—'"></td>
+                            <td class="py-2.5 px-3 text-right font-mono text-sm font-semibold text-base-content whitespace-nowrap"
+                                x-text="fmtCompact(cat.total) || '—'"></td>
+                        </tr>
+
+                        <!-- Subcategory Rows -->
+                        <template x-for="sub in cat.subcategories" :key="sub.name">
+                            <tr class="reports-grid-sub-row transition-colors"
+                                x-show="store.expandedCategories[cat.name]"
+                                x-transition:enter="transition ease-out duration-150"
+                                x-transition:enter-start="opacity-0"
+                                x-transition:enter-end="opacity-100">
+                                <td class="reports-grid-sticky-col reports-grid-sticky-col-sub py-2 px-4 pl-10">
+                                    <span class="text-xs text-base-content/50 truncate block" x-text="sub.name"></span>
+                                </td>
+                                <template x-for="(val, mi) in sub.months" :key="mi">
+                                    <td class="py-2 px-3 text-right font-mono text-xs whitespace-nowrap"
+                                        :class="[
+                                            val > 0 ? 'text-base-content/60 reports-grid-cell-clickable' : 'text-base-content/15',
+                                            (store.drawer.open && store.drawer.category === cat.name && store.drawer.subcategory === sub.name && store.drawer.monthIndex === mi) ? 'reports-grid-cell-active' : ''
+                                        ]"
+                                        @click.stop="val > 0 && store.openDrawer(cat.name, sub.name, mi, val)">
+                                        <span x-text="val > 0 ? fmtCompact(val) : '—'"></span>
+                                    </td>
+                                </template>
+                                <td class="py-2 px-3 text-right font-mono text-xs text-base-content/35 whitespace-nowrap"
+                                    x-text="fmtCompact(sub.average) || '—'"></td>
+                                <td class="py-2 px-3 text-right font-mono text-xs text-base-content/60 whitespace-nowrap"
+                                    x-text="fmtCompact(sub.total) || '—'"></td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </template>
+
+                <!-- Footer -->
+                <tfoot>
+                    <tr class="reports-grid-footer">
+                        <td class="reports-grid-sticky-col py-3 px-4 text-sm font-semibold text-base-content">
+                            Total
+                        </td>
+                        <template x-for="(val, mi) in data.month_totals" :key="mi">
+                            <td class="py-3 px-3 text-right font-mono text-sm font-semibold whitespace-nowrap"
+                                :class="val > 0 ? 'text-base-content' : 'text-base-content/20'">
+                                <span x-text="val > 0 ? fmtCompact(val) : '—'"></span>
+                            </td>
+                        </template>
+                        <td class="py-3 px-3 text-right font-mono text-sm font-semibold text-base-content/50 whitespace-nowrap"
+                            x-text="fmtCompact(data.grand_average) || '—'"></td>
+                        <td class="py-3 px-3 text-right font-mono text-sm font-bold text-primary whitespace-nowrap"
+                            x-text="fmtAmount(data.grand_total) || '—'"></td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+</template>
+
+<!-- Drill-Down Drawer -->
+<template x-if="store.drawer.open">
+    <div @keydown.window.escape="store.closeDrawer()">
+        <!-- Backdrop -->
+        <div class="fixed inset-0 bg-black/30 backdrop-blur-sm z-40"
+             @click="store.closeDrawer()"
+             x-transition:enter="transition ease-out duration-200"
+             x-transition:enter-start="opacity-0"
+             x-transition:enter-end="opacity-100"
+             x-transition:leave="transition ease-in duration-150"
+             x-transition:leave-start="opacity-100"
+             x-transition:leave-end="opacity-0">
+        </div>
+
+        <!-- Desktop: Right Drawer / Mobile: Bottom Sheet -->
+        <div class="reports-drill-drawer fixed z-50
+                    md:top-0 md:right-0 md:bottom-0 md:w-[400px]
+                    max-md:bottom-0 max-md:left-0 max-md:right-0 max-md:max-h-[75vh] max-md:rounded-t-2xl"
+             x-transition:enter="transition ease-out duration-300"
+             x-transition:enter-start="md:translate-x-full max-md:translate-y-full"
+             x-transition:enter-end="md:translate-x-0 max-md:translate-y-0"
+             x-transition:leave="transition ease-in duration-200"
+             x-transition:leave-start="md:translate-x-0 max-md:translate-y-0"
+             x-transition:leave-end="md:translate-x-full max-md:translate-y-full"
+             @click.stop>
+
+            <!-- Mobile drag handle -->
+            <div class="md:hidden flex justify-center pt-3 pb-1">
+                <div class="w-10 h-1 rounded-full bg-base-content/20"></div>
+            </div>
+
+            <!-- Header -->
+            <div class="flex items-start justify-between px-5 py-4 border-b border-base-content/8">
+                <div class="min-w-0">
+                    <h3 class="text-base font-semibold text-base-content truncate">
+                        <span x-text="store.drawer.category"></span>
+                        <template x-if="store.drawer.subcategory">
+                            <span class="text-base-content/40 font-normal">
+                                / <span x-text="store.drawer.subcategory"></span>
+                            </span>
+                        </template>
+                    </h3>
+                    <p class="text-sm text-base-content/50 mt-0.5">
+                        <span x-text="store.drawer.monthName"></span>
+                        <span class="mx-1.5 text-base-content/20">&mdash;</span>
+                        <span class="font-mono font-semibold text-base-content/70" x-text="fmtAmount(store.drawer.total)"></span>
+                    </p>
+                </div>
+                <button @click="store.closeDrawer()"
+                        class="btn-icon btn-icon-sm flex-shrink-0 ml-3">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
+            </div>
+
+            <!-- Content -->
+            <div class="flex-1 overflow-y-auto custom-scrollbar">
+                <!-- Loading -->
+                <template x-if="store.drawer.loading">
+                    <div class="flex items-center justify-center py-16">
+                        <span class="loading loading-spinner text-primary"></span>
+                    </div>
+                </template>
+
+                <!-- Empty -->
+                <template x-if="!store.drawer.loading && store.drawer.transactions.length === 0">
+                    <div class="flex flex-col items-center justify-center py-16 text-base-content/40">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="mb-3 opacity-40"><path d="M3 3h18v18H3z"/><path d="M12 8v8"/><path d="M8 12h8"/></svg>
+                        <p class="text-sm">No transactions found</p>
+                    </div>
+                </template>
+
+                <!-- Transaction list -->
+                <template x-if="!store.drawer.loading && store.drawer.transactions.length > 0">
+                    <div>
+                        <div class="px-5 py-2.5 text-xs text-base-content/40 font-medium">
+                            <span x-text="store.drawer.count"></span> transactions
+                        </div>
+                        <template x-for="txn in store.drawer.transactions" :key="txn.id">
+                            <div class="flex items-center gap-3 px-5 py-3 border-b border-base-content/4 last:border-b-0 hover:bg-base-content/2 transition-colors">
+                                <!-- Avatar -->
+                                <div class="txn-avatar text-sm flex-shrink-0"
+                                     :class="getCategoryColor(txn.accounts?.[0] || '')">
+                                    <span x-text="getCategoryEmoji(txn.accounts?.[0] || '')"></span>
+                                </div>
+                                <!-- Details -->
+                                <div class="flex-1 min-w-0">
+                                    <div class="text-sm font-medium text-base-content truncate" x-text="txn.payee"></div>
+                                    <div class="flex items-center gap-2 mt-0.5">
+                                        <span class="text-xs text-base-content/40" x-text="txn.date"></span>
+                                        <template x-if="txn.accounts?.[0]">
+                                            <span class="text-[10px] font-medium uppercase tracking-wide px-1.5 py-0.5 rounded-full bg-base-content/5 text-base-content/40"
+                                                  x-text="txn.accounts[0].split(':').pop()"></span>
+                                        </template>
+                                    </div>
+                                </div>
+                                <!-- Amount -->
+                                <div class="font-mono text-sm font-semibold text-base-content text-right flex-shrink-0"
+                                     x-text="fmtAmount(txn.amount)"></div>
+                            </div>
+                        </template>
+                    </div>
+                </template>
+            </div>
+        </div>
+    </div>
+</template>
