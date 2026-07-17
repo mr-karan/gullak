@@ -171,14 +171,14 @@ export function loadConfig(): AppConfig {
   const modelId =
     getFirstOptionalEnv("GULLAK_MODEL_ID") ??
     (openRouterApiKey
-      ? "google/gemini-3-flash-preview"
+      ? "google/gemini-3.5-flash"
       : openAiApiKey
         ? "gpt-4.1-mini"
         : "gpt-oss:20b");
   const modelName =
     getFirstOptionalEnv("GULLAK_MODEL_NAME") ??
     (openRouterApiKey
-      ? "Gemini 3 Flash"
+      ? "Gemini 3.5 Flash"
       : openAiApiKey
         ? "GPT-4.1 Mini"
         : "GPT-OSS 20B");
