@@ -151,7 +151,18 @@ class SmsRepository {
   /// legacy equivalents for rows captured before the server-queue refactor.
   /// `pending_parse`/`parsing` are intentionally excluded — they're in-flight,
   /// not yet reviewable.
-  static const _pendingStatuses = ['parsed', 'parse_failed', 'inbox', 'error'];
+  // Includes `pending_parse`/`parsing` so a row waiting on the server (or stuck
+  // there during an outage — LLM 402/server down) stays VISIBLE in Review as
+  // "waiting to be parsed" instead of silently vanishing until its backoff
+  // expires. The parse-health banner explains the systemic case.
+  static const _pendingStatuses = [
+    'parsed',
+    'parse_failed',
+    'inbox',
+    'error',
+    'pending_parse',
+    'parsing',
+  ];
 
   /// Ingested but not pending review: classifier-rejected (`none`), server said
   /// not-a-transaction (`not_a_txn`), duplicates (`duplicate`), and

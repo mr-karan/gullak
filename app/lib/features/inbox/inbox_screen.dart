@@ -75,11 +75,17 @@ class _InboxScreenState extends ConsumerState<InboxScreen> {
         actions: [
           asyncRows.maybeWhen(
             data: (rows) {
-              final failed = rows
-                  .where(
-                    (r) => r.status == 'parse_failed' || r.status == 'error',
-                  )
-                  .length;
+              // Count rows still stuck server-side too (pending_parse/parsing),
+              // not just terminal parse_failed/error — otherwise an operational
+              // failure moves them out of the count and the "Retry failed"
+              // option disappears after a single use.
+              const retryable = {
+                'parse_failed',
+                'error',
+                'pending_parse',
+                'parsing',
+              };
+              final failed = rows.where((r) => retryable.contains(r.status)).length;
               return PopupMenuButton<_InboxAction>(
                 tooltip: 'Inbox actions',
                 onSelected: (action) {

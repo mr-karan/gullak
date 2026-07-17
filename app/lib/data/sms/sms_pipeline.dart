@@ -328,10 +328,16 @@ class SmsPipeline {
   Future<int> retryFailedBackfill({
     Duration window = const Duration(days: 14),
   }) async {
+    // A user-initiated rescan means "try everything unresolved NOW", so it must
+    // also clear the backoff on rows already queued (`pending_parse`) — an
+    // operational failure (server down / LLM 402) leaves them there with a
+    // growing next_parse_after, and without resetting it a second rescan would
+    // silently skip them (the "could only retry once" bug). Rows the user has
+    // acted on ('accepted'/'inbox'/'dismissed'/'not_a_txn') are left alone.
     await db.customStatement(
       "UPDATE sms_messages SET candidate_status = 'pending_parse', "
       'parse_attempt_count = 0, next_parse_after = NULL, last_parse_error = NULL '
-      "WHERE candidate_status IN ('parse_failed', 'error')",
+      "WHERE candidate_status IN ('parse_failed', 'error', 'pending_parse')",
     );
     final added = await backfill(window: window, label: 'Refreshing SMS');
     await drainPendingParses(limit: 500);
