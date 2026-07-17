@@ -13,8 +13,6 @@
   "dependencies": {
     "@actual-app/api": "^26.6.0",
     "@hono/node-server": "^1.14.0",
-    "@mariozechner/pi-agent-core": "^0.73.1",
-    "@mariozechner/pi-ai": "^0.73.1",
     "better-sqlite3": "^12.11.1",
     "drizzle-orm": "^0.45.2",
     "drizzle-zod": "^0.8.3",

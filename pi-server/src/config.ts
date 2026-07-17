@@ -1,5 +1,10 @@
-import type { ThinkingLevel } from "@mariozechner/pi-agent-core";
 import { z } from "zod";
+
+// Inlined from the (now-abandoned) @mariozechner/pi-agent-core: it's a trivial
+// string union and was the ONLY thing we imported from that package — pi-ai was
+// never used at all. Dropping both deps removes an unmaintained agent framework
+// from the supply chain for one type. Keep in sync if a consumer ever needs it.
+type ThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh";
 
 function getEnv(name: string, fallback: string): string {
   const value = process.env[name];
