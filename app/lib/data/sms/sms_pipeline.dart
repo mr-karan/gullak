@@ -349,6 +349,25 @@ class SmsPipeline {
     Duration minimumWindow = const Duration(days: 7),
   }) => retryFailedBackfill(window: minimumWindow);
 
+  /// Per-row retry from the Inbox: re-queue one SMS (clearing any backoff so it
+  /// runs immediately) and drain. Lets the user retry a single failed/stuck row
+  /// without re-scanning the whole inbox. Returns the row's status after the
+  /// attempt (e.g. 'parsed', 'not_a_txn', 'parse_failed', or 'pending_parse'
+  /// if the server is still down).
+  Future<String?> retryOne(int smsRowId) async {
+    await db.customStatement(
+      "UPDATE sms_messages SET candidate_status = 'pending_parse', "
+      'parse_attempt_count = 0, next_parse_after = NULL, last_parse_error = NULL '
+      'WHERE id = ?',
+      [smsRowId],
+    );
+    await drainPendingParses(limit: 50);
+    final row =
+        await (db.select(db.smsMessages)..where((t) => t.id.equals(smsRowId)))
+            .getSingleOrNull();
+    return row?.candidateStatus;
+  }
+
   /// Capture-only. Classifies the SMS and, if it looks transactional, queues
   /// it as `pending_parse` for the server-parse drainer. There is NO on-device
   /// parsing or transaction creation here — that all happens in

@@ -984,6 +984,7 @@ class _ParseDebugDialog extends ConsumerStatefulWidget {
 
 class _ParseDebugDialogState extends ConsumerState<_ParseDebugDialog> {
   bool _sending = false;
+  bool _retrying = false;
   String? _result; // null = idle, "Sent #N" on success, "Failed: …" on error.
   bool _success = false;
 
@@ -1051,6 +1052,17 @@ class _ParseDebugDialogState extends ConsumerState<_ParseDebugDialog> {
               : const Icon(Icons.bug_report_outlined, size: 18),
           label: Text(_sending ? 'Sending…' : 'Send feedback'),
         ),
+        TextButton.icon(
+          onPressed: _sending || _retrying ? null : _retry,
+          icon: _retrying
+              ? const SizedBox(
+                  width: 14,
+                  height: 14,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.replay_outlined, size: 18),
+          label: Text(_retrying ? 'Retrying…' : 'Retry'),
+        ),
         FilledButton.tonal(
           onPressed: _sending ? null : () => Navigator.of(context).pop('log'),
           child: const Text('Log manually'),
@@ -1061,6 +1073,45 @@ class _ParseDebugDialogState extends ConsumerState<_ParseDebugDialog> {
         ),
       ],
     );
+  }
+
+  /// Re-parse just this SMS (clears backoff, runs now). On success it lands in
+  /// Ready/Ignored and drops out of Review; if the server's still down it stays
+  /// queued and the Inbox banner explains why.
+  Future<void> _retry() async {
+    setState(() {
+      _retrying = true;
+      _result = null;
+    });
+    final messenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
+    try {
+      final status = await ref
+          .read(smsPipelineProvider)
+          .retryOne(widget.item.id);
+      if (!mounted) return;
+      final resolved = status != 'parse_failed' &&
+          status != 'pending_parse' &&
+          status != 'parsing' &&
+          status != 'error';
+      navigator.maybePop();
+      showTimedSnackBar(
+        messenger,
+        SnackBar(
+          content: Text(
+            resolved
+                ? 'Parsed ✓ — check the Inbox'
+                : 'Still could not parse — it stays queued to retry',
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _retrying = false;
+        _result = 'Retry failed: $e';
+      });
+    }
   }
 
   Future<void> _send() async {
