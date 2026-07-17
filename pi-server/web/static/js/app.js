@@ -527,19 +527,45 @@ document.addEventListener('alpine:init', () => {
         receiptPreview: null,
         pendingMedia: null,
 
-        // The conversational agent (streaming /api/chat) has no wired endpoint
-        // on this build. Keep the chat UI present but surface a "coming soon"
-        // reply instead of hitting a dead path. A later phase wires /v1/messages.
+        // The conversational agent is the pi-server /v1/messages endpoint. It is
+        // a plain request/response (not streaming): POST { text, threadId? } and
+        // render the returned { threadId, reply }. The threadId is threaded back
+        // on subsequent turns so the agent keeps conversation context.
         async send() {
             if (!this.input.trim() || this.streaming) return;
+            if (!GullakApi.isConnected()) {
+                Alpine.store('connection').open();
+                return;
+            }
             const userMessage = this.input.trim();
             this.input = '';
             this.messages.push({ id: Date.now(), role: 'user', content: userMessage });
-            this.messages.push({
-                id: Date.now() + 1,
-                role: 'assistant',
-                content: 'Chat is coming soon. For now, view your transactions and monthly summary from the Transactions tab.'
-            });
+            this.streaming = true;
+
+            const threads = Alpine.store('threads');
+            try {
+                const body = { text: userMessage, source: 'web' };
+                if (threads.currentId) body.threadId = threads.currentId;
+                const res = await GullakApi.post('/v1/messages', body);
+                if (res?.threadId) threads.currentId = res.threadId;
+                this.messages.push({
+                    id: Date.now() + 1,
+                    role: 'assistant',
+                    content: res?.reply || 'No response.',
+                });
+            } catch (error) {
+                // The local dev server has no model key, so the agent may 503.
+                // Surface a graceful message inline instead of a dead bubble.
+                console.error('Chat request failed:', error);
+                this.messages.push({
+                    id: Date.now() + 1,
+                    role: 'assistant',
+                    content: `AI is unavailable right now (${error.message || 'request failed'}). Try again once the server has a model configured.`,
+                });
+                Alpine.store('notify').error(error.message || 'AI request failed');
+            } finally {
+                this.streaming = false;
+            }
         },
 
         async sendWithMedia() {
@@ -848,9 +874,15 @@ document.addEventListener('alpine:init', () => {
                 const summary = await GullakApi.get(`/v1/summary?startDate=${startDate}&endDate=${endDate}`);
                 // expenseCents is negative (money out); show as positive spend.
                 const totalSpent = Math.abs((summary?.expenseCents || 0) / 100);
+                // Count of expense rows in the period, derived from the rows we
+                // already fetched (the summary endpoint returns totals only).
+                const txnCount = (this._rawList || []).filter((r) => (r.amountCents || 0) < 0).length;
                 this.stats = {
                     currency: this.currency,
                     total_spent: totalSpent,
+                    transaction_count: txnCount,
+                    period_start: startDate,
+                    period_end: endDate,
                     income: (summary?.incomeCents || 0) / 100,
                     net: (summary?.netCents || 0) / 100,
                     categories: this.deriveCategories(this._rawList),
@@ -902,12 +934,12 @@ document.addEventListener('alpine:init', () => {
             if (!this.filtersActive) return;
 
             const rawFiltered = this._rawList.filter((r) => this.matchesFilters(r));
-            const spent = rawFiltered
-                .filter((r) => (r.amountCents || 0) < 0)
-                .reduce((s, r) => s + Math.abs(r.amountCents) / 100, 0);
+            const expenseRows = rawFiltered.filter((r) => (r.amountCents || 0) < 0);
+            const spent = expenseRows.reduce((s, r) => s + Math.abs(r.amountCents) / 100, 0);
             this.filteredStats = {
                 currency: this.currency,
                 total_spent: spent,
+                transaction_count: expenseRows.length,
                 categories: this.deriveCategories(rawFiltered),
                 top_payees: this.derivePayees(rawFiltered),
             };
@@ -1233,11 +1265,92 @@ document.addEventListener('alpine:init', () => {
             count: 0
         },
 
-        // The yearly reports grid has no pi-server endpoint yet. Keep the view
-        // present but empty (the grid partial renders its own empty state when
-        // `data` is null). A later phase builds this from /v1/transactions.
+        currency: 'INR',
+        _rows: [],
+        _categoriesById: {},
+
+        // Month labels for the grid columns (Jan..Dec).
+        _monthLabels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
+        _monthFull: ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'],
+
+        // Build the YNAB-style spend-by-category x month grid for the selected
+        // year from the current API: fetch the whole year of transactions plus
+        // the category name map, then aggregate client-side by categoryId x
+        // month. Amounts in the API are integer minor units; we render decimals.
         async load() {
-            this.data = null;
+            if (!GullakApi.isConnected()) {
+                Alpine.store('connection').open();
+                return;
+            }
+            this.loading = true;
+            try {
+                const [txnRes, catRes] = await Promise.all([
+                    GullakApi.get(`/v1/transactions?startDate=${this.year}-01-01&endDate=${this.year}-12-31&limit=5000`),
+                    GullakApi.get('/v1/categories'),
+                ]);
+                this._categoriesById = {};
+                for (const ct of (catRes?.categories || [])) this._categoriesById[ct.id] = ct.name;
+                this._rows = txnRes?.transactions || [];
+                this.data = this.buildGrid(this._rows);
+            } catch (error) {
+                console.error('Failed to load reports:', error);
+                Alpine.store('notify').error(error.message || 'Failed to load reports');
+                this.data = null;
+            } finally {
+                this.loading = false;
+            }
+        },
+
+        // Aggregate expense rows into the grid shape the partial expects.
+        buildGrid(rows) {
+            const byCategory = {};   // name -> months[12] of decimal spend
+            const monthTotals = new Array(12).fill(0);
+
+            for (const row of rows || []) {
+                if ((row.amountCents || 0) >= 0) continue; // expenses only
+                const d = (row.date || '');
+                const mi = Number.parseInt(d.slice(5, 7), 10) - 1;
+                if (Number.isNaN(mi) || mi < 0 || mi > 11) continue;
+                const name = row.categoryId ? (this._categoriesById[row.categoryId] || 'Uncategorized') : 'Uncategorized';
+                const amount = Math.abs(row.amountCents) / 100;
+                if (!byCategory[name]) byCategory[name] = new Array(12).fill(0);
+                byCategory[name][mi] += amount;
+                monthTotals[mi] += amount;
+            }
+
+            const activeMonths = monthTotals.filter((v) => v > 0).length || 1;
+
+            const categories = Object.entries(byCategory)
+                .map(([name, months]) => {
+                    const total = months.reduce((s, v) => s + v, 0);
+                    const spentMonths = months.filter((v) => v > 0).length || 1;
+                    return {
+                        name,
+                        months,
+                        subcategories: [],
+                        total,
+                        average: total / spentMonths,
+                    };
+                })
+                .sort((a, b) => b.total - a.total);
+
+            const grandTotal = monthTotals.reduce((s, v) => s + v, 0);
+
+            return {
+                currency: this.currency,
+                available_years: this.availableYears(),
+                months: this._monthLabels,
+                categories,
+                month_totals: monthTotals,
+                grand_total: grandTotal,
+                grand_average: grandTotal / activeMonths,
+            };
+        },
+
+        // Offer the current year plus the two prior years for quick switching.
+        availableYears() {
+            const now = new Date().getFullYear();
+            return [now, now - 1, now - 2];
         },
 
         async setYear(y) {
@@ -1251,8 +1364,35 @@ document.addEventListener('alpine:init', () => {
             this.expandedCategories[name] = !this.expandedCategories[name];
         },
 
-        // Report drilldown is disabled while the reports grid is unwired.
-        async openDrawer() {},
+        // Drill into a single category x month cell: show that month's expense
+        // transactions for the category, mapped to the shape the list expects.
+        async openDrawer(category, subcategory, monthIndex, total) {
+            this.drawer.open = true;
+            this.drawer.loading = false;
+            this.drawer.category = category;
+            this.drawer.subcategory = subcategory || '';
+            this.drawer.monthIndex = monthIndex;
+            this.drawer.monthName = `${this._monthFull[monthIndex]} ${this.year}`;
+            this.drawer.total = total || 0;
+
+            const txns = (this._rows || []).filter((row) => {
+                if ((row.amountCents || 0) >= 0) return false;
+                const d = (row.date || '');
+                const mi = Number.parseInt(d.slice(5, 7), 10) - 1;
+                if (mi !== monthIndex) return false;
+                const name = row.categoryId ? (this._categoriesById[row.categoryId] || 'Uncategorized') : 'Uncategorized';
+                return name === category;
+            }).map((row) => ({
+                id: row.id,
+                date: row.date,
+                payee: row.payeeName || 'Unknown',
+                amount: Math.abs(row.amountCents) / 100,
+                accounts: [`Expenses:${category}`],
+            })).sort((a, b) => b.date.localeCompare(a.date));
+
+            this.drawer.transactions = txns;
+            this.drawer.count = txns.length;
+        },
 
         closeDrawer() {
             this.drawer.open = false;
