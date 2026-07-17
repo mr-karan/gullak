@@ -94,8 +94,33 @@ class SmsPipeline {
     const SmsScanState.idle(),
   );
 
+  /// Null when SMS parsing is healthy; a human-readable reason when the sync
+  /// server / LLM is failing operationally (e.g. out of model credits, server
+  /// unreachable). The Inbox surfaces this as a banner so a systemic outage
+  /// reads as "parsing is down, will retry" instead of a pile of per-message
+  /// "couldn't parse" rows. Set on a thrown (operational) parse; cleared the
+  /// moment the server answers again.
+  final ValueNotifier<String?> parseHealth = ValueNotifier<String?>(null);
+
   void _updateScanState(SmsScanState state) {
     if (!_disposed) scanState.value = state;
+  }
+
+  void _setParseHealth(String? reason) {
+    if (!_disposed && parseHealth.value != reason) parseHealth.value = reason;
+  }
+
+  static String _degradedReason(Object e) {
+    final s = e.toString().toLowerCase();
+    if (s.contains('503') ||
+        s.contains('unavailable') ||
+        s.contains('credit') ||
+        s.contains('402')) {
+      return 'AI parsing is unavailable — check your sync server\'s model '
+          'credits. Messages are queued and will retry automatically.';
+    }
+    return "Can't reach your sync server. SMS are queued and will retry "
+        'automatically once it\'s back.';
   }
 
   /// Reset rows stranded mid-flight by a crash or force-kill. `parsing` is a
@@ -433,6 +458,9 @@ class SmsPipeline {
       );
       try {
         final outcome = await parserRegistry.parse(sms);
+        // The server answered (even a content parse_failed means it's up) →
+        // parsing is healthy again.
+        _setParseHealth(null);
         switch (outcome.status) {
           case SmsParseStatus.transaction:
             await _applyParsed(row, sms, outcome.candidate!);
@@ -447,8 +475,11 @@ class SmsPipeline {
         }
         processed += 1;
       } catch (e) {
-        // Transport failure: server unreachable / not configured yet. Keep the
-        // SMS queued and back off so it parses once the server is reachable.
+        // Operational failure: server unreachable, not configured, or the LLM
+        // 402'd/timed out (server now replies 503 on those). Surface it so the
+        // Inbox shows a banner, and keep the SMS queued with backoff so it
+        // parses once the service is healthy — never burned as a bad message.
+        _setParseHealth(_degradedReason(e));
         final attempt = row.parseAttemptCount + 1;
         await (db.update(
           db.smsMessages,

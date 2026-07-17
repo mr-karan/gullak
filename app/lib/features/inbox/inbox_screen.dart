@@ -138,6 +138,11 @@ class _InboxScreenState extends ConsumerState<InboxScreen> {
             valueListenable: pipeline.scanState,
             builder: (context, scan, _) => _SmsScanBanner(scan: scan),
           ),
+          ValueListenableBuilder<String?>(
+            valueListenable: pipeline.parseHealth,
+            builder: (context, reason, _) =>
+                reason == null ? const SizedBox.shrink() : _ParseHealthBanner(reason),
+          ),
           _InboxBucketChips(
             selected: _bucket,
             counts: counts,
@@ -358,6 +363,41 @@ class _InboxScreenState extends ConsumerState<InboxScreen> {
         SnackBar(content: Text('Confirm all failed: $e')),
       );
     }
+  }
+}
+
+/// Shown when SMS parsing is failing operationally (sync server down / LLM out
+/// of credits). Uses the error container so it reads as "something's wrong,
+/// systemic" — distinct from a per-message "needs review" — while making clear
+/// the messages aren't lost (they retry).
+class _ParseHealthBanner extends StatelessWidget {
+  const _ParseHealthBanner(this.reason);
+
+  final String reason;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Material(
+      color: cs.errorContainer,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+        child: Row(
+          children: [
+            Icon(Icons.cloud_off_outlined, size: 18, color: cs.onErrorContainer),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                reason,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: cs.onErrorContainer,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 

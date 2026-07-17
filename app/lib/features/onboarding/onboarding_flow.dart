@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:permission_handler/permission_handler.dart' as ph;
 
 import '../../core/money.dart';
 import '../../data/ai/pi_ai_client.dart';
@@ -120,6 +121,19 @@ class _OnboardingFlowState extends ConsumerState<OnboardingFlow> {
               apiKey: key == null || key.isEmpty ? null : key,
             );
         ref.invalidate(piAiClientProvider);
+
+        // Ask for SMS access now, as part of onboarding, rather than leaving it
+        // buried in Settings for the user to discover. Only meaningful with a
+        // sync server (SMS parsing runs there), which is why it's gated on
+        // `url` — this covers BOTH the fresh flow and the restore path (which
+        // skips the SMS primer page). Denial is fine; the Settings toggle still
+        // lets them enable it later.
+        if (Platform.isAndroid) {
+          final status = await ph.Permission.sms.request();
+          if (status.isGranted) {
+            await ref.read(prefsProvider).setSmsEnabled(true);
+          }
+        }
       }
 
       // Set onboarded *last* and invalidate — the router listens to
