@@ -1,0 +1,1844 @@
+<!DOCTYPE html>
+<html lang="en" class="transition-colors duration-300">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Gullak</title>
+
+    <!-- PWA -->
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#4338CA" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#0C0C0F" media="(prefers-color-scheme: dark)">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Gullak">
+    <link rel="apple-touch-icon" href="/static/icons/icon.svg">
+    <link rel="icon" type="image/svg+xml" href="/static/icons/icon.svg">
+
+    <!-- Fonts - Distinctive choices -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=Instrument+Serif&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <script src="/static/js/app.js?v=1"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.15.12/dist/cdn.min.js"></script>
+
+    <!-- Apply saved theme immediately to prevent flash of unstyled theme. -->
+    <script>
+        (function() {
+            const saved = localStorage.getItem('theme');
+            const theme = saved === 'gullak-dark' ? 'dark'
+                : saved === 'gullak' ? 'light'
+                : (saved || 'light');
+            document.documentElement.setAttribute('data-theme', theme);
+            if (document.body) document.body.setAttribute('data-theme', theme);
+        })();
+    </script>
+
+    <!--
+      DaisyUI 5 component + theme styles, loaded as a standalone stylesheet.
+
+      NOTE (no-build-step constraint): the @tailwindcss/browser build cannot
+      resolve DaisyUI's `@plugin "daisyui"` directive (that needs npm), and
+      including that directive silently ABORTS Tailwind's core utility layer
+      (flex/grid/p-*/etc. stop generating). So we do NOT use @plugin; we link
+      daisyui.css directly for the component/theme CSS, and the Tailwind browser
+      build below just runs `@import "tailwindcss"` for the utility layer. The
+      original custom theme colors are applied by overriding DaisyUI 5's
+      --color-* theme variables in plain CSS (see the [data-theme] block).
+    -->
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@5.0.43/daisyui.css" rel="stylesheet" type="text/css" />
+
+    <!-- Tailwind v4 browser build. Loaded in <head> with an @import so it emits
+         the utility layer used by the markup, plus the original custom fonts. -->
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4.1.11"></script>
+    <style type="text/tailwindcss">
+        @import "tailwindcss";
+
+        /* Original custom fonts, exposed as Tailwind font-* utilities. */
+        @theme {
+            --font-sans: 'DM Sans', system-ui, sans-serif;
+            --font-display: 'Instrument Serif', Georgia, serif;
+            --font-mono: 'IBM Plex Mono', monospace;
+        }
+    </style>
+
+    <!--
+      Original theme palette (the recovered "gullak" light + "gullak-dark"
+      themes). Loaded AFTER daisyui.css so these overrides win on equal
+      specificity, applying the exact original colors to two variable systems:
+
+      1. DaisyUI 5 `--color-*` full-color vars  → drive Tailwind utilities in the
+         markup (bg-base-100, text-primary, text-success, border-base-200, ...).
+      2. DaisyUI 4 short raw-oklch-component vars (--p, --bc, --b1, ...) → the
+         recovered main.css has ~270 refs like `oklch(var(--bc) / 0.04)` in the
+         v4 convention; DaisyUI 5 dropped these names, so we keep supplying them
+         ourselves (raw L C H components) rather than rewriting main.css.
+
+      data-theme is toggled at runtime as 'light' | 'dark'; 'gullak' /
+      'gullak-dark' are covered as aliases.
+    -->
+    <style>
+        [data-theme="light"], [data-theme="gullak"] {
+            /* DaisyUI 5 full-color theme vars (for Tailwind utilities). */
+            --color-primary: #4338CA;
+            --color-primary-content: #ffffff;
+            --color-secondary: #E0E7FF;
+            --color-secondary-content: #3730A3;
+            --color-accent: #F59E0B;
+            --color-accent-content: #ffffff;
+            --color-neutral: #1F2937;
+            --color-neutral-content: #ffffff;
+            --color-base-100: #FFFFFF;
+            --color-base-200: #F8FAFC;
+            --color-base-300: #F1F5F9;
+            --color-base-content: #0F172A;
+            --color-info: #3B82F6;
+            --color-success: #059669;
+            --color-warning: #D97706;
+            --color-error: #DC2626;
+            /* DaisyUI 4 short raw-component vars (for recovered main.css). */
+            --p: 45.68% 0.2146 277.02;
+            --pc: 100% 0 89.88;
+            --s: 92.99% 0.0334 272.79;
+            --sc: 39.84% 0.1773 277.37;
+            --a: 76.86% 0.1647 70.08;
+            --ac: 100% 0 89.88;
+            --n: 27.81% 0.0296 256.85;
+            --nc: 100% 0 89.88;
+            --b1: 100% 0 89.88;
+            --b2: 98.42% 0.0034 247.86;
+            --b3: 96.83% 0.0069 247.9;
+            --bc: 20.77% 0.0398 265.75;
+            --in: 62.31% 0.188 259.81;
+            --su: 59.6% 0.1274 163.23;
+            --wa: 66.58% 0.1574 58.32;
+            --er: 57.71% 0.2152 27.33;
+        }
+        [data-theme="dark"], [data-theme="gullak-dark"] {
+            --color-primary: #818CF8;
+            --color-primary-content: #0F0F23;
+            --color-secondary: #312E81;
+            --color-secondary-content: #E0E7FF;
+            --color-accent: #FBBF24;
+            --color-accent-content: #1F2937;
+            --color-neutral: #9CA3AF;
+            --color-neutral-content: #1F2937;
+            --color-base-100: #0C0C0F;
+            --color-base-200: #141419;
+            --color-base-300: #1E1E26;
+            --color-base-content: #F1F5F9;
+            --color-info: #60A5FA;
+            --color-success: #34D399;
+            --color-warning: #FBBF24;
+            --color-error: #F87171;
+            --p: 68.01% 0.1583 276.93;
+            --pc: 18.07% 0.0404 281.57;
+            --s: 35.88% 0.1354 278.7;
+            --sc: 92.99% 0.0334 272.79;
+            --a: 83.69% 0.1644 84.43;
+            --ac: 27.81% 0.0296 256.85;
+            --n: 71.37% 0.0192 261.32;
+            --nc: 27.81% 0.0296 256.85;
+            --b1: 15.58% 0.0063 285.64;
+            --b2: 19.35% 0.01 285.43;
+            --b3: 23.86% 0.0152 285.19;
+            --bc: 96.83% 0.0069 247.9;
+            --in: 71.37% 0.1434 254.62;
+            --su: 77.29% 0.1535 163.22;
+            --wa: 83.69% 0.1644 84.43;
+            --er: 71.06% 0.1661 22.22;
+        }
+    </style>
+
+    <link href="/static/css/main.css?v=1" rel="stylesheet">
+
+</head>
+<body class="min-h-screen bg-base-100 text-base-content antialiased selection:bg-primary/20 selection:text-primary overflow-hidden">
+    
+<div class="flex h-dvh bg-base-100" x-data="gullakApp()" 
+     @keydown.window.meta.k.prevent="$store.commandPalette && $store.commandPalette.toggle()"
+     @keydown.window.ctrl.k.prevent="$store.commandPalette && $store.commandPalette.toggle()"
+     @keydown.window.slash.prevent="if(!['INPUT','TEXTAREA'].includes(document.activeElement.tagName)) $refs.chatInput?.focus()"
+     @keydown.window.escape="$store.commandPalette && ($store.commandPalette.open = false)">
+
+    <!-- Mobile Header Bar -->
+    <div class="md:hidden fixed top-0 left-0 right-0 h-14 bg-base-100 border-b border-base-200/60 flex items-center px-4 z-30" x-show="$store.setup.complete" x-cloak>
+        <button @click="$store.router.toggleSidebar()" class="p-2 -ml-2 rounded-lg hover:bg-base-200/80 transition-colors">
+            <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+        </button>
+        <div class="flex items-center gap-2 ml-3">
+            <img src="/static/icons/icon.svg" alt="Gullak" class="w-7 h-7 rounded-lg" />
+            <span class="font-semibold text-base">Gullak</span>
+        </div>
+    </div>
+
+    <!-- Mobile Overlay -->
+    <div class="md:hidden fixed inset-0 bg-black/50 z-30 transition-opacity duration-200"
+         x-show="$store.router.sidebarOpen"
+         x-transition:enter="ease-out"
+         x-transition:enter-start="opacity-0"
+         x-transition:enter-end="opacity-100"
+         x-transition:leave="ease-in"
+         x-transition:leave-start="opacity-100"
+         x-transition:leave-end="opacity-0"
+         @click="$store.router.closeSidebar()"
+         x-cloak></div>
+
+    <!-- Sidebar Navigation -->
+    <aside class="w-[280px] flex flex-col border-r border-base-200/60 bg-base-100 flex-shrink-0 z-40
+                  fixed md:relative inset-y-0 left-0 transform transition-transform duration-200 ease-out
+                  md:translate-x-0"
+           :class="$store.router.sidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'"
+           x-show="$store.setup.complete" x-cloak>
+        <!-- App Header -->
+        <div class="h-14 flex items-center px-5 border-b border-base-200/60">
+            <div class="flex items-center gap-3">
+                <img src="/static/icons/icon.svg" alt="Gullak" class="w-9 h-9 rounded-xl shadow-sm" />
+                <span class="font-semibold text-lg tracking-tight">Gullak</span>
+            </div>
+        </div>
+
+        <!-- Main Nav -->
+        <nav class="flex-1 px-3 py-4 space-y-1 overflow-y-auto custom-scrollbar">
+            <a href="#chat"
+               @click.prevent="$store.router.navigate('chat')"
+               :class="$store.router.view === 'chat' ? 'bg-primary/10 text-primary border-primary/20' : 'text-base-content/60 hover:bg-base-200/80 hover:text-base-content border-transparent'"
+               class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 border group">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="transition-transform group-hover:scale-110"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                <span class="flex-1">Chat</span>
+                <kbd class="hidden xl:inline text-[10px] font-mono px-1.5 py-0.5 rounded bg-base-200/80 text-base-content/40">/</kbd>
+            </a>
+            <a href="#transactions"
+               @click.prevent="$store.router.navigate('transactions')"
+               :class="$store.router.view === 'transactions' ? 'bg-primary/10 text-primary border-primary/20' : 'text-base-content/60 hover:bg-base-200/80 hover:text-base-content border-transparent'"
+               class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 border group">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="transition-transform group-hover:scale-110"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
+                <span class="flex-1">Transactions</span>
+            </a>
+            <a href="#reports"
+               @click.prevent="$store.router.navigate('reports')"
+               :class="$store.router.view === 'reports' ? 'bg-primary/10 text-primary border-primary/20' : 'text-base-content/60 hover:bg-base-200/80 hover:text-base-content border-transparent'"
+               class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 border group">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="transition-transform group-hover:scale-110"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/></svg>
+                <span class="flex-1">Reports</span>
+            </a>
+            <a href="#ledger"
+               @click.prevent="$store.router.navigate('ledger')"
+               :class="$store.router.view === 'ledger' ? 'bg-primary/10 text-primary border-primary/20' : 'text-base-content/60 hover:bg-base-200/80 hover:text-base-content border-transparent'"
+               class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 border group">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="transition-transform group-hover:scale-110"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/></svg>
+                <span class="flex-1">Ledger</span>
+            </a>
+
+            <!-- Thread History -->
+            <div class="pt-5 mt-5 border-t border-base-200/60">
+                <div class="px-4 flex items-center justify-between mb-3">
+                    <span class="text-xs font-semibold text-base-content/40 uppercase tracking-wider">History</span>
+                    <button @click="$store.threads.create()" class="p-1 rounded-md text-primary hover:bg-primary/10 transition-colors" title="New Chat">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                    </button>
+                </div>
+
+                <div class="space-y-0.5">
+                    <template x-if="$store.threads.loading">
+                        <div class="px-4 py-2 text-sm text-base-content/40 italic">Loading...</div>
+                    </template>
+
+                    <template x-for="thread in $store.threads.list" :key="thread.id">
+                        <div class="group relative flex items-center gap-2 px-4 py-2 rounded-lg text-sm cursor-pointer transition-all duration-150"
+                             :class="$store.threads.currentId === thread.id ? 'bg-base-200/80 text-base-content' : 'text-base-content/60 hover:bg-base-200/50 hover:text-base-content'"
+                             @click="$store.router.navigate('chat', { threadId: thread.id })">
+                            <span class="truncate flex-1 text-[13px]" x-text="thread.title || 'New Chat'"></span>
+
+                            <button @click.stop="$store.threads.delete(thread.id)"
+                                    class="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-error/10 hover:text-error transition-all duration-150">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                            </button>
+                        </div>
+                    </template>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Install App Banner -->
+        <div x-show="$store.pwa.canInstall && !$store.pwa.isStandalone" 
+             x-transition
+             class="p-3 mx-3 mb-2 rounded-xl bg-gradient-to-r from-primary/10 to-primary/5 border border-primary/20" 
+             x-cloak>
+            <button @click="$store.pwa.promptInstall()" 
+                    class="w-full flex items-center gap-3 text-left">
+                <div class="w-9 h-9 rounded-lg bg-primary/20 flex items-center justify-center flex-shrink-0">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-primary"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                </div>
+                <div class="flex-1 min-w-0">
+                    <div class="text-sm font-medium text-base-content">Install App</div>
+                    <div class="text-xs text-base-content/50">Add to home screen</div>
+                </div>
+            </button>
+        </div>
+
+        <!-- Update Available Banner -->
+        <div x-show="$store.pwa.updateAvailable" 
+             x-transition
+             class="p-3 mx-3 mb-2 rounded-xl bg-success/10 border border-success/20" 
+             x-cloak>
+            <button @click="$store.pwa.applyUpdate()" 
+                    class="w-full flex items-center gap-3 text-left">
+                <div class="w-9 h-9 rounded-lg bg-success/20 flex items-center justify-center flex-shrink-0">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-success"><path d="M21 2v6h-6M3 12a9 9 0 0 1 15-6.7L21 8M3 22v-6h6M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>
+                </div>
+                <div class="flex-1 min-w-0">
+                    <div class="text-sm font-medium text-base-content">Update Available</div>
+                    <div class="text-xs text-base-content/50">Tap to refresh</div>
+                </div>
+            </button>
+        </div>
+
+        <!-- Footer Actions -->
+        <div class="p-4 border-t border-base-200/60">
+            <div class="flex items-center justify-between">
+                
+                <a href="#" @click.prevent="$store.connection.open()" class="p-2 rounded-lg text-base-content/50 hover:text-base-content hover:bg-base-200/80 transition-all duration-150" title="Settings">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                </a>
+
+                <!-- Theme Toggle -->
+                <button @click="$store.theme.toggle()" class="theme-toggle" title="Toggle Theme">
+                    <svg class="sun-icon" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+                    <svg class="moon-icon" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+                </button>
+            </div>
+        </div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main class="flex-1 flex flex-col relative overflow-hidden bg-gradient-mesh pt-14 md:pt-0 pb-[calc(68px+env(safe-area-inset-bottom,0px))] md:pb-0">
+
+        <!-- Setup Wizard -->
+        <template x-if="$store.router.view === 'setup'">
+            <div class="flex-1 overflow-y-auto p-8">
+                <div class="w-full max-w-3xl space-y-8 animate-slide-up">
+                    <div class="flex items-center justify-between">
+                        <h1 class="text-2xl font-display">Settings</h1>
+                        <button @click="$store.router.navigate('chat')" class="btn btn-ghost btn-sm" x-show="$store.setup.complete">Done</button>
+                    </div>
+
+                    <!-- Steps -->
+                    <div x-show="!$store.setup.complete" class="flex gap-2 mb-8">
+                        <div class="h-1 flex-1 rounded-full transition-colors duration-300" :class="['welcome', 'accounts', 'categories'].indexOf($store.setup.step) >= 0 ? 'bg-primary' : 'bg-base-300'"></div>
+                        <div class="h-1 flex-1 rounded-full transition-colors duration-300" :class="['accounts', 'categories'].indexOf($store.setup.step) >= 0 ? 'bg-primary' : 'bg-base-300'"></div>
+                        <div class="h-1 flex-1 rounded-full transition-colors duration-300" :class="$store.setup.step === 'categories' ? 'bg-primary' : 'bg-base-300'"></div>
+                    </div>
+
+                    <!-- Content -->
+                    <div class="space-y-6">
+                        <!-- Welcome / Currency -->
+                        <div x-show="$store.setup.step === 'welcome' || ($store.setup.complete && $store.router.view === 'setup')" class="card-elevated p-6 space-y-4">
+                            <h2 class="text-lg font-semibold">Preferences</h2>
+                            <div class="grid gap-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-base-content/70 mb-2">Currency</label>
+                                    <select x-model="$store.setup.data.currency" class="select select-bordered w-full bg-base-100">
+                                        <template x-for="curr in $store.setup.options?.currencies || []" :key="curr.code">
+                                            <option :value="curr.code" x-text="`${curr.symbol} ${curr.name}`"></option>
+                                        </template>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-base-content/70 mb-2">Timezone</label>
+                                    <select x-model="$store.setup.data.timezone" class="select select-bordered w-full bg-base-100">
+                                        <template x-for="tz in $store.setup.options?.timezones || []" :key="tz.value">
+                                            <option :value="tz.value" x-text="tz.label"></option>
+                                        </template>
+                                    </select>
+                                </div>
+                            </div>
+                            <div x-show="!$store.setup.complete && $store.setup.step === 'welcome'" class="pt-2">
+                                <button @click="$store.setup.submitStep()" class="btn btn-primary w-full" :disabled="$store.setup.loading">Continue</button>
+                            </div>
+                        </div>
+
+                        <!-- Accounts -->
+                        <div x-show="$store.setup.step === 'accounts' || ($store.setup.complete && $store.router.view === 'setup')" class="card-elevated p-6 space-y-5">
+                            <h2 class="text-lg font-semibold">Accounts</h2>
+
+                            <!-- Banks -->
+                            <div>
+                                <label class="block text-xs font-semibold text-base-content/50 uppercase tracking-wider mb-3">Bank Accounts</label>
+                                <div class="flex flex-wrap gap-2 mb-3">
+                                    <template x-for="bank in $store.setup.data.bank_accounts" :key="bank">
+                                        <div class="inline-flex items-center gap-2 bg-base-200 rounded-full pl-4 pr-2 py-1.5 text-sm">
+                                            <span x-text="bank"></span>
+                                            <button @click="$store.setup.removeBank(bank)" class="p-0.5 rounded-full hover:bg-error/20 hover:text-error transition-colors">
+                                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                                            </button>
+                                        </div>
+                                    </template>
+                                </div>
+                                <!-- Quick add suggested banks -->
+                                <div class="flex flex-wrap gap-1.5 mb-3" x-show="$store.setup.options?.suggested_banks?.length">
+                                    <template x-for="bank in ($store.setup.options?.suggested_banks || []).filter(b => !$store.setup.data.bank_accounts.includes(b))" :key="bank">
+                                        <button @click="$store.setup.addBank(bank)" 
+                                                class="px-3 py-1 text-xs rounded-full border border-base-300 text-base-content/60 hover:border-primary hover:text-primary hover:bg-primary/5 transition-all">
+                                            + <span x-text="bank"></span>
+                                        </button>
+                                    </template>
+                                </div>
+                                <div class="flex gap-2">
+                                    <input type="text" x-data="{val:''}" x-model="val" @keyup.enter="$store.setup.addBank(val); val=''" placeholder="Or type custom bank name..." class="input-box flex-1" />
+                                    <button class="btn btn-primary" @click="$store.setup.addBank($el.previousElementSibling.value); $el.previousElementSibling.value=''">Add</button>
+                                </div>
+                            </div>
+
+                            <!-- Cards -->
+                            <div>
+                                <label class="block text-xs font-semibold text-base-content/50 uppercase tracking-wider mb-3">Credit Cards</label>
+                                <div class="flex flex-wrap gap-2 mb-3">
+                                    <template x-for="card in $store.setup.data.credit_cards" :key="card">
+                                        <div class="inline-flex items-center gap-2 bg-base-200 rounded-full pl-4 pr-2 py-1.5 text-sm">
+                                            <span x-text="card"></span>
+                                            <button @click="$store.setup.removeCard(card)" class="p-0.5 rounded-full hover:bg-error/20 hover:text-error transition-colors">
+                                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                                            </button>
+                                        </div>
+                                    </template>
+                                </div>
+                                <div class="flex flex-wrap gap-1.5 mb-3" x-show="$store.setup.options?.suggested_cards?.length">
+                                    <template x-for="card in ($store.setup.options?.suggested_cards || []).filter(c => !$store.setup.data.credit_cards.includes(c))" :key="card">
+                                        <button @click="$store.setup.addCard(card)" 
+                                                class="px-3 py-1 text-xs rounded-full border border-base-300 text-base-content/60 hover:border-primary hover:text-primary hover:bg-primary/5 transition-all">
+                                            + <span x-text="card"></span>
+                                        </button>
+                                    </template>
+                                </div>
+                                <div class="flex gap-2">
+                                    <input type="text" x-data="{val:''}" x-model="val" @keyup.enter="$store.setup.addCard(val); val=''" placeholder="Or type custom card name..." class="input-box flex-1" />
+                                    <button class="btn btn-primary" @click="$store.setup.addCard($el.previousElementSibling.value); $el.previousElementSibling.value=''">Add</button>
+                                </div>
+                            </div>
+
+                            <div x-show="!$store.setup.complete && $store.setup.step === 'accounts'" class="pt-2 flex gap-3">
+                                <button @click="$store.setup.step = 'categories'" class="btn btn-ghost">Skip</button>
+                                <button @click="$store.setup.submitStep()" class="btn btn-primary flex-1" :disabled="$store.setup.loading">Continue</button>
+                            </div>
+                        </div>
+
+                        <!-- Categories -->
+                        <div x-show="$store.setup.step === 'categories' || ($store.setup.complete && $store.router.view === 'setup')" class="card-elevated p-6 space-y-4">
+                            <h2 class="text-lg font-semibold">Categories</h2>
+                            <div class="bg-base-200/50 rounded-xl p-4 max-h-60 overflow-y-auto custom-scrollbar">
+                                <div class="flex flex-wrap gap-2">
+                                    <template x-for="cat in ($store.setup.data.categories.length ? $store.setup.data.categories : $store.setup.options?.default_expense_accounts) || []" :key="cat">
+                                        <span class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-base-100 rounded-full text-xs text-base-content/70 border border-base-200">
+                                            <div class="w-1.5 h-1.5 rounded-full bg-primary/60 flex-shrink-0"></div>
+                                            <span x-text="cat"></span>
+                                        </span>
+                                    </template>
+                                </div>
+                            </div>
+                            <div x-show="!$store.setup.complete && $store.setup.step === 'categories'" class="pt-2">
+                                <button @click="$store.setup.submitStep()" class="btn btn-primary w-full" :disabled="$store.setup.loading">Finish Setup</button>
+                            </div>
+                        </div>
+
+                        <!-- WhatsApp Integration -->
+                        <div x-show="$store.setup.complete && $store.router.view === 'setup'" class="card-elevated p-6 space-y-5">
+                            <div class="flex items-center justify-between">
+                                <h2 class="text-lg font-semibold">WhatsApp Integration</h2>
+                                <div class="px-2 py-1 rounded-full text-xs font-medium"
+                                     :class="$store.whatsapp.connected ? 'bg-success/10 text-success' : 'bg-base-200 text-base-content/50'">
+                                    <span x-text="$store.whatsapp.connected ? 'Connected' : 'Not Connected'"></span>
+                                </div>
+                            </div>
+
+                            <div x-show="!$store.whatsapp.connected" class="space-y-4">
+                                <p class="text-sm text-base-content/70">
+                                    Link your WhatsApp to log expenses via chat.
+                                    <br>
+                                    1. Open WhatsApp on your phone
+                                    <br>
+                                    2. Go to <strong>Settings > Linked Devices > Link a Device</strong>
+                                    <br>
+                                    3. Click the button below to generate a QR code, then scan it
+                                </p>
+                                
+                                <template x-if="$store.whatsapp.status === 'stopped' || $store.whatsapp.status === 'STOPPED'">
+                                    <div class="flex justify-center">
+                                        <button @click="$store.whatsapp.startSession()" 
+                                                :disabled="$store.whatsapp.qrLoading"
+                                                class="btn btn-primary">
+                                            <span x-show="!$store.whatsapp.qrLoading">Generate QR Code</span>
+                                            <span x-show="$store.whatsapp.qrLoading" class="loading loading-spinner loading-sm"></span>
+                                        </button>
+                                    </div>
+                                </template>
+
+                                <template x-if="$store.whatsapp.status === 'STARTING'">
+                                    <div class="flex flex-col items-center gap-2 p-4">
+                                        <span class="loading loading-spinner loading-lg text-primary"></span>
+                                        <p class="text-sm text-base-content/60">Starting session...</p>
+                                    </div>
+                                </template>
+
+                                <template x-if="$store.whatsapp.status === 'SCAN_QR_CODE' && $store.whatsapp.qrImageUrl">
+                                    <div class="space-y-3">
+                                        <div class="flex justify-center p-4 bg-white rounded-xl border border-base-200 w-fit mx-auto">
+                                            <img :src="$store.whatsapp.qrImageUrl" class="w-64 h-64 object-contain" alt="Scan QR Code" />
+                                        </div>
+                                        <p class="text-xs text-center text-base-content/40">
+                                            Scan with WhatsApp. QR expires in ~20 seconds.
+                                        </p>
+                                        <div class="flex justify-center">
+                                            <button @click="$store.whatsapp.startSession()" class="btn btn-sm btn-ghost">
+                                                Regenerate QR
+                                            </button>
+                                        </div>
+                                    </div>
+                                </template>
+                            </div>
+
+                            <div x-show="$store.whatsapp.connected" class="space-y-3">
+                                <p class="text-sm text-base-content/70">
+                                    Your WhatsApp is linked. You can now start logging expenses.
+                                </p>
+                                <div class="bg-base-200/50 rounded-lg p-4 text-sm">
+                                    <p class="font-medium mb-1">Try sending:</p>
+                                    <code class="text-xs bg-base-100 px-1.5 py-0.5 rounded border border-base-200">Spent 500 on dinner</code>
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+        </template>
+
+        <!-- Chat View -->
+        <template x-if="$store.router.view === 'chat'">
+            <div class="flex-1 flex overflow-hidden">
+                <!-- Chat Area -->
+                <div class="flex-1 flex flex-col relative min-w-0">
+
+                    <!-- Messages Container -->
+                    <div class="flex-1 overflow-y-auto px-3 py-4 md:px-8 md:py-6 custom-scrollbar" x-ref="messagesContainer">
+
+                        <!-- Empty State -->
+                        <template x-if="$store.chat.messages.length === 0 && !$store.chat.streaming">
+                            <div class="h-full flex flex-col items-center justify-center p-6 text-center animate-fade-in">
+                                <div class="empty-state-icon-wrapper">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                                </div>
+                                <h2 class="empty-state-title-premium">Log an expense in a sentence</h2>
+                                <p class="empty-state-desc-premium mb-10">Just type it out. Gullak will categorize it and prep it for confirmation.</p>
+
+                                <div class="flex flex-wrap justify-center gap-2.5 max-w-lg">
+                                    <button @click="$store.chat.input = 'Uber to office 350'; $refs.chatInput.focus()" class="prompt-suggestion group">
+                                        <span class="text-base-content/40 group-hover:text-primary mr-1.5">→</span>
+                                        Uber to office 350
+                                    </button>
+                                    <button @click="$store.chat.input = 'Blinkit groceries 850'; $refs.chatInput.focus()" class="prompt-suggestion group">
+                                        <span class="text-base-content/40 group-hover:text-primary mr-1.5">→</span>
+                                        Blinkit groceries 850
+                                    </button>
+                                    <button @click="$store.chat.input = 'Netflix renewal 649'; $refs.chatInput.focus()" class="prompt-suggestion group">
+                                        <span class="text-base-content/40 group-hover:text-primary mr-1.5">→</span>
+                                        Netflix renewal 649
+                                    </button>
+                                    <button @click="$store.chat.input = 'Coffee and croissant 180'; $refs.chatInput.focus()" class="prompt-suggestion group">
+                                        <span class="text-base-content/40 group-hover:text-primary mr-1.5">→</span>
+                                        Coffee and croissant 180
+                                    </button>
+                                </div>
+
+                                <!-- Keyboard shortcut hint for desktop -->
+                                <div class="hidden md:flex items-center gap-2 mt-10 text-xs text-base-content/40">
+                                    <span>Press</span>
+                                    <kbd class="px-2 py-1 bg-base-200 rounded text-base-content/60 font-mono">/</kbd>
+                                    <span>to focus input or</span>
+                                    <kbd class="px-2 py-1 bg-base-200 rounded text-base-content/60 font-mono">⌘K</kbd>
+                                    <span>for command palette</span>
+                                </div>
+                            </div>
+                        </template>
+
+                        <!-- Messages -->
+                        <div class="max-w-3xl mx-auto space-y-5 pb-4">
+                            <template x-for="msg in $store.chat.messages" :key="msg.id">
+                                <div :class="msg.role === 'user' ? 'flex justify-end' : 'flex justify-start'"
+                                     x-show="hasDisplayableContent(msg.content)"
+                                     class="animate-slide-up">
+                                    <div :class="msg.role === 'user' ? 'chat-bubble-user max-w-[80%]' : 'chat-bubble-ai max-w-[85%]'">
+                                        <div class="message-content" x-html="formatMessage(msg.content)"></div>
+                                    </div>
+                                </div>
+                            </template>
+
+                            <!-- Typing Indicator -->
+                            <template x-if="$store.chat.streaming">
+                                <div class="flex justify-start animate-fade-in">
+                                    <div class="chat-bubble-ai">
+                                        <div class="typing-indicator">
+                                            <div class="dot"></div>
+                                            <div class="dot"></div>
+                                            <div class="dot"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+
+                    <!-- Input Area -->
+                    <div class="p-3 md:p-6 pb-4 md:pb-6 bg-gradient-to-t from-base-100 via-base-100/95 to-transparent flex-shrink-0">
+                        <div class="max-w-3xl mx-auto">
+                            <form @submit.prevent="$store.chat.send()">
+                                <div class="chat-input-container flex items-end gap-1.5 md:gap-2">
+                                    <label class="chat-attach-btn cursor-pointer hidden md:flex" title="Upload CSV/Excel">
+                                        <input type="file" accept=".csv,.xlsx,.xls" @change="$store.chat.uploadFile($event)" class="hidden" :disabled="$store.chat.streaming || $store.chat.uploading || $store.chat.uploadingReceipt">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+                                    </label>
+ 
+                                    <label class="chat-attach-btn cursor-pointer" title="Upload receipt">
+                                        <input type="file" accept="image/jpeg,image/png,image/webp,application/pdf,.csv,.xlsx,.xls" @change="$event.target.files[0]?.type.startsWith('image') || $event.target.files[0]?.type === 'application/pdf' ? $store.chat.uploadReceipt($event) : $store.chat.uploadFile($event)" class="hidden" :disabled="$store.chat.streaming || $store.chat.uploading || $store.chat.uploadingReceipt">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+                                    </label>
+
+                                    <textarea
+                                        x-model="$store.chat.input"
+                                        x-ref="chatInput"
+                                        @keydown.enter.prevent="if(!$event.shiftKey) $store.chat.send()"
+                                        rows="1"
+                                        placeholder="Log an expense..."
+                                        class="chat-input-textarea flex-1"
+                                        :disabled="$store.chat.streaming || $store.chat.uploading || $store.chat.uploadingReceipt"></textarea>
+ 
+                                    <button type="submit"
+                                            class="chat-send-button flex-shrink-0"
+                                            :disabled="$store.chat.streaming || $store.chat.uploading || $store.chat.uploadingReceipt || !$store.chat.input.trim()">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+                                    </button>
+                                </div>
+                            </form>
+                            <!-- Upload status indicators -->
+                            <div x-show="$store.chat.uploading" class="flex items-center justify-center gap-2 mt-3 text-xs text-base-content/50">
+                                <div class="w-4 h-4 border-2 border-primary/30 border-t-primary rounded-full animate-spin"></div>
+                                <span>Uploading file...</span>
+                            </div>
+                            <div x-show="$store.chat.uploadingReceipt" class="flex items-center justify-center gap-2 mt-3 text-xs text-base-content/50">
+                                <div class="w-4 h-4 border-2 border-primary/30 border-t-primary rounded-full animate-spin"></div>
+                                <span>Processing receipt...</span>
+                            </div>
+                            <template x-if="$store.chat.uploadingReceipt && $store.chat.receiptPreview">
+                                <div class="mt-3 flex items-center justify-center gap-2 text-xs text-base-content/60">
+                                    <img :src="$store.chat.receiptPreview" alt="Receipt preview" class="w-10 h-10 rounded-xl object-cover border border-base-200/60 shadow-sm" />
+                                    <span>Receipt attached</span>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Transaction Preview Panel (Right Side on desktop, Bottom Sheet on mobile) -->
+                <div class="preview-panel flex flex-col z-10
+                            fixed md:relative bottom-0 left-0 right-0 md:bottom-auto md:left-auto md:right-auto
+                            w-full md:w-[340px] max-h-[60vh] md:max-h-none
+                            rounded-t-2xl md:rounded-none shadow-[0_-4px_20px_rgba(0,0,0,0.1)] md:shadow-none"
+                     x-show="$store.pending.transactions.length > 0"
+                     x-transition:enter="transition ease-out duration-300"
+                     x-transition:enter-start="translate-y-full md:translate-y-0 md:translate-x-full opacity-0"
+                     x-transition:enter-end="translate-y-0 md:translate-x-0 opacity-100"
+                     x-transition:leave="transition ease-in duration-200"
+                     x-transition:leave-start="translate-y-0 md:translate-x-0 opacity-100"
+                     x-transition:leave-end="translate-y-full md:translate-y-0 md:translate-x-full opacity-0">
+
+                    <!-- Panel Header -->
+                    <div class="border-b border-base-200/60 bg-base-100 rounded-t-2xl md:rounded-none">
+                        <div class="w-10 h-1 bg-base-300 rounded-full mx-auto mt-2 mb-1 md:hidden"></div>
+                        <div class="h-12 flex items-center justify-between px-4">
+                            <div class="flex items-center gap-2">
+                                <div class="w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center">
+                                    <span class="text-[10px] font-semibold text-primary" x-text="$store.pending.transactions.length"></span>
+                                </div>
+                                <span class="font-medium text-xs">Pending</span>
+                            </div>
+                            <div class="flex gap-1">
+                                <button @click="$store.pending.confirmAll()"
+                                        class="px-2.5 py-1 rounded-md bg-success/90 text-white text-[10px] font-semibold hover:bg-success transition-colors"
+                                        :disabled="$store.pending.confirming">
+                                    Confirm All
+                                </button>
+                                <button @click="$store.pending.cancelAll()"
+                                        class="px-2.5 py-1 rounded-md text-[10px] font-medium text-base-content/50 hover:text-error hover:bg-error/10 transition-colors">
+                                    Clear
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Transaction List -->
+                    <div class="flex-1 overflow-y-auto custom-scrollbar bg-base-100">
+                        <template x-for="pending in $store.pending.transactions" :key="pending.data.id">
+                            <div class="preview-card-compact border-b border-base-100 last:border-0 animate-slide-up">
+                                <!-- Top row: Payee + Amount + Quick Actions -->
+                                <div class="flex items-start justify-between gap-2 px-3 pt-2.5 pb-2">
+                                    <div class="flex-1 min-w-0">
+                                        <div class="text-sm font-semibold text-base-content truncate" x-text="pending.data.transaction.payee"></div>
+                                        <div class="text-xs text-base-content/50 font-mono mt-0.5" x-text="formatCurrency(pending.data.transaction.amount, pending.data.transaction.currency)"></div>
+                                    </div>
+                                    <div class="flex gap-1 flex-shrink-0">
+                                        <button @click="$store.pending.confirmOne(pending.data.id)"
+                                                class="w-7 h-7 rounded-md bg-success/90 text-white flex items-center justify-center hover:bg-success transition-colors"
+                                                :disabled="$store.pending.confirming">
+                                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                                        </button>
+                                        <button @click="$store.pending.cancel(pending.data.id)"
+                                                class="w-7 h-7 rounded-md bg-base-200 text-base-content/50 hover:text-error hover:bg-error/10 flex items-center justify-center transition-colors">
+                                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <!-- Compact editable fields -->
+                                <div class="px-3 pb-2.5 space-y-1.5">
+                                    <!-- Date -->
+                                    <div class="flex items-center gap-2">
+                                        <svg class="w-3.5 h-3.5 text-base-content/30 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                                        <input type="date"
+                                               x-model="pending.data.transaction.date"
+                                               @change="$store.pending.update(pending.data.id, 'date', $event.target.value)"
+                                               class="text-xs bg-transparent border-none p-0 text-base-content/70 focus:text-base-content outline-none w-full" />
+                                    </div>
+
+                                    <!-- Category -->
+                                    <div class="flex items-center gap-2">
+                                        <svg class="w-3.5 h-3.5 text-base-content/30 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
+                                        <input type="text"
+                                               x-model="pending.data.transaction.expense_account"
+                                               @input="$store.pending.update(pending.data.id, 'expense_account', $event.target.value)"
+                                               class="text-xs bg-transparent border-none p-0 text-primary font-medium focus:text-primary/80 outline-none w-full placeholder:text-base-content/30"
+                                               placeholder="Category" />
+                                    </div>
+
+                                    <!-- Payment Account -->
+                                    <div class="flex items-center gap-2">
+                                        <svg class="w-3.5 h-3.5 text-base-content/30 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+                                        <input type="text"
+                                               x-model="pending.data.transaction.payment_account"
+                                               @input="$store.pending.update(pending.data.id, 'payment_account', $event.target.value)"
+                                               class="text-xs bg-transparent border-none p-0 text-base-content/70 focus:text-base-content outline-none w-full placeholder:text-base-content/30"
+                                               placeholder="Payment" />
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+            </div>
+        </template>
+
+        <!-- Transactions View -->
+        <template x-if="$store.router.view === 'transactions'">
+            <div class="flex-1 flex flex-col h-full bg-base-50/50 min-h-0" x-data="transactionsDashboard()">
+                <div class="min-h-14 md:h-16 border-b border-base-200/60 bg-base-100 flex flex-col md:flex-row md:items-center justify-between px-4 md:px-8 py-3 md:py-0 gap-3 md:gap-0 flex-shrink-0">
+    <h2 class="text-lg md:text-xl font-display">Transactions</h2>
+    <div class="flex items-center gap-2 md:gap-3">
+        <div class="flex bg-base-200/80 p-1 rounded-xl flex-1 md:flex-none">
+            <button class="flex-1 md:flex-none px-3 md:px-4 py-1.5 rounded-lg text-xs font-medium transition-all duration-150"
+                    :class="$store.transactions.period === 'week' ? 'bg-base-100 text-primary shadow-sm' : 'text-base-content/60 hover:text-base-content'"
+                    @click="$store.transactions.setPeriod('week')">Week</button>
+            <button class="flex-1 md:flex-none px-3 md:px-4 py-1.5 rounded-lg text-xs font-medium transition-all duration-150"
+                    :class="$store.transactions.period === 'month' ? 'bg-base-100 text-primary shadow-sm' : 'text-base-content/60 hover:text-base-content'"
+                    @click="$store.transactions.setPeriod('month')">Month</button>
+            <button class="flex-1 md:flex-none px-3 md:px-4 py-1.5 rounded-lg text-xs font-medium transition-all duration-150"
+                    :class="$store.transactions.period === 'year' ? 'bg-base-100 text-primary shadow-sm' : 'text-base-content/60 hover:text-base-content'"
+                    @click="$store.transactions.setPeriod('year')">Year</button>
+        </div>
+        <button @click="$store.transactions.load(); $store.pending.load()" class="p-2 rounded-lg text-base-content/50 hover:text-base-content hover:bg-base-200/80 transition-colors flex-shrink-0">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 5.5A10 10 0 1 1 11.26 2.8"/></svg>
+        </button>
+    </div>
+</div>
+
+                <div class="flex-1 overflow-y-auto custom-scrollbar">
+                    <div class="px-4 md:px-8 pt-6" x-show="$store.pending.transactions.length > 0" x-cloak>
+    <div class="card-elevated overflow-hidden">
+        <div class="h-12 flex items-center justify-between px-4 border-b border-base-200/60 bg-base-100">
+            <div class="flex items-center gap-2">
+                <div class="w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center">
+                    <span class="text-[10px] font-semibold text-primary" x-text="$store.pending.transactions.length"></span>
+                </div>
+                <span class="font-medium text-xs">Pending confirmations</span>
+            </div>
+            <div class="flex gap-2">
+                <button @click="$store.pending.confirmAll()"
+                        class="px-3 py-1 rounded-md bg-success/90 text-white text-[10px] font-semibold hover:bg-success transition-colors"
+                        :disabled="$store.pending.confirming">
+                    Confirm all
+                </button>
+                <button @click="$store.pending.cancelAll()"
+                        class="px-3 py-1 rounded-md text-[10px] font-medium text-base-content/50 hover:text-error hover:bg-error/10 transition-colors">
+                    Clear all
+                </button>
+            </div>
+        </div>
+        <div class="max-h-64 overflow-y-auto custom-scrollbar bg-base-100">
+            <template x-for="pending in $store.pending.transactions" :key="pending.data.id">
+                <div class="preview-card-compact border-b border-base-100 last:border-0 animate-slide-up">
+                    <div class="flex items-start justify-between gap-2 px-3 pt-2.5 pb-2">
+                        <div class="flex-1 min-w-0">
+                            <div class="text-sm font-semibold text-base-content truncate" x-text="pending.data.transaction.payee"></div>
+                            <div class="text-xs text-base-content/50 font-mono mt-0.5" x-text="formatCurrency(pending.data.transaction.amount, pending.data.transaction.currency)"></div>
+                        </div>
+                        <div class="flex gap-1 flex-shrink-0">
+                            <button @click="$store.pending.confirmOne(pending.data.id)"
+                                    class="w-7 h-7 rounded-md bg-success/90 text-white flex items-center justify-center hover:bg-success transition-colors"
+                                    :disabled="$store.pending.confirming">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                            </button>
+                            <button @click="$store.pending.cancel(pending.data.id)"
+                                    class="w-7 h-7 rounded-md bg-base-200 text-base-content/50 hover:text-error hover:bg-error/10 flex items-center justify-center transition-colors">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="px-3 pb-2.5 space-y-1.5">
+                        <div class="flex items-center gap-2">
+                            <svg class="w-3.5 h-3.5 text-base-content/30 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                            <input type="date"
+                                   x-model="pending.data.transaction.date"
+                                   @change="$store.pending.update(pending.data.id, 'date', $event.target.value)"
+                                   class="text-xs bg-transparent border-none p-0 text-base-content/70 focus:text-base-content outline-none w-full" />
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <svg class="w-3.5 h-3.5 text-base-content/30 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
+                            <input type="text"
+                                   x-model="pending.data.transaction.expense_account"
+                                   @input="$store.pending.update(pending.data.id, 'expense_account', $event.target.value)"
+                                   class="text-xs bg-transparent border-none p-0 text-primary font-medium focus:text-primary/80 outline-none w-full placeholder:text-base-content/30"
+                                   placeholder="Category" />
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <svg class="w-3.5 h-3.5 text-base-content/30 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+                            <input type="text"
+                                   x-model="pending.data.transaction.payment_account"
+                                   @input="$store.pending.update(pending.data.id, 'payment_account', $event.target.value)"
+                                   class="text-xs bg-transparent border-none p-0 text-base-content/70 focus:text-base-content outline-none w-full placeholder:text-base-content/30"
+                                   placeholder="Payment" />
+                        </div>
+                    </div>
+                </div>
+            </template>
+        </div>
+    </div>
+</div>
+
+                    <div class="px-4 md:px-8 py-4 md:py-6">
+                        <div class="grid gap-4 lg:grid-cols-[360px,1fr]">
+                            <div class="space-y-4">
+                                <div class="card-elevated p-4 md:p-5">
+    <div class="flex items-center justify-between">
+        <div>
+            <div class="text-[10px] font-semibold uppercase tracking-wider text-base-content/50">Total Spent</div>
+            <div class="text-xl md:text-2xl font-semibold text-base-content"
+                 x-text="formatCurrency($store.transactions.activeStats.total_spent || 0, $store.transactions.activeStats.currency || 'INR')"></div>
+            <div class="text-[10px] text-base-content/50 mt-1"
+                 x-show="$store.transactions.activeStats.projection?.available"
+                 x-text="`Projected: ${formatCurrency($store.transactions.activeStats.projection?.projected_total_spent || 0, $store.transactions.activeStats.currency || 'INR')}`"></div>
+        </div>
+        <div class="text-xs font-mono"
+             :class="$store.transactions.deltaClass($store.transactions.activeStats.comparison)"
+             x-text="$store.transactions.deltaLabel($store.transactions.activeStats.comparison)"></div>
+    </div>
+    <div class="mt-3">
+        <svg viewBox="0 0 120 40" class="w-full h-12">
+            <polyline fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      class="text-primary"
+                      :points="$store.transactions.sparklinePoints($store.transactions.activeStats.daily_spending, 120, 40)"></polyline>
+        </svg>
+    </div>
+    <div class="mt-2 flex items-center justify-between text-[10px] text-base-content/40 font-mono">
+        <span x-text="$store.transactions.activeStats.period_start"></span>
+        <span x-text="$store.transactions.activeStats.period_end"></span>
+    </div>
+    <div class="mt-4 grid grid-cols-2 gap-3">
+        <div class="rounded-lg bg-base-200/50 px-3 py-2">
+            <div class="text-[10px] uppercase tracking-wider text-base-content/50">Transactions</div>
+            <div class="text-sm font-medium text-base-content" x-text="$store.transactions.activeStats.transaction_count || 0"></div>
+        </div>
+        <div class="rounded-lg bg-base-200/50 px-3 py-2">
+            <div class="text-[10px] uppercase tracking-wider text-base-content/50">Avg / txn</div>
+            <div class="text-sm font-medium text-base-content"
+                 x-text="formatCurrency(($store.transactions.activeStats.total_spent || 0) / Math.max($store.transactions.activeStats.transaction_count || 1, 1), $store.transactions.activeStats.currency || 'INR')"></div>
+        </div>
+    </div>
+</div>
+
+<div class="card-elevated p-4 md:p-5">
+    <div class="flex items-center justify-between mb-2">
+        <div class="text-[10px] font-semibold uppercase tracking-wider text-base-content/50">Spend Flow</div>
+        <button class="text-[10px] text-base-content/40 hover:text-base-content"
+                x-show="hasFilters"
+                @click="clearAllFilters()">Clear</button>
+    </div>
+    <div class="text-[11px] text-base-content/40 mb-4" x-text="breadcrumb"></div>
+
+    <div class="space-y-2">
+        <template x-for="cat in flowCategories" :key="cat.name">
+            <button class="w-full px-2 py-1.5 rounded-lg border border-transparent transition-colors"
+                    :class="isActiveCategory(cat.name) ? 'bg-primary/10 text-primary' : 'hover:bg-base-200/60 text-base-content'"
+                    @click="selectCategory(cat.name)">
+                <div class="flex items-center justify-between">
+                    <span class="text-sm font-medium truncate" x-text="cat.name"></span>
+                    <span class="text-xs font-mono text-base-content/50"
+                          x-text="formatCurrency(cat.amount, $store.transactions.activeStats.currency)"></span>
+                </div>
+                <div class="mt-1 h-1.5 bg-base-200/70 rounded-full overflow-hidden">
+                    <div class="h-full bg-primary"
+                         :style="`width:${cat.percent.toFixed(1)}%`"></div>
+                </div>
+            </button>
+        </template>
+        <div x-show="!flowCategories.length" class="text-sm text-base-content/40">No data available</div>
+    </div>
+
+    <div class="mt-4" x-show="$store.transactions.categoryFilter" x-cloak>
+        <div class="flex items-center justify-between mb-2">
+            <div class="text-[10px] font-semibold uppercase tracking-wider text-base-content/50">Subcategories</div>
+            <button class="text-[10px] text-base-content/40 hover:text-base-content"
+                    x-show="$store.transactions.subCategoryFilter"
+                    @click="$store.transactions.setSubCategory('')">Clear</button>
+        </div>
+        <div class="space-y-2">
+            <template x-for="sub in flowSubcategories" :key="sub.name">
+                <button class="w-full px-2 py-1.5 rounded-lg border border-transparent transition-colors"
+                        :class="isActiveSubcategory(sub.name) ? 'bg-primary/10 text-primary' : 'hover:bg-base-200/60 text-base-content'"
+                        @click="selectSubcategory(sub.name)">
+                    <div class="flex items-center justify-between">
+                        <span class="text-sm font-medium truncate" x-text="sub.name"></span>
+                        <span class="text-xs font-mono text-base-content/50"
+                              x-text="formatCurrency(sub.amount, $store.transactions.activeStats.currency)"></span>
+                    </div>
+                    <div class="mt-1 h-1.5 bg-base-200/70 rounded-full overflow-hidden">
+                        <div class="h-full bg-primary"
+                             :style="`width:${sub.percent.toFixed(1)}%`"></div>
+                    </div>
+                </button>
+            </template>
+            <div x-show="!flowSubcategories.length" class="text-sm text-base-content/40">No subcategories yet</div>
+        </div>
+    </div>
+
+    <div class="mt-4" x-show="flowPayees.length">
+        <div class="flex items-center justify-between mb-2">
+            <div class="text-[10px] font-semibold uppercase tracking-wider text-base-content/50">Top Payees</div>
+            <div class="text-[10px] text-base-content/40">Tap to filter</div>
+        </div>
+        <div class="space-y-2">
+            <template x-for="payee in flowPayees" :key="payee.name">
+                <button class="w-full flex items-center justify-between px-2 py-1.5 rounded-lg hover:bg-base-200/60 transition-colors"
+                        @click="selectPayee(payee.name)">
+                    <div class="flex flex-col text-left min-w-0">
+                        <span class="text-sm font-medium truncate" x-text="payee.name"></span>
+                        <span class="text-[10px] text-base-content/40" x-text="`${payee.count} txns`"></span>
+                    </div>
+                    <span class="text-xs font-mono text-base-content/50"
+                          x-text="formatCurrency(payee.amount, $store.transactions.activeStats.currency)"></span>
+                </button>
+            </template>
+        </div>
+    </div>
+</div>
+
+                                <div class="card-elevated p-4 md:p-5">
+    <div class="flex items-center justify-between mb-3">
+        <div class="text-[10px] font-semibold uppercase tracking-wider text-base-content/50">Cut-down Cues</div>
+        <div class="text-[10px] text-base-content/40">Focus this period</div>
+    </div>
+
+    <div class="space-y-4">
+        <div>
+            <div class="text-[10px] font-semibold uppercase tracking-wider text-base-content/40 mb-2">Budgets at risk</div>
+            <div class="space-y-3" x-show="budgetAlerts.length">
+                <template x-for="budget in budgetAlerts" :key="budget.account">
+                    <div class="space-y-1">
+                        <div class="flex items-center justify-between">
+                            <span class="text-sm font-medium truncate" x-text="budget.account.replace('Expenses:', '')"></span>
+                            <span class="text-xs font-mono text-base-content/50"
+                                  x-text="formatCurrency(budget.actual, budget.currency) + ' / ' + formatCurrency(budget.amount, budget.currency)"></span>
+                        </div>
+                        <div class="h-1.5 bg-base-200/70 rounded-full overflow-hidden">
+                            <div class="h-full rounded-full"
+                                 :class="budget.status === 'over' ? 'bg-error' : 'bg-warning'"
+                                 :style="`width:${Math.min(100, budget.progress * 100)}%`"></div>
+                        </div>
+                        <div class="flex items-center justify-between text-[10px] text-base-content/40">
+                            <span x-text="budget.status === 'over' ? 'Over budget' : 'At risk'"></span>
+                            <span x-text="formatCurrency(budget.remaining, budget.currency) + ' left'"></span>
+                        </div>
+                        <div class="text-[10px] text-base-content/40"
+                             x-show="budget.projected_over"
+                             x-text="`Projected: ${formatCurrency(budget.projected, budget.currency)}`"></div>
+                    </div>
+                </template>
+            </div>
+            <div x-show="!budgetAlerts.length" class="text-sm text-base-content/40">No budget alerts</div>
+        </div>
+
+        <div>
+            <div class="text-[10px] font-semibold uppercase tracking-wider text-base-content/40 mb-2">Repeat payees</div>
+            <div class="space-y-2">
+                <template x-for="payee in ($store.transactions.activeStats.repeat_payees || [])" :key="payee.name">
+                    <button class="w-full flex items-center justify-between px-2 py-1.5 rounded-lg hover:bg-base-200/60 transition-colors"
+                            @click="selectPayee(payee.name)">
+                        <div class="flex flex-col text-left min-w-0">
+                            <span class="text-sm font-medium truncate" x-text="payee.name"></span>
+                            <span class="text-[10px] text-base-content/40"
+                                  x-text="`${payee.count} txns · avg ${formatCurrency(payee.average, $store.transactions.activeStats.currency)}`"></span>
+                        </div>
+                        <span class="text-xs font-mono text-base-content/50"
+                              x-text="formatCurrency(payee.amount, $store.transactions.activeStats.currency)"></span>
+                    </button>
+                </template>
+                <div x-show="!$store.transactions.activeStats.repeat_payees?.length" class="text-sm text-base-content/40">No repeat payees</div>
+            </div>
+        </div>
+
+        <div>
+            <div class="text-[10px] font-semibold uppercase tracking-wider text-base-content/40 mb-2">One-off spikes</div>
+            <div class="space-y-2">
+                <template x-for="txn in ($store.transactions.activeStats.one_offs || [])" :key="txn.id">
+                    <button class="w-full flex items-center justify-between px-2 py-1.5 rounded-lg hover:bg-base-200/60 transition-colors"
+                            @click="selectPayee(txn.payee)">
+                        <div class="flex flex-col text-left min-w-0">
+                            <span class="text-sm font-medium truncate" x-text="txn.payee"></span>
+                            <span class="text-[10px] text-base-content/40" x-text="txn.date"></span>
+                        </div>
+                        <span class="text-xs font-mono text-base-content/50"
+                              x-text="formatCurrency(txn.amount, txn.currency)"></span>
+                    </button>
+                </template>
+                <div x-show="!$store.transactions.activeStats.one_offs?.length" class="text-sm text-base-content/40">No one-off spikes</div>
+            </div>
+        </div>
+
+        <div>
+            <div class="text-[10px] font-semibold uppercase tracking-wider text-base-content/40 mb-2">Largest transactions</div>
+            <div class="space-y-2">
+                <template x-for="txn in ($store.transactions.activeStats.largest_transactions || [])" :key="txn.id">
+                    <button class="w-full flex items-center justify-between px-2 py-1.5 rounded-lg hover:bg-base-200/60 transition-colors"
+                            @click="selectPayee(txn.payee)">
+                        <div class="flex flex-col text-left min-w-0">
+                            <span class="text-sm font-medium truncate" x-text="txn.payee"></span>
+                            <span class="text-[10px] text-base-content/40" x-text="txn.date"></span>
+                        </div>
+                        <span class="text-xs font-mono text-base-content/50"
+                              x-text="formatCurrency(txn.amount, txn.currency)"></span>
+                    </button>
+                </template>
+                <div x-show="!$store.transactions.activeStats.largest_transactions?.length" class="text-sm text-base-content/40">No data available</div>
+            </div>
+        </div>
+
+        <div>
+            <div class="text-[10px] font-semibold uppercase tracking-wider text-base-content/40 mb-2">Category shifts</div>
+            <div class="space-y-2">
+                <template x-for="delta in ($store.transactions.activeStats.category_deltas || [])" :key="delta.name">
+                    <button class="w-full flex items-center justify-between px-2 py-1.5 rounded-lg hover:bg-base-200/60 transition-colors"
+                            @click="selectCategory(delta.name)">
+                        <div class="flex flex-col text-left min-w-0">
+                            <span class="text-sm font-medium truncate" x-text="delta.name"></span>
+                            <span class="text-[10px] text-base-content/40"
+                                  x-text="delta.delta_percent !== null ? `${delta.delta_percent.toFixed(1)}% vs prev` : 'No prior baseline'"></span>
+                        </div>
+                        <span class="text-xs font-mono"
+                              :class="delta.delta_amount >= 0 ? 'text-error' : 'text-success'"
+                              x-text="formatCurrency(delta.delta_amount, $store.transactions.activeStats.currency)"></span>
+                    </button>
+                </template>
+                <div x-show="!$store.transactions.activeStats.category_deltas?.length" class="text-sm text-base-content/40">No category shifts</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+                                <div class="card-elevated p-4 md:p-5">
+    <div class="flex items-center justify-between mb-3">
+        <div class="text-[10px] font-semibold uppercase tracking-wider text-base-content/50">Needs Review</div>
+        <div class="text-[10px] font-semibold text-warning bg-warning/10 px-2 py-0.5 rounded-full"
+             x-show="$store.transactions.stats.needs_review?.length"
+             x-text="$store.transactions.stats.needs_review?.length"></div>
+    </div>
+    <div class="space-y-3" x-show="$store.transactions.stats.needs_review?.length">
+        <template x-for="review in ($store.transactions.stats.needs_review || [])" :key="review.payee">
+            <div class="border border-base-200/60 rounded-lg p-3 space-y-2">
+                <div class="flex items-center justify-between">
+                    <div class="min-w-0">
+                        <div class="text-sm font-medium truncate" x-text="review.payee"></div>
+                        <div class="text-[10px] text-base-content/40"
+                             x-text="`${review.count} txns`"></div>
+                    </div>
+                    <div class="text-xs font-mono text-base-content/50"
+                         x-text="formatCurrency(review.amount, $store.transactions.stats.currency)"></div>
+                </div>
+                <div class="flex flex-wrap gap-2">
+                    <template x-for="reason in (review.reasons || [])" :key="reason">
+                        <span class="text-[10px] px-2 py-0.5 rounded-full bg-base-200/70 text-base-content/60"
+                              x-text="reason.replace('_', ' ')"></span>
+                    </template>
+                    <button class="text-[10px] text-primary hover:text-primary/80"
+                            x-show="review.suggested_account"
+                            @click="$store.transactions.mappingInputs[review.payee] = review.suggested_account">
+                        Use suggested
+                    </button>
+                </div>
+                <div class="flex items-center gap-2">
+                    <input type="text"
+                           x-model="$store.transactions.mappingInputs[review.payee]"
+                           class="input-box flex-1 h-8 text-xs"
+                           placeholder="Expenses:Food:Delivery" />
+                    <button class="px-3 py-1.5 rounded-lg text-[10px] font-semibold bg-primary text-white hover:bg-primary/90 transition-colors"
+                            :disabled="$store.transactions.mappingSaving[review.payee]"
+                            @click="$store.transactions.learnPayeeMapping(review.payee)">
+                        Remember
+                    </button>
+                </div>
+            </div>
+        </template>
+    </div>
+    <div x-show="!$store.transactions.stats.needs_review?.length" class="text-sm text-base-content/40">All clear</div>
+</div>
+
+                            </div>
+                            <div class="space-y-4">
+                                <div class="card-elevated p-4 md:p-5">
+    <div class="flex flex-col gap-3">
+        <div class="flex items-center justify-between">
+            <div>
+                <div class="text-[10px] font-semibold uppercase tracking-wider text-base-content/50">Entries</div>
+                <div class="text-sm text-base-content/60" x-text="listSummary"></div>
+            </div>
+            <button class="text-[10px] text-base-content/40 hover:text-base-content"
+                    x-show="hasFilters"
+                    @click="clearAllFilters()">Clear filters</button>
+        </div>
+
+        <div class="relative">
+            <svg class="absolute left-3.5 top-3 w-4 h-4 text-base-content/40" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <input type="text"
+                   x-model="$store.transactions.search"
+                   @input="$store.transactions.queueFilterUpdate()"
+                   placeholder="Search payee, note, account..."
+                   class="input-box pl-10 w-full" />
+        </div>
+
+        <div class="flex flex-wrap gap-2">
+            <template x-for="chip in activeChips" :key="chip.key">
+                <button class="filter-pill active"
+                        @click="clearFilter(chip.type)"
+                        x-text="chip.label"></button>
+            </template>
+            <div x-show="!activeChips.length" class="text-[10px] text-base-content/40">No filters applied</div>
+        </div>
+    </div>
+</div>
+
+<div class="card-elevated overflow-hidden min-h-[400px]" data-transactions-list>
+    <template x-if="$store.transactions.loadingList">
+        <div class="flex flex-col items-center justify-center h-64 text-base-content/40">
+            <div class="loading loading-dots loading-sm mb-2"></div>
+            <p>Loading transactions</p>
+        </div>
+    </template>
+    <template x-if="!$store.transactions.loadingList && $store.transactions.list.length === 0">
+        <div class="flex flex-col items-center justify-center h-64 text-base-content/40">
+            <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="mb-2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            <p>No transactions found</p>
+        </div>
+    </template>
+
+    <div x-show="!$store.transactions.loadingList && $store.transactions.list.length > 0">
+        <template x-for="(group, dateKey) in $store.transactions.grouped" :key="dateKey">
+            <div>
+                <!-- Date Header -->
+                <div class="glass-panel px-5 py-2.5 border-b border-base-200/50 flex items-center justify-between sticky top-0 z-10">
+                    <span class="text-xs font-semibold text-base-content/50 uppercase tracking-wider" x-text="formatDateRelative(dateKey) + ' · ' + new Date(dateKey).toLocaleDateString()"></span>
+                    <span class="text-xs font-mono text-base-content/40" x-text="formatCurrency(group.reduce((sum, t) => sum + Math.abs(t.amount), 0), $store.transactions.activeStats.currency || 'INR')"></span>
+                </div>
+                <!-- Rows -->
+                <template x-for="txn in group" :key="txn.id">
+                    <div class="txn-swipe-container">
+                        <!-- Swipe action buttons (revealed on swipe) -->
+                        <div class="txn-swipe-actions">
+                            <button @click="$store.transactions.openEdit(txn); $store.transactions.swipedId = null"
+                                    class="txn-action-btn edit">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                            </button>
+                            <button @click="$store.transactions.delete(txn.id)"
+                                    :disabled="$store.transactions.deleting"
+                                    class="txn-action-btn delete">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                            </button>
+                        </div>
+                        <!-- Swipeable content -->
+                        <div class="txn-item group"
+                             x-ref="txnRow"
+                             @touchstart="$store.transactions.handleTouchStart($event, txn.id)"
+                             @touchmove="$store.transactions.handleTouchMove($event, txn.id, $el)"
+                             @touchend="$store.transactions.handleTouchEnd($event, txn.id, $el)"
+                             @click="if($store.transactions.swipedId === txn.id) { $store.transactions.closeSwipe($el) }">
+                            <div class="flex items-center gap-4 flex-1 min-w-0">
+                                <div class="w-10 h-10 rounded-xl flex items-center justify-center text-base flex-shrink-0" :class="getCategoryColor(txn.accounts[0])" x-text="getCategoryEmoji(txn.accounts[0])"></div>
+                                <div class="flex flex-col min-w-0">
+                                    <span class="text-sm font-medium text-base-content truncate" x-text="txn.payee"></span>
+                                    <span class="text-xs text-base-content/50 truncate" x-text="txn.note || txn.accounts[0]"></span>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-3 flex-shrink-0">
+                                <div class="font-mono text-sm font-semibold" :class="txn.amount > 0 ? 'text-base-content' : 'text-success'" x-text="formatCurrency(Math.abs(txn.amount), txn.currency)"></div>
+                                <!-- Desktop hover actions -->
+                                <div class="hidden md:flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <button @click.stop="$store.transactions.openEdit(txn)" 
+                                            class="w-7 h-7 rounded-md bg-base-200 text-base-content/50 hover:text-primary hover:bg-primary/10 flex items-center justify-center transition-colors"
+                                            title="Edit">
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                                    </button>
+                                    <button @click.stop="$store.transactions.delete(txn.id)" 
+                                            class="w-7 h-7 rounded-md bg-base-200 text-base-content/50 hover:text-error hover:bg-error/10 flex items-center justify-center transition-colors"
+                                            :disabled="$store.transactions.deleting"
+                                            title="Delete">
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </template>
+            </div>
+        </template>
+        <div class="flex items-center justify-center p-4 border-t border-base-200/50"
+             x-show="$store.transactions.hasMore">
+            <button class="btn btn-ghost btn-sm"
+                    @click="$store.transactions.loadMore()"
+                    :disabled="$store.transactions.loadingMore">
+                <span x-show="!$store.transactions.loadingMore">Load more</span>
+                <span x-show="$store.transactions.loadingMore">Loading...</span>
+            </button>
+        </div>
+    </div>
+</div>
+
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </template>
+
+        <div x-show="$store.transactions.showEditModal" 
+     x-transition:enter="transition ease-out duration-200"
+     x-transition:enter-start="opacity-0"
+     x-transition:enter-end="opacity-100"
+     x-transition:leave="transition ease-in duration-150"
+     x-transition:leave-start="opacity-100"
+     x-transition:leave-end="opacity-0"
+     class="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/50 backdrop-blur-sm"
+     @click.self="$store.transactions.closeEdit()"
+     x-cloak>
+    <div class="bg-base-100 rounded-t-2xl md:rounded-2xl shadow-2xl w-full md:max-w-md md:mx-4 overflow-hidden max-h-[90vh] overflow-y-auto"
+         x-show="$store.transactions.showEditModal"
+         x-transition:enter="transition ease-out duration-200"
+         x-transition:enter-start="opacity-0 scale-95"
+         x-transition:enter-end="opacity-100 scale-100"
+         x-transition:leave="transition ease-in duration-150"
+         x-transition:leave-start="opacity-100 scale-100"
+         x-transition:leave-end="opacity-0 scale-95">
+        
+        <!-- Modal Header -->
+        <div class="px-6 py-4 border-b border-base-200/60 flex items-center justify-between">
+            <h3 class="text-lg font-semibold">Edit Transaction</h3>
+            <button @click="$store.transactions.closeEdit()" class="w-8 h-8 rounded-lg hover:bg-base-200 flex items-center justify-center text-base-content/50 hover:text-base-content transition-colors">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+        </div>
+
+        <!-- Modal Body -->
+        <template x-if="$store.transactions.editing">
+            <div class="p-6 space-y-4">
+                <!-- Payee -->
+                <div>
+                    <label class="block text-xs font-medium text-base-content/60 mb-1.5">Payee</label>
+                    <input type="text" x-model="$store.transactions.editing.payee" class="input-box w-full" />
+                </div>
+
+                <!-- Date & Amount -->
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-medium text-base-content/60 mb-1.5">Date</label>
+                        <input type="date" x-model="$store.transactions.editing.date" class="input-box w-full" />
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-base-content/60 mb-1.5">Amount</label>
+                        <input type="number" step="0.01" x-model="$store.transactions.editing.amount" class="input-box w-full" />
+                    </div>
+                </div>
+
+                <!-- Expense Account -->
+                <div>
+                    <label class="block text-xs font-medium text-base-content/60 mb-1.5">Category</label>
+                    <input type="text" x-model="$store.transactions.editing.expense_account" class="input-box w-full" placeholder="Expenses:Food:Groceries" />
+                </div>
+
+                <!-- Payment Account -->
+                <div>
+                    <label class="block text-xs font-medium text-base-content/60 mb-1.5">Payment Account</label>
+                    <input type="text" x-model="$store.transactions.editing.payment_account" class="input-box w-full" placeholder="Assets:Bank:HDFC" />
+                </div>
+
+                <!-- Note -->
+                <div>
+                    <label class="block text-xs font-medium text-base-content/60 mb-1.5">Note (optional)</label>
+                    <input type="text" x-model="$store.transactions.editing.note" class="input-box w-full" placeholder="Add a note..." />
+                </div>
+            </div>
+        </template>
+
+        <!-- Modal Footer -->
+        <div class="px-6 py-4 border-t border-base-200/60 flex justify-end gap-3">
+            <button @click="$store.transactions.closeEdit()" class="px-4 py-2 rounded-lg text-sm font-medium text-base-content/60 hover:text-base-content hover:bg-base-200 transition-colors">
+                Cancel
+            </button>
+            <button @click="$store.transactions.saveEdit()" class="px-4 py-2 rounded-lg text-sm font-medium bg-primary text-white hover:bg-primary/90 transition-colors">
+                Save Changes
+            </button>
+        </div>
+    </div>
+</div>
+
+
+        <!-- Reports View -->
+        <template x-if="$store.router.view === 'reports'">
+            <div class="flex-1 flex flex-col h-full bg-base-50/50 min-h-0" x-data="reportsView()">
+                <!-- Header -->
+                <div class="min-h-14 md:h-16 border-b border-base-200/60 bg-base-100 flex items-center justify-between px-4 md:px-8 py-3 md:py-0 flex-shrink-0">
+                    <div>
+                        <h2 class="text-lg md:text-xl font-display">Reports</h2>
+                        <p class="text-[10px] md:text-xs text-base-content/40 mt-0.5">Yearly spending breakdown</p>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <!-- Year Selector -->
+                        <template x-if="data">
+                            <div class="flex items-center gap-1 bg-base-200/60 rounded-lg p-0.5">
+                                <template x-for="y in availableYears" :key="y">
+                                    <button @click="store.setYear(y)"
+                                            class="px-3 py-1.5 rounded-md text-xs font-semibold transition-all duration-150"
+                                            :class="store.year === y ? 'bg-base-100 text-primary shadow-sm' : 'text-base-content/50 hover:text-base-content'">
+                                        <span x-text="y"></span>
+                                    </button>
+                                </template>
+                            </div>
+                        </template>
+                        <!-- Loading indicator -->
+                        <div x-show="store.loading" class="w-5 h-5 border-2 border-primary/30 border-t-primary rounded-full animate-spin"></div>
+                    </div>
+                </div>
+
+                <!-- Content -->
+                <div class="flex-1 overflow-auto p-4 md:p-6 custom-scrollbar">
+                    <!-- Loading State -->
+<template x-if="store.loading && !data">
+    <div class="flex items-center justify-center h-64">
+        <span class="loading loading-spinner text-primary"></span>
+    </div>
+</template>
+
+<!-- Empty State -->
+<template x-if="!store.loading && data && data.categories.length === 0">
+    <div class="flex flex-col items-center justify-center h-64 text-base-content/40">
+        <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="mb-4 opacity-40"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+        <p class="text-sm">No expense data for <span x-text="store.year"></span></p>
+    </div>
+</template>
+
+<!-- Grid -->
+<template x-if="data && data.categories.length > 0">
+    <div class="reports-grid-wrapper card-elevated overflow-hidden">
+        <div class="reports-grid-scroll overflow-x-auto custom-scrollbar">
+            <table class="reports-grid w-full">
+                <!-- Header -->
+                <thead>
+                    <tr class="reports-grid-header">
+                        <th class="reports-grid-sticky-col text-left py-3 px-4 text-xs font-semibold uppercase tracking-wider text-base-content/50">
+                            Category
+                        </th>
+                        <template x-for="(month, i) in data.months" :key="i">
+                            <th class="py-3 px-3 text-right text-xs font-semibold uppercase tracking-wider text-base-content/50 whitespace-nowrap"
+                                x-text="month"></th>
+                        </template>
+                        <th class="py-3 px-3 text-right text-xs font-semibold uppercase tracking-wider text-base-content/40 whitespace-nowrap">Avg</th>
+                        <th class="py-3 px-3 text-right text-xs font-semibold uppercase tracking-wider text-primary whitespace-nowrap">Total</th>
+                    </tr>
+                </thead>
+
+                <!-- Each category gets its own tbody (valid HTML, avoids nesting) -->
+                <template x-for="cat in data.categories" :key="cat.name">
+                    <tbody>
+                        <!-- Category Row -->
+                        <tr class="reports-grid-cat-row cursor-pointer transition-colors"
+                            @click="store.toggleCategory(cat.name)">
+                            <td class="reports-grid-sticky-col py-2.5 px-4">
+                                <div class="flex items-center gap-2">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24"
+                                         fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                                         class="text-base-content/30 transition-transform duration-200 flex-shrink-0"
+                                         :class="store.expandedCategories[cat.name] && 'rotate-90'">
+                                            <polyline points="9 18 15 12 9 6"/>
+                                    </svg>
+                                    <span class="text-sm font-semibold text-base-content truncate" x-text="cat.name"></span>
+                                </div>
+                            </td>
+                            <template x-for="(val, mi) in cat.months" :key="mi">
+                                <td class="py-2.5 px-3 text-right font-mono text-sm whitespace-nowrap"
+                                    :class="[
+                                        val > 0 ? 'text-base-content reports-grid-cell-clickable' : 'text-base-content/20',
+                                        (store.drawer.open && store.drawer.category === cat.name && !store.drawer.subcategory && store.drawer.monthIndex === mi) ? 'reports-grid-cell-active' : ''
+                                    ]"
+                                    @click.stop="val > 0 && store.openDrawer(cat.name, '', mi, val)">
+                                    <span x-text="val > 0 ? fmtCompact(val) : '—'"></span>
+                                </td>
+                            </template>
+                            <td class="py-2.5 px-3 text-right font-mono text-sm text-base-content/50 whitespace-nowrap"
+                                x-text="fmtCompact(cat.average) || '—'"></td>
+                            <td class="py-2.5 px-3 text-right font-mono text-sm font-semibold text-base-content whitespace-nowrap"
+                                x-text="fmtCompact(cat.total) || '—'"></td>
+                        </tr>
+
+                        <!-- Subcategory Rows -->
+                        <template x-for="sub in cat.subcategories" :key="sub.name">
+                            <tr class="reports-grid-sub-row transition-colors"
+                                x-show="store.expandedCategories[cat.name]"
+                                x-transition:enter="transition ease-out duration-150"
+                                x-transition:enter-start="opacity-0"
+                                x-transition:enter-end="opacity-100">
+                                <td class="reports-grid-sticky-col reports-grid-sticky-col-sub py-2 px-4 pl-10">
+                                    <span class="text-xs text-base-content/50 truncate block" x-text="sub.name"></span>
+                                </td>
+                                <template x-for="(val, mi) in sub.months" :key="mi">
+                                    <td class="py-2 px-3 text-right font-mono text-xs whitespace-nowrap"
+                                        :class="[
+                                            val > 0 ? 'text-base-content/60 reports-grid-cell-clickable' : 'text-base-content/15',
+                                            (store.drawer.open && store.drawer.category === cat.name && store.drawer.subcategory === sub.name && store.drawer.monthIndex === mi) ? 'reports-grid-cell-active' : ''
+                                        ]"
+                                        @click.stop="val > 0 && store.openDrawer(cat.name, sub.name, mi, val)">
+                                        <span x-text="val > 0 ? fmtCompact(val) : '—'"></span>
+                                    </td>
+                                </template>
+                                <td class="py-2 px-3 text-right font-mono text-xs text-base-content/35 whitespace-nowrap"
+                                    x-text="fmtCompact(sub.average) || '—'"></td>
+                                <td class="py-2 px-3 text-right font-mono text-xs text-base-content/60 whitespace-nowrap"
+                                    x-text="fmtCompact(sub.total) || '—'"></td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </template>
+
+                <!-- Footer -->
+                <tfoot>
+                    <tr class="reports-grid-footer">
+                        <td class="reports-grid-sticky-col py-3 px-4 text-sm font-semibold text-base-content">
+                            Total
+                        </td>
+                        <template x-for="(val, mi) in data.month_totals" :key="mi">
+                            <td class="py-3 px-3 text-right font-mono text-sm font-semibold whitespace-nowrap"
+                                :class="val > 0 ? 'text-base-content' : 'text-base-content/20'">
+                                <span x-text="val > 0 ? fmtCompact(val) : '—'"></span>
+                            </td>
+                        </template>
+                        <td class="py-3 px-3 text-right font-mono text-sm font-semibold text-base-content/50 whitespace-nowrap"
+                            x-text="fmtCompact(data.grand_average) || '—'"></td>
+                        <td class="py-3 px-3 text-right font-mono text-sm font-bold text-primary whitespace-nowrap"
+                            x-text="fmtAmount(data.grand_total) || '—'"></td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+</template>
+
+<!-- Drill-Down Drawer -->
+<template x-if="store.drawer.open">
+    <div @keydown.window.escape="store.closeDrawer()">
+        <!-- Backdrop -->
+        <div class="fixed inset-0 bg-black/30 backdrop-blur-sm z-40"
+             @click="store.closeDrawer()"
+             x-transition:enter="transition ease-out duration-200"
+             x-transition:enter-start="opacity-0"
+             x-transition:enter-end="opacity-100"
+             x-transition:leave="transition ease-in duration-150"
+             x-transition:leave-start="opacity-100"
+             x-transition:leave-end="opacity-0">
+        </div>
+
+        <!-- Desktop: Right Drawer / Mobile: Bottom Sheet -->
+        <div class="reports-drill-drawer fixed z-50
+                    md:top-0 md:right-0 md:bottom-0 md:w-[400px]
+                    max-md:bottom-0 max-md:left-0 max-md:right-0 max-md:max-h-[75vh] max-md:rounded-t-2xl"
+             x-transition:enter="transition ease-out duration-300"
+             x-transition:enter-start="md:translate-x-full max-md:translate-y-full"
+             x-transition:enter-end="md:translate-x-0 max-md:translate-y-0"
+             x-transition:leave="transition ease-in duration-200"
+             x-transition:leave-start="md:translate-x-0 max-md:translate-y-0"
+             x-transition:leave-end="md:translate-x-full max-md:translate-y-full"
+             @click.stop>
+
+            <!-- Mobile drag handle -->
+            <div class="md:hidden flex justify-center pt-3 pb-1">
+                <div class="w-10 h-1 rounded-full bg-base-content/20"></div>
+            </div>
+
+            <!-- Header -->
+            <div class="flex items-start justify-between px-5 py-4 border-b border-base-content/8">
+                <div class="min-w-0">
+                    <h3 class="text-base font-semibold text-base-content truncate">
+                        <span x-text="store.drawer.category"></span>
+                        <template x-if="store.drawer.subcategory">
+                            <span class="text-base-content/40 font-normal">
+                                / <span x-text="store.drawer.subcategory"></span>
+                            </span>
+                        </template>
+                    </h3>
+                    <p class="text-sm text-base-content/50 mt-0.5">
+                        <span x-text="store.drawer.monthName"></span>
+                        <span class="mx-1.5 text-base-content/20">&mdash;</span>
+                        <span class="font-mono font-semibold text-base-content/70" x-text="fmtAmount(store.drawer.total)"></span>
+                    </p>
+                </div>
+                <button @click="store.closeDrawer()"
+                        class="btn-icon btn-icon-sm flex-shrink-0 ml-3">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
+            </div>
+
+            <!-- Content -->
+            <div class="flex-1 overflow-y-auto custom-scrollbar">
+                <!-- Loading -->
+                <template x-if="store.drawer.loading">
+                    <div class="flex items-center justify-center py-16">
+                        <span class="loading loading-spinner text-primary"></span>
+                    </div>
+                </template>
+
+                <!-- Empty -->
+                <template x-if="!store.drawer.loading && store.drawer.transactions.length === 0">
+                    <div class="flex flex-col items-center justify-center py-16 text-base-content/40">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="mb-3 opacity-40"><path d="M3 3h18v18H3z"/><path d="M12 8v8"/><path d="M8 12h8"/></svg>
+                        <p class="text-sm">No transactions found</p>
+                    </div>
+                </template>
+
+                <!-- Transaction list -->
+                <template x-if="!store.drawer.loading && store.drawer.transactions.length > 0">
+                    <div>
+                        <div class="px-5 py-2.5 text-xs text-base-content/40 font-medium">
+                            <span x-text="store.drawer.count"></span> transactions
+                        </div>
+                        <template x-for="txn in store.drawer.transactions" :key="txn.id">
+                            <div class="flex items-center gap-3 px-5 py-3 border-b border-base-content/4 last:border-b-0 hover:bg-base-content/2 transition-colors">
+                                <!-- Avatar -->
+                                <div class="txn-avatar text-sm flex-shrink-0"
+                                     :class="getCategoryColor(txn.accounts?.[0] || '')">
+                                    <span x-text="getCategoryEmoji(txn.accounts?.[0] || '')"></span>
+                                </div>
+                                <!-- Details -->
+                                <div class="flex-1 min-w-0">
+                                    <div class="text-sm font-medium text-base-content truncate" x-text="txn.payee"></div>
+                                    <div class="flex items-center gap-2 mt-0.5">
+                                        <span class="text-xs text-base-content/40" x-text="txn.date"></span>
+                                        <template x-if="txn.accounts?.[0]">
+                                            <span class="text-[10px] font-medium uppercase tracking-wide px-1.5 py-0.5 rounded-full bg-base-content/5 text-base-content/40"
+                                                  x-text="txn.accounts[0].split(':').pop()"></span>
+                                        </template>
+                                    </div>
+                                </div>
+                                <!-- Amount -->
+                                <div class="font-mono text-sm font-semibold text-base-content text-right flex-shrink-0"
+                                     x-text="fmtAmount(txn.amount)"></div>
+                            </div>
+                        </template>
+                    </div>
+                </template>
+            </div>
+        </div>
+    </div>
+</template>
+
+                </div>
+            </div>
+        </template>
+
+        <!-- Ledger View -->
+        <template x-if="$store.router.view === 'ledger'">
+            <div class="flex-1 flex flex-col h-full bg-base-50/50">
+                <div class="min-h-14 md:h-16 border-b border-base-200/60 bg-base-100 flex flex-col md:flex-row md:items-center justify-between px-4 md:px-8 py-3 md:py-0 gap-2 md:gap-0 flex-shrink-0">
+                    <div>
+                        <h2 class="text-lg md:text-xl font-display">Ledger File</h2>
+                        <div class="text-[10px] md:text-xs text-base-content/40 font-mono mt-0.5 truncate max-w-[200px] md:max-w-none" x-text="$store.ledger.path"></div>
+                    </div>
+                    <div class="flex items-center gap-2 md:gap-3">
+                        <div class="relative flex-1 md:flex-none">
+                            <svg class="absolute left-3 top-2.5 w-3.5 h-3.5 text-base-content/40" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                            <input type="text" x-model="$store.ledger.search" @input.debounce="$store.ledger.load()" placeholder="Search..." class="input-box pl-9 py-2 h-9 w-full md:w-48 text-sm" />
+                        </div>
+                        <button class="px-3 md:px-4 py-2 rounded-lg text-sm font-medium text-base-content/60 hover:text-base-content hover:bg-base-200/80 transition-colors flex-shrink-0" @click="$store.ledger.load()">Refresh</button>
+                    </div>
+                </div>
+
+                <div class="flex-1 overflow-auto p-4 md:p-8 custom-scrollbar">
+                    <div class="card-elevated p-6 min-h-[500px]">
+                        <template x-if="!$store.ledger.content && $store.ledger.exists">
+                            <div class="flex items-center justify-center h-32">
+                                <span class="loading loading-spinner text-primary"></span>
+                            </div>
+                        </template>
+                        <template x-if="!$store.ledger.exists">
+                            <div class="flex flex-col items-center justify-center h-64 text-base-content/40">
+                                <p>No ledger file found.</p>
+                            </div>
+                        </template>
+                        <pre class="font-mono text-[13px] leading-7 text-base-content/80" x-html="highlightLedger($store.ledger.content)"></pre>
+                    </div>
+                </div>
+            </div>
+        </template>
+
+    </main>
+
+    <!-- Mobile Bottom Navigation -->
+    <nav class="bottom-nav md:hidden" x-show="$store.setup.complete" x-cloak>
+        <div class="bottom-nav-inner">
+            <button @click="$store.router.navigate('chat')" 
+                    class="bottom-nav-item"
+                    :class="$store.router.view === 'chat' && 'active'">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                <span>Chat</span>
+            </button>
+            <button @click="$store.router.navigate('transactions')" 
+                    class="bottom-nav-item"
+                    :class="$store.router.view === 'transactions' && 'active'">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
+                <span>Transactions</span>
+            </button>
+            <button @click="$store.router.navigate('reports')"
+                    class="bottom-nav-item"
+                    :class="$store.router.view === 'reports' && 'active'">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/></svg>
+                <span>Reports</span>
+            </button>
+            <button @click="$store.connection.open()"
+                    class="bottom-nav-item"
+                    :class="$store.router.view === 'setup' && 'active'">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                <span>Settings</span>
+            </button>
+        </div>
+    </nav>
+
+    <!-- Command Palette (Desktop) -->
+    <div x-data="{ open: false, query: '', selectedIndex: 0, commands: [
+            { id: 'chat', label: 'Go to Chat', shortcut: '/', icon: 'chat' },
+            { id: 'transactions', label: 'Go to Transactions', shortcut: 'Alt+T', icon: 'card' },
+            { id: 'reports', label: 'Go to Reports', shortcut: 'Alt+R', icon: 'grid' },
+            { id: 'ledger', label: 'Go to Ledger', shortcut: 'Alt+L', icon: 'book' },
+            { id: 'settings', label: 'Open Settings', shortcut: 'Alt+S', icon: 'settings' },
+            { id: 'new-thread', label: 'New Chat Thread', shortcut: 'Alt+N', icon: 'plus' },
+            { id: 'theme', label: 'Toggle Theme', shortcut: 'Alt+D', icon: 'moon' }
+         ] }"
+         x-init="Alpine.store('commandPalette', { open: false, toggle() { this.open = !this.open } });
+                 $watch('$store.commandPalette.open', v => { open = v; if(v) { query = ''; selectedIndex = 0; $nextTick(() => $refs.cmdInput?.focus()); } })"
+         x-show="open"
+         x-transition:enter="transition ease-out duration-200"
+         x-transition:enter-start="opacity-0"
+         x-transition:enter-end="opacity-100"
+         x-transition:leave="transition ease-in duration-150"
+         x-transition:leave-start="opacity-100"
+         x-transition:leave-end="opacity-0"
+         class="command-palette-backdrop hidden md:flex"
+         @click.self="$store.commandPalette.open = false"
+         x-cloak>
+        <div class="command-palette animate-scale-in"
+             @keydown.down.prevent="selectedIndex = Math.min(selectedIndex + 1, commands.filter(c => c.label.toLowerCase().includes(query.toLowerCase())).length - 1)"
+             @keydown.up.prevent="selectedIndex = Math.max(selectedIndex - 1, 0)"
+             @keydown.enter.prevent="
+                const filtered = commands.filter(c => c.label.toLowerCase().includes(query.toLowerCase()));
+                const cmd = filtered[selectedIndex];
+                if (cmd) {
+                    if (cmd.id === 'theme') $store.theme.toggle();
+                    else if (cmd.id === 'new-thread') $store.threads.create();
+                    else $store.router.navigate(cmd.id);
+                    $store.commandPalette.open = false;
+                }
+             ">
+            <div class="flex items-center gap-3 px-5 py-4 border-b border-base-200/60">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-base-content/40"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                <input type="text" 
+                       x-ref="cmdInput"
+                       x-model="query"
+                       placeholder="Type a command or search..." 
+                       class="flex-1 bg-transparent outline-none text-base text-base-content placeholder:text-base-content/40" />
+                <kbd class="px-2 py-1 text-xs font-mono bg-base-200 rounded text-base-content/50">ESC</kbd>
+            </div>
+            <div class="command-palette-list">
+                <template x-for="(cmd, index) in commands.filter(c => c.label.toLowerCase().includes(query.toLowerCase()))" :key="cmd.id">
+                    <button class="command-palette-item w-full text-left"
+                            :class="index === selectedIndex && 'selected'"
+                            @click="
+                                if (cmd.id === 'theme') $store.theme.toggle();
+                                else if (cmd.id === 'new-thread') $store.threads.create();
+                                else $store.router.navigate(cmd.id);
+                                $store.commandPalette.open = false;
+                            "
+                            @mouseenter="selectedIndex = index">
+                        <div class="command-palette-item-icon">
+                            <template x-if="cmd.icon === 'chat'">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                            </template>
+                            <template x-if="cmd.icon === 'card'">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
+                            </template>
+                            <template x-if="cmd.icon === 'grid'">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/></svg>
+                            </template>
+                            <template x-if="cmd.icon === 'book'">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/></svg>
+                            </template>
+                            <template x-if="cmd.icon === 'settings'">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                            </template>
+                            <template x-if="cmd.icon === 'plus'">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                            </template>
+                            <template x-if="cmd.icon === 'moon'">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+                            </template>
+                        </div>
+                        <span class="command-palette-item-label" x-text="cmd.label"></span>
+                        <span class="command-palette-item-shortcut" x-text="cmd.shortcut"></span>
+                    </button>
+                </template>
+                <div x-show="commands.filter(c => c.label.toLowerCase().includes(query.toLowerCase())).length === 0" 
+                     class="px-5 py-8 text-center text-sm text-base-content/40">
+                    No commands found
+                </div>
+            </div>
+            <div class="flex items-center justify-between px-5 py-3 border-t border-base-200/60 text-xs text-base-content/40">
+                <div class="flex items-center gap-4">
+                    <span class="flex items-center gap-1"><kbd class="px-1.5 py-0.5 bg-base-200 rounded">↑↓</kbd> Navigate</span>
+                    <span class="flex items-center gap-1"><kbd class="px-1.5 py-0.5 bg-base-200 rounded">↵</kbd> Select</span>
+                </div>
+                <span class="flex items-center gap-1"><kbd class="px-1.5 py-0.5 bg-base-200 rounded">⌘K</kbd> to toggle</span>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<!-- Connection / API Key Modal -->
+<div x-data
+     x-show="$store.connection.showModal"
+     x-transition:enter="transition ease-out duration-200"
+     x-transition:enter-start="opacity-0"
+     x-transition:enter-end="opacity-100"
+     x-transition:leave="transition ease-in duration-150"
+     x-transition:leave-start="opacity-100"
+     x-transition:leave-end="opacity-0"
+     class="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50"
+     @click.self="$store.connection.connected && $store.connection.close()"
+     x-cloak>
+    <div class="card-elevated w-full max-w-md p-6 space-y-5 animate-scale-in bg-base-100">
+        <div class="flex items-center gap-3">
+            <img src="/static/icons/icon.svg" alt="Gullak" class="w-10 h-10 rounded-xl shadow-sm" />
+            <div>
+                <h2 class="text-lg font-semibold">Connect to your Gullak server</h2>
+                <p class="text-xs text-base-content/50">Enter your API key to load your data.</p>
+            </div>
+        </div>
+
+        <div class="space-y-4">
+            <div>
+                <label class="block text-sm font-medium text-base-content/70 mb-2">API Key</label>
+                <input type="password"
+                       x-model="$store.connection.apiKey"
+                       @keydown.enter="$store.connection.save()"
+                       placeholder="x-api-key"
+                       autocomplete="off"
+                       class="input-box w-full" />
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-base-content/70 mb-2">Server URL <span class="text-base-content/40 font-normal">(optional)</span></label>
+                <input type="text"
+                       x-model="$store.connection.serverUrl"
+                       @keydown.enter="$store.connection.save()"
+                       placeholder="Leave blank to use this server"
+                       autocomplete="off"
+                       class="input-box w-full" />
+                <p class="text-[10px] text-base-content/40 mt-1">Only set this if your API runs on a different origin.</p>
+            </div>
+
+            <div x-show="$store.connection.error" class="text-xs text-error" x-text="$store.connection.error" x-cloak></div>
+        </div>
+
+        <div class="flex items-center justify-between gap-2 pt-1">
+            <button class="btn btn-ghost btn-sm"
+                    x-show="$store.connection.connected"
+                    @click="$store.connection.clear()">Disconnect</button>
+            <div class="flex-1"></div>
+            <button class="btn btn-ghost btn-sm"
+                    x-show="$store.connection.connected"
+                    @click="$store.connection.close()">Cancel</button>
+            <button class="btn btn-primary btn-sm"
+                    @click="$store.connection.save()"
+                    :disabled="$store.connection.checking">
+                <span x-show="!$store.connection.checking">Connect</span>
+                <span x-show="$store.connection.checking" class="loading loading-spinner loading-sm"></span>
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Toast Notifications -->
+<div class="fixed bottom-24 md:bottom-6 right-4 md:right-6 left-4 md:left-auto z-50 flex flex-col gap-3 pointer-events-none"
+     x-data="{ toasts: [] }"
+     @notify.window="toasts.push($event.detail); setTimeout(() => toasts.shift(), 4000)">
+    <template x-for="toast in toasts" :key="toast.id">
+        <div class="toast-notification pointer-events-auto max-w-sm"
+             :class="{
+                 'success': toast.type === 'success',
+                 'error': toast.type === 'error',
+                 'info': toast.type === 'info',
+             }">
+            <div class="toast-icon" x-show="toast.type === 'success'">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            </div>
+            <div class="toast-icon" x-show="toast.type === 'error'">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            </div>
+            <div class="toast-icon" x-show="toast.type === 'info'">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+            </div>
+            <div class="flex items-center gap-3">
+                <div class="text-sm font-medium text-base-content" x-text="toast.message"></div>
+                <button x-show="toast.action"
+                        @click="window.dispatchEvent(new CustomEvent(toast.action.event, { detail: toast.action.payload }))"
+                        class="text-xs font-semibold text-primary hover:text-primary/80">
+                    <span x-text="toast.action?.label"></span>
+                </button>
+            </div>
+        </div>
+    </template>
+</div>
+
+</body>
+</html>

@@ -29,6 +29,11 @@ COPY --from=install /app/node_modules ./node_modules
 COPY package.json drizzle.config.ts tsconfig.json ./
 COPY src ./src
 COPY drizzle ./drizzle
+# Static web PWA (index.html + static/). The webRouter reads these at runtime
+# via readFileSync / serveStatic; without this COPY the shell 500s in the
+# container even though local dev works (CWD-relative paths resolve fine here
+# because WORKDIR=/app matches the serveStatic root ./web/static).
+COPY web ./web
 
 VOLUME ["/data"]
 EXPOSE 8787

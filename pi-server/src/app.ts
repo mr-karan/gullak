@@ -26,6 +26,7 @@ import { smsRouter } from "./routes/sms.ts";
 import { summaryRouter } from "./routes/summary.ts";
 import { syncRouter } from "./routes/sync.ts";
 import { transactionsRouter } from "./routes/transactions.ts";
+import { webRouter } from "./routes/web.ts";
 
 export type AppEnv = {
   Variables: {
@@ -67,6 +68,10 @@ export function createApp(ctx: AppContext) {
     const key = ctx.config.httpApiKey;
     if (!key) return next();
     const path = c.req.path;
+    // The static web PWA (shell + assets) must load without a key so the user
+    // can reach the Settings modal to enter one. Only the /v1/* API is gated;
+    // the browser attaches the key from localStorage on those calls itself.
+    if (!path.startsWith("/v1/")) return next();
     if (path === "/v1/health" || path.endsWith("/whatsapp/webhook")) {
       return next();
     }
@@ -139,6 +144,11 @@ export function createApp(ctx: AppContext) {
   app.route("/v1/ai", aiRouter);
   app.route("/v1/sms", smsRouter);
   app.route("/v1/feedback", feedbackRouter);
+
+  // Static web PWA (flattened legacy UI). Mounted last so it can never shadow
+  // a /v1/* route; it only claims "/", "/offline", "/manifest.json", "/sw.js"
+  // and "/static/*".
+  app.route("/", webRouter);
 
   app.onError((error, c) => {
     // Validation errors are the client's fault → 400 with safe field info.
