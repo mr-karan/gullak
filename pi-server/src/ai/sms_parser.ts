@@ -224,11 +224,21 @@ export async function parseSms(
     // app surfaces it for review rather than hot-looping retries on an SMS the
     // model can't handle. (A true network failure happens app-side, before
     // this ever runs, and keeps the SMS queued.)
+    const msg = e instanceof Error ? e.message : String(e);
+    // Log server-side so failures are visible in `docker logs` immediately —
+    // an LLM 402/credit issue, a bad-JSON decode, etc. — instead of only
+    // surfacing as an app-submitted feedback event. The error carries the
+    // cause (e.g. "LLM 402: ...") and, for decode failures, a raw-output
+    // snippet. Sender + a short body slice give context; we don't log the
+    // full body to keep logs lean.
+    console.warn(
+      `[sms-parse] parse_failed sender=${req.sender} err=${msg} body=${JSON.stringify(req.body.slice(0, 120))}`,
+    );
     return {
       status: "parse_failed",
       isTransaction: false,
       candidate: null,
-      error: e instanceof Error ? e.message : String(e),
+      error: msg,
     };
   }
 }

@@ -27,6 +27,13 @@ export interface ChatJsonOptions {
   imageBase64?: string;
   imageMimeType?: string;
   temperature?: number;
+  /// Cap the completion size. Critical on OpenRouter: an UNSET max_tokens
+  /// defaults to the model's full output window (e.g. 65536) and OpenRouter
+  /// gates your balance against that whole number upfront — so a request 402s
+  /// ("requires more credits") the moment your balance dips below it, even
+  /// though the actual JSON reply is ~100 tokens. Every caller here emits a
+  /// small JSON object or a short chat reply, so a tight default is correct.
+  maxTokens?: number;
 }
 
 export async function chatJson<T = unknown>(
@@ -65,6 +72,10 @@ export async function chatJson<T = unknown>(
       body: JSON.stringify({
         model: config.modelId,
         temperature: opts.temperature ?? 0.1,
+        // Default 2048: generous for a parse's JSON object or a short chat
+        // reply, but 32x below the 65536 model max — so the OpenRouter
+        // credit-headroom gate needs 2048, not 65536, of balance per request.
+        max_tokens: opts.maxTokens ?? 2048,
         response_format: { type: "json_object" },
         messages,
       }),
@@ -100,7 +111,12 @@ function parseJsonObject<T>(raw: string): T {
     // Malformed JSON (e.g. an Indian-comma number like 6,275) is recoverable:
     // the parser re-prompts on LlmOutputError. We deliberately do NOT hand-
     // repair it — silently rewriting 6,275→6275 could log a wrong amount.
-    throw new LlmOutputError("LLM returned malformed JSON", { cause });
+    // Include a raw-output snippet so a logged failure shows what the model
+    // actually returned.
+    throw new LlmOutputError(
+      `LLM returned malformed JSON: ${text.slice(0, 200)}`,
+      { cause },
+    );
   }
 }
 
