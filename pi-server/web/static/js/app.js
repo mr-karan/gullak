@@ -192,36 +192,53 @@ document.addEventListener('alpine:init', () => {
     // ROUTER STORE - View state and navigation
     // =========================================================================
     Alpine.store('router', {
-        route: { name: 'chat', params: {} },
+        route: { name: 'accounts', params: {} },
         sidebarOpen: false,
         loading: false,
         _started: false,
         _applying: false,
         _pendingRoute: null,
 
-        validViews: ['chat', 'transactions', 'reports', 'ledger', 'settings'],
+        validViews: ['accounts', 'transactions', 'insights', 'chat', 'settings'],
 
         get view() {
             return this.route.name === 'settings' ? 'setup' : this.route.name;
         },
 
         parseHash(rawHash) {
-            const hash = (rawHash || '').replace(/^#/, '') || 'chat';
+            const hash = (rawHash || '').replace(/^#/, '') || 'accounts';
 
             if (hash.startsWith('chat/')) {
                 return { name: 'chat', params: { threadId: hash.slice(5) } };
+            }
+
+            // transactions?accountId=..&uncategorized=1 — parse query into params.
+            if (hash.startsWith('transactions?') || hash === 'transactions') {
+                const [, qs = ''] = hash.split('?');
+                const q = new URLSearchParams(qs);
+                const params = {};
+                if (q.get('accountId')) params.accountId = q.get('accountId');
+                if (q.get('uncategorized') === '1') params.uncategorized = true;
+                return { name: 'transactions', params };
             }
 
             if (this.validViews.includes(hash)) {
                 return { name: hash, params: {} };
             }
 
-            return { name: 'chat', params: {} };
+            return { name: 'accounts', params: {} };
         },
 
         toHash(route) {
             if (route.name === 'chat' && route.params?.threadId) {
                 return `#chat/${route.params.threadId}`;
+            }
+            if (route.name === 'transactions') {
+                const q = new URLSearchParams();
+                if (route.params?.accountId) q.set('accountId', route.params.accountId);
+                if (route.params?.uncategorized) q.set('uncategorized', '1');
+                const qs = q.toString();
+                return qs ? `#transactions?${qs}` : '#transactions';
             }
             return `#${route.name}`;
         },
@@ -290,13 +307,13 @@ document.addEventListener('alpine:init', () => {
 
                 if (nextRoute.name === 'chat') {
                     await this._applyChatRoute(nextRoute.params);
+                } else if (nextRoute.name === 'accounts') {
+                    await Alpine.store('accounts').load();
                 } else if (nextRoute.name === 'transactions') {
+                    Alpine.store('transactions').applyRouteParams(nextRoute.params);
                     await Alpine.store('transactions').load();
-                    await Alpine.store('pending').load();
-                } else if (nextRoute.name === 'reports') {
-                    await Alpine.store('reports').load();
-                } else if (nextRoute.name === 'ledger') {
-                    await Alpine.store('ledger').load();
+                } else if (nextRoute.name === 'insights') {
+                    await Alpine.store('insights').load();
                 } else if (nextRoute.name === 'settings') {
                     await Alpine.store('setup').loadOptions();
                     await Alpine.store('whatsapp').checkStatus();
@@ -432,7 +449,7 @@ document.addEventListener('alpine:init', () => {
 
         finishSetup() {
             this.complete = true;
-            Alpine.store('router').navigate('chat');
+            Alpine.store('router').navigate('accounts');
         },
 
         addBank(name) {
@@ -499,7 +516,15 @@ document.addEventListener('alpine:init', () => {
         },
 
         async create() {
-            Alpine.store('notify').info('Chat is not available yet');
+            // No server-side thread API yet: "New Chat" just starts a fresh
+            // local thread. The agent (/v1/messages) mints a threadId on the
+            // first turn and send() threads it back, so nothing needs creating
+            // server-side here.
+            this.currentId = null;
+            Alpine.store('chat').messages = [];
+            Alpine.store('chat').input = '';
+            Alpine.store('pending').transactions = [];
+            Alpine.store('router').sidebarOpen = false;
         },
 
         async switch(threadId, opts = {}) {
@@ -722,24 +747,20 @@ document.addEventListener('alpine:init', () => {
     // TRANSACTIONS STORE - Confirmed transactions with computed filtering
     // =========================================================================
     Alpine.store('transactions', {
-        list: [],
-        stats: {},
-        filteredStats: null,
-        categoryStats: null,
+        // Dense register. Server filter = date range (+ accountId when scoped).
+        // Category / search / uncategorized are client-side over the window.
+        rawList: [],          // pi-server rows for the fetched window
+        list: [],             // mapped rows for display (all matching filters)
         search: '',
-        payeeFilter: '',
-        categoryFilter: '',
-        subCategoryFilter: '',
-        mappingInputs: {},
-        mappingSaving: {},
-        period: 'month',
-        offset: 0,
-        limit: 50,
-        total: 0,
-        hasMore: false,
+        rangeKey: 'month',    // month | last-month | 3m | year | custom
+        customStart: '',
+        customEnd: '',
+        accountId: '',        // '' = all; set when account-scoped
+        accountScoped: false, // hides Account column + shows subheader
+        categoryFilter: '',   // category name ('' = all)
+        uncategorizedOnly: false,
+        capped: false,        // response hit the 1000 cap
         loadingList: false,
-        loadingMore: false,
-        loadingStats: false,
         editing: null,
         showEditModal: false,
         deleting: false,
@@ -747,113 +768,166 @@ document.addEventListener('alpine:init', () => {
         _swipeState: null,
         _searchTimer: null,
         currency: 'INR',
+        accounts: [],         // [{id,name,archived}]
+        categoryGroups: [],   // [{ group, categories: [{id,name}] }]
         _accountsById: {},
         _categoriesById: {},
-        _rawList: [],
+        _categoryIdByName: {},
+        editingCatFor: null,  // txn id whose category combobox is open
+        catQuery: '',
 
-        get filtered() {
-            return this.list;
-        },
-
-        // Inclusive [startDate, endDate] (YYYY-MM-DD) for the active period.
+        // Inclusive [startDate, endDate] (YYYY-MM-DD) for the active range.
         periodRange() {
             const now = new Date();
             const pad = (n) => String(n).padStart(2, '0');
             const iso = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-            let start;
-            if (this.period === 'week') {
-                start = new Date(now);
-                start.setDate(now.getDate() - 6);
-            } else if (this.period === 'year') {
+            let start, end = now;
+            if (this.rangeKey === 'last-month') {
+                start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+                end = new Date(now.getFullYear(), now.getMonth(), 0);
+            } else if (this.rangeKey === '3m') {
+                start = new Date(now.getFullYear(), now.getMonth() - 2, 1);
+            } else if (this.rangeKey === 'year') {
                 start = new Date(now.getFullYear(), 0, 1);
+            } else if (this.rangeKey === 'custom' && this.customStart && this.customEnd) {
+                return { startDate: this.customStart, endDate: this.customEnd };
             } else {
                 start = new Date(now.getFullYear(), now.getMonth(), 1);
             }
-            return { startDate: iso(start), endDate: iso(now) };
+            return { startDate: iso(start), endDate: iso(end) };
+        },
+
+        rangeLabel() {
+            return ({
+                'month': 'This month',
+                'last-month': 'Last month',
+                '3m': 'Last 3 months',
+                'year': 'This year',
+                'custom': 'Custom',
+            })[this.rangeKey] || 'This month';
+        },
+
+        // Apply router params (account scope / uncategorized) before load.
+        applyRouteParams(params = {}) {
+            if (params.accountId) {
+                this.accountId = params.accountId;
+                this.accountScoped = true;
+            } else {
+                this.accountScoped = false;
+            }
+            this.uncategorizedOnly = params.uncategorized === true;
+        },
+
+        get accountName() {
+            return this._accountsById[this.accountId] || '';
+        },
+
+        get activeChips() {
+            const chips = [];
+            if (this.rangeKey !== 'month') chips.push({ type: 'range', label: this.rangeLabel() });
+            if (this.accountId && !this.accountScoped) chips.push({ type: 'account', label: this.accountName });
+            if (this.categoryFilter) chips.push({ type: 'category', label: this.categoryFilter });
+            if (this.uncategorizedOnly) chips.push({ type: 'uncategorized', label: 'Uncategorized' });
+            if (this.search) chips.push({ type: 'search', label: `“${this.search}”` });
+            return chips;
+        },
+
+        clearChip(type) {
+            if (type === 'range') this.rangeKey = 'month';
+            else if (type === 'account') { this.accountId = ''; }
+            else if (type === 'category') this.categoryFilter = '';
+            else if (type === 'uncategorized') this.uncategorizedOnly = false;
+            else if (type === 'search') this.search = '';
+            if (type === 'range' || type === 'account') this.load();
+            else this.applyFilters();
         },
 
         // Resolve account/category id -> display name; cached from /v1/*.
         async ensureLookups() {
-            if (Object.keys(this._accountsById).length && Object.keys(this._categoriesById).length) return;
+            if (this.accounts.length && Object.keys(this._categoriesById).length) return;
             try {
-                const [acc, cat] = await Promise.all([
+                const [acc, cat, grp] = await Promise.all([
                     GullakApi.get('/v1/accounts'),
                     GullakApi.get('/v1/categories'),
+                    GullakApi.get('/v1/category-groups'),
                 ]);
+                this.accounts = (acc?.accounts || []).filter((a) => !a.archived);
                 this._accountsById = {};
                 for (const a of (acc?.accounts || [])) this._accountsById[a.id] = a.name;
                 this._categoriesById = {};
-                for (const ct of (cat?.categories || [])) this._categoriesById[ct.id] = ct.name;
+                this._categoryIdByName = {};
+                for (const ct of (cat?.categories || [])) {
+                    this._categoriesById[ct.id] = ct.name;
+                    this._categoryIdByName[ct.name] = ct.id;
+                }
+                // Group categories by their category-group for the pickers.
+                const groups = grp?.groups || [];
+                const groupById = {};
+                for (const g of groups) groupById[g.id] = { group: g.name, categories: [] };
+                const ungrouped = { group: 'Other', categories: [] };
+                for (const ct of (cat?.categories || [])) {
+                    const bucket = groupById[ct.groupId] || ungrouped;
+                    bucket.categories.push({ id: ct.id, name: ct.name });
+                }
+                this.categoryGroups = [...Object.values(groupById), ungrouped]
+                    .filter((b) => b.categories.length);
             } catch (e) {
-                // Names are best-effort; ids still render if lookups fail.
                 console.warn('lookup load failed:', e.message);
             }
         },
 
-        // Map a pi-server transaction row (integer cents, id refs) to the shape
-        // the legacy list/partials expect: { id, date, payee, amount (decimal,
-        // negative = expense), currency, note, accounts: [category, account] }.
+        // Map a pi-server row to the display shape used by the register.
         mapRow(row) {
-            const categoryName = row.categoryId ? (this._categoriesById[row.categoryId] || 'Uncategorized') : 'Uncategorized';
-            const accountName = this._accountsById[row.accountId] || row.accountId;
+            const categoryName = row.categoryId ? (this._categoriesById[row.categoryId] || 'Uncategorized') : null;
             return {
                 id: row.id,
                 date: row.date,
                 payee: row.payeeName || 'Unknown',
-                amount: (row.amountCents || 0) / 100,
-                currency: this.currency,
+                amountCents: row.amountCents || 0,
                 note: row.notes || '',
-                // First entry is treated as the category (Expenses:*) by the UI helpers.
-                accounts: [`Expenses:${categoryName}`, accountName],
+                location: row.locationName || '',
+                accountId: row.accountId,
+                account: this._accountsById[row.accountId] || '',
+                categoryId: row.categoryId || null,
+                category: categoryName,
+                uncategorized: !row.categoryId,
             };
         },
 
-        get filtersActive() {
-            return Boolean(
-                this.categoryFilter ||
-                this.subCategoryFilter ||
-                this.payeeFilter ||
-                this.search
-            );
+        // Client-side filter predicate over mapped rows.
+        matchesFilters(txn) {
+            if (this.categoryFilter && txn.category !== this.categoryFilter) return false;
+            if (this.uncategorizedOnly && !txn.uncategorized) return false;
+            if (this.search) {
+                const q = this.search.toLowerCase();
+                const hay = `${txn.payee} ${txn.note} ${txn.location}`.toLowerCase();
+                if (!hay.includes(q)) return false;
+            }
+            return true;
         },
 
-        get activeStats() {
-            if (!this.filtersActive) return this.stats;
-            return this.filteredStats || this.stats;
+        // Rows after client-side filters, newest first (server already sorts).
+        get filtered() {
+            return this.list.filter((t) => this.matchesFilters(t));
         },
 
+        // Group filtered rows by date (desc), each with a net-cents total.
         get grouped() {
             const groups = {};
             for (const txn of this.filtered) {
-                if (!groups[txn.date]) groups[txn.date] = [];
-                groups[txn.date].push(txn);
+                (groups[txn.date] = groups[txn.date] || []).push(txn);
             }
-            const sortedDates = Object.keys(groups).sort((a, b) => b.localeCompare(a));
-            const sorted = {};
-            for (const date of sortedDates) {
-                sorted[date] = groups[date];
-            }
-            return sorted;
+            return Object.keys(groups)
+                .sort((a, b) => b.localeCompare(a))
+                .map((date) => ({
+                    date,
+                    rows: groups[date],
+                    netCents: groups[date].reduce((s, t) => s + t.amountCents, 0),
+                }));
         },
 
-        buildStatsParams(options = {}) {
-            const { includeSubcategory = true } = options;
-            const params = new URLSearchParams();
-            params.set('period', this.period);
-            if (this.categoryFilter) params.set('category', this.categoryFilter);
-            if (includeSubcategory && this.subCategoryFilter) {
-                params.set('subcategory', this.subCategoryFilter);
-            }
-            if (this.payeeFilter) params.set('payee', this.payeeFilter);
-            if (this.search) params.set('search', this.search);
-            return params;
-        },
-
-        buildListParams(offset, limit) {
-            const params = this.buildStatsParams({ includeSubcategory: true });
-            params.set('limit', limit);
-            params.set('offset', offset);
-            return params;
+        get resultCount() {
+            return this.filtered.length;
         },
 
         async load() {
@@ -861,398 +935,206 @@ document.addEventListener('alpine:init', () => {
                 Alpine.store('connection').open();
                 return;
             }
-            await this.ensureLookups();
-            await this.loadList(true);
-            await this.loadStats();
-            await this.refreshFilteredStats();
-        },
-
-        async loadStats() {
-            this.loadingStats = true;
+            this.loadingList = true;
+            this.capped = false;
             try {
+                await this.ensureLookups();
                 const { startDate, endDate } = this.periodRange();
-                const summary = await GullakApi.get(`/v1/summary?startDate=${startDate}&endDate=${endDate}`);
-                // expenseCents is negative (money out); show as positive spend.
-                const totalSpent = Math.abs((summary?.expenseCents || 0) / 100);
-                // Count of expense rows in the period, derived from the rows we
-                // already fetched (the summary endpoint returns totals only).
-                const txnCount = (this._rawList || []).filter((r) => (r.amountCents || 0) < 0).length;
-                this.stats = {
-                    currency: this.currency,
-                    total_spent: totalSpent,
-                    transaction_count: txnCount,
-                    period_start: startDate,
-                    period_end: endDate,
-                    income: (summary?.incomeCents || 0) / 100,
-                    net: (summary?.netCents || 0) / 100,
-                    categories: this.deriveCategories(this._rawList),
-                    top_payees: this.derivePayees(this._rawList),
-                    budgets: [],
-                    needs_review: [],
-                };
-            } catch (error) {
-                console.error('Failed to load stats:', error);
-                Alpine.store('notify').error('Failed to load summary');
-            } finally {
-                this.loadingStats = false;
-            }
-        },
-
-        // Aggregate expense rows by category name for the explorer breakdown.
-        deriveCategories(rows) {
-            const totals = {};
-            for (const row of rows || []) {
-                if ((row.amountCents || 0) >= 0) continue; // expenses only
-                const name = row.categoryId ? (this._categoriesById[row.categoryId] || 'Uncategorized') : 'Uncategorized';
-                totals[name] = (totals[name] || 0) + Math.abs(row.amountCents) / 100;
-            }
-            return Object.entries(totals)
-                .map(([name, amount]) => ({ name, amount, subcategories: [] }))
-                .sort((a, b) => b.amount - a.amount);
-        },
-
-        derivePayees(rows) {
-            const totals = {};
-            const counts = {};
-            for (const row of rows || []) {
-                if ((row.amountCents || 0) >= 0) continue;
-                const name = row.payeeName || 'Unknown';
-                totals[name] = (totals[name] || 0) + Math.abs(row.amountCents) / 100;
-                counts[name] = (counts[name] || 0) + 1;
-            }
-            return Object.entries(totals)
-                .map(([name, amount]) => ({ name, amount, count: counts[name] || 0 }))
-                .sort((a, b) => b.amount - a.amount)
-                .slice(0, 5);
-        },
-
-        // The pi-server has no server-side filtered-stats endpoint. Derive the
-        // filtered totals client-side from the already-fetched, filtered rows.
-        async refreshFilteredStats() {
-            this.filteredStats = null;
-            this.categoryStats = null;
-            if (!this.filtersActive) return;
-
-            const rawFiltered = this._rawList.filter((r) => this.matchesFilters(r));
-            const expenseRows = rawFiltered.filter((r) => (r.amountCents || 0) < 0);
-            const spent = expenseRows.reduce((s, r) => s + Math.abs(r.amountCents) / 100, 0);
-            this.filteredStats = {
-                currency: this.currency,
-                total_spent: spent,
-                transaction_count: expenseRows.length,
-                categories: this.deriveCategories(rawFiltered),
-                top_payees: this.derivePayees(rawFiltered),
-            };
-            if (this.categoryFilter) {
-                this.categoryStats = { currency: this.currency, total_spent: spent, subcategories: [] };
-            }
-        },
-
-        // Client-side filter predicate over raw pi-server rows.
-        matchesFilters(row) {
-            if (this.categoryFilter) {
-                const name = row.categoryId ? (this._categoriesById[row.categoryId] || 'Uncategorized') : 'Uncategorized';
-                if (name !== this.categoryFilter) return false;
-            }
-            if (this.payeeFilter && (row.payeeName || 'Unknown') !== this.payeeFilter) return false;
-            if (this.search) {
-                const q = this.search.toLowerCase();
-                const hay = `${row.payeeName || ''} ${row.notes || ''} ${this._accountsById[row.accountId] || ''}`.toLowerCase();
-                if (!hay.includes(q)) return false;
-            }
-            return true;
-        },
-
-        // Fetch the whole period window once, then filter + paginate client-side.
-        // The pi-server list endpoint has no offset, so "load more" just reveals
-        // more of the already-fetched, filtered set.
-        async loadList(reset = false) {
-            if (this.loadingList || this.loadingMore) return;
-            if (reset) {
-                this.loadingList = true;
-                this.list = [];
-                this.offset = 0;
-                this.hasMore = false;
-            } else {
-                this.loadingMore = true;
-            }
-
-            try {
-                if (reset) {
-                    const { startDate, endDate } = this.periodRange();
-                    const data = await GullakApi.get(
-                        `/v1/transactions?startDate=${startDate}&endDate=${endDate}&limit=1000`
-                    );
-                    this._rawList = data?.transactions || [];
-                }
-                const filtered = this._rawList.filter((r) => this.matchesFilters(r));
-                this.total = filtered.length;
-                const shown = reset ? this.limit : this.offset + this.limit;
-                this.list = filtered.slice(0, shown).map((r) => this.mapRow(r));
-                this.offset = this.list.length;
-                this.hasMore = this.list.length < filtered.length;
+                let path = `/v1/transactions?startDate=${startDate}&endDate=${endDate}&limit=1000`;
+                if (this.accountId) path += `&accountId=${encodeURIComponent(this.accountId)}`;
+                const data = await GullakApi.get(path);
+                this.rawList = data?.transactions || [];
+                this.capped = this.rawList.length >= 1000;
+                this.list = this.rawList.map((r) => this.mapRow(r));
             } catch (error) {
                 console.error('Failed to load transactions:', error);
                 Alpine.store('notify').error(error.message || 'Failed to load transactions');
             } finally {
                 this.loadingList = false;
-                this.loadingMore = false;
             }
         },
 
-        async loadMore() {
-            if (!this.hasMore || this.loadingMore || this.loadingList) return;
-            await this.loadList(false);
+        // Filter-only changes don't refetch (client-side over the window).
+        applyFilters() { /* getters recompute reactively */ },
+
+        setRange(key) {
+            this.rangeKey = key;
+            if (key !== 'custom') this.load();
         },
 
-        async applyFilters() {
-            await this.refreshFilteredStats();
-            await this.loadList(true);
-        },
-
-        async setPeriod(newPeriod) {
-            this.period = newPeriod;
-            await this.load();
-        },
-
-        async setCategory(category) {
-            this.categoryFilter = category;
-            this.subCategoryFilter = '';
-            await this.applyFilters();
-        },
-
-        async setSubCategory(subCategory) {
-            this.subCategoryFilter = subCategory;
-            await this.applyFilters();
-        },
-
-        async applyPayeeFilter(payee) {
-            this.payeeFilter = payee;
-            this.search = '';
-            await this.applyFilters();
-            const list = document.querySelector('[data-transactions-list]');
-            if (list) {
-                list.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        applyCustomRange() {
+            if (this.customStart && this.customEnd) {
+                this.rangeKey = 'custom';
+                this.load();
             }
+        },
+
+        setAccount(id) {
+            this.accountId = id || '';
+            this.load();
+        },
+
+        toggleUncategorized() {
+            this.uncategorizedOnly = !this.uncategorizedOnly;
         },
 
         queueFilterUpdate() {
             if (this._searchTimer) clearTimeout(this._searchTimer);
-            this._searchTimer = setTimeout(() => {
-                this.applyFilters();
-            }, 350);
+            this._searchTimer = setTimeout(() => { this.applyFilters(); }, 250);
         },
 
-        async clearFilters() {
+        clearFilters() {
             this.search = '';
-            this.payeeFilter = '';
             this.categoryFilter = '';
-            this.subCategoryFilter = '';
-            await this.applyFilters();
+            this.uncategorizedOnly = false;
         },
 
-        prepareReviewMappings(items) {
-            if (!Array.isArray(items)) return;
-            for (const item of items) {
-                if (!this.mappingInputs[item.payee] && item.suggested_account) {
-                    this.mappingInputs[item.payee] = item.suggested_account;
-                }
+        // ---- Inline category edit -------------------------------------------
+        openCatCombo(txnId) {
+            this.editingCatFor = txnId;
+            this.catQuery = '';
+        },
+
+        closeCatCombo() {
+            this.editingCatFor = null;
+            this.catQuery = '';
+        },
+
+        // Category groups filtered by the combobox query.
+        filteredCategoryGroups() {
+            const q = this.catQuery.trim().toLowerCase();
+            if (!q) return this.categoryGroups;
+            return this.categoryGroups
+                .map((g) => ({ group: g.group, categories: g.categories.filter((c) => c.name.toLowerCase().includes(q)) }))
+                .filter((g) => g.categories.length);
+        },
+
+        // Optimistic update + single PATCH; revert on failure.
+        async setCategoryFor(txnId, categoryId, categoryName) {
+            const txn = this.list.find((t) => t.id === txnId);
+            if (!txn) return;
+            const prev = { categoryId: txn.categoryId, category: txn.category, uncategorized: txn.uncategorized };
+            txn.categoryId = categoryId;
+            txn.category = categoryName;
+            txn.uncategorized = !categoryId;
+            this.closeCatCombo();
+            try {
+                await GullakApi.patch(`/v1/transactions/${txnId}`, { categoryId });
+                Alpine.store('notify').success('Category updated');
+            } catch (error) {
+                txn.categoryId = prev.categoryId;
+                txn.category = prev.category;
+                txn.uncategorized = prev.uncategorized;
+                console.error('Failed to set category:', error);
+                Alpine.store('notify').error(error.message || 'Failed to update category');
             }
         },
 
-        sparklinePoints(series, width = 120, height = 40) {
-            if (!Array.isArray(series) || series.length === 0) {
-                const mid = (height / 2).toFixed(1);
-                return `0,${mid} ${width},${mid}`;
-            }
+    });
 
-            const values = series.map(item => Number(item.amount) || 0);
-            const max = Math.max(...values);
-            const min = Math.min(...values);
-            const range = max - min || 1;
-            const step = values.length > 1 ? width / (values.length - 1) : width;
+    // =========================================================================
+    // ACCOUNTS STORE - Home view: per-account balances + net worth + recent.
+    // Balance = openingBalanceCents + summary.netCents for the account.
+    // =========================================================================
+    Alpine.store('accounts', {
+        list: [],            // non-archived, with computed balanceCents
+        archived: [],        // archived, with computed balanceCents
+        showArchived: false,
+        netWorthCents: 0,
+        month: { incomeCents: 0, expenseCents: 0, netCents: 0 },
+        recent: [],          // last ~8 txns, mapped for display
+        uncategorizedCount: 0,
+        loading: false,
+        currency: 'INR',
+        _catById: {},
+        _accById: {},
 
-            return values.map((value, index) => {
-                const x = (step * index).toFixed(1);
-                const y = (height - ((value - min) / range) * height).toFixed(1);
-                return `${x},${y}`;
-            }).join(' ');
+        monthRange() {
+            const now = new Date();
+            const pad = (n) => String(n).padStart(2, '0');
+            const iso = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+            const first = new Date(now.getFullYear(), now.getMonth(), 1);
+            return { startDate: iso(first), endDate: iso(now) };
         },
 
-        deltaLabel(comparison) {
-            if (!comparison || !comparison.available) return '—';
-            if (comparison.delta_percent === null || comparison.delta_percent === undefined) {
-                return '—';
-            }
-            const sign = comparison.delta_percent > 0 ? '+' : '';
-            return `${sign}${comparison.delta_percent.toFixed(1)}% vs prev`;
-        },
-
-        deltaClass(comparison) {
-            if (!comparison || !comparison.available) return 'text-base-content/40';
-            return (comparison.delta_amount || 0) >= 0 ? 'text-success' : 'text-error';
-        },
-
-        async learnPayeeMapping(payee) {
-            const account = (this.mappingInputs[payee] || '').trim();
-            if (!account) {
-                Alpine.store('notify').error('Account is required');
+        async load() {
+            if (!GullakApi.isConnected()) {
+                Alpine.store('connection').open();
                 return;
             }
-
-            // Payee->category learning has no pi-server endpoint yet. Keep the
-            // affordance but no-op it so nothing hits a dead /api/* path.
-            Alpine.store('notify').info('Payee mapping is not available yet');
-        },
-
-        openEdit(txn) {
-            this.editing = {
-                id: txn.id,
-                payee: txn.payee,
-                date: txn.date,
-                amount: Math.abs(txn.amount),
-                // Preserve the sign so a saved edit keeps expense/income polarity.
-                sign: (txn.amount || 0) < 0 ? -1 : 1,
-                expense_account: txn.accounts.find(a => a.startsWith('Expenses:')) || txn.accounts[0] || '',
-                payment_account: txn.accounts.find(a => !a.startsWith('Expenses:')) || txn.accounts[1] || '',
-                note: txn.note || ''
-            };
-            this.showEditModal = true;
-        },
-
-        closeEdit() {
-            this.editing = null;
-            this.showEditModal = false;
-        },
-
-        async saveEdit() {
-            if (!this.editing) return;
-
+            this.loading = true;
             try {
-                // Only payee/date/amount/note map cleanly to the pi-server row;
-                // the free-text account fields have no id mapping so we leave the
-                // transaction's accountId/categoryId untouched.
-                const sign = this.editing.sign || -1;
-                const amountCents = Math.round(Math.abs(Number(this.editing.amount) || 0) * 100) * sign;
-                await GullakApi.patch(`/v1/transactions/${this.editing.id}`, {
-                    payeeName: this.editing.payee || null,
-                    date: this.editing.date,
-                    amountCents,
-                    notes: this.editing.note || null,
-                });
-                Alpine.store('notify').success('Transaction updated');
-                this.closeEdit();
-                await this.load();
-            } catch (error) {
-                console.error('Failed to update transaction:', error);
-                Alpine.store('notify').error(error.message || 'Failed to update transaction');
-            }
-        },
+                const [accRes, catRes] = await Promise.all([
+                    GullakApi.get('/v1/accounts'),
+                    GullakApi.get('/v1/categories'),
+                ]);
+                const accounts = accRes?.accounts || [];
+                this._accById = {};
+                for (const a of accounts) this._accById[a.id] = a.name;
+                this._catById = {};
+                for (const ct of (catRes?.categories || [])) this._catById[ct.id] = ct.name;
 
-        async delete(txnId) {
-            if (!confirm('Delete this transaction?')) return;
+                // Per-account net activity (summary netCents), computed in parallel.
+                const summaries = await Promise.all(
+                    accounts.map((a) =>
+                        GullakApi.get(`/v1/summary?accountId=${encodeURIComponent(a.id)}`)
+                            .catch(() => ({ netCents: 0 }))
+                    )
+                );
+                const withBalance = accounts.map((a, i) => ({
+                    ...a,
+                    balanceCents: (a.openingBalanceCents || 0) + (summaries[i]?.netCents || 0),
+                }));
+                this.list = withBalance
+                    .filter((a) => !a.archived)
+                    .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
+                this.archived = withBalance.filter((a) => a.archived);
+                this.netWorthCents = this.list.reduce((s, a) => s + a.balanceCents, 0);
 
-            this.deleting = true;
-            try {
-                await GullakApi.del(`/v1/transactions/${txnId}`);
-                Alpine.store('notify').success('Transaction deleted');
-                this.swipedId = null;
-                await this.load();
+                // This-month in/out/net + recent activity + uncategorized count.
+                const { startDate, endDate } = this.monthRange();
+                const [monthSummary, txnRes] = await Promise.all([
+                    GullakApi.get(`/v1/summary?startDate=${startDate}&endDate=${endDate}`),
+                    GullakApi.get(`/v1/transactions?startDate=${startDate}&endDate=${endDate}&limit=1000`),
+                ]);
+                this.month = {
+                    incomeCents: monthSummary?.incomeCents || 0,
+                    expenseCents: monthSummary?.expenseCents || 0,
+                    netCents: monthSummary?.netCents || 0,
+                };
+                const rows = txnRes?.transactions || [];
+                this.uncategorizedCount = rows.filter((r) => !r.categoryId).length;
+                this.recent = rows.slice(0, 8).map((r) => ({
+                    id: r.id,
+                    date: r.date,
+                    payee: r.payeeName || 'Unknown',
+                    amountCents: r.amountCents || 0,
+                    accountId: r.accountId,
+                    account: this._accById[r.accountId] || '',
+                    category: r.categoryId ? (this._catById[r.categoryId] || 'Uncategorized') : null,
+                }));
             } catch (error) {
-                console.error('Failed to delete transaction:', error);
-                Alpine.store('notify').error(error.message || 'Failed to delete transaction');
+                console.error('Failed to load accounts:', error);
+                Alpine.store('notify').error(error.message || 'Failed to load accounts');
             } finally {
-                this.deleting = false;
+                this.loading = false;
             }
         },
-
-        handleTouchStart(e, txnId) {
-            if (this.swipedId && this.swipedId !== txnId) {
-                this.swipedId = null;
-            }
-            const touch = e.touches[0];
-            this._swipeState = {
-                id: txnId,
-                startX: touch.clientX,
-                startY: touch.clientY,
-                currentX: 0,
-                swiping: false
-            };
-        },
-
-        handleTouchMove(e, txnId, el) {
-            if (!this._swipeState || this._swipeState.id !== txnId) return;
-
-            const touch = e.touches[0];
-            const deltaX = touch.clientX - this._swipeState.startX;
-            const deltaY = touch.clientY - this._swipeState.startY;
-
-            if (!this._swipeState.swiping) {
-                if (Math.abs(deltaX) > 10 && Math.abs(deltaX) > Math.abs(deltaY)) {
-                    this._swipeState.swiping = true;
-                } else if (Math.abs(deltaY) > 10) {
-                    this._swipeState = null;
-                    return;
-                }
-            }
-
-            if (this._swipeState.swiping) {
-                e.preventDefault();
-                const clampedX = Math.max(-100, Math.min(0, deltaX));
-                this._swipeState.currentX = clampedX;
-                el.style.transform = `translateX(${clampedX}px)`;
-            }
-        },
-
-        handleTouchEnd(e, txnId, el) {
-            if (!this._swipeState || this._swipeState.id !== txnId) return;
-
-            const threshold = -50;
-            if (this._swipeState.currentX < threshold) {
-                el.style.transform = 'translateX(-100px)';
-                this.swipedId = txnId;
-            } else {
-                el.style.transform = 'translateX(0)';
-                this.swipedId = null;
-            }
-            this._swipeState = null;
-        },
-
-        closeSwipe(el) {
-            if (el) el.style.transform = 'translateX(0)';
-            this.swipedId = null;
-        }
     });
 
     // =========================================================================
-    // LEDGER STORE - Ledger file viewer
+    // INSIGHTS STORE - Charts hub: month-over-month, spend-by-category,
+    // top payees, plus the yearly category x month grid (preserved).
     // =========================================================================
-    Alpine.store('ledger', {
-        content: '',
-        path: '',
-        lines: 0,
-        exists: true,
-        search: '',
-
-        // The ledger-file view is obsolete: the new backend stores data in
-        // SQLite, not a plaintext ledger file. Show an empty state instead of
-        // hitting a dead /api/ledger/* path.
-        async load() {
-            this.content = '';
-            this.path = '';
-            this.lines = 0;
-            this.exists = false;
-        }
-    });
-
-    // =========================================================================
-    // REPORTS STORE - Yearly spending grid
-    // =========================================================================
-    Alpine.store('reports', {
+    Alpine.store('insights', {
         data: null,
         year: new Date().getFullYear(),
         loading: false,
         expandedCategories: {},
+        // Section state added above the grid.
+        compare: null,       // { thisMonth:{income,spending,net}, lastMonth:{...}, delta:{...} }
+        byCategory: [],      // [{ name, amountCents, percent }] current month, top 8
+        topPayees: [],       // [{ name, amountCents }] current month, top 8
         drawer: {
             open: false,
             loading: false,
@@ -1285,20 +1167,83 @@ document.addEventListener('alpine:init', () => {
             this.loading = true;
             try {
                 const [txnRes, catRes] = await Promise.all([
-                    GullakApi.get(`/v1/transactions?startDate=${this.year}-01-01&endDate=${this.year}-12-31&limit=5000`),
+                    GullakApi.get(`/v1/transactions?startDate=${this.year}-01-01&endDate=${this.year}-12-31&limit=1000`),
                     GullakApi.get('/v1/categories'),
                 ]);
                 this._categoriesById = {};
                 for (const ct of (catRes?.categories || [])) this._categoriesById[ct.id] = ct.name;
                 this._rows = txnRes?.transactions || [];
                 this.data = this.buildGrid(this._rows);
+                await this.loadSections();
             } catch (error) {
-                console.error('Failed to load reports:', error);
-                Alpine.store('notify').error(error.message || 'Failed to load reports');
+                console.error('Failed to load insights:', error);
+                Alpine.store('notify').error(error.message || 'Failed to load insights');
                 this.data = null;
             } finally {
                 this.loading = false;
             }
+        },
+
+        // Month labels + ranges for this month and last month.
+        _monthRanges() {
+            const now = new Date();
+            const pad = (n) => String(n).padStart(2, '0');
+            const iso = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+            const thisFirst = new Date(now.getFullYear(), now.getMonth(), 1);
+            const lastFirst = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+            const lastEnd = new Date(now.getFullYear(), now.getMonth(), 0); // day 0 = last day prev month
+            return {
+                thisMonth: { startDate: iso(thisFirst), endDate: iso(now) },
+                lastMonth: { startDate: iso(lastFirst), endDate: iso(lastEnd) },
+            };
+        },
+
+        // 1) this vs last month, 2) spend-by-category, 3) top payees (this month).
+        async loadSections() {
+            const { thisMonth, lastMonth } = this._monthRanges();
+            const [tsum, lsum, tTxn] = await Promise.all([
+                GullakApi.get(`/v1/summary?startDate=${thisMonth.startDate}&endDate=${thisMonth.endDate}`),
+                GullakApi.get(`/v1/summary?startDate=${lastMonth.startDate}&endDate=${lastMonth.endDate}`),
+                GullakApi.get(`/v1/transactions?startDate=${thisMonth.startDate}&endDate=${thisMonth.endDate}&limit=1000`),
+            ]);
+            const t = { income: tsum?.incomeCents || 0, spending: Math.abs(tsum?.expenseCents || 0), net: tsum?.netCents || 0 };
+            const l = { income: lsum?.incomeCents || 0, spending: Math.abs(lsum?.expenseCents || 0), net: lsum?.netCents || 0 };
+            this.compare = {
+                thisMonth: t,
+                lastMonth: l,
+                delta: {
+                    income: t.income - l.income,
+                    spending: t.spending - l.spending,
+                    net: t.net - l.net,
+                },
+            };
+
+            const rows = tTxn?.transactions || [];
+            // Spend by category (expenses only), top 8.
+            const catTotals = {};
+            for (const r of rows) {
+                if ((r.amountCents || 0) >= 0) continue;
+                const name = r.categoryId ? (this._categoriesById[r.categoryId] || 'Uncategorized') : 'Uncategorized';
+                catTotals[name] = (catTotals[name] || 0) + Math.abs(r.amountCents);
+            }
+            const catList = Object.entries(catTotals)
+                .map(([name, amountCents]) => ({ name, amountCents }))
+                .sort((a, b) => b.amountCents - a.amountCents)
+                .slice(0, 8);
+            const catMax = catList[0]?.amountCents || 1;
+            this.byCategory = catList.map((c) => ({ ...c, percent: Math.min(100, (c.amountCents / catMax) * 100) }));
+
+            // Top payees by outflow, top 8.
+            const payTotals = {};
+            for (const r of rows) {
+                if ((r.amountCents || 0) >= 0) continue;
+                const name = r.payeeName || 'Unknown';
+                payTotals[name] = (payTotals[name] || 0) + Math.abs(r.amountCents);
+            }
+            this.topPayees = Object.entries(payTotals)
+                .map(([name, amountCents]) => ({ name, amountCents }))
+                .sort((a, b) => b.amountCents - a.amountCents)
+                .slice(0, 8);
         },
 
         // Aggregate expense rows into the grid shape the partial expects.
@@ -1402,193 +1347,14 @@ document.addEventListener('alpine:init', () => {
 });
 
 
+
 // =============================================================================
-// TRANSACTIONS DASHBOARD COMPONENT - Drilldown explorer + list helpers
+// INSIGHTS VIEW COMPONENT - Charts hub + yearly spending grid helpers
 // =============================================================================
-function transactionsDashboard() {
+function insightsView() {
     return {
         get store() {
-            return Alpine.store('transactions');
-        },
-
-        get stats() {
-            return this.store.activeStats || {};
-        },
-
-        get totalSpent() {
-            return this.stats.total_spent || 0;
-        },
-
-        get flowCategories() {
-            const source = this.store.categoryFilter ? this.store.stats : this.stats;
-            const total = source?.total_spent || 0;
-            return this.buildFlow(source?.categories || [], total);
-        },
-
-        get categoryTotal() {
-            if (!this.store.categoryFilter) return this.totalSpent || 0;
-            const source = this.store.categoryStats || this.store.filteredStats || {};
-            return source.total_spent || 0;
-        },
-
-        get flowSubcategories() {
-            if (!this.store.categoryFilter) return [];
-            const source = this.store.categoryStats || this.store.filteredStats || {};
-            return this.buildFlow(source.subcategories || [], this.categoryTotal);
-        },
-
-        get flowPayees() {
-            return this.stats.top_payees || [];
-        },
-
-        get budgetAlerts() {
-            return (this.stats.budgets || []).filter((budget) => budget.status !== 'ok');
-        },
-
-        get breadcrumb() {
-            const parts = ['All'];
-            if (this.store.categoryFilter) parts.push(this.store.categoryFilter);
-            if (this.store.subCategoryFilter) parts.push(this.store.subCategoryFilter);
-            if (this.store.payeeFilter) parts.push(`Payee: ${this.store.payeeFilter}`);
-            if (this.store.search) parts.push(`Search: ${this.store.search}`);
-            return parts.join(' > ');
-        },
-
-        get activeChips() {
-            const chips = [];
-            if (this.store.categoryFilter) {
-                chips.push({
-                    type: 'category',
-                    label: this.store.categoryFilter,
-                    key: `cat-${this.store.categoryFilter}`
-                });
-            }
-            if (this.store.subCategoryFilter) {
-                chips.push({
-                    type: 'subcategory',
-                    label: this.store.subCategoryFilter,
-                    key: `sub-${this.store.subCategoryFilter}`
-                });
-            }
-            if (this.store.payeeFilter) {
-                chips.push({
-                    type: 'payee',
-                    label: this.store.payeeFilter,
-                    key: `payee-${this.store.payeeFilter}`
-                });
-            }
-            if (this.store.search) {
-                chips.push({
-                    type: 'search',
-                    label: `Search: ${this.store.search}`,
-                    key: `search-${this.store.search}`
-                });
-            }
-            return chips;
-        },
-
-        get hasFilters() {
-            return this.store.filtersActive;
-        },
-
-        get listSummary() {
-            const total = this.store.total || 0;
-            const shown = this.store.list?.length || 0;
-            if (!total && !shown) return '0 transactions';
-            if (!total) return `${shown} transactions`;
-            if (shown >= total) return `${total} transactions`;
-            return `Showing ${shown} of ${total}`;
-        },
-
-        buildFlow(items, total) {
-            const safeTotal = total > 0 ? total : 1;
-            return items.map((item) => ({
-                ...item,
-                percent: Math.min(100, (item.amount / safeTotal) * 100)
-            }));
-        },
-
-        buildPayees(list) {
-            const totals = {};
-            const counts = {};
-            for (const txn of list || []) {
-                const amount = Math.abs(txn.amount || 0);
-                totals[txn.payee] = (totals[txn.payee] || 0) + amount;
-                counts[txn.payee] = (counts[txn.payee] || 0) + 1;
-            }
-            return Object.entries(totals)
-                .map(([name, amount]) => ({
-                    name,
-                    amount,
-                    count: counts[name] || 0
-                }))
-                .sort((a, b) => b.amount - a.amount)
-                .slice(0, 5);
-        },
-
-        isActiveCategory(name) {
-            return this.store.categoryFilter === name;
-        },
-
-        isActiveSubcategory(name) {
-            return this.store.subCategoryFilter === name;
-        },
-
-        async selectCategory(name) {
-            await this.store.setCategory(name);
-            this.scrollToList();
-        },
-
-        async selectSubcategory(name) {
-            await this.store.setSubCategory(name);
-            this.scrollToList();
-        },
-
-        async selectPayee(name) {
-            await this.store.applyPayeeFilter(name);
-        },
-
-        async clearFilter(type) {
-            if (type === 'category') {
-                await this.store.setCategory('');
-                return;
-            }
-            if (type === 'subcategory') {
-                await this.store.setSubCategory('');
-                return;
-            }
-            if (type === 'payee') {
-                this.store.payeeFilter = '';
-                await this.store.applyFilters();
-                return;
-            }
-            if (type === 'search') {
-                this.store.search = '';
-                await this.store.applyFilters();
-            }
-        },
-
-        async clearAllFilters() {
-            await this.store.clearFilters();
-        },
-
-        scrollToList() {
-            const list = document.querySelector('[data-transactions-list]');
-            if (list) {
-                list.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            }
-        }
-    };
-}
-
-
-// =============================================================================
-// REPORTS VIEW COMPONENT - Yearly spending grid helpers
-// =============================================================================
-function reportsView() {
-    return {
-        get store() {
-            return Alpine.store('reports');
+            return Alpine.store('insights');
         },
 
         get data() {
@@ -1707,9 +1473,30 @@ function gullakApp() {
             return new Intl.NumberFormat('en-IN', {
                 style: 'currency',
                 currency,
-                minimumFractionDigits: 0,
+                minimumFractionDigits: 2,
                 maximumFractionDigits: 2
             }).format(amount);
+        },
+
+        // Integer minor units -> ₹ with Indian grouping. Display layer only.
+        fmtCents(cents, currency = 'INR') {
+            return this.formatCurrency((cents || 0) / 100, currency);
+        },
+
+        // Signed money for balances/net rows (keeps the leading minus).
+        fmtCentsSigned(cents, currency = 'INR') {
+            const v = (cents || 0) / 100;
+            const s = new Intl.NumberFormat('en-IN', {
+                style: 'currency', currency, minimumFractionDigits: 2, maximumFractionDigits: 2,
+            }).format(Math.abs(v));
+            return v < 0 ? `-${s}` : s;
+        },
+
+        // Short day/month label for the register date column.
+        fmtDayMonth(dateStr) {
+            if (!dateStr) return '';
+            const [y, m, d] = dateStr.split('-').map(Number);
+            return new Date(y, m - 1, d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' });
         },
 
         getCategoryEmoji(account) {

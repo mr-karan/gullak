@@ -7,8 +7,7 @@
 
     <!-- PWA -->
     <link rel="manifest" href="/manifest.json">
-    <meta name="theme-color" content="#4338CA" media="(prefers-color-scheme: light)">
-    <meta name="theme-color" content="#0C0C0F" media="(prefers-color-scheme: dark)">
+    <meta name="theme-color" content="#f7f8fa">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -16,12 +15,12 @@
     <link rel="apple-touch-icon" href="/static/icons/icon.svg">
     <link rel="icon" type="image/svg+xml" href="/static/icons/icon.svg">
 
-    <!-- Fonts - Distinctive choices -->
+    <!-- Fonts: DM Sans (body) + IBM Plex Mono (figures). No third display font. -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=Instrument+Serif&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 
-    <script src="/static/js/app.js?v=1"></script>
+    <script src="/static/js/app.js?v=2"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.15.12/dist/cdn.min.js"></script>
 
     <!-- Apply saved theme immediately to prevent flash of unstyled theme. -->
@@ -56,10 +55,10 @@
     <style type="text/tailwindcss">
         @import "tailwindcss";
 
-        /* Original custom fonts, exposed as Tailwind font-* utilities. */
+        /* Fonts exposed as Tailwind font-* utilities. */
         @theme {
             --font-sans: 'DM Sans', system-ui, sans-serif;
-            --font-display: 'Instrument Serif', Georgia, serif;
+            --font-display: 'DM Sans', system-ui, sans-serif;
             --font-mono: 'IBM Plex Mono', monospace;
         }
     </style>
@@ -80,79 +79,128 @@
       'gullak-dark' are covered as aliases.
     -->
     <style>
-        [data-theme="light"], [data-theme="gullak"] {
-            /* DaisyUI 5 full-color theme vars (for Tailwind utilities). */
-            --color-primary: #4338CA;
-            --color-primary-content: #ffffff;
-            --color-secondary: #E0E7FF;
-            --color-secondary-content: #3730A3;
-            --color-accent: #F59E0B;
-            --color-accent-content: #ffffff;
-            --color-neutral: #1F2937;
-            --color-neutral-content: #ffffff;
-            --color-base-100: #FFFFFF;
-            --color-base-200: #F8FAFC;
-            --color-base-300: #F1F5F9;
-            --color-base-content: #0F172A;
-            --color-info: #3B82F6;
-            --color-success: #059669;
-            --color-warning: #D97706;
-            --color-error: #DC2626;
-            /* DaisyUI 4 short raw-component vars (for recovered main.css). */
-            --p: 45.68% 0.2146 277.02;
-            --pc: 100% 0 89.88;
-            --s: 92.99% 0.0334 272.79;
-            --sc: 39.84% 0.1773 277.37;
-            --a: 76.86% 0.1647 70.08;
-            --ac: 100% 0 89.88;
-            --n: 27.81% 0.0296 256.85;
-            --nc: 100% 0 89.88;
-            --b1: 100% 0 89.88;
-            --b2: 98.42% 0.0034 247.86;
-            --b3: 96.83% 0.0069 247.9;
-            --bc: 20.77% 0.0398 265.75;
-            --in: 62.31% 0.188 259.81;
-            --su: 59.6% 0.1274 163.23;
-            --wa: 66.58% 0.1574 58.32;
-            --er: 57.71% 0.2152 27.33;
+        /*
+          Clean light workspace palette (OKLCH). Named tokens are the source of
+          truth; the DaisyUI-5 --color-* vars (Tailwind utilities) and the
+          DaisyUI-4 short raw-component vars (--p/--bc/--b1... consumed by
+          main.css as `oklch(var(--x))`) are BOTH mapped to them. The app only
+          ships a light theme now: 'light'/'gullak'/'dark'/'gullak-dark' all
+          resolve to the same light palette so a stale saved theme still renders
+          light-on-light rather than dark-on-dark.
+        */
+        :root {
+            --color-paper:      oklch(99%  0.004 240);
+            --color-paper-2:    oklch(97%  0.005 240);
+            --color-paper-3:    oklch(94%  0.006 240);
+            --color-ink:        oklch(27%  0.02  255);
+            --color-ink-2:      oklch(52%  0.015 255);
+            --color-rule:       oklch(90%  0.006 255);
+            --color-accent:     oklch(60%  0.11  190);
+            --color-accent-ink: oklch(99%  0.01  190);
+            --color-pos:        oklch(56%  0.13  155);
+            --color-neg:        oklch(56%  0.17  25);
+            --color-warn:       oklch(72%  0.15  75);
         }
-        [data-theme="dark"], [data-theme="gullak-dark"] {
-            --color-primary: #818CF8;
-            --color-primary-content: #0F0F23;
-            --color-secondary: #312E81;
-            --color-secondary-content: #E0E7FF;
-            --color-accent: #FBBF24;
-            --color-accent-content: #1F2937;
-            --color-neutral: #9CA3AF;
-            --color-neutral-content: #1F2937;
-            --color-base-100: #0C0C0F;
-            --color-base-200: #141419;
-            --color-base-300: #1E1E26;
-            --color-base-content: #F1F5F9;
-            --color-info: #60A5FA;
-            --color-success: #34D399;
-            --color-warning: #FBBF24;
-            --color-error: #F87171;
-            --p: 68.01% 0.1583 276.93;
-            --pc: 18.07% 0.0404 281.57;
-            --s: 35.88% 0.1354 278.7;
-            --sc: 92.99% 0.0334 272.79;
-            --a: 83.69% 0.1644 84.43;
-            --ac: 27.81% 0.0296 256.85;
-            --n: 71.37% 0.0192 261.32;
-            --nc: 27.81% 0.0296 256.85;
-            --b1: 15.58% 0.0063 285.64;
-            --b2: 19.35% 0.01 285.43;
-            --b3: 23.86% 0.0152 285.19;
-            --bc: 96.83% 0.0069 247.9;
-            --in: 71.37% 0.1434 254.62;
-            --su: 77.29% 0.1535 163.22;
-            --wa: 83.69% 0.1644 84.43;
-            --er: 71.06% 0.1661 22.22;
+        [data-theme="light"], [data-theme="gullak"],
+        [data-theme="dark"],  [data-theme="gullak-dark"] {
+            /* DaisyUI 5 full-color theme vars (for Tailwind utilities). */
+            --color-primary: var(--color-accent);
+            --color-primary-content: var(--color-accent-ink);
+            --color-secondary: var(--color-paper-2);
+            --color-secondary-content: var(--color-ink);
+            --color-accent: var(--color-accent);
+            --color-accent-content: var(--color-accent-ink);
+            --color-neutral: var(--color-ink);
+            --color-neutral-content: var(--color-paper);
+            --color-base-100: var(--color-paper);
+            --color-base-200: var(--color-paper-2);
+            --color-base-300: var(--color-paper-3);
+            --color-base-content: var(--color-ink);
+            --color-info: var(--color-accent);
+            --color-success: var(--color-pos);
+            --color-warning: var(--color-warn);
+            --color-error: var(--color-neg);
+            /* DaisyUI 4 short raw-component vars: raw "L C H" triples (no oklch() wrapper). */
+            --p:  60% 0.11  190;   /* accent  */
+            --pc: 99% 0.01  190;   /* accent-ink */
+            --s:  97% 0.005 240;   /* paper-2 (secondary surface) */
+            --sc: 27% 0.02  255;   /* ink */
+            --a:  60% 0.11  190;   /* accent  */
+            --ac: 99% 0.01  190;   /* accent-ink */
+            --n:  27% 0.02  255;   /* ink (neutral) */
+            --nc: 99% 0.004 240;   /* paper */
+            --b1: 99% 0.004 240;   /* paper (app bg) */
+            --b2: 97% 0.005 240;   /* paper-2 (raised) */
+            --b3: 94% 0.006 240;   /* paper-3 (hover/selected) */
+            --bc: 27% 0.02  255;   /* ink (text) */
+            --in: 60% 0.11  190;   /* accent (info) */
+            --su: 56% 0.13  155;   /* pos (success) */
+            --wa: 72% 0.15  75;    /* warn */
+            --er: 56% 0.17  25;    /* neg (error) */
+        }
+
+        /* Money + numeric columns use tabular mono figures. */
+        .font-mono, .tabular, [class*="font-mono"] {
+            font-variant-numeric: tabular-nums;
+        }
+
+        /*
+          Flatten: kill the gradient-mesh + heavy card shadows from main.css so
+          working views read as flat paper surfaces with hairline rules. These
+          override the recovered main.css rules (loaded after; :root token names
+          below win by being applied to elements the same way).
+        */
+        .bg-gradient-mesh, .bg-gradient-mesh-dark { background: var(--color-paper) !important; }
+        .card-elevated {
+            background: var(--color-paper-2) !important;
+            border: 1px solid var(--color-rule) !important;
+            box-shadow: none !important;
+        }
+        .card-elevated:hover { box-shadow: none !important; transform: none !important; }
+        .glass-panel { background: var(--color-paper-2) !important; backdrop-filter: none !important; }
+
+        /* Register (dense date-grouped transaction list) */
+        .register-date-header {
+            position: sticky; top: 0; z-index: 10;
+            display: flex; align-items: baseline; justify-content: space-between;
+            gap: .75rem; padding: .4rem 1rem;
+            background: var(--color-paper-2);
+            border-bottom: 1px solid var(--color-rule);
+            font-size: .7rem; font-weight: 600; letter-spacing: .04em; text-transform: uppercase;
+            color: var(--color-ink-2);
+        }
+        .register-row {
+            display: grid; align-items: center; gap: .75rem;
+            grid-template-columns: 3.5rem 1fr 9rem 8rem auto;
+            min-height: 40px; padding: .3rem 1rem;
+            border-bottom: 1px solid var(--color-rule);
+            font-size: .82rem;
+        }
+        .register-row:hover { background: var(--color-paper-3); }
+        .register-row .col-amount { text-align: right; font-family: 'IBM Plex Mono', monospace; font-variant-numeric: tabular-nums; }
+        .register-row .col-date { font-family: 'IBM Plex Mono', monospace; color: var(--color-ink-2); font-size: .72rem; }
+        .money-pos { color: var(--color-pos); }
+        .money-neg { color: var(--color-neg); }
+        .warn-dot { display: inline-block; width: .45rem; height: .45rem; border-radius: 9999px; background: var(--color-warn); }
+        @media (max-width: 640px) {
+            .register-row { grid-template-columns: 1fr auto; row-gap: .15rem; }
+        }
+        .cat-combo-menu {
+            position: absolute; z-index: 40; margin-top: .25rem; width: 15rem; max-height: 16rem; overflow-y: auto;
+            background: var(--color-paper); border: 1px solid var(--color-rule); border-radius: .5rem;
+            box-shadow: 0 6px 24px oklch(27% 0.02 255 / 0.12);
+        }
+        .cat-combo-item { display: block; width: 100%; text-align: left; padding: .3rem .6rem; font-size: .8rem; }
+        .cat-combo-item:hover, .cat-combo-item.active { background: var(--color-paper-3); }
+        .cat-combo-group { padding: .3rem .6rem .1rem; font-size: .62rem; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: var(--color-ink-2); }
+        .insight-bar-track { height: .5rem; border-radius: 9999px; background: var(--color-paper-3); overflow: hidden; }
+        .insight-bar-fill { height: 100%; background: var(--color-accent); }
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
         }
     </style>
 
-    <link href="/static/css/main.css?v=1" rel="stylesheet">
+    <link href="/static/css/main.css?v=2" rel="stylesheet">
 
 </head>
 <body class="min-h-screen bg-base-100 text-base-content antialiased selection:bg-primary/20 selection:text-primary overflow-hidden">
@@ -202,34 +250,34 @@
 
         <!-- Main Nav -->
         <nav class="flex-1 px-3 py-4 space-y-1 overflow-y-auto custom-scrollbar">
-            <a href="#chat"
-               @click.prevent="$store.router.navigate('chat')"
-               :class="$store.router.view === 'chat' ? 'bg-primary/10 text-primary border-primary/20' : 'text-base-content/60 hover:bg-base-200/80 hover:text-base-content border-transparent'"
+            <a href="#accounts"
+               @click.prevent="$store.router.navigate('accounts')"
+               :class="$store.router.view === 'accounts' ? 'bg-primary/10 text-primary border-primary/20' : 'text-base-content/60 hover:bg-base-200/80 hover:text-base-content border-transparent'"
                class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 border group">
-                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="transition-transform group-hover:scale-110"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-                <span class="flex-1">Chat</span>
-                <kbd class="hidden xl:inline text-[10px] font-mono px-1.5 py-0.5 rounded bg-base-200/80 text-base-content/40">/</kbd>
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/><path d="M6 15h4"/></svg>
+                <span class="flex-1">Accounts</span>
             </a>
             <a href="#transactions"
                @click.prevent="$store.router.navigate('transactions')"
                :class="$store.router.view === 'transactions' ? 'bg-primary/10 text-primary border-primary/20' : 'text-base-content/60 hover:bg-base-200/80 hover:text-base-content border-transparent'"
                class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 border group">
-                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="transition-transform group-hover:scale-110"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
                 <span class="flex-1">Transactions</span>
             </a>
-            <a href="#reports"
-               @click.prevent="$store.router.navigate('reports')"
-               :class="$store.router.view === 'reports' ? 'bg-primary/10 text-primary border-primary/20' : 'text-base-content/60 hover:bg-base-200/80 hover:text-base-content border-transparent'"
+            <a href="#insights"
+               @click.prevent="$store.router.navigate('insights')"
+               :class="$store.router.view === 'insights' ? 'bg-primary/10 text-primary border-primary/20' : 'text-base-content/60 hover:bg-base-200/80 hover:text-base-content border-transparent'"
                class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 border group">
-                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="transition-transform group-hover:scale-110"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/></svg>
-                <span class="flex-1">Reports</span>
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+                <span class="flex-1">Insights</span>
             </a>
-            <a href="#ledger"
-               @click.prevent="$store.router.navigate('ledger')"
-               :class="$store.router.view === 'ledger' ? 'bg-primary/10 text-primary border-primary/20' : 'text-base-content/60 hover:bg-base-200/80 hover:text-base-content border-transparent'"
+            <a href="#chat"
+               @click.prevent="$store.router.navigate('chat')"
+               :class="$store.router.view === 'chat' ? 'bg-primary/10 text-primary border-primary/20' : 'text-base-content/60 hover:bg-base-200/80 hover:text-base-content border-transparent'"
                class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 border group">
-                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="transition-transform group-hover:scale-110"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/></svg>
-                <span class="flex-1">Ledger</span>
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                <span class="flex-1">Chat</span>
+                <kbd class="hidden xl:inline text-[10px] font-mono px-1.5 py-0.5 rounded bg-base-200/80 text-base-content/40">/</kbd>
             </a>
 
             <!-- Thread History -->
@@ -515,6 +563,121 @@
             </div>
         </template>
 
+        <!-- Accounts View (home) -->
+        <template x-if="$store.router.view === 'accounts'">
+            <div class="flex-1 flex flex-col h-full min-h-0">
+                <div class="min-h-14 md:h-16 border-b border-base-200/60 bg-base-100 flex items-center justify-between px-4 md:px-8 flex-shrink-0">
+                    <h2 class="text-lg md:text-xl font-semibold tracking-tight">Accounts</h2>
+                    <button @click="$store.accounts.load()" class="p-2 rounded-lg text-base-content/50 hover:text-base-content hover:bg-base-200/80 transition-colors" title="Refresh">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 5.5A10 10 0 1 1 11.26 2.8"/></svg>
+                    </button>
+                </div>
+
+                <div class="flex-1 overflow-y-auto custom-scrollbar px-4 md:px-8 py-6 space-y-6">
+                    <!-- Net worth + this month -->
+                    <div class="card-elevated p-5 md:p-6">
+                        <div class="text-[11px] font-semibold uppercase tracking-wider text-base-content/50">Net worth</div>
+                        <div class="font-mono text-3xl md:text-4xl font-semibold mt-1"
+                             :class="$store.accounts.netWorthCents < 0 ? 'money-neg' : ''"
+                             x-text="fmtCentsSigned($store.accounts.netWorthCents, $store.accounts.currency)"></div>
+                        <div class="mt-4 flex flex-wrap items-center gap-x-8 gap-y-2 text-sm">
+                            <div>
+                                <span class="text-[10px] uppercase tracking-wider text-base-content/50 mr-2">In</span>
+                                <span class="font-mono money-pos" x-text="fmtCents($store.accounts.month.incomeCents, $store.accounts.currency)"></span>
+                            </div>
+                            <div>
+                                <span class="text-[10px] uppercase tracking-wider text-base-content/50 mr-2">Out</span>
+                                <span class="font-mono money-neg" x-text="fmtCents(Math.abs($store.accounts.month.expenseCents), $store.accounts.currency)"></span>
+                            </div>
+                            <div>
+                                <span class="text-[10px] uppercase tracking-wider text-base-content/50 mr-2">Net</span>
+                                <span class="font-mono" :class="$store.accounts.month.netCents < 0 ? 'money-neg' : 'money-pos'" x-text="fmtCentsSigned($store.accounts.month.netCents, $store.accounts.currency)"></span>
+                            </div>
+                            <button x-show="$store.accounts.uncategorizedCount > 0"
+                                    @click="$store.router.navigate('transactions', { uncategorized: true })"
+                                    class="ml-auto inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-warning/15 text-warning hover:bg-warning/25 transition-colors">
+                                <span class="warn-dot"></span>
+                                <span x-text="`${$store.accounts.uncategorizedCount} uncategorized`"></span>
+                            </button>
+                        </div>
+                        <div class="text-[10px] text-base-content/40 mt-2">This month</div>
+                    </div>
+
+                    <!-- Account balances -->
+                    <div>
+                        <div class="text-[11px] font-semibold uppercase tracking-wider text-base-content/50 mb-2 px-1">Balances</div>
+                        <div class="card-elevated overflow-hidden">
+                            <template x-if="!$store.accounts.list.length && !$store.accounts.loading">
+                                <div class="p-6 text-sm text-base-content/40">No accounts yet.</div>
+                            </template>
+                            <template x-for="acc in $store.accounts.list" :key="acc.id">
+                                <button @click="$store.router.navigate('transactions', { accountId: acc.id })"
+                                        class="w-full flex items-center justify-between px-4 py-3 border-b border-base-200/60 last:border-0 hover:bg-base-200/60 transition-colors text-left">
+                                    <div class="min-w-0">
+                                        <div class="text-sm font-medium text-base-content truncate" x-text="acc.name"></div>
+                                        <div class="text-[10px] uppercase tracking-wide text-base-content/40" x-text="acc.kind"></div>
+                                    </div>
+                                    <div class="font-mono text-sm font-semibold flex-shrink-0"
+                                         :class="acc.balanceCents < 0 ? 'money-neg' : ''"
+                                         x-text="fmtCentsSigned(acc.balanceCents, $store.accounts.currency)"></div>
+                                </button>
+                            </template>
+                        </div>
+
+                        <!-- Archived -->
+                        <template x-if="$store.accounts.archived.length">
+                            <div class="mt-3">
+                                <button @click="$store.accounts.showArchived = !$store.accounts.showArchived"
+                                        class="text-xs text-base-content/50 hover:text-base-content px-1">
+                                    <span x-text="$store.accounts.showArchived ? 'Hide archived' : `Show archived (${$store.accounts.archived.length})`"></span>
+                                </button>
+                                <div class="card-elevated overflow-hidden mt-2" x-show="$store.accounts.showArchived" x-cloak>
+                                    <template x-for="acc in $store.accounts.archived" :key="acc.id">
+                                        <button @click="$store.router.navigate('transactions', { accountId: acc.id })"
+                                                class="w-full flex items-center justify-between px-4 py-3 border-b border-base-200/60 last:border-0 hover:bg-base-200/60 transition-colors text-left opacity-70">
+                                            <div class="min-w-0">
+                                                <div class="text-sm font-medium text-base-content truncate" x-text="acc.name"></div>
+                                                <div class="text-[10px] uppercase tracking-wide text-base-content/40" x-text="acc.kind + ' · archived'"></div>
+                                            </div>
+                                            <div class="font-mono text-sm font-semibold flex-shrink-0"
+                                                 :class="acc.balanceCents < 0 ? 'money-neg' : ''"
+                                                 x-text="fmtCentsSigned(acc.balanceCents, $store.accounts.currency)"></div>
+                                        </button>
+                                    </template>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+
+                    <!-- Recent activity -->
+                    <div>
+                        <div class="text-[11px] font-semibold uppercase tracking-wider text-base-content/50 mb-2 px-1">Recent activity</div>
+                        <div class="card-elevated overflow-hidden">
+                            <template x-if="!$store.accounts.recent.length && !$store.accounts.loading">
+                                <div class="p-6 text-sm text-base-content/40">No recent transactions.</div>
+                            </template>
+                            <template x-for="txn in $store.accounts.recent" :key="txn.id">
+                                <button @click="$store.router.navigate('transactions', { accountId: txn.accountId })"
+                                        class="w-full flex items-center justify-between gap-3 px-4 py-2.5 border-b border-base-200/60 last:border-0 hover:bg-base-200/60 transition-colors text-left">
+                                    <div class="col-date font-mono text-[11px] text-base-content/50 w-14 flex-shrink-0" x-text="fmtDayMonth(txn.date)"></div>
+                                    <div class="flex-1 min-w-0">
+                                        <div class="text-sm font-medium text-base-content truncate flex items-center gap-1.5">
+                                            <span x-text="txn.payee"></span>
+                                            <span x-show="!txn.category" class="warn-dot" title="Uncategorized"></span>
+                                        </div>
+                                        <div class="text-[11px] text-base-content/50 truncate" x-text="[txn.account, txn.category].filter(Boolean).join(' · ')"></div>
+                                    </div>
+                                    <div class="font-mono text-sm font-semibold flex-shrink-0"
+                                         :class="txn.amountCents < 0 ? 'money-neg' : 'money-pos'"
+                                         x-text="fmtCentsSigned(txn.amountCents, $store.accounts.currency)"></div>
+                                </button>
+                            </template>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </template>
+
         <!-- Chat View -->
         <template x-if="$store.router.view === 'chat'">
             <div class="flex-1 flex overflow-hidden">
@@ -738,595 +901,186 @@
             </div>
         </template>
 
-        <!-- Transactions View -->
+        <!-- Transactions View (dense register) -->
         <template x-if="$store.router.view === 'transactions'">
-            <div class="flex-1 flex flex-col h-full bg-base-50/50 min-h-0" x-data="transactionsDashboard()">
-                <div class="min-h-14 md:h-16 border-b border-base-200/60 bg-base-100 flex flex-col md:flex-row md:items-center justify-between px-4 md:px-8 py-3 md:py-0 gap-3 md:gap-0 flex-shrink-0">
-    <h2 class="text-lg md:text-xl font-display">Transactions</h2>
-    <div class="flex items-center gap-2 md:gap-3">
-        <div class="flex bg-base-200/80 p-1 rounded-xl flex-1 md:flex-none">
-            <button class="flex-1 md:flex-none px-3 md:px-4 py-1.5 rounded-lg text-xs font-medium transition-all duration-150"
-                    :class="$store.transactions.period === 'week' ? 'bg-base-100 text-primary shadow-sm' : 'text-base-content/60 hover:text-base-content'"
-                    @click="$store.transactions.setPeriod('week')">Week</button>
-            <button class="flex-1 md:flex-none px-3 md:px-4 py-1.5 rounded-lg text-xs font-medium transition-all duration-150"
-                    :class="$store.transactions.period === 'month' ? 'bg-base-100 text-primary shadow-sm' : 'text-base-content/60 hover:text-base-content'"
-                    @click="$store.transactions.setPeriod('month')">Month</button>
-            <button class="flex-1 md:flex-none px-3 md:px-4 py-1.5 rounded-lg text-xs font-medium transition-all duration-150"
-                    :class="$store.transactions.period === 'year' ? 'bg-base-100 text-primary shadow-sm' : 'text-base-content/60 hover:text-base-content'"
-                    @click="$store.transactions.setPeriod('year')">Year</button>
-        </div>
-        <button @click="$store.transactions.load(); $store.pending.load()" class="p-2 rounded-lg text-base-content/50 hover:text-base-content hover:bg-base-200/80 transition-colors flex-shrink-0">
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 5.5A10 10 0 1 1 11.26 2.8"/></svg>
-        </button>
-    </div>
-</div>
-
-                <div class="flex-1 overflow-y-auto custom-scrollbar">
-                    <div class="px-4 md:px-8 pt-6" x-show="$store.pending.transactions.length > 0" x-cloak>
-    <div class="card-elevated overflow-hidden">
-        <div class="h-12 flex items-center justify-between px-4 border-b border-base-200/60 bg-base-100">
-            <div class="flex items-center gap-2">
-                <div class="w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center">
-                    <span class="text-[10px] font-semibold text-primary" x-text="$store.pending.transactions.length"></span>
+            <div class="flex-1 flex flex-col h-full min-h-0">
+                <!-- Header -->
+                <div class="min-h-14 md:h-16 border-b border-base-200/60 bg-base-100 flex items-center justify-between px-4 md:px-8 flex-shrink-0">
+                    <div class="min-w-0">
+                        <h2 class="text-lg md:text-xl font-semibold tracking-tight">Transactions</h2>
+                        <div x-show="$store.transactions.accountScoped" class="text-xs text-base-content/50 truncate" x-text="$store.transactions.accountName"></div>
+                    </div>
+                    <button @click="$store.transactions.load()" class="p-2 rounded-lg text-base-content/50 hover:text-base-content hover:bg-base-200/80 transition-colors flex-shrink-0" title="Refresh">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 5.5A10 10 0 1 1 11.26 2.8"/></svg>
+                    </button>
                 </div>
-                <span class="font-medium text-xs">Pending confirmations</span>
-            </div>
-            <div class="flex gap-2">
-                <button @click="$store.pending.confirmAll()"
-                        class="px-3 py-1 rounded-md bg-success/90 text-white text-[10px] font-semibold hover:bg-success transition-colors"
-                        :disabled="$store.pending.confirming">
-                    Confirm all
-                </button>
-                <button @click="$store.pending.cancelAll()"
-                        class="px-3 py-1 rounded-md text-[10px] font-medium text-base-content/50 hover:text-error hover:bg-error/10 transition-colors">
-                    Clear all
-                </button>
-            </div>
-        </div>
-        <div class="max-h-64 overflow-y-auto custom-scrollbar bg-base-100">
-            <template x-for="pending in $store.pending.transactions" :key="pending.data.id">
-                <div class="preview-card-compact border-b border-base-100 last:border-0 animate-slide-up">
-                    <div class="flex items-start justify-between gap-2 px-3 pt-2.5 pb-2">
-                        <div class="flex-1 min-w-0">
-                            <div class="text-sm font-semibold text-base-content truncate" x-text="pending.data.transaction.payee"></div>
-                            <div class="text-xs text-base-content/50 font-mono mt-0.5" x-text="formatCurrency(pending.data.transaction.amount, pending.data.transaction.currency)"></div>
+
+                <!-- Filter toolbar (sticky) -->
+                <div class="border-b border-base-200/60 bg-base-100 px-4 md:px-8 py-3 flex flex-col gap-3 flex-shrink-0">
+                    <div class="flex flex-wrap items-center gap-2">
+                        <!-- Date range -->
+                        <select class="input-box h-9 text-sm w-auto"
+                                x-model="$store.transactions.rangeKey"
+                                @change="$store.transactions.setRange($store.transactions.rangeKey)">
+                            <option value="month">This month</option>
+                            <option value="last-month">Last month</option>
+                            <option value="3m">Last 3 months</option>
+                            <option value="year">This year</option>
+                            <option value="custom">Custom</option>
+                        </select>
+                        <template x-if="$store.transactions.rangeKey === 'custom'">
+                            <div class="flex items-center gap-1.5">
+                                <input type="date" class="input-box h-9 text-sm w-auto" x-model="$store.transactions.customStart" @change="$store.transactions.applyCustomRange()" />
+                                <span class="text-base-content/40">–</span>
+                                <input type="date" class="input-box h-9 text-sm w-auto" x-model="$store.transactions.customEnd" @change="$store.transactions.applyCustomRange()" />
+                            </div>
+                        </template>
+
+                        <!-- Account filter (hidden when account-scoped) -->
+                        <select x-show="!$store.transactions.accountScoped"
+                                class="input-box h-9 text-sm w-auto"
+                                x-model="$store.transactions.accountId"
+                                @change="$store.transactions.setAccount($store.transactions.accountId)">
+                            <option value="">All accounts</option>
+                            <template x-for="acc in $store.transactions.accounts" :key="acc.id">
+                                <option :value="acc.id" x-text="acc.name"></option>
+                            </template>
+                        </select>
+
+                        <!-- Category filter (grouped) -->
+                        <select class="input-box h-9 text-sm w-auto" x-model="$store.transactions.categoryFilter">
+                            <option value="">All categories</option>
+                            <template x-for="grp in $store.transactions.categoryGroups" :key="grp.group">
+                                <optgroup :label="grp.group">
+                                    <template x-for="c in grp.categories" :key="c.id">
+                                        <option :value="c.name" x-text="c.name"></option>
+                                    </template>
+                                </optgroup>
+                            </template>
+                        </select>
+
+                        <!-- Uncategorized toggle -->
+                        <button @click="$store.transactions.toggleUncategorized()"
+                                class="h-9 px-3 rounded-lg text-sm font-medium border transition-colors"
+                                :class="$store.transactions.uncategorizedOnly ? 'bg-warning/15 text-warning border-warning/30' : 'border-base-300 text-base-content/60 hover:text-base-content'">
+                            Uncategorized
+                        </button>
+
+                        <!-- Search -->
+                        <div class="relative flex-1 min-w-[10rem]">
+                            <svg class="absolute left-3 top-2.5 w-4 h-4 text-base-content/40" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                            <input type="text" x-model="$store.transactions.search" @input="$store.transactions.queueFilterUpdate()"
+                                   placeholder="Search payee, memo, location..." class="input-box h-9 pl-9 w-full text-sm" />
                         </div>
-                        <div class="flex gap-1 flex-shrink-0">
-                            <button @click="$store.pending.confirmOne(pending.data.id)"
-                                    class="w-7 h-7 rounded-md bg-success/90 text-white flex items-center justify-center hover:bg-success transition-colors"
-                                    :disabled="$store.pending.confirming">
-                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-                            </button>
-                            <button @click="$store.pending.cancel(pending.data.id)"
-                                    class="w-7 h-7 rounded-md bg-base-200 text-base-content/50 hover:text-error hover:bg-error/10 flex items-center justify-center transition-colors">
+                    </div>
+
+                    <!-- Active filter chips + count -->
+                    <div class="flex flex-wrap items-center gap-2" x-show="$store.transactions.activeChips.length">
+                        <template x-for="chip in $store.transactions.activeChips" :key="chip.type">
+                            <button class="filter-pill active inline-flex items-center gap-1"
+                                    @click="$store.transactions.clearChip(chip.type)">
+                                <span x-text="chip.label"></span>
                                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                             </button>
-                        </div>
-                    </div>
-                    <div class="px-3 pb-2.5 space-y-1.5">
-                        <div class="flex items-center gap-2">
-                            <svg class="w-3.5 h-3.5 text-base-content/30 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-                            <input type="date"
-                                   x-model="pending.data.transaction.date"
-                                   @change="$store.pending.update(pending.data.id, 'date', $event.target.value)"
-                                   class="text-xs bg-transparent border-none p-0 text-base-content/70 focus:text-base-content outline-none w-full" />
-                        </div>
-                        <div class="flex items-center gap-2">
-                            <svg class="w-3.5 h-3.5 text-base-content/30 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
-                            <input type="text"
-                                   x-model="pending.data.transaction.expense_account"
-                                   @input="$store.pending.update(pending.data.id, 'expense_account', $event.target.value)"
-                                   class="text-xs bg-transparent border-none p-0 text-primary font-medium focus:text-primary/80 outline-none w-full placeholder:text-base-content/30"
-                                   placeholder="Category" />
-                        </div>
-                        <div class="flex items-center gap-2">
-                            <svg class="w-3.5 h-3.5 text-base-content/30 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
-                            <input type="text"
-                                   x-model="pending.data.transaction.payment_account"
-                                   @input="$store.pending.update(pending.data.id, 'payment_account', $event.target.value)"
-                                   class="text-xs bg-transparent border-none p-0 text-base-content/70 focus:text-base-content outline-none w-full placeholder:text-base-content/30"
-                                   placeholder="Payment" />
-                        </div>
+                        </template>
+                        <span class="text-[11px] text-base-content/40 ml-auto" x-text="`${$store.transactions.resultCount} shown`"></span>
                     </div>
                 </div>
-            </template>
-        </div>
-    </div>
-</div>
 
-                    <div class="px-4 md:px-8 py-4 md:py-6">
-                        <div class="grid gap-4 lg:grid-cols-[360px,1fr]">
-                            <div class="space-y-4">
-                                <div class="card-elevated p-4 md:p-5">
-    <div class="flex items-center justify-between">
-        <div>
-            <div class="text-[10px] font-semibold uppercase tracking-wider text-base-content/50">Total Spent</div>
-            <div class="text-xl md:text-2xl font-semibold text-base-content"
-                 x-text="formatCurrency($store.transactions.activeStats.total_spent || 0, $store.transactions.activeStats.currency || 'INR')"></div>
-            <div class="text-[10px] text-base-content/50 mt-1"
-                 x-show="$store.transactions.activeStats.projection?.available"
-                 x-text="`Projected: ${formatCurrency($store.transactions.activeStats.projection?.projected_total_spent || 0, $store.transactions.activeStats.currency || 'INR')}`"></div>
-        </div>
-        <div class="text-xs font-mono"
-             :class="$store.transactions.deltaClass($store.transactions.activeStats.comparison)"
-             x-text="$store.transactions.deltaLabel($store.transactions.activeStats.comparison)"></div>
-    </div>
-    <div class="mt-3">
-        <svg viewBox="0 0 120 40" class="w-full h-12">
-            <polyline fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      class="text-primary"
-                      :points="$store.transactions.sparklinePoints($store.transactions.activeStats.daily_spending, 120, 40)"></polyline>
-        </svg>
-    </div>
-    <div class="mt-2 flex items-center justify-between text-[10px] text-base-content/40 font-mono">
-        <span x-text="$store.transactions.activeStats.period_start"></span>
-        <span x-text="$store.transactions.activeStats.period_end"></span>
-    </div>
-    <div class="mt-4 grid grid-cols-2 gap-3">
-        <div class="rounded-lg bg-base-200/50 px-3 py-2">
-            <div class="text-[10px] uppercase tracking-wider text-base-content/50">Transactions</div>
-            <div class="text-sm font-medium text-base-content" x-text="$store.transactions.activeStats.transaction_count || 0"></div>
-        </div>
-        <div class="rounded-lg bg-base-200/50 px-3 py-2">
-            <div class="text-[10px] uppercase tracking-wider text-base-content/50">Avg / txn</div>
-            <div class="text-sm font-medium text-base-content"
-                 x-text="formatCurrency(($store.transactions.activeStats.total_spent || 0) / Math.max($store.transactions.activeStats.transaction_count || 1, 1), $store.transactions.activeStats.currency || 'INR')"></div>
-        </div>
-    </div>
-</div>
-
-<div class="card-elevated p-4 md:p-5">
-    <div class="flex items-center justify-between mb-2">
-        <div class="text-[10px] font-semibold uppercase tracking-wider text-base-content/50">Spend Flow</div>
-        <button class="text-[10px] text-base-content/40 hover:text-base-content"
-                x-show="hasFilters"
-                @click="clearAllFilters()">Clear</button>
-    </div>
-    <div class="text-[11px] text-base-content/40 mb-4" x-text="breadcrumb"></div>
-
-    <div class="space-y-2">
-        <template x-for="cat in flowCategories" :key="cat.name">
-            <button class="w-full px-2 py-1.5 rounded-lg border border-transparent transition-colors"
-                    :class="isActiveCategory(cat.name) ? 'bg-primary/10 text-primary' : 'hover:bg-base-200/60 text-base-content'"
-                    @click="selectCategory(cat.name)">
-                <div class="flex items-center justify-between">
-                    <span class="text-sm font-medium truncate" x-text="cat.name"></span>
-                    <span class="text-xs font-mono text-base-content/50"
-                          x-text="formatCurrency(cat.amount, $store.transactions.activeStats.currency)"></span>
-                </div>
-                <div class="mt-1 h-1.5 bg-base-200/70 rounded-full overflow-hidden">
-                    <div class="h-full bg-primary"
-                         :style="`width:${cat.percent.toFixed(1)}%`"></div>
-                </div>
-            </button>
-        </template>
-        <div x-show="!flowCategories.length" class="text-sm text-base-content/40">No data available</div>
-    </div>
-
-    <div class="mt-4" x-show="$store.transactions.categoryFilter" x-cloak>
-        <div class="flex items-center justify-between mb-2">
-            <div class="text-[10px] font-semibold uppercase tracking-wider text-base-content/50">Subcategories</div>
-            <button class="text-[10px] text-base-content/40 hover:text-base-content"
-                    x-show="$store.transactions.subCategoryFilter"
-                    @click="$store.transactions.setSubCategory('')">Clear</button>
-        </div>
-        <div class="space-y-2">
-            <template x-for="sub in flowSubcategories" :key="sub.name">
-                <button class="w-full px-2 py-1.5 rounded-lg border border-transparent transition-colors"
-                        :class="isActiveSubcategory(sub.name) ? 'bg-primary/10 text-primary' : 'hover:bg-base-200/60 text-base-content'"
-                        @click="selectSubcategory(sub.name)">
-                    <div class="flex items-center justify-between">
-                        <span class="text-sm font-medium truncate" x-text="sub.name"></span>
-                        <span class="text-xs font-mono text-base-content/50"
-                              x-text="formatCurrency(sub.amount, $store.transactions.activeStats.currency)"></span>
+                <!-- Register -->
+                <div class="flex-1 overflow-y-auto custom-scrollbar" @click="$store.transactions.closeCatCombo()">
+                    <!-- Cap notice -->
+                    <div x-show="$store.transactions.capped" class="px-4 md:px-8 py-2 text-xs text-warning bg-warning/10 border-b border-warning/20">
+                        Showing first 1000 — narrow the date range.
                     </div>
-                    <div class="mt-1 h-1.5 bg-base-200/70 rounded-full overflow-hidden">
-                        <div class="h-full bg-primary"
-                             :style="`width:${sub.percent.toFixed(1)}%`"></div>
-                    </div>
-                </button>
-            </template>
-            <div x-show="!flowSubcategories.length" class="text-sm text-base-content/40">No subcategories yet</div>
-        </div>
-    </div>
 
-    <div class="mt-4" x-show="flowPayees.length">
-        <div class="flex items-center justify-between mb-2">
-            <div class="text-[10px] font-semibold uppercase tracking-wider text-base-content/50">Top Payees</div>
-            <div class="text-[10px] text-base-content/40">Tap to filter</div>
-        </div>
-        <div class="space-y-2">
-            <template x-for="payee in flowPayees" :key="payee.name">
-                <button class="w-full flex items-center justify-between px-2 py-1.5 rounded-lg hover:bg-base-200/60 transition-colors"
-                        @click="selectPayee(payee.name)">
-                    <div class="flex flex-col text-left min-w-0">
-                        <span class="text-sm font-medium truncate" x-text="payee.name"></span>
-                        <span class="text-[10px] text-base-content/40" x-text="`${payee.count} txns`"></span>
-                    </div>
-                    <span class="text-xs font-mono text-base-content/50"
-                          x-text="formatCurrency(payee.amount, $store.transactions.activeStats.currency)"></span>
-                </button>
-            </template>
-        </div>
-    </div>
-</div>
-
-                                <div class="card-elevated p-4 md:p-5">
-    <div class="flex items-center justify-between mb-3">
-        <div class="text-[10px] font-semibold uppercase tracking-wider text-base-content/50">Cut-down Cues</div>
-        <div class="text-[10px] text-base-content/40">Focus this period</div>
-    </div>
-
-    <div class="space-y-4">
-        <div>
-            <div class="text-[10px] font-semibold uppercase tracking-wider text-base-content/40 mb-2">Budgets at risk</div>
-            <div class="space-y-3" x-show="budgetAlerts.length">
-                <template x-for="budget in budgetAlerts" :key="budget.account">
-                    <div class="space-y-1">
-                        <div class="flex items-center justify-between">
-                            <span class="text-sm font-medium truncate" x-text="budget.account.replace('Expenses:', '')"></span>
-                            <span class="text-xs font-mono text-base-content/50"
-                                  x-text="formatCurrency(budget.actual, budget.currency) + ' / ' + formatCurrency(budget.amount, budget.currency)"></span>
+                    <!-- Loading -->
+                    <template x-if="$store.transactions.loadingList">
+                        <div class="flex flex-col items-center justify-center h-64 text-base-content/40">
+                            <div class="loading loading-dots loading-sm mb-2"></div>
+                            <p>Loading transactions</p>
                         </div>
-                        <div class="h-1.5 bg-base-200/70 rounded-full overflow-hidden">
-                            <div class="h-full rounded-full"
-                                 :class="budget.status === 'over' ? 'bg-error' : 'bg-warning'"
-                                 :style="`width:${Math.min(100, budget.progress * 100)}%`"></div>
-                        </div>
-                        <div class="flex items-center justify-between text-[10px] text-base-content/40">
-                            <span x-text="budget.status === 'over' ? 'Over budget' : 'At risk'"></span>
-                            <span x-text="formatCurrency(budget.remaining, budget.currency) + ' left'"></span>
-                        </div>
-                        <div class="text-[10px] text-base-content/40"
-                             x-show="budget.projected_over"
-                             x-text="`Projected: ${formatCurrency(budget.projected, budget.currency)}`"></div>
-                    </div>
-                </template>
-            </div>
-            <div x-show="!budgetAlerts.length" class="text-sm text-base-content/40">No budget alerts</div>
-        </div>
-
-        <div>
-            <div class="text-[10px] font-semibold uppercase tracking-wider text-base-content/40 mb-2">Repeat payees</div>
-            <div class="space-y-2">
-                <template x-for="payee in ($store.transactions.activeStats.repeat_payees || [])" :key="payee.name">
-                    <button class="w-full flex items-center justify-between px-2 py-1.5 rounded-lg hover:bg-base-200/60 transition-colors"
-                            @click="selectPayee(payee.name)">
-                        <div class="flex flex-col text-left min-w-0">
-                            <span class="text-sm font-medium truncate" x-text="payee.name"></span>
-                            <span class="text-[10px] text-base-content/40"
-                                  x-text="`${payee.count} txns · avg ${formatCurrency(payee.average, $store.transactions.activeStats.currency)}`"></span>
-                        </div>
-                        <span class="text-xs font-mono text-base-content/50"
-                              x-text="formatCurrency(payee.amount, $store.transactions.activeStats.currency)"></span>
-                    </button>
-                </template>
-                <div x-show="!$store.transactions.activeStats.repeat_payees?.length" class="text-sm text-base-content/40">No repeat payees</div>
-            </div>
-        </div>
-
-        <div>
-            <div class="text-[10px] font-semibold uppercase tracking-wider text-base-content/40 mb-2">One-off spikes</div>
-            <div class="space-y-2">
-                <template x-for="txn in ($store.transactions.activeStats.one_offs || [])" :key="txn.id">
-                    <button class="w-full flex items-center justify-between px-2 py-1.5 rounded-lg hover:bg-base-200/60 transition-colors"
-                            @click="selectPayee(txn.payee)">
-                        <div class="flex flex-col text-left min-w-0">
-                            <span class="text-sm font-medium truncate" x-text="txn.payee"></span>
-                            <span class="text-[10px] text-base-content/40" x-text="txn.date"></span>
-                        </div>
-                        <span class="text-xs font-mono text-base-content/50"
-                              x-text="formatCurrency(txn.amount, txn.currency)"></span>
-                    </button>
-                </template>
-                <div x-show="!$store.transactions.activeStats.one_offs?.length" class="text-sm text-base-content/40">No one-off spikes</div>
-            </div>
-        </div>
-
-        <div>
-            <div class="text-[10px] font-semibold uppercase tracking-wider text-base-content/40 mb-2">Largest transactions</div>
-            <div class="space-y-2">
-                <template x-for="txn in ($store.transactions.activeStats.largest_transactions || [])" :key="txn.id">
-                    <button class="w-full flex items-center justify-between px-2 py-1.5 rounded-lg hover:bg-base-200/60 transition-colors"
-                            @click="selectPayee(txn.payee)">
-                        <div class="flex flex-col text-left min-w-0">
-                            <span class="text-sm font-medium truncate" x-text="txn.payee"></span>
-                            <span class="text-[10px] text-base-content/40" x-text="txn.date"></span>
-                        </div>
-                        <span class="text-xs font-mono text-base-content/50"
-                              x-text="formatCurrency(txn.amount, txn.currency)"></span>
-                    </button>
-                </template>
-                <div x-show="!$store.transactions.activeStats.largest_transactions?.length" class="text-sm text-base-content/40">No data available</div>
-            </div>
-        </div>
-
-        <div>
-            <div class="text-[10px] font-semibold uppercase tracking-wider text-base-content/40 mb-2">Category shifts</div>
-            <div class="space-y-2">
-                <template x-for="delta in ($store.transactions.activeStats.category_deltas || [])" :key="delta.name">
-                    <button class="w-full flex items-center justify-between px-2 py-1.5 rounded-lg hover:bg-base-200/60 transition-colors"
-                            @click="selectCategory(delta.name)">
-                        <div class="flex flex-col text-left min-w-0">
-                            <span class="text-sm font-medium truncate" x-text="delta.name"></span>
-                            <span class="text-[10px] text-base-content/40"
-                                  x-text="delta.delta_percent !== null ? `${delta.delta_percent.toFixed(1)}% vs prev` : 'No prior baseline'"></span>
-                        </div>
-                        <span class="text-xs font-mono"
-                              :class="delta.delta_amount >= 0 ? 'text-error' : 'text-success'"
-                              x-text="formatCurrency(delta.delta_amount, $store.transactions.activeStats.currency)"></span>
-                    </button>
-                </template>
-                <div x-show="!$store.transactions.activeStats.category_deltas?.length" class="text-sm text-base-content/40">No category shifts</div>
-            </div>
-        </div>
-    </div>
-</div>
-
-                                <div class="card-elevated p-4 md:p-5">
-    <div class="flex items-center justify-between mb-3">
-        <div class="text-[10px] font-semibold uppercase tracking-wider text-base-content/50">Needs Review</div>
-        <div class="text-[10px] font-semibold text-warning bg-warning/10 px-2 py-0.5 rounded-full"
-             x-show="$store.transactions.stats.needs_review?.length"
-             x-text="$store.transactions.stats.needs_review?.length"></div>
-    </div>
-    <div class="space-y-3" x-show="$store.transactions.stats.needs_review?.length">
-        <template x-for="review in ($store.transactions.stats.needs_review || [])" :key="review.payee">
-            <div class="border border-base-200/60 rounded-lg p-3 space-y-2">
-                <div class="flex items-center justify-between">
-                    <div class="min-w-0">
-                        <div class="text-sm font-medium truncate" x-text="review.payee"></div>
-                        <div class="text-[10px] text-base-content/40"
-                             x-text="`${review.count} txns`"></div>
-                    </div>
-                    <div class="text-xs font-mono text-base-content/50"
-                         x-text="formatCurrency(review.amount, $store.transactions.stats.currency)"></div>
-                </div>
-                <div class="flex flex-wrap gap-2">
-                    <template x-for="reason in (review.reasons || [])" :key="reason">
-                        <span class="text-[10px] px-2 py-0.5 rounded-full bg-base-200/70 text-base-content/60"
-                              x-text="reason.replace('_', ' ')"></span>
                     </template>
-                    <button class="text-[10px] text-primary hover:text-primary/80"
-                            x-show="review.suggested_account"
-                            @click="$store.transactions.mappingInputs[review.payee] = review.suggested_account">
-                        Use suggested
-                    </button>
-                </div>
-                <div class="flex items-center gap-2">
-                    <input type="text"
-                           x-model="$store.transactions.mappingInputs[review.payee]"
-                           class="input-box flex-1 h-8 text-xs"
-                           placeholder="Expenses:Food:Delivery" />
-                    <button class="px-3 py-1.5 rounded-lg text-[10px] font-semibold bg-primary text-white hover:bg-primary/90 transition-colors"
-                            :disabled="$store.transactions.mappingSaving[review.payee]"
-                            @click="$store.transactions.learnPayeeMapping(review.payee)">
-                        Remember
-                    </button>
-                </div>
-            </div>
-        </template>
-    </div>
-    <div x-show="!$store.transactions.stats.needs_review?.length" class="text-sm text-base-content/40">All clear</div>
-</div>
 
-                            </div>
-                            <div class="space-y-4">
-                                <div class="card-elevated p-4 md:p-5">
-    <div class="flex flex-col gap-3">
-        <div class="flex items-center justify-between">
-            <div>
-                <div class="text-[10px] font-semibold uppercase tracking-wider text-base-content/50">Entries</div>
-                <div class="text-sm text-base-content/60" x-text="listSummary"></div>
-            </div>
-            <button class="text-[10px] text-base-content/40 hover:text-base-content"
-                    x-show="hasFilters"
-                    @click="clearAllFilters()">Clear filters</button>
-        </div>
-
-        <div class="relative">
-            <svg class="absolute left-3.5 top-3 w-4 h-4 text-base-content/40" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-            <input type="text"
-                   x-model="$store.transactions.search"
-                   @input="$store.transactions.queueFilterUpdate()"
-                   placeholder="Search payee, note, account..."
-                   class="input-box pl-10 w-full" />
-        </div>
-
-        <div class="flex flex-wrap gap-2">
-            <template x-for="chip in activeChips" :key="chip.key">
-                <button class="filter-pill active"
-                        @click="clearFilter(chip.type)"
-                        x-text="chip.label"></button>
-            </template>
-            <div x-show="!activeChips.length" class="text-[10px] text-base-content/40">No filters applied</div>
-        </div>
-    </div>
-</div>
-
-<div class="card-elevated overflow-hidden min-h-[400px]" data-transactions-list>
-    <template x-if="$store.transactions.loadingList">
-        <div class="flex flex-col items-center justify-center h-64 text-base-content/40">
-            <div class="loading loading-dots loading-sm mb-2"></div>
-            <p>Loading transactions</p>
-        </div>
-    </template>
-    <template x-if="!$store.transactions.loadingList && $store.transactions.list.length === 0">
-        <div class="flex flex-col items-center justify-center h-64 text-base-content/40">
-            <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="mb-2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-            <p>No transactions found</p>
-        </div>
-    </template>
-
-    <div x-show="!$store.transactions.loadingList && $store.transactions.list.length > 0">
-        <template x-for="(group, dateKey) in $store.transactions.grouped" :key="dateKey">
-            <div>
-                <!-- Date Header -->
-                <div class="glass-panel px-5 py-2.5 border-b border-base-200/50 flex items-center justify-between sticky top-0 z-10">
-                    <span class="text-xs font-semibold text-base-content/50 uppercase tracking-wider" x-text="formatDateRelative(dateKey) + ' · ' + new Date(dateKey).toLocaleDateString()"></span>
-                    <span class="text-xs font-mono text-base-content/40" x-text="formatCurrency(group.reduce((sum, t) => sum + Math.abs(t.amount), 0), $store.transactions.activeStats.currency || 'INR')"></span>
-                </div>
-                <!-- Rows -->
-                <template x-for="txn in group" :key="txn.id">
-                    <div class="txn-swipe-container">
-                        <!-- Swipe action buttons (revealed on swipe) -->
-                        <div class="txn-swipe-actions">
-                            <button @click="$store.transactions.openEdit(txn); $store.transactions.swipedId = null"
-                                    class="txn-action-btn edit">
-                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                            </button>
-                            <button @click="$store.transactions.delete(txn.id)"
-                                    :disabled="$store.transactions.deleting"
-                                    class="txn-action-btn delete">
-                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-                            </button>
+                    <!-- Empty -->
+                    <template x-if="!$store.transactions.loadingList && $store.transactions.resultCount === 0">
+                        <div class="flex flex-col items-center justify-center h-64 text-base-content/40">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="mb-2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                            <p>No transactions found</p>
                         </div>
-                        <!-- Swipeable content -->
-                        <div class="txn-item group"
-                             x-ref="txnRow"
-                             @touchstart="$store.transactions.handleTouchStart($event, txn.id)"
-                             @touchmove="$store.transactions.handleTouchMove($event, txn.id, $el)"
-                             @touchend="$store.transactions.handleTouchEnd($event, txn.id, $el)"
-                             @click="if($store.transactions.swipedId === txn.id) { $store.transactions.closeSwipe($el) }">
-                            <div class="flex items-center gap-4 flex-1 min-w-0">
-                                <div class="w-10 h-10 rounded-xl flex items-center justify-center text-base flex-shrink-0" :class="getCategoryColor(txn.accounts[0])" x-text="getCategoryEmoji(txn.accounts[0])"></div>
-                                <div class="flex flex-col min-w-0">
-                                    <span class="text-sm font-medium text-base-content truncate" x-text="txn.payee"></span>
-                                    <span class="text-xs text-base-content/50 truncate" x-text="txn.note || txn.accounts[0]"></span>
+                    </template>
+
+                    <!-- Date-grouped rows -->
+                    <div x-show="!$store.transactions.loadingList && $store.transactions.resultCount > 0">
+                        <template x-for="group in $store.transactions.grouped" :key="group.date">
+                            <div>
+                                <div class="register-date-header">
+                                    <span x-text="formatDateRelative(group.date) + ' · ' + fmtDayMonth(group.date)"></span>
+                                    <span class="font-mono normal-case tracking-normal" :class="group.netCents < 0 ? 'money-neg' : 'money-pos'" x-text="fmtCentsSigned(group.netCents, $store.transactions.currency)"></span>
                                 </div>
+                                <template x-for="txn in group.rows" :key="txn.id">
+                                    <div class="register-row group">
+                                        <!-- Date -->
+                                        <div class="col-date hidden sm:block" x-text="fmtDayMonth(txn.date)"></div>
+                                        <!-- Payee + memo -->
+                                        <div class="min-w-0">
+                                            <div class="font-medium text-base-content truncate flex items-center gap-1.5">
+                                                <span x-text="txn.payee"></span>
+                                                <span x-show="txn.uncategorized" class="warn-dot" title="Uncategorized"></span>
+                                            </div>
+                                            <div class="text-[11px] text-base-content/50 truncate" x-show="txn.note" x-text="txn.note"></div>
+                                            <!-- Mobile line 2 -->
+                                            <div class="sm:hidden text-[11px] text-base-content/50 truncate mt-0.5"
+                                                 x-text="[($store.transactions.accountScoped ? '' : txn.account), (txn.category || 'Uncategorized')].filter(Boolean).join(' · ')"></div>
+                                        </div>
+                                        <!-- Category (inline editable combobox) -->
+                                        <div class="relative hidden sm:block" @click.stop>
+                                            <button @click="$store.transactions.editingCatFor === txn.id ? $store.transactions.closeCatCombo() : $store.transactions.openCatCombo(txn.id)"
+                                                    class="w-full text-left text-xs px-2 py-1 rounded-md border border-transparent hover:border-base-300 transition-colors truncate"
+                                                    :class="txn.uncategorized ? 'text-warning' : 'text-base-content/70'">
+                                                <span x-text="txn.category || 'Uncategorized'"></span>
+                                            </button>
+                                            <div class="cat-combo-menu" x-show="$store.transactions.editingCatFor === txn.id" x-cloak>
+                                                <div class="p-1.5 border-b border-base-200/60">
+                                                    <input type="text" x-model="$store.transactions.catQuery" placeholder="Search category..."
+                                                           class="input-box h-8 w-full text-xs" @click.stop />
+                                                </div>
+                                                <template x-for="grp in $store.transactions.filteredCategoryGroups()" :key="grp.group">
+                                                    <div>
+                                                        <div class="cat-combo-group" x-text="grp.group"></div>
+                                                        <template x-for="c in grp.categories" :key="c.id">
+                                                            <button class="cat-combo-item"
+                                                                    :class="txn.categoryId === c.id ? 'active' : ''"
+                                                                    @click="$store.transactions.setCategoryFor(txn.id, c.id, c.name)"
+                                                                    x-text="c.name"></button>
+                                                        </template>
+                                                    </div>
+                                                </template>
+                                            </div>
+                                        </div>
+                                        <!-- Account (hidden when scoped) -->
+                                        <div class="hidden sm:block text-xs text-base-content/50 truncate"
+                                             x-show="!$store.transactions.accountScoped" x-text="txn.account"></div>
+                                        <!-- Amount -->
+                                        <div class="col-amount font-semibold" :class="txn.amountCents < 0 ? 'money-neg' : 'money-pos'"
+                                             x-text="fmtCentsSigned(txn.amountCents, $store.transactions.currency)"></div>
+                                    </div>
+                                </template>
                             </div>
-                            <div class="flex items-center gap-3 flex-shrink-0">
-                                <div class="font-mono text-sm font-semibold" :class="txn.amount > 0 ? 'text-base-content' : 'text-success'" x-text="formatCurrency(Math.abs(txn.amount), txn.currency)"></div>
-                                <!-- Desktop hover actions -->
-                                <div class="hidden md:flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                    <button @click.stop="$store.transactions.openEdit(txn)" 
-                                            class="w-7 h-7 rounded-md bg-base-200 text-base-content/50 hover:text-primary hover:bg-primary/10 flex items-center justify-center transition-colors"
-                                            title="Edit">
-                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                                    </button>
-                                    <button @click.stop="$store.transactions.delete(txn.id)" 
-                                            class="w-7 h-7 rounded-md bg-base-200 text-base-content/50 hover:text-error hover:bg-error/10 flex items-center justify-center transition-colors"
-                                            :disabled="$store.transactions.deleting"
-                                            title="Delete">
-                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
+                        </template>
                     </div>
-                </template>
-            </div>
-        </template>
-        <div class="flex items-center justify-center p-4 border-t border-base-200/50"
-             x-show="$store.transactions.hasMore">
-            <button class="btn btn-ghost btn-sm"
-                    @click="$store.transactions.loadMore()"
-                    :disabled="$store.transactions.loadingMore">
-                <span x-show="!$store.transactions.loadingMore">Load more</span>
-                <span x-show="$store.transactions.loadingMore">Loading...</span>
-            </button>
-        </div>
-    </div>
-</div>
-
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </template>
-
-        <div x-show="$store.transactions.showEditModal" 
-     x-transition:enter="transition ease-out duration-200"
-     x-transition:enter-start="opacity-0"
-     x-transition:enter-end="opacity-100"
-     x-transition:leave="transition ease-in duration-150"
-     x-transition:leave-start="opacity-100"
-     x-transition:leave-end="opacity-0"
-     class="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/50 backdrop-blur-sm"
-     @click.self="$store.transactions.closeEdit()"
-     x-cloak>
-    <div class="bg-base-100 rounded-t-2xl md:rounded-2xl shadow-2xl w-full md:max-w-md md:mx-4 overflow-hidden max-h-[90vh] overflow-y-auto"
-         x-show="$store.transactions.showEditModal"
-         x-transition:enter="transition ease-out duration-200"
-         x-transition:enter-start="opacity-0 scale-95"
-         x-transition:enter-end="opacity-100 scale-100"
-         x-transition:leave="transition ease-in duration-150"
-         x-transition:leave-start="opacity-100 scale-100"
-         x-transition:leave-end="opacity-0 scale-95">
-        
-        <!-- Modal Header -->
-        <div class="px-6 py-4 border-b border-base-200/60 flex items-center justify-between">
-            <h3 class="text-lg font-semibold">Edit Transaction</h3>
-            <button @click="$store.transactions.closeEdit()" class="w-8 h-8 rounded-lg hover:bg-base-200 flex items-center justify-center text-base-content/50 hover:text-base-content transition-colors">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-            </button>
-        </div>
-
-        <!-- Modal Body -->
-        <template x-if="$store.transactions.editing">
-            <div class="p-6 space-y-4">
-                <!-- Payee -->
-                <div>
-                    <label class="block text-xs font-medium text-base-content/60 mb-1.5">Payee</label>
-                    <input type="text" x-model="$store.transactions.editing.payee" class="input-box w-full" />
-                </div>
-
-                <!-- Date & Amount -->
-                <div class="grid grid-cols-2 gap-4">
-                    <div>
-                        <label class="block text-xs font-medium text-base-content/60 mb-1.5">Date</label>
-                        <input type="date" x-model="$store.transactions.editing.date" class="input-box w-full" />
-                    </div>
-                    <div>
-                        <label class="block text-xs font-medium text-base-content/60 mb-1.5">Amount</label>
-                        <input type="number" step="0.01" x-model="$store.transactions.editing.amount" class="input-box w-full" />
-                    </div>
-                </div>
-
-                <!-- Expense Account -->
-                <div>
-                    <label class="block text-xs font-medium text-base-content/60 mb-1.5">Category</label>
-                    <input type="text" x-model="$store.transactions.editing.expense_account" class="input-box w-full" placeholder="Expenses:Food:Groceries" />
-                </div>
-
-                <!-- Payment Account -->
-                <div>
-                    <label class="block text-xs font-medium text-base-content/60 mb-1.5">Payment Account</label>
-                    <input type="text" x-model="$store.transactions.editing.payment_account" class="input-box w-full" placeholder="Assets:Bank:HDFC" />
-                </div>
-
-                <!-- Note -->
-                <div>
-                    <label class="block text-xs font-medium text-base-content/60 mb-1.5">Note (optional)</label>
-                    <input type="text" x-model="$store.transactions.editing.note" class="input-box w-full" placeholder="Add a note..." />
                 </div>
             </div>
         </template>
 
-        <!-- Modal Footer -->
-        <div class="px-6 py-4 border-t border-base-200/60 flex justify-end gap-3">
-            <button @click="$store.transactions.closeEdit()" class="px-4 py-2 rounded-lg text-sm font-medium text-base-content/60 hover:text-base-content hover:bg-base-200 transition-colors">
-                Cancel
-            </button>
-            <button @click="$store.transactions.saveEdit()" class="px-4 py-2 rounded-lg text-sm font-medium bg-primary text-white hover:bg-primary/90 transition-colors">
-                Save Changes
-            </button>
-        </div>
-    </div>
-</div>
-
-
-        <!-- Reports View -->
-        <template x-if="$store.router.view === 'reports'">
-            <div class="flex-1 flex flex-col h-full bg-base-50/50 min-h-0" x-data="reportsView()">
+        <!-- Insights View -->
+        <template x-if="$store.router.view === 'insights'">
+            <div class="flex-1 flex flex-col h-full bg-base-50/50 min-h-0" x-data="insightsView()">
                 <!-- Header -->
                 <div class="min-h-14 md:h-16 border-b border-base-200/60 bg-base-100 flex items-center justify-between px-4 md:px-8 py-3 md:py-0 flex-shrink-0">
                     <div>
-                        <h2 class="text-lg md:text-xl font-display">Reports</h2>
-                        <p class="text-[10px] md:text-xs text-base-content/40 mt-0.5">Yearly spending breakdown</p>
+                        <h2 class="text-lg md:text-xl font-semibold tracking-tight">Insights</h2>
+                        <p class="text-[10px] md:text-xs text-base-content/40 mt-0.5">Spending trends and breakdowns</p>
                     </div>
                     <div class="flex items-center gap-2">
                         <!-- Year Selector -->
@@ -1347,7 +1101,62 @@
                 </div>
 
                 <!-- Content -->
-                <div class="flex-1 overflow-auto p-4 md:p-6 custom-scrollbar">
+                <div class="flex-1 overflow-auto p-4 md:p-6 custom-scrollbar space-y-6">
+
+                    <!-- Section 1: this month vs last month -->
+                    <template x-if="store.compare">
+                        <div class="grid gap-3 sm:grid-cols-3">
+                            <template x-for="metric in [
+                                    { key: 'income', label: 'Income', posGood: true },
+                                    { key: 'spending', label: 'Spending', posGood: false },
+                                    { key: 'net', label: 'Net', posGood: true }
+                                ]" :key="metric.key">
+                                <div class="card-elevated p-4">
+                                    <div class="text-[10px] font-semibold uppercase tracking-wider text-base-content/50" x-text="metric.label"></div>
+                                    <div class="font-mono text-xl font-semibold mt-1" x-text="fmtAmount(store.compare.thisMonth[metric.key] / 100) || '₹0'"></div>
+                                    <div class="text-[11px] mt-1 font-mono"
+                                         :class="((store.compare.delta[metric.key] >= 0) === metric.posGood) ? 'money-pos' : 'money-neg'">
+                                        <span x-text="(store.compare.delta[metric.key] >= 0 ? '+' : '') + (fmtAmount(store.compare.delta[metric.key] / 100) || '₹0')"></span>
+                                        <span class="text-base-content/40">vs last month</span>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+                    </template>
+
+                    <!-- Section 2: spending by category (current month) -->
+                    <div class="card-elevated p-4 md:p-5" x-show="store.byCategory.length">
+                        <div class="text-[10px] font-semibold uppercase tracking-wider text-base-content/50 mb-3">Spending by category · this month</div>
+                        <div class="space-y-2.5">
+                            <template x-for="cat in store.byCategory" :key="cat.name">
+                                <div>
+                                    <div class="flex items-center justify-between mb-1">
+                                        <span class="text-sm text-base-content truncate" x-text="cat.name"></span>
+                                        <span class="text-xs font-mono text-base-content/60" x-text="fmtAmount(cat.amountCents / 100)"></span>
+                                    </div>
+                                    <div class="insight-bar-track">
+                                        <div class="insight-bar-fill" :style="`width:${cat.percent.toFixed(1)}%`"></div>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+
+                    <!-- Section 3: top payees (current month) -->
+                    <div class="card-elevated p-4 md:p-5" x-show="store.topPayees.length">
+                        <div class="text-[10px] font-semibold uppercase tracking-wider text-base-content/50 mb-3">Top payees · this month</div>
+                        <div class="divide-y divide-base-200/60">
+                            <template x-for="p in store.topPayees" :key="p.name">
+                                <div class="flex items-center justify-between py-2">
+                                    <span class="text-sm text-base-content truncate" x-text="p.name"></span>
+                                    <span class="text-xs font-mono text-base-content/60" x-text="fmtAmount(p.amountCents / 100)"></span>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+
+                    <div class="text-[10px] font-semibold uppercase tracking-wider text-base-content/50 pt-2">Category × month</div>
+
                     <!-- Loading State -->
 <template x-if="store.loading && !data">
     <div class="flex items-center justify-center h-64">
@@ -1579,79 +1388,44 @@
             </div>
         </template>
 
-        <!-- Ledger View -->
-        <template x-if="$store.router.view === 'ledger'">
-            <div class="flex-1 flex flex-col h-full bg-base-50/50">
-                <div class="min-h-14 md:h-16 border-b border-base-200/60 bg-base-100 flex flex-col md:flex-row md:items-center justify-between px-4 md:px-8 py-3 md:py-0 gap-2 md:gap-0 flex-shrink-0">
-                    <div>
-                        <h2 class="text-lg md:text-xl font-display">Ledger File</h2>
-                        <div class="text-[10px] md:text-xs text-base-content/40 font-mono mt-0.5 truncate max-w-[200px] md:max-w-none" x-text="$store.ledger.path"></div>
-                    </div>
-                    <div class="flex items-center gap-2 md:gap-3">
-                        <div class="relative flex-1 md:flex-none">
-                            <svg class="absolute left-3 top-2.5 w-3.5 h-3.5 text-base-content/40" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-                            <input type="text" x-model="$store.ledger.search" @input.debounce="$store.ledger.load()" placeholder="Search..." class="input-box pl-9 py-2 h-9 w-full md:w-48 text-sm" />
-                        </div>
-                        <button class="px-3 md:px-4 py-2 rounded-lg text-sm font-medium text-base-content/60 hover:text-base-content hover:bg-base-200/80 transition-colors flex-shrink-0" @click="$store.ledger.load()">Refresh</button>
-                    </div>
-                </div>
-
-                <div class="flex-1 overflow-auto p-4 md:p-8 custom-scrollbar">
-                    <div class="card-elevated p-6 min-h-[500px]">
-                        <template x-if="!$store.ledger.content && $store.ledger.exists">
-                            <div class="flex items-center justify-center h-32">
-                                <span class="loading loading-spinner text-primary"></span>
-                            </div>
-                        </template>
-                        <template x-if="!$store.ledger.exists">
-                            <div class="flex flex-col items-center justify-center h-64 text-base-content/40">
-                                <p>No ledger file found.</p>
-                            </div>
-                        </template>
-                        <pre class="font-mono text-[13px] leading-7 text-base-content/80" x-html="highlightLedger($store.ledger.content)"></pre>
-                    </div>
-                </div>
-            </div>
-        </template>
-
     </main>
 
     <!-- Mobile Bottom Navigation -->
     <nav class="bottom-nav md:hidden" x-show="$store.setup.complete" x-cloak>
         <div class="bottom-nav-inner">
-            <button @click="$store.router.navigate('chat')" 
+            <button @click="$store.router.navigate('accounts')"
+                    class="bottom-nav-item"
+                    :class="$store.router.view === 'accounts' && 'active'">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/><path d="M6 15h4"/></svg>
+                <span>Accounts</span>
+            </button>
+            <button @click="$store.router.navigate('transactions')"
+                    class="bottom-nav-item"
+                    :class="$store.router.view === 'transactions' && 'active'">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+                <span>Transactions</span>
+            </button>
+            <button @click="$store.router.navigate('insights')"
+                    class="bottom-nav-item"
+                    :class="$store.router.view === 'insights' && 'active'">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+                <span>Insights</span>
+            </button>
+            <button @click="$store.router.navigate('chat')"
                     class="bottom-nav-item"
                     :class="$store.router.view === 'chat' && 'active'">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
                 <span>Chat</span>
-            </button>
-            <button @click="$store.router.navigate('transactions')" 
-                    class="bottom-nav-item"
-                    :class="$store.router.view === 'transactions' && 'active'">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
-                <span>Transactions</span>
-            </button>
-            <button @click="$store.router.navigate('reports')"
-                    class="bottom-nav-item"
-                    :class="$store.router.view === 'reports' && 'active'">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/></svg>
-                <span>Reports</span>
-            </button>
-            <button @click="$store.connection.open()"
-                    class="bottom-nav-item"
-                    :class="$store.router.view === 'setup' && 'active'">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-                <span>Settings</span>
             </button>
         </div>
     </nav>
 
     <!-- Command Palette (Desktop) -->
     <div x-data="{ open: false, query: '', selectedIndex: 0, commands: [
+            { id: 'accounts', label: 'Go to Accounts', shortcut: 'Alt+A', icon: 'card' },
+            { id: 'transactions', label: 'Go to Transactions', shortcut: 'Alt+T', icon: 'list' },
+            { id: 'insights', label: 'Go to Insights', shortcut: 'Alt+I', icon: 'grid' },
             { id: 'chat', label: 'Go to Chat', shortcut: '/', icon: 'chat' },
-            { id: 'transactions', label: 'Go to Transactions', shortcut: 'Alt+T', icon: 'card' },
-            { id: 'reports', label: 'Go to Reports', shortcut: 'Alt+R', icon: 'grid' },
-            { id: 'ledger', label: 'Go to Ledger', shortcut: 'Alt+L', icon: 'book' },
             { id: 'settings', label: 'Open Settings', shortcut: 'Alt+S', icon: 'settings' },
             { id: 'new-thread', label: 'New Chat Thread', shortcut: 'Alt+N', icon: 'plus' },
             { id: 'theme', label: 'Toggle Theme', shortcut: 'Alt+D', icon: 'moon' }
@@ -1707,6 +1481,9 @@
                             </template>
                             <template x-if="cmd.icon === 'card'">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
+                            </template>
+                            <template x-if="cmd.icon === 'list'">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
                             </template>
                             <template x-if="cmd.icon === 'grid'">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/></svg>
