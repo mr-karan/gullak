@@ -7,7 +7,7 @@
 
     <!-- PWA -->
     <link rel="manifest" href="/manifest.json">
-    <meta name="theme-color" content="#f7f8fa">
+    <meta name="theme-color" content="#f2eee6">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -15,12 +15,11 @@
     <link rel="apple-touch-icon" href="/static/icons/icon.svg">
     <link rel="icon" type="image/svg+xml" href="/static/icons/icon.svg">
 
-    <!-- Fonts: DM Sans (body) + IBM Plex Mono (figures). No third display font. -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <!-- Display face: Gambarino (Fontshare). Body + numerals: system-ui with tabular-nums. -->
+    <link rel="preconnect" href="https://api.fontshare.com" crossorigin>
+    <link href="https://api.fontshare.com/v2/css?f[]=gambarino@400&display=swap" rel="stylesheet">
 
-    <script src="/static/js/app.js?v=2"></script>
+    <script src="/static/js/app.js?v=4"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.15.12/dist/cdn.min.js"></script>
 
     <!-- Apply saved theme immediately to prevent flash of unstyled theme. -->
@@ -57,9 +56,9 @@
 
         /* Fonts exposed as Tailwind font-* utilities. */
         @theme {
-            --font-sans: 'DM Sans', system-ui, sans-serif;
-            --font-display: 'DM Sans', system-ui, sans-serif;
-            --font-mono: 'IBM Plex Mono', monospace;
+            --font-sans: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+            --font-display: 'Gambarino', Georgia, serif;
+            --font-mono: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
         }
     </style>
 
@@ -89,26 +88,38 @@
           light-on-light rather than dark-on-dark.
         */
         :root {
-            --color-paper:      oklch(99%  0.004 240);
-            --color-paper-2:    oklch(97%  0.005 240);
-            --color-paper-3:    oklch(94%  0.006 240);
-            --color-ink:        oklch(27%  0.02  255);
-            --color-ink-2:      oklch(52%  0.015 255);
-            --color-rule:       oklch(90%  0.006 255);
-            --color-accent:     oklch(60%  0.11  190);
-            --color-accent-ink: oklch(99%  0.01  190);
-            --color-pos:        oklch(56%  0.13  155);
-            --color-neg:        oklch(56%  0.17  25);
-            --color-warn:       oklch(72%  0.15  75);
+            /* paper — warm clay-tinted, NOT gray, NOT cream */
+            --color-paper:    oklch(96.5% 0.009 80);
+            --color-paper-2:  oklch(94%   0.012 80);   /* raised surface */
+            --color-paper-3:  oklch(91%   0.015 80);   /* hover/selected */
+            --color-ink:      oklch(25%   0.02  40);
+            --color-ink-2:    oklch(48%   0.02  50);
+            --color-rule:     oklch(86%   0.02  70);   /* ledger ruling on paper */
+            /* binding — the shell + the single accent family */
+            --color-bind:     oklch(28% 0.06 25);      /* sidebar/rail bg */
+            --color-bind-2:   oklch(33% 0.06 25);      /* rail hover/active bg */
+            --color-bind-ink: oklch(94% 0.015 75);     /* text on binding */
+            --color-bind-mut: oklch(72% 0.03  50);     /* muted text on binding */
+            --color-accent:   oklch(46% 0.13 27);      /* primary action = binding red */
+            --color-accent-ink: oklch(97% 0.01 80);
+            --color-pos:      oklch(48% 0.09 150);
+            --color-neg:      oklch(48% 0.14 28);
+            --color-warn:     oklch(60% 0.11 70);
         }
         [data-theme="light"], [data-theme="gullak"],
         [data-theme="dark"],  [data-theme="gullak-dark"] {
-            /* DaisyUI 5 full-color theme vars (for Tailwind utilities). */
+            /* DaisyUI 5 full-color theme vars (for Tailwind utilities). These MUST
+               be restated here (not left to :root) because 'light'/'dark' are
+               built-in DaisyUI themes whose own [data-theme] rules would otherwise
+               leak through for any var we don't override. */
             --color-primary: var(--color-accent);
             --color-primary-content: var(--color-accent-ink);
             --color-secondary: var(--color-paper-2);
             --color-secondary-content: var(--color-ink);
-            --color-accent: var(--color-accent);
+            /* Literal, NOT var(--color-accent): our token IS DaisyUI's own
+               --color-accent property, so var(--color-accent) here is a CSS
+               self-cycle that invalidates it and everything downstream. */
+            --color-accent: oklch(46% 0.13 27);
             --color-accent-content: var(--color-accent-ink);
             --color-neutral: var(--color-ink);
             --color-neutral-content: var(--color-paper);
@@ -116,27 +127,27 @@
             --color-base-200: var(--color-paper-2);
             --color-base-300: var(--color-paper-3);
             --color-base-content: var(--color-ink);
-            --color-info: var(--color-accent);
+            --color-info: var(--color-ink);
             --color-success: var(--color-pos);
             --color-warning: var(--color-warn);
             --color-error: var(--color-neg);
             /* DaisyUI 4 short raw-component vars: raw "L C H" triples (no oklch() wrapper). */
-            --p:  60% 0.11  190;   /* accent  */
-            --pc: 99% 0.01  190;   /* accent-ink */
-            --s:  97% 0.005 240;   /* paper-2 (secondary surface) */
-            --sc: 27% 0.02  255;   /* ink */
-            --a:  60% 0.11  190;   /* accent  */
-            --ac: 99% 0.01  190;   /* accent-ink */
-            --n:  27% 0.02  255;   /* ink (neutral) */
-            --nc: 99% 0.004 240;   /* paper */
-            --b1: 99% 0.004 240;   /* paper (app bg) */
-            --b2: 97% 0.005 240;   /* paper-2 (raised) */
-            --b3: 94% 0.006 240;   /* paper-3 (hover/selected) */
-            --bc: 27% 0.02  255;   /* ink (text) */
-            --in: 60% 0.11  190;   /* accent (info) */
-            --su: 56% 0.13  155;   /* pos (success) */
-            --wa: 72% 0.15  75;    /* warn */
-            --er: 56% 0.17  25;    /* neg (error) */
+            --p:  46% 0.13 27;     /* accent  */
+            --pc: 97% 0.01 80;     /* accent-ink */
+            --s:  94% 0.012 80;    /* paper-2 (secondary surface) */
+            --sc: 25% 0.02 40;     /* ink */
+            --a:  46% 0.13 27;     /* accent  */
+            --ac: 97% 0.01 80;     /* accent-ink */
+            --n:  25% 0.02 40;     /* ink (neutral) */
+            --nc: 96.5% 0.009 80;  /* paper */
+            --b1: 96.5% 0.009 80;  /* paper (app bg) */
+            --b2: 94% 0.012 80;    /* paper-2 (raised) */
+            --b3: 91% 0.015 80;    /* paper-3 (hover/selected) */
+            --bc: 25% 0.02 40;     /* ink (text) */
+            --in: 46% 0.13 27;     /* accent (info) */
+            --su: 48% 0.09 150;    /* pos (success) */
+            --wa: 60% 0.11 70;     /* warn */
+            --er: 48% 0.14 28;     /* neg (error) */
         }
 
         /* Money + numeric columns use tabular mono figures. */
@@ -177,8 +188,8 @@
             font-size: .82rem;
         }
         .register-row:hover { background: var(--color-paper-3); }
-        .register-row .col-amount { text-align: right; font-family: 'IBM Plex Mono', monospace; font-variant-numeric: tabular-nums; }
-        .register-row .col-date { font-family: 'IBM Plex Mono', monospace; color: var(--color-ink-2); font-size: .72rem; }
+        .register-row .col-amount { text-align: right; font-family: inherit; font-variant-numeric: tabular-nums; }
+        .register-row .col-date { font-family: inherit; color: var(--color-ink-2); font-size: .72rem; }
         .money-pos { color: var(--color-pos); }
         .money-neg { color: var(--color-neg); }
         .warn-dot { display: inline-block; width: .45rem; height: .45rem; border-radius: 9999px; background: var(--color-warn); }
@@ -195,12 +206,64 @@
         .cat-combo-group { padding: .3rem .6rem .1rem; font-size: .62rem; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: var(--color-ink-2); }
         .insight-bar-track { height: .5rem; border-radius: 9999px; background: var(--color-paper-3); overflow: hidden; }
         .insight-bar-fill { height: 100%; background: var(--color-accent); }
+
+        /* ---- Wealth / M5 surfaces (flat paper, hairline rules) ---------- */
+        .nav-section-label { padding: .9rem 1rem .35rem; font-size: .62rem; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; color: var(--color-ink-2); }
+
+        /* Holdings register: symbol / kind / qty / avg / ltp / invested / current / pnl / goal */
+        .holdings-row {
+            display: grid; align-items: center; gap: .75rem;
+            grid-template-columns: minmax(9rem,1.4fr) 4rem 4.5rem 5rem 5rem 6rem 6rem 6rem 8rem;
+            min-height: 44px; padding: .35rem 1rem;
+            border-bottom: 1px solid var(--color-rule); font-size: .8rem;
+        }
+        .holdings-row:hover { background: var(--color-paper-3); }
+        .holdings-head { font-size: .62rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--color-ink-2); background: var(--color-paper-2); position: sticky; top: 0; z-index: 5; }
+        .holdings-num { text-align: right; font-family: inherit; font-variant-numeric: tabular-nums; }
+        .kind-chip { display: inline-block; padding: .05rem .4rem; border-radius: 9999px; font-size: .6rem; font-weight: 600; letter-spacing: .03em; text-transform: uppercase; border: 1px solid var(--color-rule); color: var(--color-ink-2); }
+        @media (max-width: 900px) {
+            .holdings-row, .holdings-head { grid-template-columns: 1fr auto; row-gap: .1rem; }
+            .holdings-hide-sm { display: none !important; }
+        }
+
+        /* Goal cards */
+        .goal-card { background: var(--color-paper-2); border: 1px solid var(--color-rule); border-radius: .75rem; padding: 1.1rem 1.15rem; }
+        .goal-progress-track { height: .6rem; border-radius: 9999px; background: var(--color-paper-3); overflow: hidden; }
+        .goal-progress-fill { height: 100%; background: var(--color-pos); border-radius: 9999px; transition: width .35s ease; }
+
+        /* Desire cards */
+        .desire-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr)); gap: 1rem; }
+        .desire-card { background: var(--color-paper-2); border: 1px solid var(--color-rule); border-radius: .75rem; overflow: hidden; display: flex; flex-direction: column; }
+        .desire-cover { aspect-ratio: 16/10; background: var(--color-paper-3); object-fit: cover; width: 100%; }
+        .desire-why { border-left: 2px solid var(--color-rule); padding-left: .6rem; font-style: italic; color: var(--color-ink-2); }
+        .status-pill { display: inline-flex; align-items: center; gap: .25rem; padding: .1rem .5rem; border-radius: 9999px; font-size: .62rem; font-weight: 600; text-transform: uppercase; letter-spacing: .03em; }
+        .status-dreaming { background: var(--color-paper-3); color: var(--color-ink-2); }
+        .status-yes { background: oklch(56% 0.13 155 / .14); color: var(--color-pos); }
+        .status-nah { background: var(--color-paper-3); color: var(--color-ink-2); }
+        .status-bought { background: oklch(60% 0.11 190 / .14); color: var(--color-accent); }
+        .chip-toggle { padding: .25rem .7rem; border-radius: 9999px; font-size: .75rem; font-weight: 500; border: 1px solid var(--color-rule); color: var(--color-ink-2); background: transparent; }
+        .chip-toggle.active { background: var(--color-accent); color: var(--color-accent-ink); border-color: var(--color-accent); }
+
+        /* Profile chip */
+        .profile-chip { display: flex; align-items: center; gap: .55rem; width: 100%; padding: .5rem .6rem; border-radius: .6rem; border: 1px solid var(--color-rule); background: var(--color-paper-2); }
+        .profile-chip:hover { background: var(--color-paper-3); }
+        .profile-avatar { width: 1.75rem; height: 1.75rem; border-radius: 9999px; background: var(--color-paper-3); display: flex; align-items: center; justify-content: center; font-size: .95rem; flex-shrink: 0; }
+        .profile-menu-item { display: flex; align-items: center; gap: .55rem; width: 100%; padding: .45rem .6rem; font-size: .82rem; text-align: left; }
+        .profile-menu-item:hover, .profile-menu-item.active { background: var(--color-paper-3); }
+
+        /* Agent side panel (desktop >=1024px) */
+        .agent-panel { width: 360px; flex-shrink: 0; border-left: 1px solid var(--color-rule); background: var(--color-paper); }
+        .agent-panel.collapsed { width: 52px; }
+        .agent-rail-btn { writing-mode: vertical-rl; transform: rotate(180deg); font-size: .7rem; letter-spacing: .08em; text-transform: uppercase; color: var(--color-ink-2); padding: .5rem 0; }
+        .agent-msg-user { background: var(--color-accent); color: var(--color-accent-ink); border-radius: .7rem; padding: .45rem .7rem; font-size: .82rem; max-width: 85%; }
+        .agent-msg-ai { background: var(--color-paper-2); border: 1px solid var(--color-rule); border-radius: .7rem; padding: .45rem .7rem; font-size: .82rem; max-width: 90%; }
+
         @media (prefers-reduced-motion: reduce) {
             *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
         }
     </style>
 
-    <link href="/static/css/main.css?v=2" rel="stylesheet">
+    <link href="/static/css/main.css?v=4" rel="stylesheet">
 
 </head>
 <body class="min-h-screen bg-base-100 text-base-content antialiased selection:bg-primary/20 selection:text-primary overflow-hidden">
@@ -208,7 +271,9 @@
 <div class="flex h-dvh bg-base-100" x-data="gullakApp()" 
      @keydown.window.meta.k.prevent="$store.commandPalette && $store.commandPalette.toggle()"
      @keydown.window.ctrl.k.prevent="$store.commandPalette && $store.commandPalette.toggle()"
-     @keydown.window.slash.prevent="if(!['INPUT','TEXTAREA'].includes(document.activeElement.tagName)) $refs.chatInput?.focus()"
+     @keydown.window.meta.slash.prevent="$store.sidebar.toggle()"
+     @keydown.window.ctrl.slash.prevent="$store.sidebar.toggle()"
+     @keydown.window.slash="if(!$event.metaKey && !$event.ctrlKey && !['INPUT','TEXTAREA'].includes(document.activeElement.tagName)) { $event.preventDefault(); ($refs.panelInput || $refs.chatInput)?.focus(); }"
      @keydown.window.escape="$store.commandPalette && ($store.commandPalette.open = false)">
 
     <!-- Mobile Header Bar -->
@@ -216,9 +281,8 @@
         <button @click="$store.router.toggleSidebar()" class="p-2 -ml-2 rounded-lg hover:bg-base-200/80 transition-colors">
             <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
         </button>
-        <div class="flex items-center gap-2 ml-3">
-            <img src="/static/icons/icon.svg" alt="Gullak" class="w-7 h-7 rounded-lg" />
-            <span class="font-semibold text-base">Gullak</span>
+        <div class="flex items-center ml-3">
+            <span class="font-display text-xl leading-none">Gullak</span>
         </div>
     </div>
 
@@ -235,52 +299,76 @@
          x-cloak></div>
 
     <!-- Sidebar Navigation -->
-    <aside class="w-[280px] flex flex-col border-r border-base-200/60 bg-base-100 flex-shrink-0 z-40
+    <aside class="sidebar-rail w-[280px] flex flex-col flex-shrink-0 z-40
                   fixed md:relative inset-y-0 left-0 transform transition-transform duration-200 ease-out
                   md:translate-x-0"
            :class="$store.router.sidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'"
            x-show="$store.setup.complete" x-cloak>
-        <!-- App Header -->
-        <div class="h-14 flex items-center px-5 border-b border-base-200/60">
-            <div class="flex items-center gap-3">
-                <img src="/static/icons/icon.svg" alt="Gullak" class="w-9 h-9 rounded-xl shadow-sm" />
-                <span class="font-semibold text-lg tracking-tight">Gullak</span>
-            </div>
+        <!-- App Header — bare wordmark, sitting directly on the binding -->
+        <div class="h-14 flex items-center px-5">
+            <span class="font-display text-2xl leading-none wordmark">Gullak</span>
         </div>
 
         <!-- Main Nav -->
         <nav class="flex-1 px-3 py-4 space-y-1 overflow-y-auto custom-scrollbar">
             <a href="#accounts"
                @click.prevent="$store.router.navigate('accounts')"
-               :class="$store.router.view === 'accounts' ? 'bg-primary/10 text-primary border-primary/20' : 'text-base-content/60 hover:bg-base-200/80 hover:text-base-content border-transparent'"
-               class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 border group">
+               :class="$store.router.view === 'accounts' ? 'nav-active' : ''"
+               class="nav-link flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm group">
                 <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/><path d="M6 15h4"/></svg>
                 <span class="flex-1">Accounts</span>
             </a>
             <a href="#transactions"
                @click.prevent="$store.router.navigate('transactions')"
-               :class="$store.router.view === 'transactions' ? 'bg-primary/10 text-primary border-primary/20' : 'text-base-content/60 hover:bg-base-200/80 hover:text-base-content border-transparent'"
-               class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 border group">
+               :class="$store.router.view === 'transactions' ? 'nav-active' : ''"
+               class="nav-link flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm group">
                 <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
                 <span class="flex-1">Transactions</span>
             </a>
             <a href="#insights"
                @click.prevent="$store.router.navigate('insights')"
-               :class="$store.router.view === 'insights' ? 'bg-primary/10 text-primary border-primary/20' : 'text-base-content/60 hover:bg-base-200/80 hover:text-base-content border-transparent'"
-               class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 border group">
+               :class="$store.router.view === 'insights' ? 'nav-active' : ''"
+               class="nav-link flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm group">
                 <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
                 <span class="flex-1">Insights</span>
             </a>
+            <!-- Chat nav hides on desktop (>=1024px): the right agent panel replaces it. -->
             <a href="#chat"
                @click.prevent="$store.router.navigate('chat')"
-               :class="$store.router.view === 'chat' ? 'bg-primary/10 text-primary border-primary/20' : 'text-base-content/60 hover:bg-base-200/80 hover:text-base-content border-transparent'"
-               class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 border group">
+               :class="$store.router.view === 'chat' ? 'nav-active' : ''"
+               class="nav-link lg:hidden flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm group">
                 <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
                 <span class="flex-1">Chat</span>
                 <kbd class="hidden xl:inline text-[10px] font-mono px-1.5 py-0.5 rounded bg-base-200/80 text-base-content/40">/</kbd>
             </a>
 
-            <!-- Thread History -->
+            <!-- WEALTH section (M5): Goals · Holdings · Desires. On mobile the whole
+                 sidebar is the hamburger drawer, so these are reachable there too. -->
+            <div class="nav-section-label">Wealth</div>
+            <a href="#goals"
+               @click.prevent="$store.router.navigate('goals')"
+               :class="$store.router.view === 'goals' ? 'nav-active' : ''"
+               class="nav-link flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm group">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
+                <span class="flex-1">Goals</span>
+            </a>
+            <a href="#holdings"
+               @click.prevent="$store.router.navigate('holdings')"
+               :class="$store.router.view === 'holdings' ? 'nav-active' : ''"
+               class="nav-link flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm group">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M18 9l-5 5-2-2-4 4"/></svg>
+                <span class="flex-1">Holdings</span>
+            </a>
+            <a href="#desires"
+               @click.prevent="$store.router.navigate('desires')"
+               :class="$store.router.view === 'desires' ? 'nav-active' : ''"
+               class="nav-link flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm group">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+                <span class="flex-1">Desires</span>
+            </a>
+
+            <!-- Thread History (hidden on desktop; the right agent panel is chat) -->
+            <div class="lg:hidden">
             <div class="pt-5 mt-5 border-t border-base-200/60">
                 <div class="px-4 flex items-center justify-between mb-3">
                     <span class="text-xs font-semibold text-base-content/40 uppercase tracking-wider">History</span>
@@ -308,55 +396,70 @@
                     </template>
                 </div>
             </div>
+            </div>
         </nav>
 
         <!-- Install App Banner -->
-        <div x-show="$store.pwa.canInstall && !$store.pwa.isStandalone" 
+        <div x-show="$store.pwa.canInstall && !$store.pwa.isStandalone"
              x-transition
-             class="p-3 mx-3 mb-2 rounded-xl bg-gradient-to-r from-primary/10 to-primary/5 border border-primary/20" 
+             class="sidebar-panel p-3 mx-3 mb-2 rounded-md"
              x-cloak>
-            <button @click="$store.pwa.promptInstall()" 
+            <button @click="$store.pwa.promptInstall()"
                     class="w-full flex items-center gap-3 text-left">
-                <div class="w-9 h-9 rounded-lg bg-primary/20 flex items-center justify-center flex-shrink-0">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-primary"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                </div>
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="flex-shrink-0"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                 <div class="flex-1 min-w-0">
-                    <div class="text-sm font-medium text-base-content">Install App</div>
-                    <div class="text-xs text-base-content/50">Add to home screen</div>
+                    <div class="text-sm font-medium">Install app</div>
+                    <div class="text-xs opacity-70">Add to home screen</div>
                 </div>
             </button>
         </div>
 
         <!-- Update Available Banner -->
-        <div x-show="$store.pwa.updateAvailable" 
+        <div x-show="$store.pwa.updateAvailable"
              x-transition
-             class="p-3 mx-3 mb-2 rounded-xl bg-success/10 border border-success/20" 
+             class="sidebar-panel p-3 mx-3 mb-2 rounded-md"
              x-cloak>
-            <button @click="$store.pwa.applyUpdate()" 
+            <button @click="$store.pwa.applyUpdate()"
                     class="w-full flex items-center gap-3 text-left">
-                <div class="w-9 h-9 rounded-lg bg-success/20 flex items-center justify-center flex-shrink-0">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-success"><path d="M21 2v6h-6M3 12a9 9 0 0 1 15-6.7L21 8M3 22v-6h6M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>
-                </div>
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="flex-shrink-0"><path d="M21 2v6h-6M3 12a9 9 0 0 1 15-6.7L21 8M3 22v-6h6M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>
                 <div class="flex-1 min-w-0">
-                    <div class="text-sm font-medium text-base-content">Update Available</div>
-                    <div class="text-xs text-base-content/50">Tap to refresh</div>
+                    <div class="text-sm font-medium">Update available</div>
+                    <div class="text-xs opacity-70">Tap to refresh</div>
                 </div>
             </button>
         </div>
 
         <!-- Footer Actions -->
-        <div class="p-4 border-t border-base-200/60">
-            <div class="flex items-center justify-between">
-                
-                <a href="#" @click.prevent="$store.connection.open()" class="p-2 rounded-lg text-base-content/50 hover:text-base-content hover:bg-base-200/80 transition-all duration-150" title="Settings">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-                </a>
-
-                <!-- Theme Toggle -->
-                <button @click="$store.theme.toggle()" class="theme-toggle" title="Toggle Theme">
-                    <svg class="sun-icon" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
-                    <svg class="moon-icon" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        <div class="p-4 border-t border-base-200/60 space-y-3">
+            <!-- Profile picker (M5): active person for desires/comments. -->
+            <div class="relative" x-data="{ open: false }" @keydown.escape="open=false">
+                <button class="profile-chip" @click="open = !open">
+                    <span class="profile-avatar" x-text="$store.profiles.active?.emoji || '👤'"></span>
+                    <div class="flex-1 min-w-0 text-left">
+                        <div class="text-sm font-medium truncate" x-text="$store.profiles.active?.name || 'Set profile'"></div>
+                        <div class="text-[10px] uppercase tracking-wider text-base-content/40">Active profile</div>
+                    </div>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-base-content/40"><polyline points="18 15 12 9 6 15"/></svg>
                 </button>
+                <div x-show="open" @click.outside="open=false" x-cloak
+                     class="absolute bottom-full left-0 right-0 mb-1.5 rounded-lg border border-base-200/80 bg-base-100 shadow-lg overflow-hidden z-50">
+                    <template x-for="p in $store.profiles.list" :key="p.id">
+                        <button class="profile-menu-item"
+                                :class="$store.profiles.activeId === p.id ? 'active' : ''"
+                                @click="$store.profiles.setActive(p.id); open=false">
+                            <span x-text="p.emoji || '👤'"></span>
+                            <span class="flex-1 truncate" x-text="p.name"></span>
+                            <svg x-show="$store.profiles.activeId === p.id" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="text-primary"><polyline points="20 6 9 17 4 12"/></svg>
+                        </button>
+                    </template>
+                    <div x-show="!$store.profiles.list.length" class="px-3 py-2 text-xs text-base-content/40">No profiles</div>
+                </div>
+            </div>
+            <div class="flex items-center">
+                <a href="#" @click.prevent="$store.connection.open()" class="inline-flex items-center gap-2 p-2 -ml-2 rounded-md text-sm transition-colors nav-footer-link" title="Settings">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                    <span>Settings</span>
+                </a>
             </div>
         </div>
     </aside>
@@ -567,17 +670,45 @@
         <template x-if="$store.router.view === 'accounts'">
             <div class="flex-1 flex flex-col h-full min-h-0">
                 <div class="min-h-14 md:h-16 border-b border-base-200/60 bg-base-100 flex items-center justify-between px-4 md:px-8 flex-shrink-0">
-                    <h2 class="text-lg md:text-xl font-semibold tracking-tight">Accounts</h2>
+                    <h2 class="view-title font-display text-2xl md:text-3xl tracking-tight ledger-rule">Accounts</h2>
                     <button @click="$store.accounts.load()" class="p-2 rounded-lg text-base-content/50 hover:text-base-content hover:bg-base-200/80 transition-colors" title="Refresh">
                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 5.5A10 10 0 1 1 11.26 2.8"/></svg>
                     </button>
                 </div>
 
                 <div class="flex-1 overflow-y-auto custom-scrollbar px-4 md:px-8 py-6 space-y-6">
-                    <!-- Net worth + this month -->
+                    <!-- Wealth strip (M5): Cash / Invested / Total net worth.
+                         Collapses to the cash-only card below when /v1/net-worth is
+                         unavailable or there are no investments. -->
+                    <div class="card-elevated p-5 md:p-6" x-show="$store.netWorth.data && ($store.netWorth.data.investedCurrentCents || 0) > 0" x-cloak>
+                        <div class="text-[11px] font-semibold uppercase tracking-wider text-base-content/50">Total net worth</div>
+                        <div class="figure-hero font-mono text-3xl md:text-4xl font-semibold mt-1"
+                             x-text="fmtCentsSigned($store.netWorth.data?.totalCents || 0, $store.accounts.currency)"></div>
+                        <div class="mt-4 grid grid-cols-2 sm:grid-cols-3 gap-4 text-sm">
+                            <div>
+                                <div class="text-[10px] uppercase tracking-wider text-base-content/50">Cash</div>
+                                <div class="font-mono" x-text="fmtCents($store.netWorth.data?.cashCents || 0, $store.accounts.currency)"></div>
+                            </div>
+                            <div>
+                                <div class="text-[10px] uppercase tracking-wider text-base-content/50">Invested</div>
+                                <div class="font-mono" x-text="fmtCents($store.netWorth.data?.investedCurrentCents || 0, $store.accounts.currency)"></div>
+                            </div>
+                            <div>
+                                <div class="text-[10px] uppercase tracking-wider text-base-content/50">Invested P&amp;L</div>
+                                <div class="font-mono" :class="($store.netWorth.data?.investedPnlCents || 0) < 0 ? 'money-neg' : 'money-pos'"
+                                     x-text="fmtCentsSigned($store.netWorth.data?.investedPnlCents || 0, $store.accounts.currency) + ' · ' + fmtPct($store.netWorth.investedPnlPct)"></div>
+                            </div>
+                        </div>
+                        <div class="text-[10px] text-base-content/40 mt-2" x-show="$store.netWorth.data?.lastImportAt">
+                            as of <span x-text="fmtEpochDate($store.netWorth.data?.lastImportAt)"></span> import
+                        </div>
+                    </div>
+
+                    <!-- Cash accounts + this month. "Cash" (not "Net worth") because the
+                         wealth strip above already carries the blended total. -->
                     <div class="card-elevated p-5 md:p-6">
-                        <div class="text-[11px] font-semibold uppercase tracking-wider text-base-content/50">Net worth</div>
-                        <div class="font-mono text-3xl md:text-4xl font-semibold mt-1"
+                        <div class="text-[11px] font-semibold uppercase tracking-wider text-base-content/50">Cash accounts</div>
+                        <div class="figure-hero font-mono text-3xl md:text-4xl font-semibold mt-1"
                              :class="$store.accounts.netWorthCents < 0 ? 'money-neg' : ''"
                              x-text="fmtCentsSigned($store.accounts.netWorthCents, $store.accounts.currency)"></div>
                         <div class="mt-4 flex flex-wrap items-center gap-x-8 gap-y-2 text-sm">
@@ -907,7 +1038,7 @@
                 <!-- Header -->
                 <div class="min-h-14 md:h-16 border-b border-base-200/60 bg-base-100 flex items-center justify-between px-4 md:px-8 flex-shrink-0">
                     <div class="min-w-0">
-                        <h2 class="text-lg md:text-xl font-semibold tracking-tight">Transactions</h2>
+                        <h2 class="view-title font-display text-2xl md:text-3xl tracking-tight ledger-rule">Transactions</h2>
                         <div x-show="$store.transactions.accountScoped" class="text-xs text-base-content/50 truncate" x-text="$store.transactions.accountName"></div>
                     </div>
                     <button @click="$store.transactions.load()" class="p-2 rounded-lg text-base-content/50 hover:text-base-content hover:bg-base-200/80 transition-colors flex-shrink-0" title="Refresh">
@@ -1079,7 +1210,7 @@
                 <!-- Header -->
                 <div class="min-h-14 md:h-16 border-b border-base-200/60 bg-base-100 flex items-center justify-between px-4 md:px-8 py-3 md:py-0 flex-shrink-0">
                     <div>
-                        <h2 class="text-lg md:text-xl font-semibold tracking-tight">Insights</h2>
+                        <h2 class="view-title font-display text-2xl md:text-3xl tracking-tight ledger-rule">Insights</h2>
                         <p class="text-[10px] md:text-xs text-base-content/40 mt-0.5">Spending trends and breakdowns</p>
                     </div>
                     <div class="flex items-center gap-2">
@@ -1150,6 +1281,25 @@
                                 <div class="flex items-center justify-between py-2">
                                     <span class="text-sm text-base-content truncate" x-text="p.name"></span>
                                     <span class="text-xs font-mono text-base-content/60" x-text="fmtAmount(p.amountCents / 100)"></span>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+
+                    <!-- Allocation (M5): equity vs MF vs cash. Hidden until holdings exist. -->
+                    <div class="card-elevated p-4 md:p-5" x-show="store.allocation.length">
+                        <div class="text-[10px] font-semibold uppercase tracking-wider text-base-content/50 mb-3">Allocation</div>
+                        <div class="space-y-2.5">
+                            <template x-for="a in store.allocation" :key="a.label">
+                                <div>
+                                    <div class="flex items-center justify-between mb-1">
+                                        <span class="text-sm text-base-content" x-text="a.label"></span>
+                                        <span class="text-xs font-mono text-base-content/60">
+                                            <span x-text="fmtAmount(a.cents / 100)"></span>
+                                            <span class="text-base-content/40" x-text="' · ' + a.percent.toFixed(0) + '%'"></span>
+                                        </span>
+                                    </div>
+                                    <div class="insight-bar-track"><div class="insight-bar-fill" :style="`width:${a.percent.toFixed(1)}%`"></div></div>
                                 </div>
                             </template>
                         </div>
@@ -1388,7 +1538,518 @@
             </div>
         </template>
 
+        <!-- ============================ HOLDINGS VIEW ======================= -->
+        <template x-if="$store.router.view === 'holdings'">
+            <div class="flex-1 flex flex-col h-full min-h-0">
+                <div class="min-h-14 md:h-16 border-b border-base-200/60 bg-base-100 flex items-center justify-between px-4 md:px-8 flex-shrink-0">
+                    <h2 class="view-title font-display text-2xl md:text-3xl tracking-tight ledger-rule">Holdings</h2>
+                    <div class="flex items-center gap-2">
+                        <input type="file" accept=".xlsx,.xls" class="hidden" x-ref="holdingsFile" @change="$store.holdings.importFile($event)" />
+                        <button @click="$refs.holdingsFile.click()" class="btn btn-primary btn-sm" :disabled="$store.holdings.importing">
+                            <span x-show="!$store.holdings.importing">Import</span>
+                            <span x-show="$store.holdings.importing" class="loading loading-spinner loading-sm"></span>
+                        </button>
+                        <button @click="$store.holdings.load()" class="p-2 rounded-lg text-base-content/50 hover:text-base-content hover:bg-base-200/80 transition-colors" title="Refresh">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 5.5A10 10 0 1 1 11.26 2.8"/></svg>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="flex-1 overflow-y-auto custom-scrollbar">
+                    <!-- Server not updated yet -->
+                    <template x-if="$store.holdings.unavailable">
+                        <div class="max-w-md mx-auto text-center py-20 px-6 text-sm text-base-content/50">
+                            Holdings need a server update — this endpoint isn't live yet.
+                        </div>
+                    </template>
+
+                    <!-- Empty -->
+                    <template x-if="!$store.holdings.unavailable && !$store.holdings.loading && !$store.holdings.list.length">
+                        <div class="max-w-md mx-auto text-center py-20 px-6 space-y-2">
+                            <div class="text-base font-medium">No holdings yet</div>
+                            <p class="text-sm text-base-content/50">Kite Console → Portfolio → Holdings → Download, then drop the <span class="font-mono">.xlsx</span> here with Import.</p>
+                            <button @click="$refs.holdingsFile.click()" class="btn btn-primary btn-sm mt-2">Import file</button>
+                        </div>
+                    </template>
+
+                    <div class="px-4 md:px-8 py-6 space-y-6" x-show="!$store.holdings.unavailable && $store.holdings.list.length">
+                        <!-- Summary -->
+                        <div class="card-elevated p-5">
+                            <div class="grid grid-cols-3 gap-4">
+                                <div>
+                                    <div class="text-[11px] font-semibold uppercase tracking-wider text-base-content/50">Invested</div>
+                                    <div class="font-mono text-lg md:text-2xl font-semibold mt-1" x-text="fmtCents($store.holdings.summary.investedCents)"></div>
+                                </div>
+                                <div>
+                                    <div class="text-[11px] font-semibold uppercase tracking-wider text-base-content/50">Current</div>
+                                    <div class="font-mono text-lg md:text-2xl font-semibold mt-1" x-text="fmtCents($store.holdings.summary.currentCents)"></div>
+                                </div>
+                                <div>
+                                    <div class="text-[11px] font-semibold uppercase tracking-wider text-base-content/50">P&amp;L</div>
+                                    <div class="font-mono text-lg md:text-2xl font-semibold mt-1"
+                                         :class="$store.holdings.summary.pnlCents < 0 ? 'money-neg' : 'money-pos'"
+                                         x-text="fmtCentsSigned($store.holdings.summary.pnlCents) + ' · ' + fmtPct($store.holdings.pnlPct)"></div>
+                                </div>
+                            </div>
+                            <div class="text-[10px] text-base-content/40 mt-3" x-show="$store.holdings.summary.lastImportAt">
+                                As of <span x-text="fmtEpochDate($store.holdings.summary.lastImportAt)"></span> import
+                            </div>
+                        </div>
+
+                        <!-- Missing rows panel -->
+                        <template x-if="$store.holdings.showMissing && $store.holdings.missing.length">
+                            <div class="card-elevated p-4 border border-warning/30">
+                                <div class="flex items-center justify-between mb-2">
+                                    <div class="text-sm font-medium flex items-center gap-2"><span class="warn-dot"></span> Not in latest file (sold?)</div>
+                                    <button @click="$store.holdings.showMissing = false" class="text-xs text-base-content/50 hover:text-base-content">Dismiss</button>
+                                </div>
+                                <div class="space-y-1.5">
+                                    <template x-for="m in $store.holdings.missing" :key="m.isin">
+                                        <div class="flex items-center justify-between text-sm">
+                                            <span class="truncate"><span class="font-medium" x-text="m.symbol"></span> <span class="text-base-content/40 font-mono text-xs" x-text="m.isin"></span></span>
+                                            <span class="flex gap-2 flex-shrink-0">
+                                                <button @click="$store.holdings.markStale(m.isin)" class="text-xs text-base-content/60 hover:text-warning">Mark stale</button>
+                                                <button @click="$store.holdings.deleteMissing(m.isin)" class="text-xs text-base-content/60 hover:text-error">Delete</button>
+                                            </span>
+                                        </div>
+                                    </template>
+                                </div>
+                            </div>
+                        </template>
+
+                        <!-- Register table -->
+                        <div class="card-elevated overflow-hidden" @click="$store.holdings.closeGoalCombo()">
+                            <div class="holdings-head holdings-row ledger-rule">
+                                <div>Symbol</div>
+                                <div class="holdings-hide-sm">Kind</div>
+                                <div class="holdings-num holdings-hide-sm">Qty</div>
+                                <div class="holdings-num holdings-hide-sm">Avg</div>
+                                <div class="holdings-num holdings-hide-sm">LTP</div>
+                                <div class="holdings-num holdings-hide-sm">Invested</div>
+                                <div class="holdings-num">Current</div>
+                                <div class="holdings-num holdings-hide-sm">P&amp;L</div>
+                                <div class="holdings-hide-sm">Goal</div>
+                            </div>
+                            <template x-for="h in $store.holdings.list" :key="h.id">
+                                <div class="holdings-row group">
+                                    <div class="min-w-0">
+                                        <div class="font-medium truncate flex items-center gap-1.5">
+                                            <span x-text="h.symbol || h.name"></span>
+                                            <span x-show="!h.goalId" class="warn-dot" title="Not mapped to a goal"></span>
+                                            <span x-show="h.stale" class="text-[9px] uppercase tracking-wide text-warning">stale</span>
+                                        </div>
+                                        <div class="text-[11px] text-base-content/50 truncate" x-text="[h.name !== h.symbol ? h.name : '', h.sector].filter(Boolean).join(' · ')"></div>
+                                        <!-- Mobile line 2 -->
+                                        <div class="md:hidden text-[11px] mt-0.5 flex items-center gap-2">
+                                            <span class="font-mono" x-text="fmtCents(h.currentCents)"></span>
+                                            <span class="font-mono" :class="h.pnlCents < 0 ? 'money-neg' : 'money-pos'" x-text="fmtCentsSigned(h.pnlCents)"></span>
+                                        </div>
+                                    </div>
+                                    <div class="holdings-hide-sm"><span class="kind-chip" x-text="h.kind === 'mutual_fund' ? 'MF' : 'EQ'"></span></div>
+                                    <div class="holdings-num holdings-hide-sm" x-text="h.quantity"></div>
+                                    <!-- Per-unit prices are REAL rupees (not cents) — format directly. -->
+                                    <div class="holdings-num holdings-hide-sm" x-text="formatCurrency(h.avgPrice)"></div>
+                                    <div class="holdings-num holdings-hide-sm" x-text="formatCurrency(h.lastPrice)"></div>
+                                    <div class="holdings-num holdings-hide-sm" x-text="fmtCents(h.investedCents)"></div>
+                                    <div class="holdings-num font-semibold" x-text="fmtCents(h.currentCents)"></div>
+                                    <div class="holdings-num holdings-hide-sm font-semibold" :class="h.pnlCents < 0 ? 'money-neg' : 'money-pos'" x-text="fmtCentsSigned(h.pnlCents)"></div>
+                                    <!-- Goal inline combobox -->
+                                    <div class="relative holdings-hide-sm" @click.stop>
+                                        <button @click="$store.holdings.editingGoalFor === h.id ? $store.holdings.closeGoalCombo() : $store.holdings.openGoalCombo(h.id)"
+                                                class="w-full text-left text-xs px-2 py-1 rounded-md border border-transparent hover:border-base-300 transition-colors truncate"
+                                                :class="h.goalId ? 'text-base-content/70' : 'text-warning'">
+                                            <span x-text="$store.holdings.goalNameFor(h.goalId)"></span>
+                                        </button>
+                                        <div class="cat-combo-menu" x-show="$store.holdings.editingGoalFor === h.id" x-cloak>
+                                            <div class="p-1.5 border-b border-base-200/60">
+                                                <input type="text" x-model="$store.holdings.goalQuery" placeholder="Search goal..." class="input-box h-8 w-full text-xs" @click.stop />
+                                            </div>
+                                            <button class="cat-combo-item" :class="!h.goalId ? 'active' : ''" @click="$store.holdings.setGoalFor(h.id, null)">— Unmapped —</button>
+                                            <template x-for="g in $store.holdings.filteredGoals()" :key="g.id">
+                                                <button class="cat-combo-item" :class="h.goalId === g.id ? 'active' : ''" @click="$store.holdings.setGoalFor(h.id, g.id)">
+                                                    <span x-text="(g.emoji ? g.emoji + ' ' : '') + g.name"></span>
+                                                </button>
+                                            </template>
+                                        </div>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </template>
+
+        <!-- ============================ GOALS VIEW ========================== -->
+        <template x-if="$store.router.view === 'goals'">
+            <div class="flex-1 flex flex-col h-full min-h-0">
+                <div class="min-h-14 md:h-16 border-b border-base-200/60 bg-base-100 flex items-center justify-between px-4 md:px-8 flex-shrink-0">
+                    <h2 class="view-title font-display text-2xl md:text-3xl tracking-tight ledger-rule">Goals</h2>
+                    <button @click="$store.goals.openCreate()" class="btn btn-primary btn-sm">New goal</button>
+                </div>
+
+                <div class="flex-1 overflow-y-auto custom-scrollbar px-4 md:px-8 py-6">
+                    <template x-if="$store.goals.unavailable">
+                        <div class="max-w-md mx-auto text-center py-20 text-sm text-base-content/50">Goals need a server update — this endpoint isn't live yet.</div>
+                    </template>
+
+                    <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3" x-show="!$store.goals.unavailable">
+                        <template x-for="g in $store.goals.list" :key="g.id">
+                            <div class="goal-card">
+                                <div class="flex items-start justify-between gap-2">
+                                    <div class="min-w-0">
+                                        <div class="flex items-center gap-2">
+                                            <span class="text-xl" x-text="g.emoji || '🎯'"></span>
+                                            <span class="font-display text-lg truncate" x-text="g.name"></span>
+                                        </div>
+                                        <div class="text-[11px] text-base-content/40 mt-0.5" x-show="g.targetDate" x-text="'Target ' + fmtDayMonth(g.targetDate) + ' ' + (g.targetDate||'').slice(0,4)"></div>
+                                    </div>
+                                    <div class="flex gap-1 opacity-70">
+                                        <button @click="$store.goals.openEdit(g)" class="p-1 rounded hover:bg-base-300 text-base-content/50" title="Edit">
+                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4z"/></svg>
+                                        </button>
+                                        <button @click="$store.goals.remove(g)" class="p-1 rounded hover:bg-error/10 text-base-content/50 hover:text-error" title="Delete">
+                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg>
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div class="mt-3">
+                                    <div class="goal-progress-track"><div class="goal-progress-fill" :style="`width:${Math.min(100, g.pct || 0)}%`"></div></div>
+                                    <div class="flex items-center justify-between mt-1.5 text-sm">
+                                        <span class="font-mono font-semibold" x-text="Math.round(g.pct || 0) + '%'"></span>
+                                        <span class="font-mono text-base-content/60 text-xs">
+                                            <span x-text="fmtCents(g.currentCents)"></span> of <span x-text="fmtCents(g.targetCents)"></span>
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <div class="text-[11px] text-base-content/50 mt-2.5">
+                                    <span x-text="(g.holdingCount||0) + ' holdings'"></span> ·
+                                    invested <span class="font-mono" x-text="fmtCents(g.investedCents)"></span> ·
+                                    <span class="font-mono" :class="(g.currentCents - g.investedCents) < 0 ? 'money-neg' : 'money-pos'" x-text="fmtCentsSigned(g.currentCents - g.investedCents)"></span>
+                                </div>
+
+                                <div class="text-[11px] text-accent mt-1.5" x-show="g.targetDate && $store.goals.monthlyNeed(g) > 0"
+                                     x-text="'needs ~' + fmtCentsCompact($store.goals.monthlyNeed(g)) + '/mo to hit ' + $store.goals.targetMonthLabel(g)"></div>
+
+                                <!-- Expand -->
+                                <button @click="$store.goals.toggleExpand(g.id)" class="text-[11px] text-base-content/50 hover:text-base-content mt-2.5">
+                                    <span x-text="$store.goals.expanded[g.id] ? 'Hide holdings' : 'Show holdings'"></span>
+                                </button>
+                                <div x-show="$store.goals.expanded[g.id]" x-cloak class="mt-2 space-y-1 border-t border-base-200/60 pt-2">
+                                    <template x-if="!$store.goals.holdingsFor(g.id).length">
+                                        <div class="text-[11px] text-base-content/40">No holdings mapped.</div>
+                                    </template>
+                                    <template x-for="h in $store.goals.holdingsFor(g.id)" :key="h.id">
+                                        <div class="flex items-center justify-between text-xs">
+                                            <span class="truncate" x-text="h.symbol || h.name"></span>
+                                            <span class="flex items-center gap-2 flex-shrink-0">
+                                                <span class="font-mono" x-text="fmtCents(h.currentCents)"></span>
+                                                <span class="font-mono text-base-content/40" x-text="(g.currentCents ? Math.round(h.currentCents / g.currentCents * 100) : 0) + '%'"></span>
+                                                <button @click="$store.goals.unmap(h.id)" class="text-base-content/40 hover:text-error" title="Unmap">✕</button>
+                                            </span>
+                                        </div>
+                                    </template>
+                                </div>
+                            </div>
+                        </template>
+
+                        <!-- Unallocated card -->
+                        <div class="goal-card border-dashed" x-show="$store.goals.unmappedCents > 0">
+                            <div class="flex items-center gap-2"><span class="text-xl">🪙</span><span class="font-semibold">Unallocated</span></div>
+                            <div class="font-mono text-lg font-semibold mt-2" x-text="fmtCents($store.goals.unmappedCents)"></div>
+                            <div class="text-[11px] text-base-content/50 mt-1" x-text="fmtCentsCompact($store.goals.unmappedCents) + ' not working toward anything yet.'"></div>
+                            <button @click="$store.router.navigate('holdings')" class="text-[11px] text-accent mt-2">Map holdings →</button>
+                        </div>
+
+                        <template x-if="!$store.goals.loading && !$store.goals.list.length && !$store.goals.unmappedCents">
+                            <div class="text-sm text-base-content/50 py-10">No goals yet. Create one to start mapping holdings.</div>
+                        </template>
+                    </div>
+                </div>
+
+                <!-- Create/Edit modal -->
+                <div x-show="$store.goals.showModal" x-cloak class="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50" @click.self="$store.goals.showModal = false">
+                    <div class="card-elevated w-full max-w-md p-6 space-y-4 bg-base-100">
+                        <h3 class="text-lg font-semibold" x-text="$store.goals.editing ? 'Edit goal' : 'New goal'"></h3>
+                        <div class="flex gap-3">
+                            <div class="w-16">
+                                <label class="block text-xs text-base-content/60 mb-1">Emoji</label>
+                                <button class="w-full h-10 rounded-lg border border-base-300 text-xl" @click="$store.goals.emojiOpen = !$store.goals.emojiOpen" x-text="$store.goals.form.emoji"></button>
+                            </div>
+                            <div class="flex-1">
+                                <label class="block text-xs text-base-content/60 mb-1">Name</label>
+                                <input type="text" x-model="$store.goals.form.name" class="input-box w-full" placeholder="Kids' education" />
+                            </div>
+                        </div>
+                        <div x-show="$store.goals.emojiOpen" class="flex flex-wrap gap-1.5">
+                            <template x-for="e in $store.goals.EMOJIS" :key="e">
+                                <button class="w-8 h-8 rounded hover:bg-base-200 text-lg" @click="$store.goals.form.emoji = e; $store.goals.emojiOpen = false" x-text="e"></button>
+                            </template>
+                        </div>
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-xs text-base-content/60 mb-1">Target (₹)</label>
+                                <input type="number" min="0" x-model="$store.goals.form.targetRupees" class="input-box w-full" placeholder="4500000" />
+                            </div>
+                            <div>
+                                <label class="block text-xs text-base-content/60 mb-1">Target date</label>
+                                <input type="date" x-model="$store.goals.form.targetDate" class="input-box w-full" />
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-xs text-base-content/60 mb-1">Notes</label>
+                            <textarea x-model="$store.goals.form.notes" rows="2" class="input-box w-full" placeholder="Optional"></textarea>
+                        </div>
+                        <div class="flex justify-end gap-2 pt-1">
+                            <button class="btn btn-ghost btn-sm" @click="$store.goals.showModal = false">Cancel</button>
+                            <button class="btn btn-primary btn-sm" @click="$store.goals.save()" :disabled="$store.goals.saving || !$store.goals.form.name.trim()">Save</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </template>
+
+        <!-- ============================ DESIRES VIEW ======================== -->
+        <template x-if="$store.router.view === 'desires'">
+            <div class="flex-1 flex flex-col h-full min-h-0">
+                <div class="min-h-14 md:h-16 border-b border-base-200/60 bg-base-100 flex items-center justify-between px-4 md:px-8 flex-shrink-0">
+                    <h2 class="view-title font-display text-2xl md:text-3xl tracking-tight ledger-rule">Desires</h2>
+                    <button @click="$store.desires.openAdd()" class="btn btn-primary btn-sm">Add desire</button>
+                </div>
+
+                <!-- Filter chips -->
+                <div class="border-b border-base-200/60 bg-base-100 px-4 md:px-8 py-2.5 flex flex-wrap items-center gap-1.5 flex-shrink-0">
+                    <button class="chip-toggle" :class="!$store.desires.filterPerson ? 'active' : ''" @click="$store.desires.setPerson('')">All</button>
+                    <template x-for="p in $store.profiles.list" :key="p.id">
+                        <button class="chip-toggle" :class="$store.desires.filterPerson === p.id ? 'active' : ''" @click="$store.desires.setPerson(p.id)" x-text="p.name"></button>
+                    </template>
+                    <span class="w-px h-4 bg-base-300 mx-1"></span>
+                    <template x-for="s in [['','All'],['dreaming','Dreaming'],['yes','Yes'],['nah','Nah'],['bought','Bought']]" :key="s[0]">
+                        <button class="chip-toggle" :class="$store.desires.filterStatus === s[0] ? 'active' : ''" @click="$store.desires.setStatusFilter(s[0])" x-text="s[1]"></button>
+                    </template>
+                </div>
+
+                <div class="flex-1 overflow-y-auto custom-scrollbar px-4 md:px-8 py-6">
+                    <template x-if="$store.desires.unavailable">
+                        <div class="max-w-md mx-auto text-center py-20 text-sm text-base-content/50">Desires need a server update — this endpoint isn't live yet.</div>
+                    </template>
+                    <template x-if="!$store.desires.unavailable && !$store.desires.loading && !$store.desires.list.length">
+                        <div class="max-w-md mx-auto text-center py-20 text-sm text-base-content/50">Nothing on the wishlist. Add a desire before you buy it.</div>
+                    </template>
+
+                    <div class="desire-grid" x-show="!$store.desires.unavailable">
+                        <template x-for="d in $store.desires.list" :key="d.id">
+                            <div class="desire-card">
+                                <div x-init="$store.desires.loadCover(d)">
+                                    <img class="desire-cover" x-show="$store.desires.coverUrls[d.id]" :src="$store.desires.coverUrls[d.id]" alt="" />
+                                    <div class="desire-cover flex items-center justify-center text-3xl" x-show="!$store.desires.coverUrls[d.id]">🎁</div>
+                                </div>
+                                <div class="p-3 flex flex-col gap-2 flex-1">
+                                    <div class="flex items-start justify-between gap-2">
+                                        <div class="font-display text-base leading-snug" x-text="d.title"></div>
+                                        <span class="status-word flex-shrink-0" :class="'status-' + d.status" x-text="d.status"></span>
+                                    </div>
+                                    <div class="font-mono text-sm" x-text="fmtCents(d.estCostCents)"></div>
+                                    <div class="text-[11px] text-base-content/50 flex items-center gap-1.5">
+                                        <span x-text="$store.desires.personName(d.person)"></span>
+                                    </div>
+                                    <div class="desire-why text-xs line-clamp-2" x-show="d.why" x-text="d.why"></div>
+                                    <div class="flex items-center gap-1.5 mt-auto pt-1">
+                                        <template x-if="d.status === 'dreaming'">
+                                            <span class="flex gap-1.5">
+                                                <button @click="$store.desires.setStatus(d.id,'yes')" class="btn btn-xs btn-ghost">👍 Yes</button>
+                                                <button @click="$store.desires.setStatus(d.id,'nah')" class="btn btn-xs btn-ghost">👎 Nah</button>
+                                            </span>
+                                        </template>
+                                        <template x-if="d.status === 'yes'">
+                                            <button @click="$store.desires.setStatus(d.id,'bought')" class="btn btn-xs btn-ghost">🛍️ Bought</button>
+                                        </template>
+                                        <button @click="$store.desires.openDetail(d.id)" class="ml-auto text-[11px] text-base-content/50 hover:text-base-content">
+                                            <span x-text="(d.commentCount||0) + ' 💬'"></span>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+
+                <!-- Detail slide-over -->
+                <template x-if="$store.desires.showDetail">
+                    <div>
+                        <div class="fixed inset-0 bg-black/40 z-40" @click="$store.desires.closeDetail()"></div>
+                        <div class="fixed z-50 top-0 right-0 bottom-0 w-full md:w-[440px] bg-base-100 border-l border-base-200/60 flex flex-col shadow-xl">
+                            <template x-if="$store.desires.detail">
+                                <div class="flex flex-col h-full">
+                                    <div class="flex items-start justify-between px-5 py-4 border-b border-base-200/60">
+                                        <div class="min-w-0">
+                                            <div class="font-semibold text-base truncate" x-text="$store.desires.detail.desire.title"></div>
+                                            <div class="text-xs text-base-content/50" x-text="$store.desires.personName($store.desires.detail.desire.person)"></div>
+                                        </div>
+                                        <button @click="$store.desires.closeDetail()" class="p-1.5 rounded hover:bg-base-200 text-base-content/50">
+                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                                        </button>
+                                    </div>
+                                    <div class="flex-1 overflow-y-auto custom-scrollbar px-5 py-4 space-y-4">
+                                        <!-- Photo strip -->
+                                        <div class="flex gap-2 flex-wrap">
+                                            <template x-for="ph in $store.desires.detail.photos" :key="ph.id">
+                                                <div x-init="$store.desires.loadPhoto($store.desires.detail.desire.id, ph.id)" class="w-20 h-20 rounded-lg bg-base-200 overflow-hidden">
+                                                    <img x-show="$store.desires.photoUrls[ph.id]" :src="$store.desires.photoUrls[ph.id]" class="w-full h-full object-cover" alt="" />
+                                                </div>
+                                            </template>
+                                            <label class="w-20 h-20 rounded-lg border border-dashed border-base-300 flex items-center justify-center text-base-content/40 cursor-pointer hover:bg-base-200"
+                                                   x-show="$store.desires.detail.photos.length < 6">
+                                                <input type="file" accept="image/*" class="hidden" @change="$store.desires.uploadPhoto($event)" />
+                                                <span class="text-2xl">＋</span>
+                                            </label>
+                                        </div>
+                                        <!-- Editable cost -->
+                                        <div>
+                                            <label class="block text-xs text-base-content/60 mb-1">Estimated cost (₹)</label>
+                                            <input type="number" min="0" class="input-box w-full" :value="Math.round($store.desires.detail.desire.estCostCents/100)"
+                                                   @change="$store.desires.updateCost($event.target.value)" />
+                                        </div>
+                                        <!-- Why -->
+                                        <div class="desire-why text-sm" x-show="$store.desires.detail.desire.why" x-text="$store.desires.detail.desire.why"></div>
+                                        <!-- Affordability -->
+                                        <div class="text-[11px] text-base-content/50" x-show="$store.desires.affordability">
+                                            ~<span x-text="fmtCentsCompact($store.desires.affordability?.avgSurplusCents || 0)"></span>/mo avg surplus
+                                            <template x-if="$store.desires.monthsOfSurplus($store.desires.detail.desire.estCostCents)">
+                                                <span> · ≈ <span x-text="$store.desires.monthsOfSurplus($store.desires.detail.desire.estCostCents)"></span> months of surplus</span>
+                                            </template>
+                                        </div>
+                                        <!-- Bought: link a transaction -->
+                                        <template x-if="$store.desires.detail.desire.status === 'bought'">
+                                            <div class="rounded-lg bg-base-200/60 p-3 space-y-2">
+                                                <div class="text-xs font-medium">Link the real transaction</div>
+                                                <template x-if="$store.desires.detail.desire.boughtTransactionId">
+                                                    <div class="text-[11px] text-pos money-pos">Linked ✓</div>
+                                                </template>
+                                                <template x-for="t in $store.desires.recentTxns" :key="t.id">
+                                                    <button @click="$store.desires.linkTransaction(t.id)" class="w-full flex items-center justify-between text-xs px-2 py-1.5 rounded hover:bg-base-100">
+                                                        <span class="truncate" x-text="t.payeeName + ' · ' + t.date"></span>
+                                                        <span class="font-mono flex-shrink-0" x-text="fmtCents(Math.abs(t.amountCents))"></span>
+                                                    </button>
+                                                </template>
+                                                <div x-show="!$store.desires.recentTxns.length" class="text-[11px] text-base-content/40">No nearby transactions found.</div>
+                                            </div>
+                                        </template>
+                                        <!-- Comments -->
+                                        <div class="space-y-2">
+                                            <div class="text-xs font-semibold text-base-content/60 uppercase tracking-wider">Comments</div>
+                                            <template x-for="c in $store.desires.detail.comments" :key="c.id">
+                                                <div class="text-sm">
+                                                    <span class="font-medium" x-text="$store.desires.personName(c.person)"></span>
+                                                    <span class="text-base-content/80" x-text="' ' + c.body"></span>
+                                                </div>
+                                            </template>
+                                            <div x-show="!$store.desires.detail.comments.length" class="text-[11px] text-base-content/40">No comments yet.</div>
+                                        </div>
+                                    </div>
+                                    <!-- Comment input -->
+                                    <div class="px-5 py-3 border-t border-base-200/60 flex gap-2">
+                                        <input type="text" x-model="$store.desires.commentBody" @keydown.enter="$store.desires.addComment()" placeholder="Add a comment..." class="input-box flex-1 h-9 text-sm" />
+                                        <button @click="$store.desires.addComment()" class="btn btn-primary btn-sm" :disabled="!$store.desires.commentBody.trim()">Send</button>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+                </template>
+
+                <!-- Add modal -->
+                <div x-show="$store.desires.showAdd" x-cloak class="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50" @click.self="$store.desires.showAdd = false">
+                    <div class="card-elevated w-full max-w-md p-6 space-y-4 bg-base-100">
+                        <h3 class="text-lg font-semibold">Add desire</h3>
+                        <div>
+                            <label class="block text-xs text-base-content/60 mb-1">Title</label>
+                            <input type="text" x-model="$store.desires.addForm.title" class="input-box w-full" placeholder="Vinyl player" />
+                        </div>
+                        <div>
+                            <label class="block text-xs text-base-content/60 mb-1">Estimated cost (₹)</label>
+                            <input type="number" min="0" x-model="$store.desires.addForm.estRupees" class="input-box w-full" placeholder="25000" />
+                        </div>
+                        <div>
+                            <label class="block text-xs text-base-content/60 mb-1">Why do I want this?</label>
+                            <textarea x-model="$store.desires.addForm.why" rows="3" class="input-box w-full" placeholder="The why is the feature."></textarea>
+                        </div>
+                        <div class="text-[11px] text-base-content/50">Adding as <span class="font-medium" x-text="$store.profiles.active?.name || '—'"></span></div>
+                        <div class="flex justify-end gap-2 pt-1">
+                            <button class="btn btn-ghost btn-sm" @click="$store.desires.showAdd = false">Cancel</button>
+                            <button class="btn btn-primary btn-sm" @click="$store.desires.saveAdd()"
+                                    :disabled="$store.desires.saving || !$store.desires.addForm.title.trim() || !$store.desires.addForm.why.trim() || !$store.desires.addForm.estRupees">Save</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </template>
+
     </main>
+
+    <!-- ===================== AGENT SIDE PANEL (desktop >=1024px) ========== -->
+    <aside class="agent-panel hidden lg:flex lg:flex-col" :class="$store.sidebar.open ? '' : 'collapsed'" x-show="$store.setup.complete" x-cloak>
+        <!-- Collapsed rail -->
+        <template x-if="!$store.sidebar.open">
+            <button @click="$store.sidebar.toggle()" class="flex-1 flex flex-col items-center justify-start pt-3 gap-2 hover:bg-base-200/60" title="Open assistant (⌘/)">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                <span class="agent-rail-btn">Assistant</span>
+            </button>
+        </template>
+
+        <!-- Expanded panel -->
+        <template x-if="$store.sidebar.open">
+            <div class="flex flex-col h-full w-full">
+                <div class="agent-header ledger-rule h-14 flex items-center justify-between px-4 flex-shrink-0">
+                    <span class="font-semibold text-sm">Assistant</span>
+                    <div class="flex items-center gap-1">
+                        <button @click="$store.threads.create()" class="p-1.5 rounded hover:bg-base-200 text-base-content/50" title="New chat">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                        </button>
+                        <button @click="$store.sidebar.toggle()" class="p-1.5 rounded hover:bg-base-200 text-base-content/50" title="Collapse (⌘/)">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="13 17 18 12 13 7"/><polyline points="6 17 11 12 6 7"/></svg>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="flex-1 overflow-y-auto custom-scrollbar px-4 py-4 space-y-3">
+                    <template x-if="$store.chat.messages.length === 0 && !$store.chat.streaming">
+                        <div class="text-xs text-base-content/40 py-6 text-center">Ask about your money — it knows the view you're on.</div>
+                    </template>
+                    <template x-for="msg in $store.chat.messages" :key="msg.id">
+                        <div :class="msg.role === 'user' ? 'flex justify-end' : 'flex justify-start'" x-show="hasDisplayableContent(msg.content)">
+                            <div :class="msg.role === 'user' ? 'agent-msg-user' : 'agent-msg-ai'">
+                                <div class="message-content" x-html="formatMessage(msg.content)"></div>
+                            </div>
+                        </div>
+                    </template>
+                    <template x-if="$store.chat.streaming">
+                        <div class="flex justify-start"><div class="agent-msg-ai"><div class="typing-indicator"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div></div></div>
+                    </template>
+                </div>
+
+                <div class="px-3 py-3 border-t border-base-200/60 flex-shrink-0 space-y-2">
+                    <!-- Suggested prompts per view -->
+                    <div class="flex flex-wrap gap-1.5">
+                        <template x-for="p in suggestedPrompts()" :key="p">
+                            <button @click="$store.chat.input = p; $refs.panelInput.focus()" class="chip-toggle text-[11px]" x-text="p"></button>
+                        </template>
+                    </div>
+                    <form @submit.prevent="$store.chat.send()" class="flex items-end gap-2">
+                        <textarea x-model="$store.chat.input" x-ref="panelInput" rows="1"
+                                  @keydown.enter.prevent="if(!$event.shiftKey) $store.chat.send()"
+                                  placeholder="Ask anything..." class="chat-input-textarea flex-1"
+                                  :disabled="$store.chat.streaming"></textarea>
+                        <button type="submit" class="chat-send-button flex-shrink-0" :disabled="$store.chat.streaming || !$store.chat.input.trim()">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </template>
+    </aside>
 
     <!-- Mobile Bottom Navigation -->
     <nav class="bottom-nav md:hidden" x-show="$store.setup.complete" x-cloak>
@@ -1425,10 +2086,12 @@
             { id: 'accounts', label: 'Go to Accounts', shortcut: 'Alt+A', icon: 'card' },
             { id: 'transactions', label: 'Go to Transactions', shortcut: 'Alt+T', icon: 'list' },
             { id: 'insights', label: 'Go to Insights', shortcut: 'Alt+I', icon: 'grid' },
+            { id: 'goals', label: 'Go to Goals', shortcut: '', icon: 'target' },
+            { id: 'holdings', label: 'Go to Holdings', shortcut: '', icon: 'chart' },
+            { id: 'desires', label: 'Go to Desires', shortcut: '', icon: 'heart' },
             { id: 'chat', label: 'Go to Chat', shortcut: '/', icon: 'chat' },
             { id: 'settings', label: 'Open Settings', shortcut: 'Alt+S', icon: 'settings' },
-            { id: 'new-thread', label: 'New Chat Thread', shortcut: 'Alt+N', icon: 'plus' },
-            { id: 'theme', label: 'Toggle Theme', shortcut: 'Alt+D', icon: 'moon' }
+            { id: 'new-thread', label: 'New Chat Thread', shortcut: 'Alt+N', icon: 'plus' }
          ] }"
          x-init="Alpine.store('commandPalette', { open: false, toggle() { this.open = !this.open } });
                  $watch('$store.commandPalette.open', v => { open = v; if(v) { query = ''; selectedIndex = 0; $nextTick(() => $refs.cmdInput?.focus()); } })"
@@ -1500,6 +2163,15 @@
                             <template x-if="cmd.icon === 'moon'">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
                             </template>
+                            <template x-if="cmd.icon === 'target'">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
+                            </template>
+                            <template x-if="cmd.icon === 'chart'">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M18 9l-5 5-2-2-4 4"/></svg>
+                            </template>
+                            <template x-if="cmd.icon === 'heart'">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+                            </template>
                         </div>
                         <span class="command-palette-item-label" x-text="cmd.label"></span>
                         <span class="command-palette-item-shortcut" x-text="cmd.shortcut"></span>
@@ -1536,9 +2208,8 @@
      x-cloak>
     <div class="card-elevated w-full max-w-md p-6 space-y-5 animate-scale-in bg-base-100">
         <div class="flex items-center gap-3">
-            <img src="/static/icons/icon.svg" alt="Gullak" class="w-10 h-10 rounded-xl shadow-sm" />
             <div>
-                <h2 class="text-lg font-semibold">Connect to your Gullak server</h2>
+                <h2 class="font-display text-xl">Connect to your Gullak server</h2>
                 <p class="text-xs text-base-content/50">Enter your API key to load your data.</p>
             </div>
         </div>

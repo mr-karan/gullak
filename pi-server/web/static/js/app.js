@@ -41,6 +41,37 @@ const GullakApi = {
     post(path, body) { return this.request(path, { method: 'POST', body: JSON.stringify(body) }); },
     patch(path, body) { return this.request(path, { method: 'PATCH', body: JSON.stringify(body) }); },
     del(path) { return this.request(path, { method: 'DELETE' }); },
+
+    // Multipart upload (holdings xlsx, desire photos). We deliberately do NOT set
+    // Content-Type — the browser sets the multipart boundary itself.
+    async upload(path, file, field = 'file') {
+        const fd = new FormData();
+        fd.append(field, file);
+        const headers = {};
+        const key = this.key();
+        if (key) headers['x-api-key'] = key;
+        const res = await fetch(`${this.serverUrl()}${path}`, { method: 'POST', body: fd, headers });
+        if (res.status === 401) throw new Error('Unauthorized — check your API key in Settings.');
+        if (!res.ok) {
+            let detail = '';
+            try { detail = (await res.json())?.error || ''; } catch (_) {}
+            throw new Error(detail || `Upload failed (${res.status})`);
+        }
+        if (res.status === 204) return null;
+        return res.json();
+    },
+
+    // Fetch protected image bytes with the api key and return an object URL.
+    // <img> cannot send x-api-key, so we fetch → blob → createObjectURL.
+    async blobUrl(path) {
+        const headers = {};
+        const key = this.key();
+        if (key) headers['x-api-key'] = key;
+        const res = await fetch(`${this.serverUrl()}${path}`, { headers });
+        if (!res.ok) throw new Error(`Image failed (${res.status})`);
+        const blob = await res.blob();
+        return URL.createObjectURL(blob);
+    },
 };
 window.GullakApi = GullakApi;
 
@@ -199,7 +230,7 @@ document.addEventListener('alpine:init', () => {
         _applying: false,
         _pendingRoute: null,
 
-        validViews: ['accounts', 'transactions', 'insights', 'chat', 'settings'],
+        validViews: ['accounts', 'transactions', 'insights', 'chat', 'settings', 'goals', 'holdings', 'desires'],
 
         get view() {
             return this.route.name === 'settings' ? 'setup' : this.route.name;
@@ -309,6 +340,14 @@ document.addEventListener('alpine:init', () => {
                     await this._applyChatRoute(nextRoute.params);
                 } else if (nextRoute.name === 'accounts') {
                     await Alpine.store('accounts').load();
+                    Alpine.store('netWorth').load();
+                } else if (nextRoute.name === 'goals') {
+                    await Alpine.store('goals').load();
+                } else if (nextRoute.name === 'holdings') {
+                    await Alpine.store('holdings').load();
+                } else if (nextRoute.name === 'desires') {
+                    await Alpine.store('profiles').load();
+                    await Alpine.store('desires').load();
                 } else if (nextRoute.name === 'transactions') {
                     Alpine.store('transactions').applyRouteParams(nextRoute.params);
                     await Alpine.store('transactions').load();
@@ -569,7 +608,7 @@ document.addEventListener('alpine:init', () => {
 
             const threads = Alpine.store('threads');
             try {
-                const body = { text: userMessage, source: 'web' };
+                const body = { text: userMessage, source: 'web', context: buildContext() };
                 if (threads.currentId) body.threadId = threads.currentId;
                 const res = await GullakApi.post('/v1/messages', body);
                 if (res?.threadId) threads.currentId = res.threadId;
@@ -1135,6 +1174,7 @@ document.addEventListener('alpine:init', () => {
         compare: null,       // { thisMonth:{income,spending,net}, lastMonth:{...}, delta:{...} }
         byCategory: [],      // [{ name, amountCents, percent }] current month, top 8
         topPayees: [],       // [{ name, amountCents }] current month, top 8
+        allocation: [],      // [{ label, cents, percent }] equity/MF/cash (M5)
         drawer: {
             open: false,
             loading: false,
@@ -1175,6 +1215,7 @@ document.addEventListener('alpine:init', () => {
                 this._rows = txnRes?.transactions || [];
                 this.data = this.buildGrid(this._rows);
                 await this.loadSections();
+                await this.loadAllocation();
             } catch (error) {
                 console.error('Failed to load insights:', error);
                 Alpine.store('notify').error(error.message || 'Failed to load insights');
@@ -1244,6 +1285,36 @@ document.addEventListener('alpine:init', () => {
                 .map(([name, amountCents]) => ({ name, amountCents }))
                 .sort((a, b) => b.amountCents - a.amountCents)
                 .slice(0, 8);
+        },
+
+        // Allocation split: equity vs MF (from /v1/holdings currentCents) vs cash
+        // (from /v1/net-worth). Both are M5 endpoints that may not be live yet;
+        // on any failure we leave allocation empty and the section stays hidden.
+        async loadAllocation() {
+            try {
+                const [hRes, nRes] = await Promise.all([
+                    GullakApi.get('/v1/holdings').catch(() => null),
+                    GullakApi.get('/v1/net-worth').catch(() => null),
+                ]);
+                const holdings = hRes?.holdings || [];
+                if (!holdings.length) { this.allocation = []; return; }
+                let equity = 0, mf = 0;
+                for (const h of holdings) {
+                    if (h.stale) continue;
+                    if (h.kind === 'mutual_fund') mf += (h.currentCents || 0);
+                    else equity += (h.currentCents || 0);
+                }
+                const cash = nRes?.cashCents || 0;
+                const parts = [
+                    { label: 'Equity', cents: equity },
+                    { label: 'Mutual funds', cents: mf },
+                    { label: 'Cash', cents: cash },
+                ].filter((p) => p.cents > 0);
+                const total = parts.reduce((s, p) => s + p.cents, 0) || 1;
+                this.allocation = parts.map((p) => ({ ...p, percent: (p.cents / total) * 100 }));
+            } catch (_) {
+                this.allocation = [];
+            }
         },
 
         // Aggregate expense rows into the grid shape the partial expects.
@@ -1344,7 +1415,595 @@ document.addEventListener('alpine:init', () => {
         }
     });
 
+    // =========================================================================
+    // PROFILES STORE (M5) - lightweight two-person attribution, no auth.
+    // Active person persists in localStorage; person-stamped writes read it.
+    // =========================================================================
+    Alpine.store('profiles', {
+        list: [],
+        activeId: null,
+        loaded: false,
+
+        init() {
+            this.activeId = localStorage.getItem('gullak_person') || null;
+        },
+
+        get active() {
+            return this.list.find((p) => p.id === this.activeId) || this.list[0] || null;
+        },
+
+        async load() {
+            if (this.loaded) return;
+            try {
+                const res = await GullakApi.get('/v1/profiles');
+                this.list = res?.profiles || [];
+            } catch (_) {
+                // Server not updated yet — sensible household defaults so the
+                // picker still works and single-person flows don't break.
+                this.list = [
+                    { id: 'karan', name: 'Karan', emoji: '🧔' },
+                    { id: 'wife', name: 'Wife', emoji: '💁‍♀️' },
+                ];
+            }
+            if (!this.activeId || !this.list.find((p) => p.id === this.activeId)) {
+                this.activeId = this.list[0]?.id || null;
+                if (this.activeId) localStorage.setItem('gullak_person', this.activeId);
+            }
+            this.loaded = true;
+        },
+
+        setActive(id) {
+            this.activeId = id;
+            localStorage.setItem('gullak_person', id);
+        },
+    });
+
+    // =========================================================================
+    // NET-WORTH STORE (M5) - cash + investments blended headline.
+    // Collapses gracefully when /v1/net-worth is not deployed yet (404/501).
+    // =========================================================================
+    Alpine.store('netWorth', {
+        data: null,
+        unavailable: false,
+
+        get investedPnlPct() {
+            const inv = this.data?.investedInvestedCents || 0;
+            return inv ? ((this.data.investedPnlCents || 0) / inv) * 100 : 0;
+        },
+
+        async load() {
+            if (!GullakApi.isConnected()) return;
+            try {
+                this.data = await GullakApi.get('/v1/net-worth');
+                this.unavailable = false;
+            } catch (e) {
+                if (/\((404|501)\)/.test(e.message)) this.unavailable = true;
+                this.data = null;
+            }
+        },
+    });
+
+    // =========================================================================
+    // HOLDINGS STORE (M5) - Kite/Coin xlsx import + register table.
+    // Prices are as-of-import; no live refresh (see issue 05 non-goals).
+    // =========================================================================
+    Alpine.store('holdings', {
+        list: [],
+        goals: [],          // for the inline goal-mapping combobox
+        summary: { investedCents: 0, currentCents: 0, pnlCents: 0, count: 0, lastImportAt: null },
+        loading: false,
+        importing: false,
+        unavailable: false,
+        missing: [],        // rows in DB but not in latest file (sold?)
+        showMissing: false,
+        editingGoalFor: null,
+        goalQuery: '',
+
+        get pnlPct() {
+            const inv = this.summary.investedCents || 0;
+            return inv ? (this.summary.pnlCents / inv) * 100 : 0;
+        },
+
+        async load() {
+            if (!GullakApi.isConnected()) { Alpine.store('connection').open(); return; }
+            this.loading = true;
+            this.unavailable = false;
+            try {
+                const res = await GullakApi.get('/v1/holdings');
+                this.list = (res?.holdings || []).slice().sort((a, b) => (b.currentCents || 0) - (a.currentCents || 0));
+                if (res?.summary) this.summary = res.summary;
+                try {
+                    const g = await GullakApi.get('/v1/goals');
+                    this.goals = (g?.goals || []).filter((x) => !x.archived);
+                } catch (_) { this.goals = []; }
+            } catch (e) {
+                if (/\((404|501)\)/.test(e.message)) { this.unavailable = true; this.list = []; }
+                else Alpine.store('notify').error(e.message || 'Failed to load holdings');
+            } finally {
+                this.loading = false;
+            }
+        },
+
+        async importFile(event) {
+            const file = event?.target?.files?.[0];
+            if (event?.target) event.target.value = '';
+            if (!file) return;
+            this.importing = true;
+            try {
+                const res = await GullakApi.upload('/v1/holdings/import', file);
+                const u = res?.updated ?? 0;
+                const a = res?.added ?? 0;
+                this.missing = res?.missing || [];
+                this.showMissing = this.missing.length > 0;
+                Alpine.store('notify').success(`Updated ${u} · Added ${a} · Missing ${this.missing.length}`);
+                await this.load();
+            } catch (e) {
+                Alpine.store('notify').error(e.message || 'Import failed');
+            } finally {
+                this.importing = false;
+            }
+        },
+
+        _idByIsin(isin) {
+            return (this.list.find((h) => h.isin === isin) || {}).id || null;
+        },
+
+        async markStale(isin) {
+            const id = this._idByIsin(isin);
+            if (!id) { this.missing = this.missing.filter((m) => m.isin !== isin); return; }
+            try {
+                await GullakApi.patch(`/v1/holdings/${id}`, { stale: true });
+                Alpine.store('notify').success('Marked stale');
+                this.missing = this.missing.filter((m) => m.isin !== isin);
+                await this.load();
+            } catch (e) { Alpine.store('notify').error(e.message || 'Failed to mark stale'); }
+        },
+
+        async deleteMissing(isin) {
+            const id = this._idByIsin(isin);
+            if (!id) { this.missing = this.missing.filter((m) => m.isin !== isin); return; }
+            try {
+                await GullakApi.del(`/v1/holdings/${id}`);
+                Alpine.store('notify').success('Deleted');
+                this.missing = this.missing.filter((m) => m.isin !== isin);
+                await this.load();
+            } catch (e) { Alpine.store('notify').error(e.message || 'Failed to delete'); }
+        },
+
+        goalNameFor(goalId) {
+            if (!goalId) return 'Set goal';
+            const g = this.goals.find((x) => x.id === goalId);
+            return g ? ((g.emoji ? g.emoji + ' ' : '') + g.name) : 'Set goal';
+        },
+        openGoalCombo(id) { this.editingGoalFor = id; this.goalQuery = ''; },
+        closeGoalCombo() { this.editingGoalFor = null; this.goalQuery = ''; },
+        filteredGoals() {
+            const q = this.goalQuery.trim().toLowerCase();
+            if (!q) return this.goals;
+            return this.goals.filter((g) => g.name.toLowerCase().includes(q));
+        },
+        async setGoalFor(holdingId, goalId) {
+            const h = this.list.find((x) => x.id === holdingId);
+            if (!h) return;
+            const prev = h.goalId;
+            h.goalId = goalId;
+            this.closeGoalCombo();
+            try {
+                await GullakApi.patch(`/v1/holdings/${holdingId}`, { goalId });
+                Alpine.store('notify').success('Goal updated');
+            } catch (e) {
+                h.goalId = prev;
+                Alpine.store('notify').error(e.message || 'Failed to update goal');
+            }
+        },
+    });
+
+    // =========================================================================
+    // GOALS STORE (M5) - named targets; progress = mapped holdings vs target.
+    // =========================================================================
+    Alpine.store('goals', {
+        list: [],
+        unmappedCents: 0,
+        loading: false,
+        unavailable: false,
+        expanded: {},
+        _holdings: [],
+        showModal: false,
+        editing: null,
+        saving: false,
+        emojiOpen: false,
+        form: { name: '', emoji: '🎯', targetRupees: '', targetDate: '', notes: '' },
+        EMOJIS: ['🎯', '🏠', '🚗', '🎓', '🏖️', '💍', '👶', '🏦', '📈', '✈️', '🩺', '🛡️', '🎸', '💻', '🐘', '🌱'],
+
+        async load() {
+            if (!GullakApi.isConnected()) { Alpine.store('connection').open(); return; }
+            this.loading = true;
+            this.unavailable = false;
+            try {
+                const res = await GullakApi.get('/v1/goals');
+                this.list = res?.goals || [];
+                this.unmappedCents = res?.unmappedCents || 0;
+                try {
+                    const h = await GullakApi.get('/v1/holdings');
+                    this._holdings = h?.holdings || [];
+                } catch (_) { this._holdings = []; }
+            } catch (e) {
+                if (/\((404|501)\)/.test(e.message)) { this.unavailable = true; this.list = []; }
+                else Alpine.store('notify').error(e.message || 'Failed to load goals');
+            } finally {
+                this.loading = false;
+            }
+        },
+
+        holdingsFor(goalId) {
+            return this._holdings
+                .filter((h) => h.goalId === goalId)
+                .sort((a, b) => (b.currentCents || 0) - (a.currentCents || 0));
+        },
+        toggleExpand(id) { this.expanded[id] = !this.expanded[id]; },
+
+        _monthsRemaining(targetDate) {
+            if (!targetDate) return 0;
+            const now = new Date();
+            const [y, m] = targetDate.split('-').map(Number);
+            const months = (y - now.getFullYear()) * 12 + (m - 1 - now.getMonth());
+            return Math.max(1, months);
+        },
+        monthlyNeed(g) {
+            if (!g.targetDate) return 0;
+            const remaining = (g.targetCents || 0) - (g.currentCents || 0);
+            if (remaining <= 0) return 0;
+            return Math.round(remaining / this._monthsRemaining(g.targetDate));
+        },
+        targetMonthLabel(g) {
+            if (!g.targetDate) return '';
+            const [y, m] = g.targetDate.split('-').map(Number);
+            return new Date(y, m - 1, 1).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' });
+        },
+
+        openCreate() {
+            this.editing = null;
+            this.form = { name: '', emoji: '🎯', targetRupees: '', targetDate: '', notes: '' };
+            this.emojiOpen = false;
+            this.showModal = true;
+        },
+        openEdit(g) {
+            this.editing = g;
+            this.form = {
+                name: g.name || '',
+                emoji: g.emoji || '🎯',
+                targetRupees: g.targetCents ? Math.round(g.targetCents / 100) : '',
+                targetDate: g.targetDate || '',
+                notes: g.notes || '',
+            };
+            this.emojiOpen = false;
+            this.showModal = true;
+        },
+
+        async save() {
+            const name = this.form.name.trim();
+            if (!name) return;
+            this.saving = true;
+            const payload = {
+                name,
+                emoji: this.form.emoji || null,
+                targetCents: Math.round(Number(this.form.targetRupees || 0) * 100),
+                targetDate: this.form.targetDate || null,
+                notes: this.form.notes || null,
+            };
+            try {
+                if (this.editing) await GullakApi.patch(`/v1/goals/${this.editing.id}`, payload);
+                else await GullakApi.post('/v1/goals', payload);
+                this.showModal = false;
+                Alpine.store('notify').success('Goal saved');
+                await this.load();
+            } catch (e) {
+                Alpine.store('notify').error(e.message || 'Failed to save goal');
+            } finally {
+                this.saving = false;
+            }
+        },
+
+        async remove(g) {
+            if (!confirm(`Delete goal "${g.name}"?`)) return;
+            try {
+                await GullakApi.del(`/v1/goals/${g.id}`);
+                Alpine.store('notify').success('Goal deleted');
+                await this.load();
+            } catch (e) {
+                // 409 when holdings are still mapped — surface the server message.
+                Alpine.store('notify').error(e.message || 'Cannot delete goal — unmap its holdings first');
+            }
+        },
+
+        async unmap(holdingId) {
+            try {
+                await GullakApi.patch(`/v1/holdings/${holdingId}`, { goalId: null });
+                await this.load();
+            } catch (e) {
+                Alpine.store('notify').error(e.message || 'Failed to unmap');
+            }
+        },
+    });
+
+    // =========================================================================
+    // DESIRES STORE (M5) - shared wishlist with brakes. Photos fetched with the
+    // api key via object URLs (see GullakApi.blobUrl); revoked on reload.
+    // =========================================================================
+    Alpine.store('desires', {
+        list: [],
+        loading: false,
+        unavailable: false,
+        filterPerson: '',
+        filterStatus: '',
+        coverUrls: {},
+        photoUrls: {},
+        _objectUrls: [],
+        showDetail: false,
+        detail: null,
+        detailId: null,
+        commentBody: '',
+        showAdd: false,
+        saving: false,
+        addForm: { title: '', estRupees: '', why: '' },
+        affordability: null,
+        recentTxns: [],
+
+        personName(id) {
+            const p = Alpine.store('profiles').list.find((x) => x.id === id);
+            return p?.name || id || '—';
+        },
+
+        _revokeAll() {
+            for (const u of this._objectUrls) { try { URL.revokeObjectURL(u); } catch (_) {} }
+            this._objectUrls = [];
+            this.coverUrls = {};
+            this.photoUrls = {};
+        },
+
+        async load() {
+            if (!GullakApi.isConnected()) { Alpine.store('connection').open(); return; }
+            this.loading = true;
+            this.unavailable = false;
+            this._revokeAll();
+            try {
+                const q = new URLSearchParams();
+                if (this.filterPerson) q.set('person', this.filterPerson);
+                if (this.filterStatus) q.set('status', this.filterStatus);
+                const qs = q.toString();
+                const res = await GullakApi.get('/v1/desires' + (qs ? `?${qs}` : ''));
+                this.list = res?.desires || [];
+                this.loadAffordability();
+            } catch (e) {
+                if (/\((404|501)\)/.test(e.message)) { this.unavailable = true; this.list = []; }
+                else Alpine.store('notify').error(e.message || 'Failed to load desires');
+            } finally {
+                this.loading = false;
+            }
+        },
+
+        setPerson(id) { this.filterPerson = id; this.load(); },
+        setStatusFilter(s) { this.filterStatus = s; this.load(); },
+
+        loadCover(d) {
+            if (!d.photoIds || !d.photoIds.length) return;
+            if (this.coverUrls[d.id]) return;
+            const pid = d.photoIds[0];
+            GullakApi.blobUrl(`/v1/desires/${d.id}/photos/${pid}`)
+                .then((url) => { this.coverUrls[d.id] = url; this._objectUrls.push(url); })
+                .catch(() => {});
+        },
+        loadPhoto(desireId, photoId) {
+            if (this.photoUrls[photoId]) return;
+            GullakApi.blobUrl(`/v1/desires/${desireId}/photos/${photoId}`)
+                .then((url) => { this.photoUrls[photoId] = url; this._objectUrls.push(url); })
+                .catch(() => {});
+        },
+
+        async openDetail(id) {
+            this.detailId = id;
+            this.showDetail = true;
+            this.detail = null;
+            this.commentBody = '';
+            this.recentTxns = [];
+            try {
+                this.detail = await GullakApi.get(`/v1/desires/${id}`);
+                if (this.detail?.desire?.status === 'bought') this.loadRecentTxns();
+            } catch (e) {
+                Alpine.store('notify').error(e.message || 'Failed to load desire');
+                this.showDetail = false;
+            }
+        },
+        closeDetail() {
+            this.showDetail = false;
+            this.detail = null;
+            this.detailId = null;
+            this.recentTxns = [];
+        },
+
+        async setStatus(id, status) {
+            try {
+                await GullakApi.patch(`/v1/desires/${id}`, { status });
+                const d = this.list.find((x) => x.id === id);
+                if (d) d.status = status;
+                if (this.detail?.desire?.id === id) this.detail.desire.status = status;
+                if (status === 'bought') this.loadRecentTxns();
+            } catch (e) {
+                Alpine.store('notify').error(e.message || 'Failed to update status');
+            }
+        },
+
+        async updateCost(rupees) {
+            if (!this.detail) return;
+            const cents = Math.round(Number(rupees || 0) * 100);
+            try {
+                await GullakApi.patch(`/v1/desires/${this.detail.desire.id}`, { estCostCents: cents });
+                this.detail.desire.estCostCents = cents;
+                const d = this.list.find((x) => x.id === this.detail.desire.id);
+                if (d) d.estCostCents = cents;
+            } catch (e) {
+                Alpine.store('notify').error(e.message || 'Failed to update cost');
+            }
+        },
+
+        async uploadPhoto(event) {
+            const file = event?.target?.files?.[0];
+            if (event?.target) event.target.value = '';
+            if (!file || !this.detail) return;
+            const did = this.detail.desire.id;
+            try {
+                await GullakApi.upload(`/v1/desires/${did}/photos`, file);
+                this.detail = await GullakApi.get(`/v1/desires/${did}`);
+                Alpine.store('notify').success('Photo added');
+                delete this.coverUrls[did];
+                const d = this.list.find((x) => x.id === did);
+                if (d) { d.photoIds = (this.detail.photos || []).map((p) => p.id); this.loadCover(d); }
+            } catch (e) {
+                Alpine.store('notify').error(e.message || 'Upload failed');
+            }
+        },
+
+        async addComment() {
+            const body = this.commentBody.trim();
+            if (!body || !this.detail) return;
+            const person = Alpine.store('profiles').activeId;
+            const did = this.detail.desire.id;
+            try {
+                await GullakApi.post(`/v1/desires/${did}/comments`, { person, body });
+                this.commentBody = '';
+                this.detail = await GullakApi.get(`/v1/desires/${did}`);
+                const d = this.list.find((x) => x.id === did);
+                if (d) d.commentCount = (this.detail.comments || []).length;
+            } catch (e) {
+                Alpine.store('notify').error(e.message || 'Failed to add comment');
+            }
+        },
+
+        openAdd() { this.showAdd = true; this.addForm = { title: '', estRupees: '', why: '' }; },
+        async saveAdd() {
+            const title = this.addForm.title.trim();
+            const why = this.addForm.why.trim();
+            if (!title || !why || !this.addForm.estRupees) return;
+            this.saving = true;
+            try {
+                await GullakApi.post('/v1/desires', {
+                    person: Alpine.store('profiles').activeId,
+                    title,
+                    estCostCents: Math.round(Number(this.addForm.estRupees) * 100),
+                    why,
+                });
+                this.showAdd = false;
+                Alpine.store('notify').success('Desire added');
+                await this.load();
+            } catch (e) {
+                Alpine.store('notify').error(e.message || 'Failed to add desire');
+            } finally {
+                this.saving = false;
+            }
+        },
+
+        // Avg monthly surplus over the last 3 full months (net = income - expense),
+        // computed client-side from /v1/summary. Numbers, not judgement.
+        async loadAffordability() {
+            try {
+                const now = new Date();
+                const pad = (n) => String(n).padStart(2, '0');
+                const iso = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+                const calls = [];
+                for (let i = 1; i <= 3; i++) {
+                    const first = new Date(now.getFullYear(), now.getMonth() - i, 1);
+                    const last = new Date(now.getFullYear(), now.getMonth() - i + 1, 0);
+                    calls.push(GullakApi.get(`/v1/summary?startDate=${iso(first)}&endDate=${iso(last)}`).catch(() => null));
+                }
+                const sums = await Promise.all(calls);
+                const nets = sums.filter(Boolean).map((s) => s.netCents || 0);
+                if (!nets.length) { this.affordability = null; return; }
+                const avg = Math.round(nets.reduce((a, b) => a + b, 0) / nets.length);
+                this.affordability = { avgSurplusCents: avg };
+            } catch (_) {
+                this.affordability = null;
+            }
+        },
+        monthsOfSurplus(estCostCents) {
+            const avg = this.affordability?.avgSurplusCents || 0;
+            if (avg <= 0) return null;
+            return Math.max(1, Math.round((estCostCents || 0) / avg));
+        },
+
+        async loadRecentTxns() {
+            if (!this.detail) return;
+            const est = this.detail.desire.estCostCents || 0;
+            try {
+                const now = new Date();
+                const pad = (n) => String(n).padStart(2, '0');
+                const iso = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+                const start = new Date(now.getFullYear(), now.getMonth() - 2, 1);
+                const res = await GullakApi.get(`/v1/transactions?startDate=${iso(start)}&endDate=${iso(now)}&limit=1000`);
+                const lo = est * 0.9;
+                const hi = est * 1.1;
+                this.recentTxns = (res?.transactions || [])
+                    .filter((t) => { const a = Math.abs(t.amountCents || 0); return a >= lo && a <= hi; })
+                    .slice(0, 8);
+            } catch (_) {
+                this.recentTxns = [];
+            }
+        },
+        async linkTransaction(txnId) {
+            if (!this.detail) return;
+            try {
+                await GullakApi.patch(`/v1/desires/${this.detail.desire.id}`, { boughtTransactionId: txnId });
+                this.detail.desire.boughtTransactionId = txnId;
+                Alpine.store('notify').success('Transaction linked');
+            } catch (e) {
+                Alpine.store('notify').error(e.message || 'Failed to link transaction');
+            }
+        },
+    });
+
+    // =========================================================================
+    // SIDEBAR STORE (M5) - always-on agent panel open/collapsed state (>=1024px).
+    // =========================================================================
+    Alpine.store('sidebar', {
+        open: true,
+        init() {
+            const s = localStorage.getItem('gullak_sidebar_open');
+            this.open = s === null ? true : s === 'true';
+        },
+        toggle() {
+            this.open = !this.open;
+            localStorage.setItem('gullak_sidebar_open', this.open ? 'true' : 'false');
+        },
+    });
+
 });
+
+// =============================================================================
+// AGENT CONTEXT (M5) - compact "where is the user" hint sent with every chat
+// message. Advisory prose for the model only; never trusted for writes.
+// =============================================================================
+function buildContext() {
+    try {
+        const router = Alpine.store('router');
+        const view = router?.route?.name || 'accounts';
+        const ctx = { view };
+        if (view === 'transactions') {
+            const t = Alpine.store('transactions');
+            if (t.accountId) ctx.accountId = t.accountId;
+            const r = t.periodRange?.();
+            if (r?.startDate) ctx.month = r.startDate.slice(0, 7);
+        } else if (view === 'desires') {
+            const d = Alpine.store('desires');
+            if (d.detailId) ctx.desireId = d.detailId;
+        } else if (view === 'goals') {
+            const g = Alpine.store('goals');
+            const openId = Object.keys(g.expanded || {}).find((k) => g.expanded[k]);
+            if (openId) ctx.goalId = openId;
+        }
+        return ctx;
+    } catch (_) {
+        return { view: 'accounts' };
+    }
+}
 
 
 
@@ -1405,6 +2064,9 @@ function gullakApp() {
             const threads = Alpine.store('threads');
 
             await setup.checkStatus();
+
+            // Load profiles early so the sidebar picker + person-stamped writes work.
+            Alpine.store('profiles').load();
 
             if (setup.complete && threads.list.length === 0) {
                 await threads.load();
@@ -1499,6 +2161,49 @@ function gullakApp() {
             return new Date(y, m - 1, d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' });
         },
 
+        // Signed percentage for P&L figures (integer-in, 1dp out).
+        fmtPct(n) {
+            const v = Number(n) || 0;
+            return (v >= 0 ? '+' : '') + v.toFixed(1) + '%';
+        },
+
+        // Compact ₹ for large figures (Cr/L/K). Integer minor units in.
+        fmtCentsCompact(cents) {
+            const rupees = Math.round((cents || 0) / 100);
+            const abs = Math.abs(rupees);
+            const sign = rupees < 0 ? '-' : '';
+            if (abs >= 10000000) return `${sign}₹${(abs / 10000000).toFixed(2).replace(/\.?0+$/, '')}Cr`;
+            if (abs >= 100000) return `${sign}₹${(abs / 100000).toFixed(2).replace(/\.?0+$/, '')}L`;
+            if (abs >= 1000) return `${sign}₹${(abs / 1000).toFixed(1).replace(/\.0$/, '')}K`;
+            return `${sign}₹${abs.toLocaleString('en-IN')}`;
+        },
+
+        // Import timestamp label. Accepts epoch ms (number/numeric string) or a
+        // date string; returns '' for anything unparseable.
+        fmtEpochDate(v) {
+            if (!v && v !== 0) return '';
+            let d;
+            if (typeof v === 'number') d = new Date(v);
+            else if (/^\d+$/.test(String(v))) d = new Date(Number(v));
+            else d = new Date(v);
+            if (isNaN(d.getTime())) return '';
+            return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+        },
+
+        // Per-view suggested prompt chips for the agent panel (issue 10).
+        suggestedPrompts() {
+            const view = Alpine.store('router')?.route?.name || 'accounts';
+            const map = {
+                transactions: ["What's driving spend this month?", 'Where can I cut back?'],
+                goals: ['When do I hit the target at current pace?', 'Which goal is furthest behind?'],
+                desires: ['Can we afford this?', "What's our surplus lately?"],
+                holdings: ['How concentrated is the portfolio?', 'Equity vs MF split?'],
+                accounts: ["What's my net worth?", 'How did this month go?'],
+                insights: ['Summarise my spending trends', 'Biggest category this year?'],
+            };
+            return map[view] || map.accounts;
+        },
+
         getCategoryEmoji(account) {
             if (!account) return '💰';
             const cat = account.toLowerCase();
@@ -1560,13 +2265,22 @@ function gullakApp() {
             }
             if (!text) return '';
 
+            // SECURITY: this string is rendered via x-html and comes from the
+            // user or the model — escape ALL of it first, then apply the
+            // markdown-ish transforms to the escaped text. Without this, a
+            // message like <img src=x onerror=...> executes in the page and
+            // can read the API key out of localStorage.
+            text = this.escapeHtml(text);
+
             text = text.replace(/```ledger\n([\s\S]*?)```/g, (match, code) => {
                 const highlighted = this.highlightLedger(code.trim());
                 return `<div class="ledger-block mt-3"><pre class="text-[13px] leading-relaxed">${highlighted}</pre></div>`;
             });
 
+            // Code is already HTML-escaped by the pass above — do not escape
+            // again or entities render literally (&amp;lt;).
             text = text.replace(/```(\w*)\n([\s\S]*?)```/g, (match, lang, code) => {
-                return `<div class="ledger-block mt-3"><pre class="text-[13px] leading-relaxed">${this.escapeHtml(code.trim())}</pre></div>`;
+                return `<div class="ledger-block mt-3"><pre class="text-[13px] leading-relaxed">${code.trim()}</pre></div>`;
             });
 
             return text

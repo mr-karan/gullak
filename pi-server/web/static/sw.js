@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'gullak-v3';
+const CACHE_VERSION = 'gullak-v4';
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 
@@ -16,8 +16,8 @@ const VERSIONED_ASSET_PATTERNS = [
 
 const CACHE_FIRST_PATTERNS = [
   /\/static\//,
-  /fonts\.googleapis\.com/,
-  /fonts\.gstatic\.com/,
+  /api\.fontshare\.com/,
+  /cdn\.fontshare\.com/,
   /cdn\.jsdelivr\.net/
 ];
 

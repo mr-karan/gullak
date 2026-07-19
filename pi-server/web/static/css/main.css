@@ -1991,3 +1991,221 @@ textarea:focus-visible {
         padding-left: 12px !important;
     }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   BAHI-KHATA OVERRIDE LAYER (appended)
+   The red cloth-bound household ledger: oxblood binding shell wrapping warm
+   clay paper pages. One family of colours; ledger ruling as the geometry.
+   This layer wins over the recovered base rules by cascade order. It does not
+   rewrite anything above — only overrides.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ---- Type ---------------------------------------------------------------- */
+body { font-family: var(--font-sans); }
+.font-display { font-family: var(--font-display) !important; }
+/* Numeric/money cells: keep the markup class, swap the meaning to tabular sans */
+.font-mono { font-family: inherit; font-variant-numeric: tabular-nums; letter-spacing: 0; }
+
+/* Kill the tracked-uppercase costume worn by every section head + micro-label */
+.uppercase.tracking-wider,
+.uppercase.tracking-wide,
+.uppercase.tracking-widest,
+.register-date-header,
+.holdings-head,
+.nav-section-label,
+.cat-combo-group,
+.agent-rail-btn { text-transform: none !important; letter-spacing: normal !important; }
+
+/* ---- The ledger double-rule (bespoke signature geometry) ----------------- */
+.ledger-rule { position: relative; }
+.ledger-rule::after {
+    content: ''; display: block; height: 5px; margin-top: 6px;
+    border-top: 1.5px solid var(--color-rule);
+    border-bottom: 0.75px solid var(--color-rule);
+    border-radius: 2px;
+}
+/* grid table-header: span every column */
+.holdings-head.ledger-rule::after { grid-column: 1 / -1; margin-top: 4px; }
+/* flex panel header: pin the rule to the header's base edge, full width */
+.agent-header.ledger-rule::after { position: absolute; left: 1rem; right: 1rem; bottom: 0; margin-top: 0; }
+
+/* ---- Paper surfaces: self-coloured edge, no shadow ----------------------- */
+.card-elevated {
+    background: var(--color-paper-2);
+    border: 1px solid color-mix(in oklch, var(--color-paper-2), black 6%) !important;
+    border-radius: 8px;
+    box-shadow: none;
+    transition: background-color 150ms ease-out, border-color 150ms ease-out;
+}
+.card-elevated:hover {
+    box-shadow: none; transform: none;
+    border-color: color-mix(in oklch, var(--color-paper-2), black 6%);
+}
+.glass-panel { background: var(--color-paper-2); backdrop-filter: none; box-shadow: none; }
+
+/* ---- The binding: sidebar rail ------------------------------------------- */
+.sidebar-rail {
+    background: var(--color-bind) !important;
+    color: var(--color-bind-ink);
+    border-right: 1px solid var(--color-bind-2);
+}
+.sidebar-rail .wordmark { color: var(--color-bind-ink); }
+
+.nav-link {
+    color: var(--color-bind-mut); font-weight: 500;
+    transition: background-color 120ms ease-out, color 120ms ease-out;
+}
+.nav-link:hover { background: var(--color-bind-2); color: var(--color-bind-ink); }
+.nav-link.nav-active { background: var(--color-bind-2); color: var(--color-bind-ink); font-weight: 600; }
+.nav-link kbd { background: var(--color-bind-2); color: var(--color-bind-mut); }
+
+/* Legibility of the rail's own text (nav + mobile history), NOT the paper popover */
+.sidebar-rail nav [class*="text-base-content/"] { color: var(--color-bind-mut); }
+.sidebar-rail .nav-section-label { color: var(--color-bind-mut) !important; }
+
+/* Footer settings link + install/update panels + profile chip on the binding */
+.nav-footer-link { color: var(--color-bind-mut); }
+.nav-footer-link:hover { color: var(--color-bind-ink); background: var(--color-bind-2); }
+.sidebar-panel { background: var(--color-bind-2); color: var(--color-bind-ink); border: 1px solid var(--color-bind-2); }
+.sidebar-panel svg { color: var(--color-bind-ink); }
+.sidebar-rail .profile-chip { background: var(--color-bind-2); border: 1px solid var(--color-bind-2); color: var(--color-bind-ink); }
+.sidebar-rail .profile-chip:hover { background: color-mix(in oklch, var(--color-bind-2), white 6%); }
+.sidebar-rail .profile-chip [class*="text-base-content/"] { color: var(--color-bind-mut); }
+.sidebar-rail .profile-avatar { background: var(--color-bind); color: var(--color-bind-ink); }
+
+/* ---- Bottom nav (mobile): binding-dark, not glass ------------------------ */
+.bottom-nav {
+    background: var(--color-bind) !important;
+    border-top: 1px solid var(--color-bind-2);
+    backdrop-filter: none; -webkit-backdrop-filter: none;
+}
+.bottom-nav-item { color: var(--color-bind-mut); }
+.bottom-nav-item.active { color: var(--color-bind-ink); font-weight: 600; }
+.bottom-nav-item.active svg { transform: none; }
+.bottom-nav-item:active { transform: none; }
+
+/* ---- Buttons: solid accent, no shadow, no hover-lift --------------------- */
+.btn { border-radius: 6px; box-shadow: none !important; }
+.btn:hover, .btn:active { transform: none !important; }
+.btn-primary {
+    --btn-bg: var(--color-accent); --btn-fg: var(--color-accent-ink); --btn-border: var(--color-accent);
+    background: var(--color-accent); border-color: var(--color-accent); color: var(--color-accent-ink);
+}
+.btn-primary:hover {
+    background: color-mix(in oklch, var(--color-accent), black 6%);
+    border-color: color-mix(in oklch, var(--color-accent), black 6%);
+    --btn-bg: color-mix(in oklch, var(--color-accent), black 6%);
+}
+.btn-primary:active {
+    background: color-mix(in oklch, var(--color-accent), black 10%);
+    border-color: color-mix(in oklch, var(--color-accent), black 10%);
+}
+.btn-ghost {
+    background: transparent; border-color: transparent; color: var(--color-accent);
+    --btn-bg: transparent; --btn-fg: var(--color-accent); --btn-border: transparent;
+}
+.btn-ghost:hover {
+    background: transparent; border-color: transparent;
+    color: color-mix(in oklch, var(--color-accent), black 12%);
+}
+
+/* Prompt suggestions: text buttons in accent, no pill / shadow / lift */
+.prompt-suggestion {
+    background: transparent; border: none; border-radius: 6px; box-shadow: none;
+    color: var(--color-accent); padding: 6px 10px;
+}
+.prompt-suggestion:hover { background: var(--color-paper-3); box-shadow: none; transform: none; color: var(--color-accent); border: none; }
+.prompt-suggestion:active { transform: none; }
+
+/* Chat send: keep the accent icon button, drop the glow + boop */
+.chat-send-button { background: var(--color-accent); box-shadow: none; }
+.chat-send-button:hover:not(:disabled) { transform: none; box-shadow: none; filter: brightness(0.96); }
+.chat-send-button:active:not(:disabled) { transform: none; box-shadow: none; }
+
+/* Neutralise the recovered "premium" gradient/lift buttons if referenced */
+.btn-premium-primary, .btn-premium-success {
+    background: var(--color-accent); color: var(--color-accent-ink); box-shadow: none;
+}
+.btn-premium-success { background: var(--color-pos); }
+.btn-premium-primary:hover, .btn-premium-success:hover { transform: none; box-shadow: none; filter: brightness(0.96); }
+.btn-premium-primary:active, .btn-premium-success:active { transform: none; box-shadow: none; }
+
+/* ---- The ledger's first line: net-worth figure owns the fold ------------- */
+.figure-hero {
+    font-size: clamp(2.5rem, 6vw, 4rem) !important;
+    font-weight: 650 !important;
+    line-height: 1.05; letter-spacing: -0.01em;
+    color: var(--color-ink);
+    font-variant-numeric: tabular-nums;
+}
+
+/* ---- Chips die: filters become tonal controls, tags become text --------- */
+.filter-pill { background: transparent; border: none; border-radius: 6px; color: var(--color-ink-2); }
+.filter-pill:hover { background: var(--color-paper-3); color: var(--color-ink); }
+.filter-pill.active { background: var(--color-paper-3); border: none; color: var(--color-ink); font-weight: 600; }
+.chip-toggle { background: transparent; border: none; border-radius: 6px; color: var(--color-ink-2); font-weight: 500; padding: .25rem .6rem; }
+.chip-toggle:hover { background: var(--color-paper-3); color: var(--color-ink); }
+.chip-toggle.active { background: var(--color-paper-3); border: none; color: var(--color-ink); font-weight: 600; }
+
+/* MF/EQ kind: bare muted text, not a capsule */
+.kind-chip {
+    display: inline; padding: 0; border: none; border-radius: 0; background: none;
+    text-transform: none; letter-spacing: 0; font-size: .72rem; font-weight: 500; color: var(--color-ink-2);
+}
+
+/* Desire status: plain sentence-case word in its tonal colour, no capsule */
+.status-word { font-weight: 600; text-transform: capitalize; font-size: .78rem; }
+.status-dreaming, .status-yes, .status-nah, .status-bought {
+    background: none !important; padding: 0 !important; border-radius: 0 !important;
+    text-transform: capitalize; letter-spacing: normal;
+}
+.status-dreaming { color: var(--color-ink-2); }
+.status-yes     { color: var(--color-pos); }
+.status-nah     { color: var(--color-ink-2); }
+.status-bought  { color: var(--color-accent); }
+
+/* ---- Icons: bare marks, never in a filled tile -------------------------- */
+.empty-state-icon-wrapper { background: none !important; }
+.empty-state-icon-wrapper::before { display: none !important; }
+.empty-state-icon-wrapper svg { color: var(--color-ink-2); }
+.empty-state-title-premium, .empty-state-title {
+    font-family: var(--font-sans); font-weight: 600; color: var(--color-ink);
+}
+.empty-state-icon { background: none !important; color: var(--color-ink-2); }
+.txn-avatar { background: transparent !important; }
+.txn-item:hover .txn-avatar { transform: none; }
+.command-palette-item-icon { background: transparent; color: var(--color-ink-2); }
+
+/* ---- Tonal toasts on paper, no saturated banners, no icon tiles --------- */
+.toast-notification { background: var(--color-paper-2); border: 1px solid var(--color-rule); box-shadow: none; }
+.toast-notification.success { border-color: color-mix(in oklch, var(--color-pos), transparent 70%); }
+.toast-notification.error   { border-color: color-mix(in oklch, var(--color-neg), transparent 70%); }
+.toast-notification.info    { border-color: var(--color-rule); }
+.toast-icon { background: transparent !important; }
+.toast-notification.success .toast-icon { color: var(--color-pos); }
+.toast-notification.error .toast-icon   { color: var(--color-neg); }
+.toast-notification.info .toast-icon    { color: var(--color-ink-2); }
+
+/* ---- Focus: instant accent ring, never animated ------------------------- */
+:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+
+/* ---- Motion: no hover boops anywhere ------------------------------------ */
+.card-elevated:hover, .prompt-suggestion:hover, .filter-pill:hover, .chip-toggle:hover,
+.btn:hover, .chat-send-button:hover, .bottom-nav-item:active { transform: none !important; }
+
+/* ---- Kill perpetual repaints from transition:all -------------------------
+   `transition: all` also transitions scrollbar-color, which Chromium
+   re-triggers endlessly — the page never renders a stable frame (breaks
+   screen capture, burns battery). Scope every legacy transition:all to the
+   properties those rules actually change. */
+.input-box,
+.bottom-nav-item,
+.command-palette-item,
+.fab,
+[class*="btn"],
+.nav-link,
+.chip-toggle {
+    transition-property: background-color, border-color, color, box-shadow, opacity, transform !important;
+    transition-duration: 0.15s !important;
+    transition-timing-function: ease-out !important;
+}
