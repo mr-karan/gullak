@@ -1,10 +1,13 @@
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { createHash } from "node:crypto";
+
+import { and, eq, gte, inArray, isNull, lte, sql } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
 
-import { parseSms, validateCandidate } from "../ai/sms_parser.ts";
+import { parseSms, validateCandidate, type SmsCandidate } from "../ai/sms_parser.ts";
 import type { AppEnv } from "../app.ts";
 import {
+  accounts,
   categories,
   payees,
   smsMessages,
@@ -16,6 +19,48 @@ import {
 import { newId, nowMs, recordChange } from "../repos/changelog.ts";
 import { recordParseFailure } from "../repos/feedback.ts";
 import { runRules } from "../rules/engine.ts";
+import {
+  MATCH_WINDOW_DAYS,
+  matchTransactions,
+  shiftYmd,
+  type ExistingTxn,
+} from "../transactions/matching.ts";
+
+/**
+ * Stable, deterministic import-dedupe key for an inbound SMS (#38). Prefers the
+ * bank's own transaction reference when the parser extracted one (survives
+ * re-sends verbatim); otherwise a content hash of sender+body so the same SMS
+ * always yields the same id. Stamped onto queued candidates so the eventually
+ * confirmed txn carries it, and used as the exact-match key here.
+ */
+function stableSmsId(sender: string, body: string, candidate: SmsCandidate): string {
+  const ref = candidate.bankRef?.trim();
+  if (ref) return `sms:ref:${ref}`;
+  const hash = createHash("sha1").update(`${sender}\n${body}`).digest("hex");
+  return `sms:${hash}`;
+}
+
+/**
+ * Conservative, deterministic account resolution for an SMS candidate. Returns
+ * an accountId ONLY when the free-text `accountHint` normalizes to exactly one
+ * account name — never a fuzzy/partial guess, because a wrong resolution would
+ * enrich the wrong account's transaction. Most hints (e.g. "xx1234") won't
+ * resolve; the caller then falls back to queuing a draft. See the TODO at the
+ * ingest wiring point.
+ */
+function resolveAccountId(
+  accts: { id: string; name: string }[],
+  hint: string | null,
+): string | null {
+  const h = normalizeName(hint);
+  if (h === "") return null;
+  const hits = accts.filter((a) => normalizeName(a.name) === h);
+  return hits.length === 1 ? hits[0]!.id : null;
+}
+
+function normalizeName(v: string | null | undefined): string {
+  return (v ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
+}
 
 export const smsRouter = new Hono<AppEnv>();
 
@@ -118,6 +163,102 @@ smsRouter.post("/ingest", async (c) => {
   result.candidate.payee = ruled.payeeName ?? null;
   result.candidate.categoryId = ruled.categoryId ?? null;
 
+  const cand = result.candidate;
+  // Signed amount: candidate.amountCents is a magnitude + isIncome flag; the
+  // matcher (and the ledger) work in signed integer minor units.
+  const signedAmount = cand.isIncome ? cand.amountCents : -cand.amountCents;
+  const importedId = stableSmsId(sender, body, cand);
+
+  // --- Import dedupe (#38) --------------------------------------------------
+  // If this SMS describes a spend we already recorded (manually, or via an
+  // earlier capture), ENRICH that row instead of queuing a duplicate draft.
+  //
+  // TODO(#38): this only fires when the candidate resolves to a concrete
+  // account. An SMS candidate carries a free-text `accountHint` (e.g. "xx1234"),
+  // not an accountId — the account is chosen on-device at confirm time — so
+  // `resolveAccountId` only matches on an exact account-name hint and most SMS
+  // will skip straight to the draft-queue fallback below. Once the ingest
+  // pipeline carries a concrete accountId (or accounts gain a matchable mask),
+  // matching will cover the common case. The matcher + enrich path below are
+  // complete and exercised via the exact-name-resolution path today.
+  const knownAccounts = db
+    .select({ id: accounts.id, name: accounts.name })
+    .from(accounts)
+    .all();
+  const accountId = resolveAccountId(knownAccounts, cand.accountHint);
+
+  if (accountId) {
+    // Single indexed lookup (idx_tx_account_date): same account, top-level rows
+    // only, within ±window days of the candidate date. better-sqlite3 is
+    // synchronous — no await on .all().
+    const lo = shiftYmd(cand.date, -MATCH_WINDOW_DAYS);
+    const hi = shiftYmd(cand.date, MATCH_WINDOW_DAYS);
+    const windowRows = db
+      .select()
+      .from(transactions)
+      .where(
+        and(
+          eq(transactions.accountId, accountId),
+          isNull(transactions.parentId),
+          gte(transactions.date, lo),
+          lte(transactions.date, hi),
+        ),
+      )
+      .all();
+
+    const match = matchTransactions(
+      {
+        accountId,
+        amountCents: signedAmount,
+        date: cand.date,
+        importedId,
+        payeeName: cand.payee,
+      },
+      windowRows as ExistingTxn[],
+    );
+
+    if (match.matched && match.matchedId) {
+      const target = windowRows.find((r) => r.id === match.matchedId)!;
+      // Conservative enrichment: only fill fields that are currently empty.
+      // Never overwrite a user-set payee, category, or amount.
+      const next = {
+        ...target,
+        payeeName:
+          !target.payeeName && cand.payee ? cand.payee : target.payeeName,
+        importedId: target.importedId ? target.importedId : importedId,
+        notes: target.notes && target.notes.trim() !== "" ? target.notes : body,
+        updatedAt: nowMs(),
+      };
+      const changed =
+        next.payeeName !== target.payeeName ||
+        next.importedId !== target.importedId ||
+        next.notes !== target.notes;
+      if (changed) {
+        db.transaction((tx) => {
+          tx.update(transactions)
+            .set(next)
+            .where(eq(transactions.id, target.id))
+            .run();
+          recordChange(tx, {
+            resource: "transactions",
+            resourceId: target.id,
+            op: "upsert",
+            payload: next,
+          });
+        });
+      }
+      // Do NOT queue a duplicate draft.
+      return c.json({
+        status: "matched",
+        matchedId: match.matchedId,
+        matchType: match.matchType,
+      });
+    }
+  }
+
+  // No match (or no resolvable account) → keep the existing behavior: queue a
+  // reviewable draft. Stamp the stable importedId into the candidate JSON so the
+  // eventually confirmed txn carries it and future re-sends dedupe exactly.
   const id = newId();
   db.insert(whatsappInboxCandidates)
     .values({
@@ -127,7 +268,7 @@ smsRouter.post("/ingest", async (c) => {
       itemIndex: 0,
       body,
       receivedAt: at,
-      candidateJson: JSON.stringify(result.candidate),
+      candidateJson: JSON.stringify({ ...cand, importedId }),
       status: "pending",
       createdAt: nowMs(),
     })

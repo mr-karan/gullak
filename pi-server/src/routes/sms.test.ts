@@ -182,6 +182,113 @@ test("ingest queues a reviewable candidate for a bank SMS (no txn written)", asy
   expect(db.select().from(schema.changeLog).all()).toHaveLength(0);
 });
 
+test("ingest enriches a matching transaction instead of queuing a duplicate (#38)", async () => {
+  const { app, db } = makeApp();
+  // An account whose name matches the candidate's accountHint exactly, plus an
+  // existing manual txn (no payee) for the same amount/date/account.
+  const now = Date.now();
+  db.insert(schema.accounts)
+    .values({ id: "a1", name: "HDFC", createdAt: now, updatedAt: now })
+    .run();
+  db.insert(schema.transactions)
+    .values({
+      id: "t-existing",
+      accountId: "a1",
+      amountCents: -48000,
+      date: "2026-06-01",
+      origin: "manual",
+      createdAt: now,
+      updatedAt: now,
+    })
+    .run();
+
+  mockParseSms.mockResolvedValue({
+    status: "transaction",
+    isTransaction: true,
+    candidate: {
+      amountCents: 48000,
+      isIncome: false,
+      payee: "Blinkit",
+      categoryId: "c1",
+      accountHint: "HDFC",
+      bankRef: "REF123",
+      date: "2026-06-01",
+      confidence: 0.9,
+    },
+  } as unknown as Awaited<ReturnType<typeof parseSms>>);
+
+  const res = await ingest(app, "Spent Rs 480 at Blinkit via HDFC");
+  expect(res.status).toBe(200);
+  const body = (await res.json()) as { status: string; matchedId: string };
+  expect(body.status).toBe("matched");
+  expect(body.matchedId).toBe("t-existing");
+
+  // No duplicate draft queued.
+  expect(db.select().from(schema.whatsappInboxCandidates).all()).toHaveLength(0);
+
+  // The existing txn was enriched: empty payee filled, importedId stamped.
+  const txn = db
+    .select()
+    .from(schema.transactions)
+    .where(eq(schema.transactions.id, "t-existing"))
+    .get();
+  expect(txn?.payeeName).toBe("Blinkit");
+  expect(txn?.importedId).toBe("sms:ref:REF123");
+  // A change_log row is recorded so the phone converges.
+  const changed = db
+    .select()
+    .from(schema.changeLog)
+    .where(eq(schema.changeLog.resourceId, "t-existing"))
+    .all();
+  expect(changed.some((c) => c.op === "upsert")).toBe(true);
+});
+
+test("ingest does not overwrite a user-set payee on match (#38)", async () => {
+  const { app, db } = makeApp();
+  const now = Date.now();
+  db.insert(schema.accounts)
+    .values({ id: "a1", name: "HDFC", createdAt: now, updatedAt: now })
+    .run();
+  db.insert(schema.transactions)
+    .values({
+      id: "t-existing",
+      accountId: "a1",
+      amountCents: -48000,
+      date: "2026-06-01",
+      payeeName: "My Payee",
+      origin: "manual",
+      createdAt: now,
+      updatedAt: now,
+    })
+    .run();
+
+  mockParseSms.mockResolvedValue({
+    status: "transaction",
+    isTransaction: true,
+    candidate: {
+      amountCents: 48000,
+      isIncome: false,
+      payee: "Blinkit",
+      categoryId: "c1",
+      accountHint: "HDFC",
+      bankRef: null,
+      date: "2026-06-01",
+      confidence: 0.9,
+    },
+  } as unknown as Awaited<ReturnType<typeof parseSms>>);
+
+  const res = await ingest(app, "Spent Rs 480 at Blinkit via HDFC");
+  const body = (await res.json()) as { status: string; matchedId: string };
+  expect(body.status).toBe("matched");
+
+  const txn = db
+    .select()
+    .from(schema.transactions)
+    .where(eq(schema.transactions.id, "t-existing"))
+    .get();
+  expect(txn?.payeeName).toBe("My Payee"); // preserved, not clobbered
+});
+
 test("ingest ignores a non-transaction SMS without queuing anything", async () => {
   const { app, db } = makeApp();
   mockParseSms.mockResolvedValue({
