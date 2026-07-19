@@ -21,6 +21,7 @@ import {
   type ChatToolCall,
 } from "../llm/client.ts";
 import { newId, nowMs, recordChange } from "../repos/changelog.ts";
+import { learnCategory } from "../rules/learn.ts";
 import {
   ASK_TOOL_NAMES,
   ASK_TOOL_SCHEMAS,
@@ -287,6 +288,9 @@ async function handleLog(
   const at = nowMs();
   const messageId = request.messageId ?? newId();
   const booked: BookedExpense[] = [];
+  // #39: payee/category of each booked row, collected for best-effort auto-learn
+  // AFTER the write commits (so the just-booked rows are counted).
+  const toLearn: { payeeName: string | null; categoryId: string | null }[] = [];
   db.transaction((tx) => {
     items.forEach((item, idx) => {
       const account = resolveByHint(item.accountHint, accountList) ?? defaultAccount;
@@ -341,8 +345,18 @@ async function handleLog(
         accountName: account.name,
         categoryName: category?.name ?? null,
       });
+      toLearn.push({ payeeName: row.payeeName, categoryId: row.categoryId });
     });
   });
+
+  // #39: auto-learn payee→category rules from the booked expenses. Best-effort;
+  // learnCategory never throws. Agent bookings have no payeeId, so this matches
+  // history by payee name.
+  for (const l of toLearn) {
+    if (l.categoryId) {
+      learnCategory(db, { payeeName: l.payeeName, categoryId: l.categoryId });
+    }
+  }
 
   const reply = composeBookedReply(booked);
   appendTurn(db, threadId, "assistant", reply);

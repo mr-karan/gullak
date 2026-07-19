@@ -223,6 +223,17 @@ syncRouter.post("/push", async (c) => {
         changed = applier.remove(tx, change.resourceId, change.payload);
       }
 
+      // TODO(#39): on-device SMS/manual categorizations arrive here as
+      // `transactions` upserts carrying a categoryId. Ideally each such applied
+      // upsert would trigger learnCategory(db, {...}) to auto-learn a
+      // payee→category rule — but this loop runs inside one broad db.transaction
+      // over the whole batch, and learnCategory does its own reads+writes
+      // (on `rules`) against `db`, not this `tx`. Nesting those writes here is
+      // not clean/safe (shared connection, mid-batch state), so it is
+      // deliberately deferred. The web-register (transactions PATCH) and agent
+      // (handleLog) categorize paths ARE hooked; learned rules then apply to new
+      // SMS drafts via runRules on the ingest path.
+
       // 3. Record the change only when it actually mutated server state, so a
       //    losing stale write neither advances the changelog nor echoes to
       //    other clients as a (stale) change.

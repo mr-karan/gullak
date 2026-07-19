@@ -5,6 +5,7 @@ import { z } from "zod";
 import type { AppEnv } from "../app.ts";
 import { transactions } from "../db/schema.ts";
 import { newId, nowMs, recordChange } from "../repos/changelog.ts";
+import { learnCategory } from "../rules/learn.ts";
 import {
   createTransferPair,
   deletePair,
@@ -350,6 +351,19 @@ transactionsRouter.patch("/:id", async (c) => {
       payload: next,
     });
   });
+
+  // #39: when this edit set a category, auto-learn a payee→category rule from
+  // the payee's recent history. This is the primary server-side categorize path
+  // (web register inline edit). Best-effort and run AFTER the write commits so
+  // the just-categorized row is counted; it never throws into this handler.
+  if (partial.categoryId != null && next.categoryId != null) {
+    learnCategory(db, {
+      payeeId: next.payeeId,
+      payeeName: next.payeeName,
+      categoryId: next.categoryId,
+    });
+  }
+
   return c.json({ transaction: next });
 });
 

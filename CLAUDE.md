@@ -195,9 +195,11 @@ All LLM work runs on pi-server. The app posts over its sync URL/API key:
 SMS category resolution order:
 
 1. learned payee→category mapping from app prefs,
-2. LLM-returned category hint,
-3. deterministic merchant fallback if it matches an existing category,
-4. `null` / Unknown.
+2. server learned rule (#39): a `triggerType='learned'` rule auto-recorded from
+   the payee's own history and applied by `runRules` on the SMS ingest path,
+3. LLM-returned category hint,
+4. deterministic merchant fallback if it matches an existing category,
+5. `null` / Unknown.
 
 Important SMS rescan behavior: old failed rows can be stuck by Android SMS id
 dedupe. `retryFailedBackfill()` deletes retryable `sms_messages` statuses
