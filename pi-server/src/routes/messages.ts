@@ -13,6 +13,10 @@ const messageBody = z.object({
   threadId: z.string().max(128).optional(),
   source: z.string().max(64).optional(),
   sourceUser: z.string().max(128).optional(),
+  // Advisory "where is the user" hint from the web sidebar. Accepted as an
+  // opaque object; the agent renders it into prose for the model and silently
+  // drops anything invalid/oversized. Never parsed, never drives writes.
+  context: z.record(z.string(), z.unknown()).optional(),
 });
 
 messagesRouter.post("/", async (c) => {

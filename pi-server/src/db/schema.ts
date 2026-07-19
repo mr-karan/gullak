@@ -259,6 +259,115 @@ export const exportState = sqliteTable("export_state", {
   updatedAt: integer("updated_at").notNull().default(now),
 });
 
+// ── M5 money-manager tables (server-only) ────────────────────────────────
+// Holdings, goals, and desires are NOT part of the phone sync changelog:
+// they live on the server only and never get a recordChange() row. The web
+// app is their only client. See the M5 epic.
+
+// Named wealth targets ("Kids' education", "BMW", "Retire early"). Holdings
+// map to a goal via holdings.goalId; progress = current value of mapped,
+// non-stale holdings vs targetCents.
+export const goals = sqliteTable("goals", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  emoji: text("emoji"),
+  targetCents: integer("target_cents").notNull(),
+  targetDate: text("target_date"), // YYYY-MM-DD, optional
+  notes: text("notes"),
+  sortOrder: integer("sort_order").notNull().default(0),
+  archived: integer("archived", { mode: "boolean" }).notNull().default(false),
+  createdAt: integer("created_at").notNull().default(now),
+  updatedAt: integer("updated_at").notNull().default(now),
+});
+
+// Portfolio holdings imported from the Zerodha Kite/Coin console XLSX export,
+// keyed by ISIN. A re-import upserts by isin; goalId (the manual mapping) is
+// never touched by import. Per-unit prices are REAL (MF NAVs carry 4dp);
+// aggregation happens only over the derived integer cents columns.
+export const holdings = sqliteTable(
+  "holdings",
+  {
+    id: text("id").primaryKey(),
+    isin: text("isin").notNull(),
+    symbol: text("symbol").notNull(),
+    name: text("name"),
+    kind: text("kind").notNull(), // 'equity' | 'mutual_fund'
+    sector: text("sector"),
+    quantity: real("quantity").notNull(),
+    avgPrice: real("avg_price").notNull(),
+    lastPrice: real("last_price").notNull(),
+    investedCents: integer("invested_cents").notNull(),
+    currentCents: integer("current_cents").notNull(),
+    goalId: text("goal_id").references(() => goals.id),
+    // Set to 1 when an import omits this ISIN (sold/left the portfolio);
+    // cleared when it reappears. Stale rows are excluded from goal progress,
+    // net-worth, and portfolio tools.
+    stale: integer("stale", { mode: "boolean" }).notNull().default(false),
+    importedAt: integer("imported_at").notNull(),
+    createdAt: integer("created_at").notNull().default(now),
+    updatedAt: integer("updated_at").notNull().default(now),
+  },
+  (t) => ({
+    uniqIsin: uniqueIndex("uniq_holding_isin").on(t.isin),
+    byGoal: index("idx_holding_goal").on(t.goalId),
+  }),
+);
+
+// A shared wishlist with brakes: title, estimated cost, "why do I want this",
+// photos, comments, and an honest verdict. Person is attribution, not
+// identity — validated against the profile enum at the route layer.
+export const desires = sqliteTable(
+  "desires",
+  {
+    id: text("id").primaryKey(),
+    person: text("person").notNull(), // 'karan' | 'wife'
+    title: text("title").notNull(),
+    estCostCents: integer("est_cost_cents").notNull(),
+    why: text("why"),
+    // 'dreaming' | 'yes' | 'nah' | 'bought'
+    status: text("status").notNull().default("dreaming"),
+    decidedAt: integer("decided_at"),
+    boughtTransactionId: text("bought_transaction_id"),
+    createdAt: integer("created_at").notNull().default(now),
+    updatedAt: integer("updated_at").notNull().default(now),
+  },
+  (t) => ({
+    byPerson: index("idx_desire_person").on(t.person),
+    byStatus: index("idx_desire_status").on(t.status),
+  }),
+);
+
+// Photo attached to a desire. Bytes live on disk under
+// <dataDir>/uploads/desires/<desireId>/<id>.<ext>; only the path is stored.
+export const desirePhotos = sqliteTable(
+  "desire_photos",
+  {
+    id: text("id").primaryKey(),
+    desireId: text("desire_id").notNull(),
+    path: text("path").notNull(),
+    contentType: text("content_type").notNull(),
+    createdAt: integer("created_at").notNull().default(now),
+  },
+  (t) => ({
+    byDesire: index("idx_desire_photo_desire").on(t.desireId),
+  }),
+);
+
+// A comment from either person on a desire ("worth it?", "wait for the sale").
+export const desireComments = sqliteTable(
+  "desire_comments",
+  {
+    id: text("id").primaryKey(),
+    desireId: text("desire_id").notNull(),
+    person: text("person").notNull(), // 'karan' | 'wife'
+    body: text("body").notNull(),
+    createdAt: integer("created_at").notNull().default(now),
+  },
+  (t) => ({
+    byDesire: index("idx_desire_comment_desire").on(t.desireId),
+  }),
+);
+
 // Append-only mutation log for sync clients. Each row is a single
 // row-level upsert/delete from any client. Clients pull rows after a
 // cursor (id) and apply LWW per-row by updatedAt.
@@ -365,3 +474,11 @@ export type NewWhatsappInboxCandidate =
   typeof whatsappInboxCandidates.$inferInsert;
 export type SmsMessage = typeof smsMessages.$inferSelect;
 export type NewSmsMessage = typeof smsMessages.$inferInsert;
+export type Goal = typeof goals.$inferSelect;
+export type NewGoal = typeof goals.$inferInsert;
+export type Holding = typeof holdings.$inferSelect;
+export type NewHolding = typeof holdings.$inferInsert;
+export type Desire = typeof desires.$inferSelect;
+export type NewDesire = typeof desires.$inferInsert;
+export type DesirePhoto = typeof desirePhotos.$inferSelect;
+export type DesireComment = typeof desireComments.$inferSelect;

@@ -59,6 +59,46 @@ function getListEnv(name: string): string[] {
     .filter(Boolean);
 }
 
+/**
+ * The two household profiles. Ids are the hard enum ('karan' | 'wife');
+ * only name/emoji are configurable. GULLAK_PROFILES is an optional JSON array
+ * of {id, name, emoji}. A malformed value is ignored (falls back to defaults)
+ * rather than crashing the server — profiles are cosmetic, not critical.
+ */
+function getProfiles(): Profile[] {
+  const defaults: Profile[] = [
+    { id: "karan", name: "Karan", emoji: null },
+    { id: "wife", name: "Partner", emoji: null },
+  ];
+  const raw = getOptionalEnv("GULLAK_PROFILES");
+  if (!raw) return defaults;
+  try {
+    const parsed = JSON.parse(raw) as Array<{
+      id?: string;
+      name?: string;
+      emoji?: string | null;
+    }>;
+    if (!Array.isArray(parsed)) return defaults;
+    return defaults.map((d) => {
+      const override = parsed.find((p) => p.id === d.id);
+      if (!override) return d;
+      return {
+        id: d.id,
+        name:
+          typeof override.name === "string" && override.name.trim()
+            ? override.name.trim()
+            : d.name,
+        emoji:
+          typeof override.emoji === "string" && override.emoji.trim()
+            ? override.emoji.trim()
+            : d.emoji,
+      };
+    });
+  } catch {
+    return defaults;
+  }
+}
+
 function getThinkingLevel(): ThinkingLevel {
   const raw = getEnv("GULLAK_MODEL_THINKING_LEVEL", "minimal");
   const allowed: ThinkingLevel[] = [
@@ -74,9 +114,22 @@ function getThinkingLevel(): ThinkingLevel {
     : "minimal";
 }
 
+/** The two household people. Ids are a hard enum; names/emoji are display
+ *  sugar overridable via GULLAK_PROFILES. */
+export interface Profile {
+  id: "karan" | "wife";
+  name: string;
+  emoji: string | null;
+}
+
+export const PROFILE_IDS = ["karan", "wife"] as const;
+export type PersonId = (typeof PROFILE_IDS)[number];
+
 export interface AppConfig {
   version: string;
   dataDir: string;
+  /** Display config for the two people; ids are fixed ('karan' | 'wife'). */
+  profiles: Profile[];
   dbPath: string;
   timezone: string;
   defaultCurrency: string;
@@ -208,6 +261,7 @@ export function loadConfig(): AppConfig {
   return {
     version: "4.1.0-node",
     dataDir,
+    profiles: getProfiles(),
     dbPath,
     timezone: getEnv("GULLAK_TIMEZONE", "Asia/Kolkata"),
     defaultCurrency: getEnv("GULLAK_DEFAULT_CURRENCY", "INR"),

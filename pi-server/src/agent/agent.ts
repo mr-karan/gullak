@@ -51,6 +51,31 @@ export interface AgentRequest {
   chatId?: string;
   messageId?: string;
   receivedAtMs?: number;
+  // Advisory "where is the user" hint from the web sidebar. Prose only — it is
+  // appended to the model turn to steer answers, NEVER parsed and never allowed
+  // to drive writes. Oversized/invalid values are dropped.
+  context?: unknown;
+}
+
+// Cap the serialized context so a bloated client payload can't blow up the
+// prompt. ~1 KB is plenty for {view, goalId, month} style breadcrumbs.
+const MAX_CONTEXT_BYTES = 1024;
+
+/// Render the advisory context breadcrumb, or "" if absent/invalid/oversized.
+function renderContextLine(context: unknown): string {
+  if (context === null || typeof context !== "object" || Array.isArray(context)) {
+    return "";
+  }
+  let serialized: string;
+  try {
+    serialized = JSON.stringify(context);
+  } catch {
+    return "";
+  }
+  if (!serialized || serialized === "{}" || serialized.length > MAX_CONTEXT_BYTES) {
+    return "";
+  }
+  return `User is currently viewing: ${serialized}`;
 }
 
 export interface AgentResponse {
@@ -112,6 +137,20 @@ Judgement rules (learned from the owner — apply them, don't recite them):
 - State numbers plainly. Never moralise about spending or suggest cuts
   unless asked.
 
+Wealth, goals, and desires (the money-manager tools):
+- When a money question spans cash AND investments ("what are we worth",
+  "can we afford X"), use net_worth or afford_check — not just
+  account_balances. Account balances alone are the wrong answer for
+  net-worth questions.
+- For desire / "can we afford it" questions, state the surplus math plainly
+  (monthly surplus, months-of-surplus, cash on hand) and STOP. NEVER moralise,
+  never recommend, never say whether to buy it — present the numbers and let
+  the humans decide. This is a hard rule.
+- Goals language: speak in "on pace / needs ₹X per month" terms, never in
+  financial-advice terms. No "you should invest more", no verdicts.
+- Investment values are as-of-import; when you quote a blended/net-worth
+  number, mention it's as of the import date if the tool gives one.
+
 When you have the numbers, write a SHORT, warm reply in plain text.
 Use the ₹ symbol for rupees. If a tool returned a bulleted breakdown,
 keep the bullets. No JSON, no markdown tables, no code fences. Keep it to
@@ -141,7 +180,7 @@ export async function handleMessage(
       return await handleLog(db, config, request, threadId, text);
     }
     if (mode === "ask") {
-      return await handleAsk(db, config, threadId, text);
+      return await handleAsk(db, config, threadId, text, request.context);
     }
     if (mode === "edit_or_delete") {
       return handleEditOrDelete(db, threadId, text);
@@ -182,7 +221,7 @@ async function classify(
     return "log";
   }
   if (
-    /(how much|how many|show|what.*spend|spent|balance|budget left|recent|last \d|this month|last month)/.test(
+    /(how much|how many|show|what.*spend|spent|balance|budget left|recent|last \d|this month|last month|net worth|worth|afford|portfolio|holdings|goal)/.test(
       lower,
     ) &&
     !/^\d/.test(lower) // questions usually don't start with a digit
@@ -381,6 +420,7 @@ async function handleAsk(
   config: AppConfig,
   threadId: string,
   text: string,
+  context?: unknown,
 ): Promise<AgentResponse> {
   // No model configured → the tool-calling loop can't run. Answer honestly
   // rather than firing a doomed request with the dummy key.
@@ -400,10 +440,12 @@ async function handleAsk(
     .select({ id: accounts.id, name: accounts.name })
     .from(accounts)
     .all();
+  const contextLine = renderContextLine(context);
   const toolUser = [
     `Today's date: ${today}. Currency: ${config.defaultCurrency}.`,
     `Accounts: ${accountList.map((a) => a.name).join(", ") || "(none)"}`,
     `Categories: ${categoryList.map((c) => c.name).join(", ") || "(none)"}`,
+    ...(contextLine ? [contextLine] : []),
     "",
     `Question: ${text}`,
   ].join("\n");
@@ -477,6 +519,11 @@ function runAskToolCall(
       payee: toStr(args.payee),
       query: toStr(args.query),
       limit: toNum(args.limit),
+      goalName: toStr(args.goalName),
+      person: toStr(args.person),
+      status: toStr(args.status),
+      amountCents: toNum(args.amountCents),
+      desireName: toStr(args.desireName),
     },
   });
   return result.formatted;

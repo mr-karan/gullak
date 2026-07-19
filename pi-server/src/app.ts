@@ -10,9 +10,14 @@ import { accountsRouter } from "./routes/accounts.ts";
 import { aiRouter } from "./routes/ai.ts";
 import { budgetsRouter } from "./routes/budgets.ts";
 import { categoriesRouter } from "./routes/categories.ts";
+import { desiresRouter } from "./routes/desires.ts";
 import { exportRouter } from "./routes/export.ts";
 import { feedbackRouter } from "./routes/feedback.ts";
+import { goalsRouter } from "./routes/goals.ts";
 import { healthRouter } from "./routes/health.ts";
+import { holdingsRouter } from "./routes/holdings.ts";
+import { netWorthRouter } from "./routes/networth.ts";
+import { profilesRouter } from "./routes/profiles.ts";
 import {
   messagesRouter,
   whatsappInboxRouter,
@@ -144,6 +149,12 @@ export function createApp(ctx: AppContext) {
   app.route("/v1/ai", aiRouter);
   app.route("/v1/sms", smsRouter);
   app.route("/v1/feedback", feedbackRouter);
+  // M5 money-manager surfaces (server-only, x-api-key gated like everything).
+  app.route("/v1/holdings", holdingsRouter);
+  app.route("/v1/goals", goalsRouter);
+  app.route("/v1/desires", desiresRouter);
+  app.route("/v1/net-worth", netWorthRouter);
+  app.route("/v1/profiles", profilesRouter);
 
   // Static web PWA (flattened legacy UI). Mounted last so it can never shadow
   // a /v1/* route; it only claims "/", "/offline", "/manifest.json", "/sw.js"

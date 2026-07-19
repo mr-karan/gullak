@@ -5,9 +5,13 @@ import {
   accounts,
   budgets,
   categories,
+  desires,
+  goals,
+  holdings,
   payees,
   transactions,
 } from "../db/schema.ts";
+import { computeNetWorth } from "../repos/networth.ts";
 
 /// Pre-canned aggregate tools the assistant can invoke when the user
 /// asks a question. The model picks one tool + params; the server runs
@@ -22,7 +26,12 @@ export type AskToolName =
   | "summary"
   | "spend_by_category"
   | "top_payees"
-  | "search_transactions";
+  | "search_transactions"
+  | "portfolio_summary"
+  | "goal_progress"
+  | "list_desires"
+  | "afford_check"
+  | "net_worth";
 
 export interface AskToolCall {
   tool: AskToolName;
@@ -37,6 +46,12 @@ export interface AskToolCall {
     payee?: string;
     query?: string;
     limit?: number;
+    // M5 money-manager tool params
+    goalName?: string;
+    person?: string;
+    status?: string;
+    amountCents?: number;
+    desireName?: string;
   };
 }
 
@@ -161,6 +176,60 @@ export const ASK_TOOL_SCHEMAS: OpenAiToolSchema[] = [
       },
     },
   },
+  {
+    name: "portfolio_summary",
+    description:
+      "Investment holdings: invested/current value, P&L, top holdings, and equity-vs-mutual-fund split. Use for 'how's my portfolio', 'how concentrated is the portfolio', 'what are my biggest holdings'. Optional goalName to scope to holdings mapped to one goal.",
+    parameters: {
+      type: "object",
+      properties: {
+        goalName: { type: "string", description: "Scope to holdings mapped to this goal." },
+        limit: { type: "integer", description: "Top holdings to list (default 5)." },
+      },
+    },
+  },
+  {
+    name: "goal_progress",
+    description:
+      "Progress toward wealth goals: target, current value, %, and monthly amount needed to hit a dated target. Use for 'how are my goals doing', 'when do I hit the BMW target', 'which goal is furthest behind'. Optional goalName for one goal.",
+    parameters: {
+      type: "object",
+      properties: {
+        goalName: { type: "string", description: "One goal by name; omit for all goals." },
+      },
+    },
+  },
+  {
+    name: "list_desires",
+    description:
+      "The shared wishlist (desires): title, estimated cost, status, why. Use for 'what's on our wishlist', 'what does Karan want to buy'. Filter by person ('karan'|'wife') and/or status ('dreaming'|'yes'|'nah'|'bought').",
+    parameters: {
+      type: "object",
+      properties: {
+        person: { type: "string", description: "'karan' or 'wife'." },
+        status: { type: "string", description: "dreaming | yes | nah | bought." },
+        limit: { type: "integer", description: "Max items (default 10)." },
+      },
+    },
+  },
+  {
+    name: "afford_check",
+    description:
+      "Whether a purchase is affordable from recent monthly surplus. Give amountCents OR a desireName to look up its estimated cost. Returns monthly surplus (avg of the last 3 full months' income minus expense), how many months of surplus the item costs, and current liquid cash. Numbers only — do NOT tell the user whether to buy it.",
+    parameters: {
+      type: "object",
+      properties: {
+        amountCents: { type: "integer", description: "The purchase amount in paise (cents)." },
+        desireName: { type: "string", description: "A wishlist item name to price instead." },
+      },
+    },
+  },
+  {
+    name: "net_worth",
+    description:
+      "Total net worth: liquid cash (accounts) + invested (holdings current value), with P&L and import date. Use for money questions that span cash AND investments — 'what are we worth', 'net worth', 'total wealth'.",
+    parameters: { type: "object", properties: {} },
+  },
 ];
 
 export const ASK_TOOL_NAMES = new Set<string>(ASK_TOOL_SCHEMAS.map((s) => s.name));
@@ -189,6 +258,16 @@ export function runAskTool(
       return topPayees(db, call.params ?? {}, symbol);
     case "search_transactions":
       return searchTransactions(db, call.params ?? {}, symbol);
+    case "portfolio_summary":
+      return portfolioSummary(db, call.params ?? {}, symbol);
+    case "goal_progress":
+      return goalProgress(db, call.params ?? {}, symbol);
+    case "list_desires":
+      return listDesires(db, call.params ?? {}, symbol);
+    case "afford_check":
+      return affordCheck(db, call.params ?? {}, symbol);
+    case "net_worth":
+      return netWorth(db, symbol);
     default:
       return { formatted: "I don't know how to answer that yet." };
   }
@@ -375,6 +454,295 @@ function searchTransactions(
     formatted: `Matches:\n${lines.join("\n")}`,
     resolved: { limit, query: q ?? null },
   };
+}
+
+// ── M5 money-manager tools ──────────────────────────────────────────────────
+
+/// Investment overview: totals, P&L, top holdings, equity/MF split. Non-stale
+/// rows only. Optional goalName scopes to holdings mapped to that goal.
+function portfolioSummary(
+  db: Db,
+  params: NonNullable<AskToolCall["params"]>,
+  symbol: string,
+): AskToolResult {
+  const limit = Math.min(Math.max(params.limit ?? 5, 1), 15);
+  const conditions = [eq(holdings.stale, false)];
+  let goalLabel = "";
+  if (params.goalName?.trim()) {
+    const goal = db
+      .select()
+      .from(goals)
+      .where(like(sql`LOWER(${goals.name})`, `%${params.goalName.trim().toLowerCase()}%`))
+      .limit(1)
+      .get();
+    if (!goal) {
+      return { formatted: `No goal matching "${params.goalName}".` };
+    }
+    conditions.push(eq(holdings.goalId, goal.id));
+    goalLabel = ` for ${goal.name}`;
+  }
+
+  const totals = db
+    .select({
+      investedCents: sql<number>`COALESCE(SUM(${holdings.investedCents}), 0)`,
+      currentCents: sql<number>`COALESCE(SUM(${holdings.currentCents}), 0)`,
+      count: sql<number>`COUNT(*)`,
+    })
+    .from(holdings)
+    .where(and(...conditions))
+    .get() ?? { investedCents: 0, currentCents: 0, count: 0 };
+
+  if (totals.count === 0) {
+    return { formatted: `No holdings${goalLabel} yet — import a Kite/Coin export first.` };
+  }
+
+  const split = db
+    .select({
+      kind: holdings.kind,
+      currentCents: sql<number>`COALESCE(SUM(${holdings.currentCents}), 0)`,
+    })
+    .from(holdings)
+    .where(and(...conditions))
+    .groupBy(holdings.kind)
+    .all();
+  const equityCents = split.find((s) => s.kind === "equity")?.currentCents ?? 0;
+  const mfCents = split.find((s) => s.kind === "mutual_fund")?.currentCents ?? 0;
+
+  const top = db
+    .select({
+      symbol: holdings.symbol,
+      name: holdings.name,
+      currentCents: holdings.currentCents,
+    })
+    .from(holdings)
+    .where(and(...conditions))
+    .orderBy(sql`${holdings.currentCents} DESC`)
+    .limit(limit)
+    .all();
+
+  const pnl = totals.currentCents - totals.investedCents;
+  const pnlPct =
+    totals.investedCents > 0
+      ? Math.round((pnl / totals.investedCents) * 1000) / 10
+      : 0;
+  const pnlSign = pnl >= 0 ? "+" : "-";
+  const lines = top.map(
+    (h) => `  • ${h.name ?? h.symbol} — ${formatMoney(h.currentCents, symbol)}`,
+  );
+  const formatted = [
+    `Portfolio${goalLabel}: ${formatMoney(totals.currentCents, symbol)} current (invested ${formatMoney(totals.investedCents, symbol)}, P&L ${pnlSign}${formatMoney(Math.abs(pnl), symbol)} / ${pnlSign}${Math.abs(pnlPct)}%).`,
+    `Split: equity ${formatMoney(equityCents, symbol)}, mutual funds ${formatMoney(mfCents, symbol)}.`,
+    `Top holdings:`,
+    ...lines,
+  ].join("\n");
+  return {
+    formatted,
+    resolved: {
+      investedCents: totals.investedCents,
+      currentCents: totals.currentCents,
+      pnlCents: pnl,
+      equityCents,
+      mfCents,
+    },
+  };
+}
+
+/// Per-goal progress: target, current, %, and monthly-needed for dated goals.
+function goalProgress(
+  db: Db,
+  params: NonNullable<AskToolCall["params"]>,
+  symbol: string,
+): AskToolResult {
+  const conditions = [eq(goals.archived, false)];
+  if (params.goalName?.trim()) {
+    conditions.push(
+      like(sql`LOWER(${goals.name})`, `%${params.goalName.trim().toLowerCase()}%`),
+    );
+  }
+  const goalRows = db
+    .select()
+    .from(goals)
+    .where(and(...conditions))
+    .orderBy(goals.sortOrder, goals.createdAt)
+    .all();
+  if (goalRows.length === 0) {
+    return { formatted: "No goals set yet." };
+  }
+
+  const lines = goalRows.map((g) => {
+    const cur =
+      db
+        .select({
+          cents: sql<number>`COALESCE(SUM(${holdings.currentCents}), 0)`,
+        })
+        .from(holdings)
+        .where(and(eq(holdings.goalId, g.id), eq(holdings.stale, false)))
+        .get()?.cents ?? 0;
+    const pct = g.targetCents > 0 ? Math.round((cur / g.targetCents) * 100) : 0;
+    const emoji = g.emoji ? `${g.emoji} ` : "";
+    let tail = "";
+    const remaining = g.targetCents - cur;
+    if (g.targetDate && remaining > 0) {
+      const months = monthsUntil(g.targetDate);
+      if (months !== null && months > 0) {
+        tail = ` — needs ${formatMoney(Math.round(remaining / months), symbol)}/mo to reach it by ${g.targetDate}`;
+      } else if (months !== null) {
+        tail = ` — target date ${g.targetDate} has passed`;
+      }
+    } else if (remaining <= 0) {
+      tail = " — on track (target reached)";
+    }
+    return `  • ${emoji}${g.name} — ${formatMoney(cur, symbol)} of ${formatMoney(g.targetCents, symbol)} (${pct}%)${tail}`;
+  });
+  return { formatted: `Goals:\n${lines.join("\n")}` };
+}
+
+/// The shared wishlist, filtered by person/status.
+function listDesires(
+  db: Db,
+  params: NonNullable<AskToolCall["params"]>,
+  symbol: string,
+): AskToolResult {
+  const limit = Math.min(Math.max(params.limit ?? 10, 1), 25);
+  const conditions = [];
+  if (params.person?.trim()) {
+    conditions.push(eq(desires.person, params.person.trim().toLowerCase()));
+  }
+  if (params.status?.trim()) {
+    conditions.push(eq(desires.status, params.status.trim().toLowerCase()));
+  }
+  const rows = db
+    .select()
+    .from(desires)
+    .where(conditions.length ? and(...conditions) : undefined)
+    .orderBy(desc(desires.createdAt))
+    .limit(limit)
+    .all();
+  if (rows.length === 0) {
+    return { formatted: "Nothing on the wishlist matches that." };
+  }
+  const lines = rows.map((d) => {
+    const why = d.why ? ` — "${d.why.slice(0, 60)}${d.why.length > 60 ? "…" : ""}"` : "";
+    return `  • ${d.title} (${formatMoney(d.estCostCents, symbol)}, ${d.status})${why}`;
+  });
+  return { formatted: `Wishlist:\n${lines.join("\n")}` };
+}
+
+/// Surplus math for a purchase. surplus = avg of the last 3 FULL calendar
+/// months' (income − expense). Reports months-of-surplus + liquid cash. States
+/// numbers plainly; the humans decide — no verdicts here.
+function affordCheck(
+  db: Db,
+  params: NonNullable<AskToolCall["params"]>,
+  symbol: string,
+): AskToolResult {
+  let amountCents = typeof params.amountCents === "number" ? Math.abs(params.amountCents) : undefined;
+  let itemLabel = "that";
+  if (amountCents === undefined && params.desireName?.trim()) {
+    const desire = db
+      .select()
+      .from(desires)
+      .where(like(sql`LOWER(${desires.title})`, `%${params.desireName.trim().toLowerCase()}%`))
+      .limit(1)
+      .get();
+    if (!desire) {
+      return { formatted: `I couldn't find "${params.desireName}" on the wishlist.` };
+    }
+    amountCents = desire.estCostCents;
+    itemLabel = desire.title;
+  }
+  if (amountCents === undefined) {
+    return { formatted: "Tell me an amount or a wishlist item to check." };
+  }
+
+  const [start, end] = lastFullMonths(3);
+  const net =
+    db
+      .select({
+        cents: sql<number>`COALESCE(SUM(${transactions.amountCents}), 0)`,
+      })
+      .from(transactions)
+      .where(
+        and(
+          gte(transactions.date, start),
+          lte(transactions.date, end),
+          sql`${transactions.parentId} IS NULL`,
+          sql`${transactions.transferGroupId} IS NULL`,
+        ),
+      )
+      .get()?.cents ?? 0;
+  const surplusPerMonth = Math.round(net / 3);
+  const nw = computeNetWorth(db);
+
+  const parts = [
+    `${itemLabel === "that" ? "That" : itemLabel} costs ${formatMoney(amountCents, symbol)}.`,
+  ];
+  if (surplusPerMonth > 0) {
+    const months = Math.round((amountCents / surplusPerMonth) * 10) / 10;
+    parts.push(
+      `Average monthly surplus over the last 3 full months is ${formatMoney(surplusPerMonth, symbol)} — that's ${months} month${months === 1 ? "" : "s"} of surplus.`,
+    );
+  } else {
+    parts.push(
+      `Average monthly surplus over the last 3 full months is ${surplusPerMonth < 0 ? "-" : ""}${formatMoney(Math.abs(surplusPerMonth), symbol)} (spending met or exceeded income).`,
+    );
+  }
+  parts.push(`Liquid cash right now is ${formatMoney(nw.cashCents, symbol)}.`);
+  return {
+    formatted: parts.join(" "),
+    resolved: {
+      amountCents,
+      surplusPerMonthCents: surplusPerMonth,
+      cashCents: nw.cashCents,
+    },
+  };
+}
+
+/// Net worth = liquid cash + invested (current). The 100% lens.
+function netWorth(db: Db, symbol: string): AskToolResult {
+  const nw = computeNetWorth(db);
+  const pnlSign = nw.investedPnlCents >= 0 ? "+" : "-";
+  const importLine =
+    nw.lastImportAt !== null
+      ? ` (holdings as of the ${new Date(nw.lastImportAt).toISOString().slice(0, 10)} import)`
+      : "";
+  return {
+    formatted:
+      `Net worth ${formatMoney(nw.totalCents, symbol)}: ${formatMoney(nw.cashCents, symbol)} liquid cash + ${formatMoney(nw.investedCurrentCents, symbol)} invested` +
+      `${nw.investedInvestedCents > 0 ? ` (P&L ${pnlSign}${formatMoney(Math.abs(nw.investedPnlCents), symbol)})` : ""}${importLine}.`,
+    resolved: {
+      cashCents: nw.cashCents,
+      investedCurrentCents: nw.investedCurrentCents,
+      totalCents: nw.totalCents,
+    },
+  };
+}
+
+/// Whole-month window covering the last `n` FULL calendar months (excludes the
+/// current, in-progress month). Returns [startYmd, endYmd].
+function lastFullMonths(n: number): [string, string] {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = now.getMonth(); // 0-based current month
+  const start = new Date(y, m - n, 1);
+  const end = new Date(y, m, 0); // last day of previous month
+  return [ymd(start), ymd(end)];
+}
+
+/// Whole months from today until a YYYY-MM-DD target (rounded up by calendar
+/// month). null if the target isn't a valid date.
+function monthsUntil(targetDate: string): number | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(targetDate)) return null;
+  const [ty, tm] = targetDate.split("-").map((s) => Number.parseInt(s, 10));
+  const now = new Date();
+  return (ty! - now.getFullYear()) * 12 + (tm! - (now.getMonth() + 1));
+}
+
+function ymd(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
 }
 
 function rangeLabelCap(start: string, end: string): string {
@@ -729,10 +1097,15 @@ function monthName(ym: string): string {
 }
 
 function formatMoney(minor: number, symbol: string): string {
-  const whole = Math.floor(minor / 100);
-  const frac = Math.abs(minor % 100);
+  // Format the absolute value and prepend the sign: Math.floor on a negative
+  // total rounds AWAY from zero (-10050/100 → -101), printing ₹-101.50 for
+  // what is actually -₹100.50.
+  const abs = Math.abs(minor);
+  const whole = Math.floor(abs / 100);
+  const frac = abs % 100;
   const formatted = whole.toLocaleString("en-IN");
-  return `${symbol}${formatted}.${String(frac).padStart(2, "0")}`;
+  const sign = minor < 0 ? "-" : "";
+  return `${sign}${symbol}${formatted}.${String(frac).padStart(2, "0")}`;
 }
 
 function isYmd(v: unknown): v is string {
