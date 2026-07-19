@@ -1,7 +1,9 @@
 import {
+  CalendarDays,
   Coins,
   Gem,
   Landmark,
+  SlidersHorizontal,
   Target,
   TrendingUp,
   Wallet,
@@ -19,7 +21,9 @@ export interface NavItem {
 export const PRIMARY_NAV: NavItem[] = [
   { to: "/", label: "Accounts", icon: Wallet },
   { to: "/transactions", label: "Transactions", icon: Coins },
+  { to: "/calendar", label: "Calendar", icon: CalendarDays },
   { to: "/insights", label: "Insights", icon: TrendingUp },
+  { to: "/rules", label: "Rules", icon: SlidersHorizontal },
 ];
 
 export const WEALTH_NAV: NavItem[] = [

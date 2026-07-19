@@ -23,6 +23,11 @@ messagesRouter.post("/", async (c) => {
   const db = c.get("db");
   const config = c.get("config");
   const parsed = messageBody.parse(await c.req.json());
+  // TODO(rules): the agent (handleMessage) is read-only today — it answers
+  // questions via ask_tools and does not build a transaction/draft server-side.
+  // When the agent gains a "log this expense" write path, thread the parsed
+  // candidate through runRules(db, txn) here (as the SMS ingest path does in
+  // routes/sms.ts) BEFORE the txn/draft is finalized, so rules normalize it too.
   const result = await handleMessage(db, config, parsed);
   return c.json(result);
 });

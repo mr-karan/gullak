@@ -15,6 +15,7 @@ import {
 } from "../db/schema.ts";
 import { newId, nowMs, recordChange } from "../repos/changelog.ts";
 import { recordParseFailure } from "../repos/feedback.ts";
+import { runRules } from "../rules/engine.ts";
 
 export const smsRouter = new Hono<AppEnv>();
 
@@ -98,6 +99,24 @@ smsRouter.post("/ingest", async (c) => {
     }
     return c.json({ status: result.status, ignored: true });
   }
+
+  // Normalize/categorize the parsed candidate through the server-side rules
+  // engine before it becomes a queued draft. Rules are server-only config; they
+  // only tweak the draft the user still confirms in the Inbox — no txn is
+  // written here. We sign the amount (candidate.amountCents is a magnitude +
+  // isIncome flag) so inflow/outflow/amount conditions evaluate correctly, and
+  // map the rule outputs (payee, category) back onto the candidate. SmsCandidate
+  // has no notes field, so set_notes actions have nowhere to land on this path.
+  const ruled = runRules(db, {
+    payeeName: result.candidate.payee,
+    categoryId: result.candidate.categoryId,
+    amountCents: result.candidate.isIncome
+      ? result.candidate.amountCents
+      : -result.candidate.amountCents,
+    date: result.candidate.date,
+  });
+  result.candidate.payee = ruled.payeeName ?? null;
+  result.candidate.categoryId = ruled.categoryId ?? null;
 
   const id = newId();
   db.insert(whatsappInboxCandidates)

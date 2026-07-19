@@ -9,6 +9,7 @@ import type { Db } from "./db/index.ts";
 import { accountsRouter } from "./routes/accounts.ts";
 import { aiRouter } from "./routes/ai.ts";
 import { budgetsRouter } from "./routes/budgets.ts";
+import { calendarRouter } from "./routes/calendar.ts";
 import { categoriesRouter } from "./routes/categories.ts";
 import { desiresRouter } from "./routes/desires.ts";
 import { exportRouter } from "./routes/export.ts";
@@ -16,6 +17,7 @@ import { feedbackRouter } from "./routes/feedback.ts";
 import { goalsRouter } from "./routes/goals.ts";
 import { healthRouter } from "./routes/health.ts";
 import { holdingsRouter } from "./routes/holdings.ts";
+import { insightsRouter } from "./routes/insights.ts";
 import { netWorthRouter } from "./routes/networth.ts";
 import { profilesRouter } from "./routes/profiles.ts";
 import {
@@ -26,6 +28,7 @@ import {
 import { rateLimit } from "./middleware/rate_limit.ts";
 import { payeesRouter } from "./routes/payees.ts";
 import { recurrencesRouter } from "./routes/recurrences.ts";
+import { rulesRouter } from "./routes/rules.ts";
 import { sheetsRouter } from "./routes/sheets.ts";
 import { smsRouter } from "./routes/sms.ts";
 import { summaryRouter } from "./routes/summary.ts";
@@ -138,6 +141,11 @@ export function createApp(ctx: AppContext) {
   app.route("/v1/budgets", budgetsRouter);
   app.route("/v1/recurrences", recurrencesRouter);
   app.route("/v1/summary", summaryRouter);
+  // Mounted at /v1/calendar (not /v1/summary/calendar) so it can't be shadowed
+  // by the summary router.
+  app.route("/v1/calendar", calendarRouter);
+  app.route("/v1/insights", insightsRouter);
+  app.route("/v1/rules", rulesRouter);
   app.route("/v1/sync", syncRouter);
   app.route("/v1/sheets", sheetsRouter);
   app.route("/v1/export", exportRouter);
