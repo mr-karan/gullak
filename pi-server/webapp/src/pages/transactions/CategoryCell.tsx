@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Check } from "lucide-react";
 import { toast } from "sonner";
@@ -18,16 +18,33 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 
 import type { CatGroup } from "./filters";
 
-/** Optimistic category PATCH across every cached transactions window. Rolls
- *  back the snapshot on failure and surfaces a toast either way. */
+/** Optimistic category PATCH for a single transaction across every cached
+ *  transactions window. Rolls back ONLY the affected row on failure (never a
+ *  whole-cache snapshot, which would clobber concurrent edits to other rows),
+ *  ignores stale results when a newer edit to the same row has started, and
+ *  always reconciles with the server on settle. */
 function useSetCategory() {
   const client = useQueryClient();
+  // Monotonic per-cell counter so an earlier, slower request can't win over a
+  // later one that already started (out-of-order completion).
+  const seq = useRef(0);
   return useMutation({
     mutationFn: (vars: { id: string; categoryId: string | null }) =>
       api.patch(`/v1/transactions/${vars.id}`, { categoryId: vars.categoryId }),
     onMutate: async (vars) => {
       await client.cancelQueries({ queryKey: ["transactions"] });
-      const prev = client.getQueriesData<TransactionsResponse>({ queryKey: ["transactions"] });
+      const mutationId = ++seq.current;
+      // Capture just this row's previous category for a targeted rollback.
+      let prevCategoryId: string | null = null;
+      for (const [, data] of client.getQueriesData<TransactionsResponse>({
+        queryKey: ["transactions"],
+      })) {
+        const found = data?.transactions.find((t) => t.id === vars.id);
+        if (found) {
+          prevCategoryId = found.categoryId;
+          break;
+        }
+      }
       client.setQueriesData<TransactionsResponse>({ queryKey: ["transactions"] }, (old) =>
         old
           ? {
@@ -37,13 +54,28 @@ function useSetCategory() {
             }
           : old,
       );
-      return { prev };
+      return { prevCategoryId, mutationId, id: vars.id };
     },
     onError: (_err, _vars, ctx) => {
-      ctx?.prev?.forEach(([key, data]) => client.setQueryData(key, data));
+      // A newer edit to this row already started — its optimistic value should
+      // stand; rolling back to our older value would resurrect a stale choice.
+      if (!ctx || ctx.mutationId !== seq.current) {
+        toast.error("Couldn't update category.");
+        return;
+      }
+      client.setQueriesData<TransactionsResponse>({ queryKey: ["transactions"] }, (old) =>
+        old
+          ? {
+              transactions: old.transactions.map((t) =>
+                t.id === ctx.id ? { ...t, categoryId: ctx.prevCategoryId } : t,
+              ),
+            }
+          : old,
+      );
       toast.error("Couldn't update category.");
     },
-    onSuccess: () => {
+    onSuccess: (_data, _vars, ctx) => {
+      if (ctx && ctx.mutationId !== seq.current) return; // superseded — stay quiet
       toast.success("Category updated.");
     },
     onSettled: () => {

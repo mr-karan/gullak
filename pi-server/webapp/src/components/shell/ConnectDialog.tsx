@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-import { api, setCredentials, type ApiError } from "@/lib/api";
+import { verifyCredentials, type ApiError } from "@/lib/api";
 import { useConnection } from "@/hooks/useConnection";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -22,18 +22,25 @@ export function ConnectDialog() {
       setError("API key is required.");
       return;
     }
-    // Persist first so the health probe uses the new credentials.
-    setCredentials(k, url);
     setChecking(true);
     try {
-      await api.get("/v1/health"); // auth-exempt: confirms the URL resolves
-      await api.get("/v1/summary"); // gated: confirms the key is accepted
-      connect(k, url);
+      // Verify BEFORE persisting: a typo or unreachable server must never
+      // destroy the previous working credentials.
+      await verifyCredentials(k, url);
+      connect(k, url); // only now persist + flip connected state
     } catch (err) {
       setError((err as ApiError).message || "Could not connect.");
     } finally {
       setChecking(false);
     }
+  }
+
+  function handleDisconnect() {
+    disconnect();
+    // Clear the controlled inputs so the old key isn't retained/redisplayed.
+    setKey("");
+    setUrl("");
+    setError("");
   }
 
   return (
@@ -73,7 +80,7 @@ export function ConnectDialog() {
           {error ? <p className="text-sm text-neg">{error}</p> : null}
           <div className="mt-1 flex items-center justify-between gap-2">
             {connected ? (
-              <Button type="button" variant="ghost" size="sm" onClick={disconnect}>
+              <Button type="button" variant="ghost" size="sm" onClick={handleDisconnect}>
                 Disconnect
               </Button>
             ) : (

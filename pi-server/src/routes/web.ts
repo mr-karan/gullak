@@ -17,22 +17,38 @@ const thisDir = dirname(fileURLToPath(import.meta.url));
 const webappDist = join(thisDir, "..", "..", "webapp", "dist"); // src/routes -> pi-server/webapp/dist
 const webDir = join(thisDir, "..", "..", "web"); // src/routes -> pi-server/web
 
-// serveStatic's `root` resolves relative to process CWD (assumed pi-server/,
-// same as the legacy mount below).
-const webappStaticRoot = "./webapp/dist";
-const legacyStaticRoot = "./web/static";
+// serveStatic's `root` resolves relative to process CWD. Passing ABSOLUTE roots
+// (derived from this module's location, not CWD) makes asset serving work no
+// matter where the process was started from — e.g. `npm --prefix pi-server
+// start` or launching from the repo root — instead of only from pi-server/.
+const webappStaticRoot = webappDist;
+const legacyStaticRoot = join(webDir, "static");
 
 const hasWebapp = existsSync(join(webappDist, "index.html"));
 
 export const webRouter = new Hono<AppEnv>();
 
 function isApiOrLegacyStatic(path: string): boolean {
-  return path.startsWith("/v1/") || path.startsWith("/static/");
+  return isApi(path) || path.startsWith("/static/");
+}
+
+// Exact `/v1` and everything under `/v1/` are the API's alone — the SPA/static
+// layer must never answer for them.
+function isApi(path: string): boolean {
+  return path === "/v1" || path.startsWith("/v1/");
 }
 
 if (hasWebapp) {
   // --- New Vite SPA -------------------------------------------------------
   const spaIndex = () => readFileSync(join(webappDist, "index.html"), "utf8");
+
+  // Guard the API namespace BEFORE any static serving so nothing under /v1 can
+  // ever be answered by serveStatic or the SPA fallback (e.g. a stray
+  // dist/v1/*.json). Unmatched /v1 paths get a JSON 404, not HTML.
+  webRouter.use("*", async (c, next) => {
+    if (isApi(c.req.path)) return c.json({ error: "Not found" }, 404);
+    return next();
+  });
 
   webRouter.get("/", (c) => c.html(spaIndex()));
 

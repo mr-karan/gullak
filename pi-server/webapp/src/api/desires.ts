@@ -96,6 +96,10 @@ export function useUploadDesirePhoto() {
 export function useDesirePhotoUrl(desireId: string | null, photoId: string | null): string | null {
   const [url, setUrl] = useState<string | null>(null);
   useEffect(() => {
+    // Clear immediately so the <img> never points at the previous (about-to-be-
+    // revoked) blob while the replacement loads — or forever if the ids are null
+    // or the fetch fails.
+    setUrl(null);
     if (!desireId || !photoId) return;
     let active = true;
     let objectUrl: string | null = null;

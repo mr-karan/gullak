@@ -11,7 +11,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { GoalCombobox } from "./GoalCombobox";
-import { fmtQty, fmtRupees, kindLabel } from "./format";
+import { kindLabel } from "./format";
 
 const numCol = "text-right tnum";
 
@@ -37,11 +37,9 @@ export function HoldingsTable({
         <Table>
           <TableHeader className="[&_tr]:border-b-0">
             <TableRow className="hover:bg-transparent">
-              <TableHead>Symbol</TableHead>
+              {/* Symbol takes the freed width so long MF names truncate less. */}
+              <TableHead className="w-[45%]">Symbol</TableHead>
               <TableHead>Kind</TableHead>
-              <TableHead className={numCol}>Qty</TableHead>
-              <TableHead className={numCol}>Avg</TableHead>
-              <TableHead className={numCol}>LTP</TableHead>
               <TableHead className={numCol}>Invested</TableHead>
               <TableHead className={numCol}>Current</TableHead>
               <TableHead className={numCol}>P&amp;L</TableHead>
@@ -51,7 +49,7 @@ export function HoldingsTable({
           <TableBody>
             {/* The one blessed in-table LedgerRule: directly under the header row. */}
             <tr>
-              <td colSpan={9} className="p-0">
+              <td colSpan={6} className="p-0">
                 <LedgerRule />
               </td>
             </tr>
@@ -61,8 +59,8 @@ export function HoldingsTable({
                 <TableRow key={h.id} className={cn(h.stale && "opacity-55")}>
                   {/* overflow-hidden + truncate on the symbol itself: long MF
                       names ("… FUND - DIRECT PLAN") must never collide with
-                      the Kind/Qty columns. */}
-                  <TableCell className="max-w-[16rem] overflow-hidden">
+                      the Kind column. */}
+                  <TableCell className="max-w-0 overflow-hidden">
                     <div className="flex min-w-0 items-center gap-1.5">
                       <span className="min-w-0 truncate font-medium text-ink">{h.symbol || h.name || "—"}</span>
                       {h.stale ? <span className="shrink-0 text-xs text-ink-2">stale</span> : null}
@@ -74,9 +72,6 @@ export function HoldingsTable({
                     ) : null}
                   </TableCell>
                   <TableCell className="text-ink-2">{kindLabel(h.kind)}</TableCell>
-                  <TableCell className={cn(numCol, "text-ink")}>{fmtQty(h.quantity)}</TableCell>
-                  <TableCell className={cn(numCol, "text-ink-2")}>{fmtRupees(h.avgPrice)}</TableCell>
-                  <TableCell className={cn(numCol, "text-ink-2")}>{fmtRupees(h.lastPrice)}</TableCell>
                   <TableCell className={cn(numCol, "text-ink-2")}>{fmtCents(h.investedCents)}</TableCell>
                   <TableCell className={cn(numCol, "font-medium text-ink")}>
                     {fmtCents(h.currentCents)}
@@ -125,7 +120,7 @@ export function HoldingsTable({
               </div>
               <div className="flex items-center justify-between gap-3 text-xs text-ink-2">
                 <span className="tnum">
-                  {fmtQty(h.quantity)} · {kindLabel(h.kind)} ·{" "}
+                  {kindLabel(h.kind)} ·{" "}
                   <span className={pnl < 0 ? "text-neg" : "text-pos"}>{fmtCentsSigned(pnl)}</span>
                 </span>
                 <span className="flex shrink-0 items-center gap-1">

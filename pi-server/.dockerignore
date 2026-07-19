@@ -1,0 +1,22 @@
+# Server deps are installed via `npm ci` in the install stage; never ship the
+# host copy.
+node_modules
+
+# Webapp is built inside the `webapp` stage. Excluding these keeps the build
+# context small AND stops `COPY webapp/ ./` from overwriting the freshly
+# `npm ci`'d node_modules or shipping a stale host dist. The lockfile,
+# package.json and sources the build stage needs are NOT excluded.
+webapp/node_modules
+webapp/dist
+webapp/dev-dist
+
+# Local runtime data and noise.
+data
+*.log
+*.db
+*.db-wal
+*.db-shm
+.git
+.gitignore
+Dockerfile
+.dockerignore

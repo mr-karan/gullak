@@ -39,22 +39,37 @@ export function GoalCombobox({
     setOpen(false);
     if (goalId === holding.goalId) return;
 
-    const prev = qc.getQueryData<HoldingsResponse>(qk.holdings);
-    if (prev) {
-      qc.setQueryData<HoldingsResponse>(qk.holdings, {
-        ...prev,
-        holdings: prev.holdings.map((h) => (h.id === holding.id ? { ...h, goalId } : h)),
-      });
-    }
+    const holdingId = holding.id;
+    const prevGoalId = holding.goalId;
+
+    qc.setQueryData<HoldingsResponse>(qk.holdings, (cur) =>
+      cur
+        ? { ...cur, holdings: cur.holdings.map((h) => (h.id === holdingId ? { ...h, goalId } : h)) }
+        : cur,
+    );
 
     patch.mutate(
-      { id: holding.id, patch: { goalId } },
+      { id: holdingId, patch: { goalId } },
       {
         onError: (err) => {
-          if (prev) qc.setQueryData(qk.holdings, prev);
+          // Roll back ONLY this holding so a concurrent successful edit to
+          // another row isn't clobbered by a stale whole-cache snapshot.
+          qc.setQueryData<HoldingsResponse>(qk.holdings, (cur) =>
+            cur
+              ? {
+                  ...cur,
+                  holdings: cur.holdings.map((h) =>
+                    h.id === holdingId ? { ...h, goalId: prevGoalId } : h,
+                  ),
+                }
+              : cur,
+          );
           toast.error(err instanceof Error ? err.message : "Failed to update goal");
         },
         onSuccess: () => toast.success(goalId ? "Goal updated" : "Unmapped"),
+        // Always reconcile with the server, on success AND failure, so a failed
+        // reconciliation can't leave stale optimistic data behind.
+        onSettled: () => void qc.invalidateQueries({ queryKey: qk.holdings }),
       },
     );
   }

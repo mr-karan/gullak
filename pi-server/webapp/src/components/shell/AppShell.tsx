@@ -5,6 +5,7 @@ import { PanelRightOpen } from "lucide-react";
 import { useIsDesktop } from "@/hooks/useMediaQuery";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { AssistantPanel } from "@/components/chat/AssistantPanel";
+import { ChatProvider } from "@/components/chat/ChatProvider";
 import { NavRail } from "./NavRail";
 import { MobileBottomBar, MobilePersonRow, MobileTopBar } from "./MobileNav";
 import { CommandPalette } from "./CommandPalette";
@@ -36,6 +37,7 @@ export function AppShell() {
   );
 
   return (
+    <ChatProvider>
     <div className="flex h-dvh flex-col overflow-hidden bg-paper text-foreground">
       {isDesktop ? (
         <div className="flex min-h-0 flex-1">
@@ -69,5 +71,6 @@ export function AppShell() {
       <CommandPalette />
       <ConnectDialog />
     </div>
+    </ChatProvider>
   );
 }

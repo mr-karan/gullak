@@ -22,11 +22,19 @@ interface FormState {
   notes: string;
 }
 
+/** Exact minor-units -> rupee input string. Preserves paise so editing an
+    unrelated field never rounds the amount (123456 -> "1234.56", not "1235").
+    Whole-rupee amounts drop the ".00" for a cleaner field. */
+function centsToRupeeInput(cents: number | null | undefined): string {
+  if (!cents) return "";
+  return cents % 100 === 0 ? String(cents / 100) : (cents / 100).toFixed(2);
+}
+
 function initial(goal: Goal | null): FormState {
   return {
     name: goal?.name ?? "",
     emoji: goal?.emoji ?? "🎯",
-    targetRupees: goal?.targetCents ? String(Math.round(goal.targetCents / 100)) : "",
+    targetRupees: centsToRupeeInput(goal?.targetCents),
     targetDate: goal?.targetDate ?? "",
     notes: goal?.notes ?? "",
   };
@@ -122,8 +130,9 @@ export function GoalDialog({
               <Input
                 id="goal-target"
                 type="number"
-                inputMode="numeric"
+                inputMode="decimal"
                 min="0"
+                step="0.01"
                 value={form.targetRupees}
                 onChange={(e) => set("targetRupees", e.target.value)}
                 placeholder="500000"

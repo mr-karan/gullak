@@ -33,6 +33,31 @@ export function clearCredentials(): void {
   localStorage.removeItem(SERVER_URL_STORAGE);
 }
 
+/** Probe a candidate key/URL WITHOUT persisting them. Confirms the URL resolves
+    (auth-exempt health) and the key is accepted (gated summary). Throws ApiError
+    on any failure so callers can keep the previous working credentials. Does not
+    dispatch UNAUTHORIZED_EVENT — verification failure is a local dialog concern,
+    not a session expiry. */
+export async function verifyCredentials(apiKey: string, serverUrl: string): Promise<void> {
+  const base = serverUrl.trim().replace(/\/$/, "");
+  const key = apiKey.trim();
+  let health: Response;
+  try {
+    health = await fetch(`${base}/v1/health`);
+  } catch {
+    throw new ApiError("Could not reach the server.", 0);
+  }
+  if (!health.ok) throw new ApiError(`Server unreachable (${health.status}).`, health.status);
+  let gated: Response;
+  try {
+    gated = await fetch(`${base}/v1/summary`, { headers: { "x-api-key": key } });
+  } catch {
+    throw new ApiError("Could not reach the server.", 0);
+  }
+  if (gated.status === 401) throw new ApiError("Unauthorized — check your API key.", 401);
+  if (!gated.ok) throw new ApiError(`Request failed (${gated.status}).`, gated.status);
+}
+
 export class ApiError extends Error {
   status: number;
   constructor(message: string, status: number) {

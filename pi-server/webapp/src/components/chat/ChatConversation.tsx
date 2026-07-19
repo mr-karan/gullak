@@ -3,24 +3,17 @@ import { useLocation } from "react-router-dom";
 import { ArrowUp } from "lucide-react";
 
 import { cn } from "@/lib/utils";
-import { useSendMessage } from "@/api/messages";
 import { useConnection } from "@/hooks/useConnection";
-import { toast } from "@/components/ui/sonner";
 import { MarkdownLite } from "./MarkdownLite";
-import { buildContext, suggestedPrompts } from "./context";
-
-interface ChatMessage {
-  id: number;
-  role: "user" | "assistant";
-  content: string;
-}
+import { useChat } from "./ChatProvider";
+import { suggestedPrompts } from "./context";
 
 export function ChatConversation({ className }: { className?: string }) {
   const { pathname } = useLocation();
   const { connected, openDialog } = useConnection();
-  const send = useSendMessage();
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [threadId, setThreadId] = useState<string | undefined>();
+  // Conversation state + the send mutation live in ChatProvider (mounted above
+  // this view) so a pending request survives panel collapse / route change.
+  const { messages, isPending, send } = useChat();
   const [input, setInput] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -28,41 +21,17 @@ export function ChatConversation({ className }: { className?: string }) {
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
-  }, [messages, send.isPending]);
+  }, [messages, isPending]);
 
   function submit(text: string) {
     const trimmed = text.trim();
-    if (!trimmed || send.isPending) return;
+    if (!trimmed || isPending) return;
     if (!connected) {
       openDialog();
       return;
     }
     setInput("");
-    setMessages((prev) => [...prev, { id: Date.now(), role: "user", content: trimmed }]);
-    send.mutate(
-      { text: trimmed, threadId, context: buildContext(pathname) },
-      {
-        onSuccess: (res) => {
-          if (res.threadId) setThreadId(res.threadId);
-          setMessages((prev) => [
-            ...prev,
-            { id: Date.now() + 1, role: "assistant", content: res.reply || "No response." },
-          ]);
-        },
-        onError: (err) => {
-          const msg = err instanceof Error ? err.message : "request failed";
-          setMessages((prev) => [
-            ...prev,
-            {
-              id: Date.now() + 1,
-              role: "assistant",
-              content: `The assistant is unavailable right now (${msg}). Try again once the server has a model configured.`,
-            },
-          ]);
-          toast.error(msg);
-        },
-      },
-    );
+    send(trimmed, pathname);
   }
 
   const empty = messages.length === 0;
@@ -111,7 +80,7 @@ export function ChatConversation({ className }: { className?: string }) {
                 </div>
               </div>
             ))}
-            {send.isPending ? <p className="text-sm text-ink-2">Thinking…</p> : null}
+            {isPending ? <p className="text-sm text-ink-2">Thinking…</p> : null}
           </div>
         )}
       </div>
@@ -139,7 +108,7 @@ export function ChatConversation({ className }: { className?: string }) {
           />
           <button
             type="submit"
-            disabled={send.isPending || !input.trim()}
+            disabled={isPending || !input.trim()}
             aria-label="Send"
             className="grid size-9 shrink-0 place-items-center rounded-md bg-primary text-primary-foreground transition-colors hover:bg-[color-mix(in_oklch,var(--primary)_94%,black)] disabled:opacity-40 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
           >

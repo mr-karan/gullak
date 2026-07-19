@@ -48,10 +48,17 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
 
   const connect = useCallback(
     (apiKey: string, serverUrl: string) => {
+      const prevKey = getApiKey();
+      const prevUrl = getServerUrl();
       setCredentials(apiKey, serverUrl);
+      const identityChanged = getApiKey() !== prevKey || getServerUrl() !== prevUrl;
       setConnected(true);
       setDialogOpen(false);
-      void client.invalidateQueries();
+      // A different server/key means the cache holds another server's data —
+      // drop it entirely rather than showing stale rows while refetching (and
+      // leaving them if the new request fails). Same identity: just refresh.
+      if (identityChanged) client.clear();
+      else void client.invalidateQueries();
     },
     [client],
   );

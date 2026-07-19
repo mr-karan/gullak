@@ -1,3 +1,16 @@
+# --- Stage 1: build the Vite + React SPA -------------------------------------
+# Node 22 matches the runtime base. package.json + lockfile are copied first so
+# the `npm ci` layer is cached until dependencies actually change.
+FROM node:22-bookworm-slim AS webapp
+
+WORKDIR /app/webapp
+
+COPY webapp/package.json webapp/package-lock.json ./
+RUN npm ci
+COPY webapp/ ./
+RUN npm run build          # -> /app/webapp/dist
+
+# --- Stage 2: install server production deps (native modules) -----------------
 FROM node:22-bookworm-slim AS install
 
 WORKDIR /app
@@ -30,10 +43,14 @@ COPY package.json drizzle.config.ts tsconfig.json ./
 COPY src ./src
 COPY drizzle ./drizzle
 # Static web PWA (index.html + static/). The webRouter reads these at runtime
-# via readFileSync / serveStatic; without this COPY the shell 500s in the
-# container even though local dev works (CWD-relative paths resolve fine here
-# because WORKDIR=/app matches the serveStatic root ./web/static).
+# via readFileSync / serveStatic (from an absolute root derived from the module
+# path, so it works regardless of CWD); without this COPY the shell 500s in the
+# container. Placed under /app to match the source layout web.ts resolves.
 COPY web ./web
+# The built SPA. web.ts resolves webapp/dist relative to WORKDIR=/app, matching
+# the runtime. Only dist ships — no webapp sources or node_modules in the image.
+# Kept alongside `web/` which stays the fallback until parity is reached.
+COPY --from=webapp /app/webapp/dist ./webapp/dist
 
 VOLUME ["/data"]
 EXPOSE 8787
