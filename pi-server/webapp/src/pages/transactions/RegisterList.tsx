@@ -4,6 +4,7 @@ import {
   Check,
   ChevronDown,
   ChevronRight,
+  Lock,
   MoreHorizontal,
   Ungroup,
 } from "lucide-react";
@@ -186,6 +187,13 @@ function Row({
         </button>
       ) : null}
       <span className="truncate font-[550] text-ink">{txn.payeeName || "Unknown"}</span>
+      {/* Reconciliation lock (#42): a reconciled row is frozen server-side. */}
+      {txn.reconciled ? (
+        <Lock
+          className="size-3 shrink-0 text-ink-2"
+          aria-label="Reconciled (locked)"
+        />
+      ) : null}
       {isGroup ? (
         <span className="shrink-0 rounded border border-rule px-1 text-[10px] uppercase tracking-wide text-ink-2">
           {row.children!.length} grouped

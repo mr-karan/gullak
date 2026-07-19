@@ -61,9 +61,20 @@ export interface Transaction {
   // both legs.
   transferGroupId?: string | null;
   transferAccountId?: string | null;
+  // Reconciliation lock (#42): set when an account reconcile confirmed this
+  // cleared row against the bank balance. Reconciled rows are frozen server-side.
+  reconciled?: boolean;
 }
 export interface TransactionsResponse {
   transactions: Transaction[];
+}
+
+export interface ReconcileResult {
+  clearedCents: number;
+  diffCents: number;
+  locked: boolean;
+  adjustmentId: string | null;
+  reconciledCount: number;
 }
 
 export interface Summary {

@@ -18,6 +18,7 @@ class TransactionListItem {
     required this.date,
     required this.dateLabel,
     required this.cleared,
+    this.reconciled = false,
     required this.isTransfer,
     required this.isSplit,
     this.isGroupParent = false,
@@ -38,6 +39,9 @@ class TransactionListItem {
   final String date;
   final String dateLabel;
   final bool cleared;
+  // Reconciliation lock (#42): set when an account reconcile confirmed this
+  // cleared row against the bank. Reconciled rows are frozen server-side.
+  final bool reconciled;
   final bool isTransfer;
   final bool isSplit;
   // Grouping (#46): a group parent collapses N children; each child points back
@@ -755,6 +759,7 @@ class TransactionRepository {
       date: t.date,
       dateLabel: _humanDate(t.date),
       cleared: t.cleared,
+      reconciled: t.reconciled,
       isTransfer: t.transferGroupId != null,
       isSplit: t.splitTotalCents != null,
       isGroupParent: t.isGroupParent,

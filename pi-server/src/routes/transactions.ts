@@ -290,13 +290,27 @@ transactionsRouter.post("/", async (c) => {
 transactionsRouter.patch("/:id", async (c) => {
   const db = c.get("db");
   const id = c.req.param("id");
-  const partial = upsertSchema.partial().parse(await c.req.json());
+  const raw = await c.req.json();
+  // Reconciliation lock (#42): force can arrive as ?force=true or force:true in
+  // the body. Zod strips the extra `force` key when parsing the partial.
+  const forced =
+    c.req.query("force") === "true" ||
+    (raw != null && typeof raw === "object" && (raw as { force?: unknown }).force === true);
+  const partial = upsertSchema.partial().parse(raw);
   const existing = db
     .select()
     .from(transactions)
     .where(eq(transactions.id, id))
     .get();
   if (!existing) return c.json({ error: "Not found" }, 404);
+  // Lock check goes FIRST — before transfer propagation — so a locked leg can't
+  // be edited without force.
+  if (existing.reconciled && !forced) {
+    return c.json(
+      { error: "Transaction is reconciled (locked). Pass force=true to override." },
+      409,
+    );
+  }
   const next = { ...existing, ...partial, updatedAt: nowMs() };
 
   // Transfer edit (#41): when the target is part of a transfer, keep its
@@ -348,6 +362,15 @@ transactionsRouter.delete("/:id", (c) => {
     .where(eq(transactions.id, id))
     .get();
   if (!existing) return c.json({ error: "Not found" }, 404);
+
+  // Reconciliation lock (#42): a reconciled row is frozen unless ?force=true.
+  // Check FIRST, before transfer handling, so a locked leg can't be deleted.
+  if (existing.reconciled && c.req.query("force") !== "true") {
+    return c.json(
+      { error: "Transaction is reconciled (locked). Pass force=true to override." },
+      409,
+    );
+  }
 
   // Transfer delete (#41): removing either leg removes BOTH, with a change_log
   // delete for each, in one transaction. A missing sibling (legacy half-link)

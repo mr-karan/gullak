@@ -200,6 +200,9 @@ smsRouter.post("/ingest", async (c) => {
         and(
           eq(transactions.accountId, accountId),
           isNull(transactions.parentId),
+          // #42: a reconciled (locked) row must not be enriched/claimed by a
+          // later import.
+          eq(transactions.reconciled, false),
           gte(transactions.date, lo),
           lte(transactions.date, hi),
         ),

@@ -5,6 +5,7 @@ import { z } from "zod";
 import type { AppEnv } from "../app.ts";
 import { accounts } from "../db/schema.ts";
 import { newId, nowMs, recordChange } from "../repos/changelog.ts";
+import { reconcileAccount } from "../transactions/reconcile.ts";
 import { nameField } from "./_fields.ts";
 
 const upsertSchema = z.object({
@@ -17,6 +18,12 @@ const upsertSchema = z.object({
   onBudget: z.boolean().default(true),
   archived: z.boolean().default(false),
   sortOrder: z.number().int().default(0),
+});
+
+const reconcileSchema = z.object({
+  targetBalanceCents: z.number().int(),
+  createAdjustment: z.boolean().optional(),
+  asOf: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
 });
 
 export const accountsRouter = new Hono<AppEnv>();
@@ -87,6 +94,23 @@ accountsRouter.patch("/:id", async (c) => {
     });
   });
   return c.json({ account: next });
+});
+
+// Reconcile (#42): submit the bank's actual balance, compute the cleared
+// balance, and either lock the cleared rows (diff 0, or diff !=0 with an
+// adjustment) or just report the diff (diff !=0, no adjustment). All writes run
+// in one db.transaction inside reconcileAccount.
+accountsRouter.post("/:id/reconcile", async (c) => {
+  const db = c.get("db");
+  const id = c.req.param("id");
+  const existing = db.select().from(accounts).where(eq(accounts.id, id)).get();
+  if (!existing) return c.json({ error: "Not found" }, 404);
+  const parsed = reconcileSchema.parse(await c.req.json());
+  const result = reconcileAccount(db, id, parsed.targetBalanceCents, {
+    createAdjustment: parsed.createAdjustment,
+    asOf: parsed.asOf,
+  });
+  return c.json(result);
 });
 
 accountsRouter.delete("/:id", (c) => {

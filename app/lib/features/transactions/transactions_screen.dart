@@ -1252,13 +1252,29 @@ class _TxRow extends ConsumerWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      row.isTransfer
-                          ? '${row.accountName ?? '—'} → ${row.transferAccountName ?? '—'}'
-                          : (row.payeeName ?? row.categoryName ?? '—'),
-                      style: Theme.of(context).textTheme.titleMedium,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            row.isTransfer
+                                ? '${row.accountName ?? '—'} → ${row.transferAccountName ?? '—'}'
+                                : (row.payeeName ?? row.categoryName ?? '—'),
+                            style: Theme.of(context).textTheme.titleMedium,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        // Reconciliation lock (#42): reconciled rows are frozen
+                        // server-side; reconcile itself is web-driven.
+                        if (row.reconciled) ...[
+                          const SizedBox(width: 4),
+                          Icon(
+                            Icons.lock_outline,
+                            size: 12,
+                            color: cs.onSurfaceVariant,
+                          ),
+                        ],
+                      ],
                     ),
                     const SizedBox(height: 2),
                     Text(

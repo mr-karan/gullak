@@ -1,6 +1,6 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, Scale } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { fmtCentsSigned, fmtDayMonth, fmtEpochDate, fmtPct } from "@/lib/money";
@@ -15,10 +15,12 @@ import { PageHeader } from "@/components/PageHeader";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CenterNote, EmptyState, ErrorState } from "@/components/states";
+import { ReconcileDialog } from "./accounts/ReconcileDialog";
 
 export function AccountsPage() {
   const { connected, openDialog } = useConnection();
   const range = useMemo(() => currentMonthRange(), []);
+  const [reconcileTarget, setReconcileTarget] = useState<{ id: string; name: string } | null>(null);
 
   const accountsQ = useAccounts(connected);
   const categoriesQ = useCategories(connected);
@@ -96,7 +98,10 @@ export function AccountsPage() {
               netCents={monthQ.data?.netCents ?? 0}
               loading={monthQ.isLoading}
             />
-            <BalancesCard balances={balances} />
+            <BalancesCard
+              balances={balances}
+              onReconcile={(a) => setReconcileTarget({ id: a.id, name: a.name })}
+            />
           </div>
 
           <RecentCard
@@ -107,6 +112,14 @@ export function AccountsPage() {
           />
         </div>
       )}
+
+      <ReconcileDialog
+        open={reconcileTarget !== null}
+        onOpenChange={(o) => {
+          if (!o) setReconcileTarget(null);
+        }}
+        account={reconcileTarget}
+      />
     </>
   );
 }
@@ -251,8 +264,10 @@ function FlowCell({
 // --- Balances list ---------------------------------------------------------
 function BalancesCard({
   balances,
+  onReconcile,
 }: {
   balances: (import("@/lib/types").Account & { balanceCents: number })[];
+  onReconcile: (account: import("@/lib/types").Account) => void;
 }) {
   return (
     <Card className="p-5">
@@ -262,10 +277,10 @@ function BalancesCard({
       ) : (
         <ul className="mt-3 flex flex-col">
           {balances.map((a) => (
-            <li key={a.id}>
+            <li key={a.id} className="group -mx-2 flex items-center gap-1 rounded-md px-2 transition-colors hover:bg-paper-3">
               <Link
                 to={`/transactions?accountId=${encodeURIComponent(a.id)}`}
-                className="group -mx-2 flex items-center justify-between gap-3 rounded-md px-2 py-2.5 transition-colors hover:bg-paper-3 focus-visible:ring-2 focus-visible:ring-ring"
+                className="flex min-w-0 flex-1 items-center justify-between gap-3 py-2.5 focus-visible:ring-2 focus-visible:ring-ring rounded"
               >
                 <span className="min-w-0">
                   <span className="block truncate text-sm font-medium text-ink">{a.name}</span>
@@ -286,6 +301,15 @@ function BalancesCard({
                   <ChevronRight className="size-4 text-ink-2 transition-colors group-hover:text-ink" />
                 </span>
               </Link>
+              <button
+                type="button"
+                onClick={() => onReconcile(a)}
+                aria-label={`Reconcile ${a.name}`}
+                title="Reconcile against your bank balance"
+                className="flex size-7 shrink-0 items-center justify-center rounded text-ink-2 transition-colors hover:text-ink focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+              >
+                <Scale className="size-4" />
+              </button>
             </li>
           ))}
         </ul>
