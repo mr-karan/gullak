@@ -1146,7 +1146,9 @@
                         <template x-for="group in $store.transactions.grouped" :key="group.date">
                             <div>
                                 <div class="register-date-header">
-                                    <span x-text="formatDateRelative(group.date) + ' · ' + fmtDayMonth(group.date)"></span>
+                                    <!-- Older dates ("Fri, 10 Jul") already carry the date — only
+                                         suffix relative labels (Today/Yesterday/weekday, no digits). -->
+                                    <span x-text="/\d/.test(formatDateRelative(group.date)) ? formatDateRelative(group.date) : formatDateRelative(group.date) + ' · ' + fmtDayMonth(group.date)"></span>
                                     <span class="font-mono normal-case tracking-normal" :class="group.netCents < 0 ? 'money-neg' : 'money-pos'" x-text="fmtCentsSigned(group.netCents, $store.transactions.currency)"></span>
                                 </div>
                                 <template x-for="txn in group.rows" :key="txn.id">
