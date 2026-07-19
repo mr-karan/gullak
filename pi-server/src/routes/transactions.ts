@@ -3,8 +3,8 @@ import { Hono } from "hono";
 import { z } from "zod";
 
 import type { AppEnv } from "../app.ts";
-import { accounts, transactions } from "../db/schema.ts";
-import { newId, nowMs, recordChange } from "../repos/changelog.ts";
+import { accounts, transactionTags, transactions } from "../db/schema.ts";
+import { newId, nowMs, recordChange, type DbOrTx } from "../repos/changelog.ts";
 import { learnCategory } from "../rules/learn.ts";
 import {
   createTransferPair,
@@ -465,12 +465,64 @@ transactionsRouter.delete("/:id", (c) => {
   }
 
   db.transaction((tx) => {
-    tx.delete(transactions).where(eq(transactions.id, id)).run();
-    recordChange(tx, {
-      resource: "transactions",
-      resourceId: id,
-      op: "delete",
-    });
+    // #47: a group PARENT is a virtual header over independent child txns — a
+    // direct delete must ungroup them (clear groupParentId + sync), never delete
+    // them. This mirrors POST /ungroup so a delete can't strand real money.
+    if (existing.isGroupParent) {
+      const kids = tx
+        .select()
+        .from(transactions)
+        .where(eq(transactions.groupParentId, id))
+        .all();
+      const at = nowMs();
+      for (const k of kids) {
+        const next = { ...k, groupParentId: null, updatedAt: at };
+        tx.update(transactions).set(next).where(eq(transactions.id, k.id)).run();
+        recordChange(tx, {
+          resource: "transactions",
+          resourceId: k.id,
+          op: "upsert",
+          payload: next,
+        });
+      }
+    } else {
+      // #47: a split PARENT carries the money; its children hold only the
+      // category breakdown and are excluded from every sum (parentId IS NULL).
+      // Deleting only the parent stranded them — junk rows the phone kept
+      // because no change_log delete was emitted. Cascade the children.
+      const children = tx
+        .select({ id: transactions.id })
+        .from(transactions)
+        .where(eq(transactions.parentId, id))
+        .all();
+      for (const child of children) deleteTxnFully(tx, child.id);
+    }
+    deleteTxnFully(tx, id);
   });
   return c.json({ deleted: true, id });
 });
+
+// Delete one transaction row plus its transaction_tags, emitting a change_log
+// delete for the row and each tag link so sync clients converge. Assumes it runs
+// inside a db.transaction.
+function deleteTxnFully(tx: DbOrTx, txnId: string): void {
+  const tagLinks = tx
+    .select({ id: transactionTags.id })
+    .from(transactionTags)
+    .where(eq(transactionTags.transactionId, txnId))
+    .all();
+  for (const link of tagLinks) {
+    tx.delete(transactionTags).where(eq(transactionTags.id, link.id)).run();
+    recordChange(tx, {
+      resource: "transaction_tags",
+      resourceId: link.id,
+      op: "delete",
+    });
+  }
+  tx.delete(transactions).where(eq(transactions.id, txnId)).run();
+  recordChange(tx, {
+    resource: "transactions",
+    resourceId: txnId,
+    op: "delete",
+  });
+}

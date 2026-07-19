@@ -755,3 +755,52 @@ test("FIX 8: parentId/splitTotalCents are stripped on a transfer create", async 
     expect(l.splitTotalCents).toBeNull();
   }
 });
+
+test("#47: deleting a split parent cascades its children + emits a change_log delete for each", async () => {
+  const { app, db } = makeApp();
+  addAccount(db, "a1");
+  // Split parent -100 carries the money; two children hold the category split.
+  addTxn(db, "p", "a1", -10000, "2026-07-10");
+  addTxn(db, "c1", "a1", -6000, "2026-07-10", "p");
+  addTxn(db, "c2", "a1", -4000, "2026-07-10", "p");
+
+  const res = await deleteTxn(app, "p");
+  expect(res.status).toBe(200);
+
+  // Parent and both children are gone — no orphan rows left behind.
+  expect(rowById(db, "p")).toBeUndefined();
+  expect(rowById(db, "c1")).toBeUndefined();
+  expect(rowById(db, "c2")).toBeUndefined();
+
+  // A change_log delete was emitted for the parent AND each child so the phone
+  // drops them too.
+  const deletes = db
+    .select()
+    .from(schema.changeLog)
+    .all()
+    .filter((r) => r.resource === "transactions" && r.op === "delete")
+    .map((r) => r.resourceId);
+  expect(new Set(deletes)).toEqual(new Set(["p", "c1", "c2"]));
+});
+
+test("#47: deleting a group parent ungroups its children (they survive, groupParentId cleared)", async () => {
+  const { app, db } = makeApp();
+  addAccount(db, "a1");
+  addTxn(db, "g1", "a1", -5000, "2026-07-10");
+  addTxn(db, "g2", "a1", -3000, "2026-07-11");
+  const parentId = ((await (
+    await app.request("/v1/transactions/group", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ ids: ["g1", "g2"], date: "2026-07-10", payeeName: "Card payment" }),
+    })
+  ).json()) as { parent: { id: string } }).parent.id;
+
+  const res = await deleteTxn(app, parentId);
+  expect(res.status).toBe(200);
+
+  // The virtual parent is gone; the real child txns survive with no dangling link.
+  expect(rowById(db, parentId)).toBeUndefined();
+  expect(rowById(db, "g1")?.groupParentId).toBeNull();
+  expect(rowById(db, "g2")?.groupParentId).toBeNull();
+});
