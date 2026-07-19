@@ -1,0 +1,175 @@
+@import "tailwindcss";
+
+/* Gullak "bahi-khata" design system. Two surfaces: warm paper for content,
+   a dark inked "binding" for the nav shell. Single fixed light identity — the
+   app is not theme-toggled; the dark shell IS the composition. */
+
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  --radius: 0.5rem;
+
+  /* --- Raw bahi-khata tokens ------------------------------------------- */
+  --paper: oklch(96.5% 0.009 80);
+  --paper-2: oklch(94% 0.012 80);
+  --paper-3: oklch(91% 0.015 80);
+
+  --ink: oklch(25% 0.02 40);
+  --ink-2: oklch(48% 0.02 50);
+  --rule: oklch(86% 0.02 70);
+
+  --bind: oklch(28% 0.06 25);
+  --bind-2: oklch(33% 0.06 25);
+  --bind-ink: oklch(94% 0.015 75);
+  --bind-mut: oklch(72% 0.03 50);
+
+  --brand: oklch(46% 0.13 27);
+  --brand-ink: oklch(97% 0.01 80);
+  --pos: oklch(48% 0.09 150);
+  --neg: oklch(48% 0.14 28);
+  --warn: oklch(60% 0.11 70);
+
+  /* --- shadcn variable mapping ----------------------------------------- */
+  --background: var(--paper);
+  --foreground: var(--ink);
+  --card: var(--paper-2);
+  --card-foreground: var(--ink);
+  --popover: var(--paper-2);
+  --popover-foreground: var(--ink);
+  --primary: var(--brand);
+  --primary-foreground: var(--brand-ink);
+  --secondary: var(--paper-3);
+  --secondary-foreground: var(--ink);
+  --muted: var(--paper-3);
+  --muted-foreground: var(--ink-2);
+  --accent: var(--paper-3);
+  --accent-foreground: var(--ink);
+  --destructive: var(--neg);
+  --destructive-foreground: var(--brand-ink);
+  --border: var(--rule);
+  --input: var(--rule);
+  --ring: var(--brand);
+
+  --chart-1: var(--brand);
+  --chart-2: var(--pos);
+  --chart-3: var(--warn);
+  --chart-4: oklch(52% 0.08 250);
+  --chart-5: oklch(58% 0.06 320);
+
+  --sidebar: var(--bind);
+  --sidebar-foreground: var(--bind-ink);
+  --sidebar-accent: var(--bind-2);
+  --sidebar-accent-foreground: var(--bind-ink);
+  --sidebar-border: oklch(38% 0.05 25);
+  --sidebar-ring: var(--brand);
+}
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  /* Brand tokens exposed as Tailwind utilities (bg-paper, text-bind-ink…). */
+  --color-paper: var(--paper);
+  --color-paper-2: var(--paper-2);
+  --color-paper-3: var(--paper-3);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-rule: var(--rule);
+  --color-bind: var(--bind);
+  --color-bind-2: var(--bind-2);
+  --color-bind-ink: var(--bind-ink);
+  --color-bind-mut: var(--bind-mut);
+  --color-brand: var(--brand);
+  --color-brand-ink: var(--brand-ink);
+  --color-pos: var(--pos);
+  --color-neg: var(--neg);
+  --color-warn: var(--warn);
+
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+
+  --font-display: "Gambarino", ui-serif, Georgia, serif;
+  --font-sans:
+    system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial,
+    sans-serif;
+
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+}
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-rendering: optimizeLegibility;
+  }
+
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
+    font-feature-settings: "cv11", "ss01";
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Focus-visible = 2px brand ring, per the design law. */
+  :focus-visible {
+    outline: 2px solid var(--color-ring);
+    outline-offset: 2px;
+  }
+
+  /* Numeric cells: tabular figures, no font swap. */
+  .tnum {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
+  }
+
+  .font-display {
+    font-family: var(--font-display);
+    letter-spacing: -0.01em;
+  }
+
+  /* Never transition `all` — a transition:all scrollbar loop broke the legacy
+     app. Only color/opacity, and only when motion is allowed. */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      transition-duration: 0.01ms !important;
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+    }
+  }
+}

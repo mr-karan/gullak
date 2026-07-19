@@ -8,7 +8,9 @@
     "test": "vitest run",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx src/db/migrate.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "webapp:install": "cd webapp && npm ci",
+    "webapp:build": "cd webapp && npm run build"
   },
   "dependencies": {
     "@actual-app/api": "^26.6.0",
