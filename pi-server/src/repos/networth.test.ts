@@ -161,3 +161,29 @@ test("cash-flow: groups income/expense per month, zero-fills empty months", () =
     netCents: -100_00,
   });
 });
+
+test("cash-flow: excludes transfer legs from gross income/expense (FIX 7)", () => {
+  const db = makeDb();
+  addAccount(db, "a1", 0);
+  addAccount(db, "a2", 0);
+  addTxn(db, "spend", "a1", -50_00, "2026-01-10"); // a real expense
+  // A transfer pair in Jan — must not show as income or expense.
+  db.insert(schema.transactions)
+    .values([
+      { id: "xout", accountId: "a1", amountCents: -300_00, date: "2026-01-15", transferGroupId: "g1", createdAt: at, updatedAt: at },
+      { id: "xin", accountId: "a2", amountCents: 300_00, date: "2026-01-15", transferGroupId: "g1", createdAt: at, updatedAt: at },
+    ])
+    .run();
+
+  const cf = computeCashFlow(db, 3, NOW);
+  expect(cf[0]).toEqual({
+    month: "2026-01",
+    incomeCents: 0,
+    expenseCents: -50_00,
+    netCents: -50_00,
+  });
+
+  // The net-worth TOTAL still counts both legs — they cancel there, so the true
+  // cash balance is unchanged (opening 0 + -50 spend + -300 + 300 = -50).
+  expect(computeNetWorth(db).cashCents).toBe(-50_00);
+});

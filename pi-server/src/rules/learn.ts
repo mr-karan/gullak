@@ -54,9 +54,7 @@ function learnCategoryImpl(db: Db, args: LearnCategoryArgs): void {
   // Need SOME payee identity to attribute the habit to.
   if (!payeeId && !payeeName) return;
 
-  // Opt-out (#39): if this payee has learnCategories=false, don't learn from it.
-  // Only checkable by payeeId; also lets us backfill the name for the rule
-  // condition when the caller only had an id.
+  // Opt-out (#39): a payee with learnCategories=false must never seed a rule.
   if (payeeId) {
     const payee = db
       .select({ name: payees.name, learnCategories: payees.learnCategories })
@@ -64,7 +62,22 @@ function learnCategoryImpl(db: Db, args: LearnCategoryArgs): void {
       .where(eq(payees.id, payeeId))
       .get();
     if (payee && payee.learnCategories === false) return;
-    if (!payeeName && payee) payeeName = payee.name;
+    // FIX 15: when the canonical payee row is known, ALWAYS use its canonical
+    // name for the learned rule's condition — the caller's payeeName may be a
+    // raw variant (e.g. "AMZN") that future "Amazon" drafts would never match.
+    if (payee) payeeName = payee.name;
+  } else if (payeeName) {
+    // FIX 14: agent bookings call learnCategory with payeeName only (no id).
+    // Honor the opt-out by resolving the payee by normalized name
+    // (case-insensitive). Conservative: if ANY payee sharing this name is
+    // opted out, skip learning.
+    const normalized = payeeName.toLowerCase();
+    const matches = db
+      .select({ learnCategories: payees.learnCategories })
+      .from(payees)
+      .where(sql`lower(${payees.name}) = ${normalized}`)
+      .all();
+    if (matches.some((p) => p.learnCategories === false)) return;
   }
 
   // The learned rule matches on payee NAME (engine field 'payee'), so a name is

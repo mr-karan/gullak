@@ -124,6 +124,27 @@ test("topSpends: filters by accountId and excludes split children", () => {
   expect(a2.map((t) => t.id)).toEqual(["a2big"]);
 });
 
+test("topSpends: a transfer leg is never a top spend (FIX 7)", () => {
+  const db = makeDb();
+  addAccount(db, "a1");
+  addTxn(db, { id: "spend", accountId: "a1", amountCents: -40_00, date: "2026-03-05" });
+  // A larger-magnitude transfer OUT — must NOT outrank (or appear at all).
+  db.insert(schema.transactions)
+    .values({
+      id: "xfer",
+      accountId: "a1",
+      amountCents: -90_00,
+      date: "2026-03-06",
+      transferGroupId: "g1",
+      createdAt: at,
+      updatedAt: at,
+    })
+    .run();
+
+  const rows = topSpends(db, START, END);
+  expect(rows.map((t) => t.id)).toEqual(["spend"]);
+});
+
 test("topSpends: honours the date range", () => {
   const db = makeDb();
   addAccount(db, "a1");

@@ -289,6 +289,104 @@ test("ingest does not overwrite a user-set payee on match (#38)", async () => {
   expect(txn?.payeeName).toBe("My Payee"); // preserved, not clobbered
 });
 
+test("FIX 5: a fuzzy-date-only match does not suppress the draft (no data loss)", async () => {
+  const { app, db } = makeApp();
+  const now = Date.now();
+  db.insert(schema.accounts)
+    .values({ id: "a1", name: "HDFC", createdAt: now, updatedAt: now })
+    .run();
+  // An unrelated small same-day row — different amount, no importedId. This can
+  // only ever be a fuzzy-DATE match for the incoming SMS.
+  db.insert(schema.transactions)
+    .values({
+      id: "t-other",
+      accountId: "a1",
+      amountCents: -123,
+      date: "2026-06-01",
+      origin: "manual",
+      createdAt: now,
+      updatedAt: now,
+    })
+    .run();
+
+  mockParseSms.mockResolvedValue({
+    status: "transaction",
+    isTransaction: true,
+    candidate: {
+      amountCents: 99999, // magnitude; signed to -99999 (nowhere near -123)
+      isIncome: false,
+      payee: "BigStore",
+      categoryId: "c1",
+      accountHint: "HDFC",
+      bankRef: null,
+      date: "2026-06-01",
+      confidence: 0.9,
+    },
+  } as unknown as Awaited<ReturnType<typeof parseSms>>);
+
+  const res = await ingest(app, "Spent Rs 999.99 at BigStore via HDFC");
+  const body = (await res.json()) as { status: string };
+  // NOT matched-for-suppression: a reviewable draft is queued instead.
+  expect(body.status).toBe("transaction");
+  expect(db.select().from(schema.whatsappInboxCandidates).all()).toHaveLength(1);
+  // The unrelated txn was NOT enriched.
+  const other = db
+    .select()
+    .from(schema.transactions)
+    .where(eq(schema.transactions.id, "t-other"))
+    .get();
+  expect(other?.payeeName).toBeNull();
+});
+
+test("FIX 10: a same-amount transfer leg in the window is not claimed by a purchase SMS", async () => {
+  const { app, db } = makeApp();
+  const now = Date.now();
+  db.insert(schema.accounts)
+    .values({ id: "a1", name: "HDFC", createdAt: now, updatedAt: now })
+    .run();
+  // A transfer leg for the SAME amount/date. It must be invisible to the matcher.
+  db.insert(schema.transactions)
+    .values({
+      id: "t-xfer",
+      accountId: "a1",
+      amountCents: -48000,
+      date: "2026-06-01",
+      transferGroupId: "g1",
+      origin: "manual",
+      createdAt: now,
+      updatedAt: now,
+    })
+    .run();
+
+  mockParseSms.mockResolvedValue({
+    status: "transaction",
+    isTransaction: true,
+    candidate: {
+      amountCents: 48000,
+      isIncome: false,
+      payee: "Blinkit",
+      categoryId: "c1",
+      accountHint: "HDFC",
+      bankRef: null,
+      date: "2026-06-01",
+      confidence: 0.9,
+    },
+  } as unknown as Awaited<ReturnType<typeof parseSms>>);
+
+  const res = await ingest(app, "Spent Rs 480 at Blinkit via HDFC");
+  const body = (await res.json()) as { status: string };
+  // Not matched — the transfer leg is excluded from the window — draft queued.
+  expect(body.status).toBe("transaction");
+  expect(db.select().from(schema.whatsappInboxCandidates).all()).toHaveLength(1);
+  // The transfer leg is untouched.
+  const xfer = db
+    .select()
+    .from(schema.transactions)
+    .where(eq(schema.transactions.id, "t-xfer"))
+    .get();
+  expect(xfer?.payeeName).toBeNull();
+});
+
 test("ingest ignores a non-transaction SMS without queuing anything", async () => {
   const { app, db } = makeApp();
   mockParseSms.mockResolvedValue({

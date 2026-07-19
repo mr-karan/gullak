@@ -203,6 +203,11 @@ smsRouter.post("/ingest", async (c) => {
           // #42: a reconciled (locked) row must not be enriched/claimed by a
           // later import.
           eq(transactions.reconciled, false),
+          // FIX 10: a transfer leg (money moved between own accounts) and a
+          // virtual group parent (amountCents=0) must never shadow or claim a
+          // real purchase SMS, so exclude them from the match window.
+          isNull(transactions.transferGroupId),
+          eq(transactions.isGroupParent, false),
           gte(transactions.date, lo),
           lte(transactions.date, hi),
         ),
@@ -220,7 +225,16 @@ smsRouter.post("/ingest", async (c) => {
       windowRows as ExistingTxn[],
     );
 
-    if (match.matched && match.matchedId) {
+    // FIX 5: only ENRICH + suppress the draft on a high-confidence match — an
+    // exact importedId or an exact-amount (fuzzy-date) match. A `fuzzy-date`
+    // match claims ANY amount within ±7 days, so acting on it could attach a
+    // real SMS to an unrelated txn AND drop the real spend (data loss). On a
+    // fuzzy-date match (or no match) fall through to queue the draft normally.
+    if (
+      match.matched &&
+      match.matchedId &&
+      (match.matchType === "exact" || match.matchType === "fuzzy-amount")
+    ) {
       const target = windowRows.find((r) => r.id === match.matchedId)!;
       // Conservative enrichment: only fill fields that are currently empty.
       // Never overwrite a user-set payee, category, or amount.

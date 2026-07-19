@@ -69,6 +69,10 @@ export function createTransferPair(
     ...primary,
     categoryId: null,
     transferGroupId: groupId,
+    // FIX 8(b): a transfer leg is never a split. Force these null on the primary
+    // (and the mirror inherits it via the spread below) regardless of caller.
+    parentId: null,
+    splitTotalCents: null,
   };
 
   // Mirror lives in B, points back at A, and carries the negated amount. Copies

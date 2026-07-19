@@ -535,3 +535,223 @@ test("non-transfer create/patch/delete still behave as before (regression)", asy
       .filter((r) => r.op === "delete" && r.resourceId === created.id),
   ).toHaveLength(1);
 });
+
+// ── FIX 6/7: /v1/summary excludes splits and transfers ─────────────────────
+
+async function summaryOf(app: ReturnType<typeof makeApp>["app"]) {
+  return (await (await app.request("/v1/summary")).json()) as {
+    incomeCents: number;
+    expenseCents: number;
+    netCents: number;
+  };
+}
+
+test("FIX 6: /v1/summary counts a split parent once, not parent+children", async () => {
+  const { app, db } = makeApp();
+  addAccount(db, "a1");
+  addTxn(db, "sp", "a1", -100_00, "2026-02-10");
+  addTxn(db, "sc1", "a1", -60_00, "2026-02-10", "sp");
+  addTxn(db, "sc2", "a1", -40_00, "2026-02-10", "sp");
+
+  const s = await summaryOf(app);
+  // Net is -100 (parent only), NOT -200 (parent + both children).
+  expect(s.expenseCents).toBe(-100_00);
+  expect(s.netCents).toBe(-100_00);
+});
+
+test("FIX 7: /v1/summary excludes transfer legs from income and expense", async () => {
+  const { app, db } = makeApp();
+  addAccount(db, "a1");
+  addAccount(db, "a2");
+  addTxn(db, "spend", "a1", -200_00, "2026-02-01"); // a real expense to anchor
+
+  await postTxn(app, {
+    accountId: "a1",
+    transferAccountId: "a2",
+    amountCents: -500_00,
+    date: "2026-02-02",
+  });
+
+  const s = await summaryOf(app);
+  // The -500 out leg and +500 mirror leg both drop out.
+  expect(s.expenseCents).toBe(-200_00);
+  expect(s.incomeCents).toBe(0);
+  expect(s.netCents).toBe(-200_00);
+});
+
+// ── FIX 11: group-parent amount invariant at the write layer ────────────────
+
+test("FIX 11: PATCH cannot give a group parent real money", async () => {
+  const { app, db } = makeApp();
+  addAccount(db, "a1");
+  addTxn(db, "t1", "a1", -500_00, "2026-02-01");
+  addTxn(db, "t2", "a1", -300_00, "2026-02-02");
+  const parentId = ((await (
+    await group(app, { ids: ["t1", "t2"], date: "2026-02-01" })
+  ).json()) as { parent: { id: string } }).parent.id;
+
+  // A non-zero amount is rejected; the parent stays at 0.
+  const res = await patchTxn(app, parentId, { amountCents: -800_00 });
+  expect(res.status).toBe(400);
+  expect(rowById(db, parentId)!.amountCents).toBe(0);
+
+  // Other fields remain patchable; amount is still forced to 0.
+  const res2 = await patchTxn(app, parentId, { payeeName: "Renamed group" });
+  expect(res2.status).toBe(200);
+  const row = rowById(db, parentId)!;
+  expect(row.amountCents).toBe(0);
+  expect(row.payeeName).toBe("Renamed group");
+  expect(row.isGroupParent).toBe(true);
+});
+
+test("FIX 11: POST overwriting a group parent forces amountCents back to 0", async () => {
+  const { app, db } = makeApp();
+  addAccount(db, "a1");
+  addTxn(db, "t1", "a1", -500_00, "2026-02-01");
+  addTxn(db, "t2", "a1", -300_00, "2026-02-02");
+  const parentId = ((await (
+    await group(app, { ids: ["t1", "t2"], date: "2026-02-01" })
+  ).json()) as { parent: { id: string } }).parent.id;
+
+  const res = await postTxn(app, {
+    id: parentId,
+    accountId: "a1",
+    amountCents: -800_00,
+    date: "2026-02-01",
+  });
+  expect(res.status).toBe(201);
+  const row = rowById(db, parentId)!;
+  expect(row.amountCents).toBe(0); // forced, not -800
+  expect(row.isGroupParent).toBe(true); // flag preserved
+});
+
+// ── FIX 2: reconcile lock covers BOTH transfer legs ─────────────────────────
+
+test("FIX 2: a reconciled transfer sibling blocks PATCH/DELETE of the unlocked leg", async () => {
+  const { app, db } = makeApp();
+  addAccount(db, "a1");
+  addAccount(db, "a2");
+  const primary = ((await (
+    await postTxn(app, {
+      accountId: "a1",
+      transferAccountId: "a2",
+      amountCents: -500_00,
+      date: "2026-03-01",
+    })
+  ).json()) as { transaction: { id: string; transferGroupId: string } }).transaction;
+  const legs = transferLegs(db, primary.transferGroupId);
+  const aLeg = legs.find((l) => l.id === primary.id)!; // unlocked
+  const bLeg = legs.find((l) => l.id !== primary.id)!; // will be locked
+
+  // Reconcile (lock) only the B leg.
+  db.update(schema.transactions)
+    .set({ reconciled: true })
+    .where(eq(schema.transactions.id, bLeg.id))
+    .run();
+
+  // PATCH the unlocked A leg → blocked by the locked sibling.
+  const res = await patchTxn(app, aLeg.id, { amountCents: -600_00 });
+  expect(res.status).toBe(409);
+  expect(rowById(db, aLeg.id)!.amountCents).toBe(-500_00); // unchanged
+
+  // force=true overrides.
+  const resF = await patchTxn(app, aLeg.id, { amountCents: -600_00, force: true });
+  expect(resF.status).toBe(200);
+  expect(rowById(db, aLeg.id)!.amountCents).toBe(-600_00);
+
+  // DELETE the unlocked A leg → blocked without force.
+  const del = await deleteTxn(app, aLeg.id);
+  expect(del.status).toBe(409);
+  expect(rowById(db, aLeg.id)).toBeDefined();
+
+  // force=true deletes both legs.
+  const delF = await app.request(`/v1/transactions/${aLeg.id}?force=true`, {
+    method: "DELETE",
+  });
+  expect(delF.status).toBe(200);
+  expect(rowById(db, aLeg.id)).toBeUndefined();
+  expect(rowById(db, bLeg.id)).toBeUndefined();
+});
+
+// ── FIX 9: PATCH must not move a transfer leg to another account ─────────────
+
+test("FIX 9: PATCH cannot move a transfer leg to another account", async () => {
+  const { app, db } = makeApp();
+  addAccount(db, "a1");
+  addAccount(db, "a2");
+  addAccount(db, "a3");
+  const primary = ((await (
+    await postTxn(app, {
+      accountId: "a1",
+      transferAccountId: "a2",
+      amountCents: -500_00,
+      date: "2026-03-01",
+    })
+  ).json()) as { transaction: { id: string; transferGroupId: string } }).transaction;
+
+  const res = await patchTxn(app, primary.id, { accountId: "a3", notes: "moved?" });
+  expect(res.status).toBe(200);
+
+  const row = rowById(db, primary.id)!;
+  expect(row.accountId).toBe("a1"); // frozen despite the body
+  expect(row.notes).toBe("moved?"); // other edits still apply
+  expect(row.transferAccountId).toBe("a2");
+
+  // Sibling linkage stays consistent: it still points back at a1.
+  const sibling = transferLegs(db, primary.transferGroupId).find(
+    (l) => l.id !== primary.id,
+  )!;
+  expect(sibling.transferAccountId).toBe("a1");
+  expect(sibling.accountId).toBe("a2");
+});
+
+// ── FIX 8: transfer create validation ───────────────────────────────────────
+
+test("FIX 8: transfer to a nonexistent target account is 400 (nothing written)", async () => {
+  const { app, db } = makeApp();
+  addAccount(db, "a1");
+  const res = await postTxn(app, {
+    accountId: "a1",
+    transferAccountId: "ghost",
+    amountCents: -100_00,
+    date: "2026-03-01",
+  });
+  expect(res.status).toBe(400);
+  expect(db.select().from(schema.transactions).all()).toHaveLength(0);
+});
+
+test("FIX 8: transfer from a nonexistent primary account is 400", async () => {
+  const { app, db } = makeApp();
+  addAccount(db, "a2");
+  const res = await postTxn(app, {
+    accountId: "ghost",
+    transferAccountId: "a2",
+    amountCents: -100_00,
+    date: "2026-03-01",
+  });
+  expect(res.status).toBe(400);
+  expect(db.select().from(schema.transactions).all()).toHaveLength(0);
+});
+
+test("FIX 8: parentId/splitTotalCents are stripped on a transfer create", async () => {
+  const { app, db } = makeApp();
+  addAccount(db, "a1");
+  addAccount(db, "a2");
+  const primary = ((await (
+    await postTxn(app, {
+      accountId: "a1",
+      transferAccountId: "a2",
+      amountCents: -500_00,
+      date: "2026-03-01",
+      parentId: "some-parent",
+      splitTotalCents: 999_00,
+    })
+  ).json()) as { transaction: { transferGroupId: string } }).transaction;
+
+  const legs = transferLegs(db, primary.transferGroupId);
+  expect(legs).toHaveLength(2);
+  for (const l of legs) {
+    expect(l.parentId).toBeNull();
+    expect(l.splitTotalCents).toBeNull();
+  }
+});

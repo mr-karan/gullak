@@ -32,6 +32,13 @@ export function computeCalendar(
     gte(transactions.date, startDate),
     lte(transactions.date, endDate),
     isNull(transactions.parentId),
+    // FIX 7: a transfer leg isn't spending — it nets to zero across accounts —
+    // so it must not paint an activity day on the calendar.
+    isNull(transactions.transferGroupId),
+    // FIX 11: a group parent carries amountCents=0; without this guard a lone
+    // group parent would create a phantom (zero-money) activity day. Children
+    // carry the real money and stay counted.
+    eq(transactions.isGroupParent, false),
     eq(accounts.archived, false),
     accountId ? eq(transactions.accountId, accountId) : undefined,
   ].filter((x): x is NonNullable<typeof x> => x !== undefined);

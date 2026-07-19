@@ -162,6 +162,53 @@ describe("learnCategory", () => {
     expect(out.categoryId).toBe("cat-X");
   });
 
+  test("FIX 14: name-only learn honors the opt-out via normalized-name resolution", () => {
+    // Agent bookings call learnCategory with a payeeName only (no id). The
+    // opt-out must still be honored by resolving the payee by name.
+    addPayee(db, { id: "p-1", name: "Zomato", learnCategories: false });
+    addTxn(db, { payeeName: "Zomato", categoryId: "cat-X" });
+    addTxn(db, { payeeName: "Zomato", categoryId: "cat-X" });
+    addTxn(db, { payeeName: "Zomato", categoryId: "cat-X" });
+
+    learnCategory(db, { payeeName: "Zomato", categoryId: "cat-X" });
+
+    expect(learnedRules(db)).toHaveLength(0);
+  });
+
+  test("FIX 14: name-only opt-out is conservative when names collide", () => {
+    // Two payees share the name; ANY opted-out one skips learning.
+    addPayee(db, { id: "p-a", name: "Zomato", learnCategories: true });
+    addPayee(db, { id: "p-b", name: "zomato", learnCategories: false });
+    addTxn(db, { payeeName: "Zomato", categoryId: "cat-X" });
+    addTxn(db, { payeeName: "Zomato", categoryId: "cat-X" });
+    addTxn(db, { payeeName: "Zomato", categoryId: "cat-X" });
+
+    learnCategory(db, { payeeName: "Zomato", categoryId: "cat-X" });
+
+    expect(learnedRules(db)).toHaveLength(0);
+  });
+
+  test("FIX 15: learned rule uses the canonical payee name, not a caller variant", () => {
+    addPayee(db, { id: "p-amz", name: "Amazon" });
+    // History linked by payeeId, categorized to cat-X.
+    addTxn(db, { payeeId: "p-amz", payeeName: "Amazon", categoryId: "cat-X" });
+    addTxn(db, { payeeId: "p-amz", payeeName: "Amazon", categoryId: "cat-X" });
+    addTxn(db, { payeeId: "p-amz", payeeName: "Amazon", categoryId: "cat-X" });
+
+    // Caller passes a raw variant ("AMZN"); the rule must use canonical "amazon".
+    learnCategory(db, { payeeId: "p-amz", payeeName: "AMZN", categoryId: "cat-X" });
+
+    const rules = learnedRules(db);
+    expect(rules).toHaveLength(1);
+    expect(rules[0]!.trigger.conditions).toEqual([
+      { field: "payee", op: "is", value: "amazon" },
+    ]);
+
+    // A fresh "Amazon" draft matches the canonical learned rule.
+    const out = runRules(db, { payeeName: "Amazon", categoryId: null });
+    expect(out.categoryId).toBe("cat-X");
+  });
+
   test("opt-out and user rules coexist: learning does not clobber a user rule", () => {
     // A hand-authored user rule for the same payee.
     db.insert(schema.rules)

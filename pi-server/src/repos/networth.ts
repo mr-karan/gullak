@@ -184,7 +184,11 @@ export function computeCashFlow(
     .from(transactions)
     .innerJoin(accounts, eq(transactions.accountId, accounts.id))
     .where(
-      sql`${accounts.archived} = 0 AND ${transactions.parentId} IS NULL AND ${transactions.date} >= ${windowStartDay}`,
+      // FIX 7: this is the GROSS income/expense series, so exclude transfer legs
+      // (they aren't real income/spend). The net-worth TOTAL / history cash walk
+      // deliberately keep counting transfers — there they cancel between the two
+      // accounts, so excluding them would wrongly move the true cash balance.
+      sql`${accounts.archived} = 0 AND ${transactions.parentId} IS NULL AND ${transactions.transferGroupId} IS NULL AND ${transactions.date} >= ${windowStartDay}`,
     )
     .groupBy(sql`substr(${transactions.date}, 1, 7)`)
     .all();

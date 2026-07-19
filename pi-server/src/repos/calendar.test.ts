@@ -142,3 +142,38 @@ test("empty range returns []", () => {
   const days = computeCalendar(db, "2026-07-01", "2026-07-31");
   expect(days).toEqual([]);
 });
+
+test("FIX 7: transfer legs do not paint an activity day", () => {
+  const db = makeDb();
+  db.insert(schema.accounts).values(account("a1")).run();
+  db.insert(schema.accounts).values(account("a2")).run();
+  db.insert(schema.transactions).values([
+    { ...txn("out", "a1", -500_00, "2026-07-01"), transferGroupId: "g1" },
+    { ...txn("in", "a2", 500_00, "2026-07-01"), transferGroupId: "g1" },
+  ]).run();
+
+  // Neither leg is spending — no calendar day is emitted.
+  expect(computeCalendar(db, "2026-07-01", "2026-07-31")).toEqual([]);
+});
+
+test("FIX 11: a lone group parent creates no phantom day; children stay counted", () => {
+  const db = makeDb();
+  db.insert(schema.accounts).values(account("a1")).run();
+
+  // A group parent alone (amount 0) must not surface a zero-money day.
+  db.insert(schema.transactions).values([
+    { ...txn("gp-only", "a1", 0, "2026-07-02"), isGroupParent: true },
+  ]).run();
+  expect(computeCalendar(db, "2026-07-01", "2026-07-31")).toEqual([]);
+
+  // A parent WITH children: the parent is excluded, the two children counted.
+  db.insert(schema.transactions).values([
+    { ...txn("gp", "a1", 0, "2026-07-10"), isGroupParent: true },
+    { ...txn("c1", "a1", -30_00, "2026-07-10"), groupParentId: "gp" },
+    { ...txn("c2", "a1", -20_00, "2026-07-10"), groupParentId: "gp" },
+  ]).run();
+  const days = computeCalendar(db, "2026-07-01", "2026-07-31");
+  const d10 = days.find((d) => d.date === "2026-07-10")!;
+  expect(d10.expenseCents).toBe(50_00);
+  expect(d10.txnCount).toBe(2); // parent excluded, both children counted
+});

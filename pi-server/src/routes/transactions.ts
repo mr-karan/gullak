@@ -3,7 +3,7 @@ import { Hono } from "hono";
 import { z } from "zod";
 
 import type { AppEnv } from "../app.ts";
-import { transactions } from "../db/schema.ts";
+import { accounts, transactions } from "../db/schema.ts";
 import { newId, nowMs, recordChange } from "../repos/changelog.ts";
 import { learnCategory } from "../rules/learn.ts";
 import {
@@ -266,11 +266,45 @@ transactionsRouter.post("/", async (c) => {
         400,
       );
     }
+    // FIX 8(a): both legs must land in real accounts. A transfer to a
+    // nonexistent account (either side) is rejected rather than silently
+    // creating an orphaned leg.
+    const acctIds = [row.accountId, row.transferAccountId];
+    const found = db
+      .select({ id: accounts.id })
+      .from(accounts)
+      .where(inArray(accounts.id, acctIds))
+      .all();
+    const foundIds = new Set(found.map((a) => a.id));
+    if (!foundIds.has(row.accountId) || !foundIds.has(row.transferAccountId)) {
+      return c.json({ error: "accountId and transferAccountId must reference existing accounts" }, 400);
+    }
+    // FIX 8(b): a transfer leg is never a split. Force parentId/splitTotalCents
+    // null on the primary; createTransferPair copies these onto the mirror, so
+    // both legs end up clean.
+    row.parentId = null;
+    row.splitTotalCents = null;
     let primary = row;
     db.transaction((tx) => {
       primary = createTransferPair(tx, row).primary as typeof row;
     });
     return c.json({ transaction: primary }, 201);
+  }
+
+  // FIX 11: a group parent's money invariant is amountCents=0 (its total is
+  // derived from children). If this upsert would OVERWRITE an existing group
+  // parent, force the amount back to 0 so a stray POST can't give the parent
+  // real money and double-count it. Fresh inserts are unaffected.
+  const existingForUpsert = db
+    .select({ isGroupParent: transactions.isGroupParent })
+    .from(transactions)
+    .where(eq(transactions.id, id))
+    .get();
+  // row carries no isGroupParent key, so the onConflictDoUpdate SET clause
+  // leaves the stored isGroupParent flag untouched — we only need to neutralize
+  // the amount.
+  if (existingForUpsert?.isGroupParent) {
+    row.amountCents = 0;
   }
 
   db.transaction((tx) => {
@@ -312,7 +346,18 @@ transactionsRouter.patch("/:id", async (c) => {
       409,
     );
   }
+
+  // FIX 11: a group parent's money invariant is amountCents=0 (its total is
+  // derived from children). A generic PATCH must not give it real money. Reject
+  // an explicit non-zero amountCents; any accepted value is forced back to 0
+  // below. isGroupParent/groupParentId aren't in upsertSchema, so a generic
+  // PATCH can't touch them.
+  if (existing.isGroupParent && partial.amountCents != null && partial.amountCents !== 0) {
+    return c.json({ error: "A group parent's amountCents is derived and stays 0" }, 400);
+  }
+
   const next = { ...existing, ...partial, updatedAt: nowMs() };
+  if (existing.isGroupParent) next.amountCents = 0;
 
   // Transfer edit (#41): when the target is part of a transfer, keep its
   // sibling in lock-step — amount negated, date/notes mirrored, category null
@@ -323,10 +368,24 @@ transactionsRouter.patch("/:id", async (c) => {
   // it to different accounts. Any attempt to change transferAccountId /
   // transferGroupId on an existing transfer is ignored (the linkage is frozen).
   if (existing.transferGroupId) {
+    const sibling = findSibling(db, existing);
+    // FIX 2: the reconciliation lock must cover BOTH legs. Editing one leg
+    // propagates to its sibling, so if EITHER leg is reconciled (locked) the
+    // edit is blocked unless force=true — checking only the addressed row let a
+    // locked sibling be mutated through its unlocked partner.
+    if (sibling?.reconciled && !forced) {
+      return c.json(
+        { error: "Transfer sibling is reconciled (locked). Pass force=true to override." },
+        409,
+      );
+    }
     next.transferGroupId = existing.transferGroupId;
     next.transferAccountId = existing.transferAccountId;
+    // FIX 9: a transfer leg's account is frozen. PATCH cannot move a leg to
+    // another account (that would desync the pair's accountId/transferAccountId
+    // linkage); ignore any accountId in the body.
+    next.accountId = existing.accountId;
     next.categoryId = null;
-    const sibling = findSibling(db, existing);
     db.transaction((tx) => {
       tx.update(transactions).set(next).where(eq(transactions.id, id)).run();
       recordChange(tx, {
@@ -391,6 +450,14 @@ transactionsRouter.delete("/:id", (c) => {
   // is tolerated — deletePair just removes the one row it has.
   if (existing.transferGroupId) {
     const sibling = findSibling(db, existing);
+    // FIX 2: deleting one leg deletes BOTH, so a reconciled (locked) sibling
+    // must block the delete just as a locked addressed row does. Require force.
+    if (sibling?.reconciled && c.req.query("force") !== "true") {
+      return c.json(
+        { error: "Transfer sibling is reconciled (locked). Pass force=true to override." },
+        409,
+      );
+    }
     db.transaction((tx) => {
       deletePair(tx, existing, sibling);
     });

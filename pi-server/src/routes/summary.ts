@@ -16,6 +16,12 @@ summaryRouter.get("/", (c) => {
     startDate ? gte(transactions.date, startDate) : undefined,
     endDate ? lte(transactions.date, endDate) : undefined,
     accountId ? eq(transactions.accountId, accountId) : undefined,
+    // FIX 6: split children mirror their parent's amount across categories —
+    // counting both double-counts every split. Aggregate over parents only.
+    sql`${transactions.parentId} IS NULL`,
+    // FIX 7: a transfer leg is not real income/spend (it nets to zero across
+    // accounts), so exclude transfers from the gross income/expense/net figures.
+    sql`${transactions.transferGroupId} IS NULL`,
   ].filter((x): x is NonNullable<typeof x> => x !== undefined);
 
   const incomeExpr = sql<number>`COALESCE(SUM(CASE WHEN ${transactions.amountCents} > 0 THEN ${transactions.amountCents} ELSE 0 END), 0)`;

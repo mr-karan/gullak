@@ -17,6 +17,9 @@ export function topSpends(
 ): Transaction[] {
   const conds = [
     sql`${transactions.parentId} IS NULL`,
+    // FIX 7: a transfer leg (money moved between own accounts) is never a "top
+    // spend" — exclude transfers from the spend ranking.
+    sql`${transactions.transferGroupId} IS NULL`,
     sql`${accounts.archived} = 0`,
     sql`${transactions.amountCents} < 0`,
     gte(transactions.date, startDate),
