@@ -216,9 +216,37 @@ class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
         if (_view == _ViewMode.summary) {
           return _SummaryActivityView(rows: rows, prefs: prefs);
         }
+        // Grouping (#46): collapse children under their group parent. The
+        // stored parent carries amountCents=0; its shown total is DERIVED from
+        // its local children, so aggregates never double-count. Children whose
+        // parent is in view render nested under it, not as top-level rows.
+        final parentIds = <String>{
+          for (final r in rows)
+            if (r.isGroupParent) r.id,
+        };
+        final childrenByParent = <String, List<TransactionListItem>>{};
+        for (final r in rows) {
+          final gp = r.groupParentId;
+          if (gp != null && parentIds.contains(gp)) {
+            childrenByParent.putIfAbsent(gp, () => []).add(r);
+          }
+        }
+        final topRows = rows
+            .where(
+              (r) =>
+                  !(r.groupParentId != null &&
+                      parentIds.contains(r.groupParentId)),
+            )
+            .toList();
+        // Displayed amount: a group parent shows the sum of its children.
+        int shownCents(TransactionListItem r) => r.isGroupParent
+            ? (childrenByParent[r.id] ?? const [])
+                  .fold<int>(0, (s, c) => s + c.amountCents)
+            : r.amountCents;
+
         // Group by date string (YYYY-MM-DD).
         final groups = <String, List<TransactionListItem>>{};
-        for (final r in rows) {
+        for (final r in topRows) {
           groups.putIfAbsent(r.date, () => []).add(r);
         }
         final orderedDates = groups.keys.toList()
@@ -231,7 +259,7 @@ class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
             final entries = groups[date]!;
             final daySpend = entries
                 .where((e) => !e.isTransfer)
-                .fold<int>(0, (s, e) => s + e.amountCents);
+                .fold<int>(0, (s, e) => s + shownCents(e));
             return Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -241,7 +269,16 @@ class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
                   symbol: prefs.currencySymbol,
                   minorDigits: prefs.currencyMinorDigits,
                 ),
-                for (final r in entries) _TxRow(row: r, prefs: prefs),
+                for (final r in entries)
+                  if (r.isGroupParent)
+                    _GroupRow(
+                      parent: r,
+                      children: childrenByParent[r.id] ?? const [],
+                      totalCents: shownCents(r),
+                      prefs: prefs,
+                    )
+                  else
+                    _TxRow(row: r, prefs: prefs),
               ],
             );
           },
@@ -1251,6 +1288,116 @@ class _TxRow extends ConsumerWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// A group parent (#46) rendered as a single collapsible row. The stored parent
+/// carries amountCents=0; this shows the DERIVED total (sum of its children) and
+/// nests the children under a disclosure, so they never also appear at the top
+/// level and are never double-counted.
+///
+/// TODO(#46): on-device create/ungroup actions are not wired here yet — groups
+/// are made on the web/server and converge to the phone via sync. This screen
+/// only renders them.
+class _GroupRow extends StatefulWidget {
+  const _GroupRow({
+    required this.parent,
+    required this.children,
+    required this.totalCents,
+    required this.prefs,
+  });
+
+  final TransactionListItem parent;
+  final List<TransactionListItem> children;
+  final int totalCents;
+  final dynamic prefs;
+
+  @override
+  State<_GroupRow> createState() => _GroupRowState();
+}
+
+class _GroupRowState extends State<_GroupRow> {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final prefs = widget.prefs;
+    final count = widget.children.length;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        InkWell(
+          onTap: () => setState(() => _expanded = !_expanded),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+            child: Row(
+              children: [
+                Container(
+                  width: 3,
+                  height: 36,
+                  margin: const EdgeInsets.only(right: 12),
+                  decoration: BoxDecoration(
+                    color: cs.outlineVariant,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                CategorySwatch(
+                  label: widget.parent.payeeName ?? 'Group',
+                  icon: Icons.workspaces_outline,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        widget.parent.payeeName ?? 'Group',
+                        style: Theme.of(context).textTheme.titleMedium,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '$count grouped',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: cs.onSurfaceVariant,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                MoneyText(
+                  amountCents: widget.totalCents,
+                  minorDigits: prefs.currencyMinorDigits,
+                  symbol: prefs.currencySymbol,
+                  color: cs.onSurface,
+                  showSign: widget.totalCents > 0,
+                ),
+                Icon(
+                  _expanded ? Icons.expand_less : Icons.expand_more,
+                  color: cs.onSurfaceVariant,
+                ),
+              ],
+            ),
+          ),
+        ),
+        if (_expanded)
+          Padding(
+            padding: const EdgeInsets.only(left: 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                for (final child in widget.children)
+                  _TxRow(row: child, prefs: prefs),
+              ],
+            ),
+          ),
+      ],
     );
   }
 }

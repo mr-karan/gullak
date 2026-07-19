@@ -80,21 +80,62 @@ export function matchesFilters(
   return true;
 }
 
+/** One rendered register line. A normal txn is shown directly; a group parent
+ *  (#46) carries its member children and a DERIVED total (children carry the
+ *  real money — the stored parent's amountCents is always 0). */
+export interface DisplayRow {
+  txn: Transaction;
+  /** Present only for a group parent: its member rows, hidden from top level. */
+  children?: Transaction[];
+  /** Amount shown for this line: the txn's own amount, or a group parent's
+   *  derived total (sum of its children). */
+  displayCents: number;
+}
+
 export interface DateGroup {
   date: string;
-  rows: Transaction[];
+  rows: DisplayRow[];
   netCents: number;
 }
 
 /** Group rows by date descending; each group carries its day net. Input is
- *  already newest-first from the server. */
+ *  already newest-first from the server. Group parents (#46) collapse their
+ *  children: children whose parent is in view render nested under the parent
+ *  and are removed from the top level. The parent's shown amount is the derived
+ *  sum of its children (the stored parent amount is 0), so day nets and totals
+ *  never double-count. */
 export function groupByDate(rows: Transaction[]): DateGroup[] {
-  const map = new Map<string, Transaction[]>();
+  const parentPresent = new Set<string>();
+  for (const t of rows) if (t.isGroupParent) parentPresent.add(t.id);
+
+  const childrenByParent = new Map<string, Transaction[]>();
   for (const t of rows) {
-    const bucket = map.get(t.date);
-    if (bucket) bucket.push(t);
-    else map.set(t.date, [t]);
+    if (t.groupParentId && parentPresent.has(t.groupParentId)) {
+      const b = childrenByParent.get(t.groupParentId);
+      if (b) b.push(t);
+      else childrenByParent.set(t.groupParentId, [t]);
+    }
   }
+
+  // Top level: everything except children whose parent is in view.
+  const top = rows.filter(
+    (t) => !(t.groupParentId && parentPresent.has(t.groupParentId)),
+  );
+
+  const map = new Map<string, DisplayRow[]>();
+  for (const t of top) {
+    const children = t.isGroupParent
+      ? (childrenByParent.get(t.id) ?? [])
+      : undefined;
+    const displayCents = children
+      ? children.reduce((s, c) => s + c.amountCents, 0)
+      : t.amountCents;
+    const row: DisplayRow = { txn: t, children, displayCents };
+    const bucket = map.get(t.date);
+    if (bucket) bucket.push(row);
+    else map.set(t.date, [row]);
+  }
+
   return [...map.keys()]
     .sort((a, b) => b.localeCompare(a))
     .map((date) => {
@@ -102,7 +143,7 @@ export function groupByDate(rows: Transaction[]): DateGroup[] {
       return {
         date,
         rows: groupRows,
-        netCents: groupRows.reduce((s, t) => s + t.amountCents, 0),
+        netCents: groupRows.reduce((s, r) => s + r.displayCents, 0),
       };
     });
 }

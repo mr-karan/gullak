@@ -1,18 +1,30 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { SlidersHorizontal } from "lucide-react";
+import { CheckSquare, SlidersHorizontal } from "lucide-react";
+import { toast } from "sonner";
 
 import { cn } from "@/lib/utils";
+import { iso } from "@/lib/dates";
 import { fmtCentsSigned } from "@/lib/money";
 import { useAccounts } from "@/api/accounts";
 import { useCategories, useCategoryGroups } from "@/api/categories";
 import { useSummary } from "@/api/summary";
-import { useTransactions } from "@/api/transactions";
+import { useGroupTransactions, useTransactions, useUngroup } from "@/api/transactions";
 import { useConnection } from "@/hooks/useConnection";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   Sheet,
   SheetContent,
@@ -24,7 +36,7 @@ import {
 import { EmptyState, ErrorState } from "@/components/states";
 
 import { FilterControls } from "./transactions/FilterControls";
-import { RegisterList } from "./transactions/RegisterList";
+import { RegisterList, type SelectionApi } from "./transactions/RegisterList";
 import {
   buildCategoryGroups,
   groupByDate,
@@ -83,6 +95,51 @@ export function TransactionsPage() {
     const t = setTimeout(() => setSearch(searchInput), 250);
     return () => clearTimeout(t);
   }, [searchInput]);
+
+  // --- Grouping selection (#46) ---------------------------------------------
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [groupDialogOpen, setGroupDialogOpen] = useState(false);
+  const groupMut = useGroupTransactions();
+  const ungroupMut = useUngroup();
+
+  const exitSelect = () => {
+    setSelectMode(false);
+    setSelectedIds(new Set());
+  };
+  const selection: SelectionApi = {
+    active: selectMode,
+    isSelected: (id) => selectedIds.has(id),
+    toggle: (id) =>
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        if (next.has(id)) next.delete(id);
+        else next.add(id);
+        return next;
+      }),
+  };
+  const handleGroup = (date: string, payeeName: string) => {
+    groupMut.mutate(
+      {
+        ids: [...selectedIds],
+        date,
+        payeeName: payeeName.trim() || undefined,
+      },
+      {
+        onSuccess: () => {
+          toast.success("Transactions grouped.");
+          setGroupDialogOpen(false);
+          exitSelect();
+        },
+        onError: (e) => toast.error(e instanceof Error ? e.message : "Couldn't group."),
+      },
+    );
+  };
+  const handleUngroup = (parentId: string) =>
+    ungroupMut.mutate(parentId, {
+      onSuccess: () => toast.success("Group removed."),
+      onError: (e) => toast.error(e instanceof Error ? e.message : "Couldn't ungroup."),
+    });
 
   // --- Data ------------------------------------------------------------------
   const range = useMemo(
@@ -213,7 +270,26 @@ export function TransactionsPage() {
         ref={toolbarRef}
         className="sticky top-0 z-20 -mx-5 border-b border-rule bg-paper/95 px-5 py-3 backdrop-blur sm:-mx-8 sm:px-8"
       >
-        {isMobile ? (
+        {selectMode ? (
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-sm font-medium text-ink">
+              {selectedIds.size} selected
+            </span>
+            <div className="flex items-center gap-2">
+              <Button type="button" variant="ghost" size="sm" onClick={exitSelect}>
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                disabled={selectedIds.size < 2 || groupMut.isPending}
+                onClick={() => setGroupDialogOpen(true)}
+              >
+                Group
+              </Button>
+            </div>
+          </div>
+        ) : isMobile ? (
           <div className="flex items-center justify-between gap-3">
             <Sheet open={filtersOpen} onOpenChange={setFiltersOpen}>
               <SheetTrigger asChild>
@@ -233,12 +309,38 @@ export function TransactionsPage() {
                 <FilterControls {...controlProps} layout="sheet" />
               </SheetContent>
             </Sheet>
-            <span className="text-xs text-ink-2">
-              {filtered.length} {filtered.length === 1 ? "entry" : "entries"}
-            </span>
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="gap-1.5"
+                onClick={() => setSelectMode(true)}
+              >
+                <CheckSquare className="size-4" />
+                Select
+              </Button>
+              <span className="text-xs text-ink-2">
+                {filtered.length} {filtered.length === 1 ? "entry" : "entries"}
+              </span>
+            </div>
           </div>
         ) : (
-          <FilterControls {...controlProps} layout="bar" />
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <FilterControls {...controlProps} layout="bar" />
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="shrink-0 gap-1.5"
+              onClick={() => setSelectMode(true)}
+            >
+              <CheckSquare className="size-4" />
+              Select
+            </Button>
+          </div>
         )}
       </div>
 
@@ -268,10 +370,101 @@ export function TransactionsPage() {
             accountName={accountName}
             showAccount={!scoped}
             stickyTop={toolbarH}
+            selection={selection}
+            onUngroup={handleUngroup}
           />
         )}
       </div>
+
+      <GroupDialog
+        open={groupDialogOpen}
+        onOpenChange={setGroupDialogOpen}
+        count={selectedIds.size}
+        pending={groupMut.isPending}
+        onConfirm={handleGroup}
+      />
     </>
+  );
+}
+
+function GroupDialog({
+  open,
+  onOpenChange,
+  count,
+  pending,
+  onConfirm,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  count: number;
+  pending: boolean;
+  onConfirm: (date: string, payeeName: string) => void;
+}) {
+  const [date, setDate] = useState(() => iso(new Date()));
+  const [payee, setPayee] = useState("");
+
+  // Reset the form each time the dialog opens.
+  useEffect(() => {
+    if (open) {
+      setDate(iso(new Date()));
+      setPayee("");
+    }
+  }, [open]);
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Group {count} transactions</DialogTitle>
+          <DialogDescription>
+            They stay as separate entries and keep their amounts — this collapses
+            them under one row. The group total is the sum of its members; the
+            group row itself never adds to any total.
+          </DialogDescription>
+        </DialogHeader>
+        <form
+          className="flex flex-col gap-4"
+          onSubmit={(e) => {
+            e.preventDefault();
+            onConfirm(date, payee);
+          }}
+        >
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="group-payee">Name</Label>
+            <Input
+              id="group-payee"
+              value={payee}
+              onChange={(e) => setPayee(e.target.value)}
+              placeholder="Group (e.g. Card payment)"
+              autoFocus
+            />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="group-date">Date</Label>
+            <Input
+              id="group-date"
+              type="date"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+              required
+            />
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => onOpenChange(false)}
+              disabled={pending}
+            >
+              Cancel
+            </Button>
+            <Button type="submit" disabled={pending || count < 2 || !date}>
+              {pending ? "Grouping…" : "Group"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
 

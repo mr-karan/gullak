@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, lte } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, lte } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
 
@@ -30,9 +30,16 @@ const upsertSchema = z.object({
   originalCurrency: z.string().max(8).nullable().optional(),
 });
 
-export const transactionsRouter = new Hono<AppEnv>();
-
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+const groupSchema = z.object({
+  ids: z.array(z.string().min(1)).min(2),
+  date: z.string().regex(DATE_RE),
+  payeeName: nameField.nullable().optional(),
+  categoryId: z.string().nullable().optional(),
+});
+
+export const transactionsRouter = new Hono<AppEnv>();
 
 transactionsRouter.get("/", (c) => {
   const db = c.get("db");
@@ -62,6 +69,142 @@ transactionsRouter.get("/", (c) => {
     .limit(limit);
   if (where.length > 0) q = q.where(and(...where)) as typeof q;
   return c.json({ transactions: q.all() });
+});
+
+// Grouping (#46): collapse N independent txns under one virtual parent. The
+// parent NEVER carries money — amountCents is always 0 so no aggregation query
+// can double-count it. Children keep their own rows/amounts and stay counted
+// (they keep parentId IS NULL). The group total is DERIVED from children by
+// clients, never stored. Registered before the /:id routes so the static paths
+// win the match.
+transactionsRouter.post("/group", async (c) => {
+  const db = c.get("db");
+  const parsed = groupSchema.parse(await c.req.json());
+  const uniqueIds = [...new Set(parsed.ids)];
+
+  const found = db
+    .select()
+    .from(transactions)
+    .where(inArray(transactions.id, uniqueIds))
+    .all();
+  const byId = new Map(found.map((r) => [r.id, r]));
+  // Preserve caller order so accountId comes from the first requested child.
+  const rows = uniqueIds
+    .map((id) => byId.get(id))
+    .filter((r): r is NonNullable<typeof r> => r !== undefined);
+
+  if (rows.length < 2) {
+    return c.json(
+      { error: "Need at least 2 existing transactions to group" },
+      400,
+    );
+  }
+  for (const r of rows) {
+    if (r.isGroupParent) {
+      return c.json({ error: "Cannot group a group parent" }, 400);
+    }
+    if (r.groupParentId) {
+      return c.json({ error: "Transaction is already grouped" }, 400);
+    }
+    if (r.parentId) {
+      return c.json({ error: "Cannot group a split child" }, 400);
+    }
+  }
+
+  const parentId = newId();
+  const at = nowMs();
+  const groupTotalCents = rows.reduce((sum, r) => sum + r.amountCents, 0);
+  const parent = {
+    id: parentId,
+    accountId: rows[0]!.accountId,
+    categoryId: parsed.categoryId ?? null,
+    payeeId: null,
+    payeeName: parsed.payeeName ?? "Group",
+    amountCents: 0,
+    date: parsed.date,
+    notes: null,
+    latitude: null,
+    longitude: null,
+    locationName: null,
+    cleared: false,
+    reconciled: false,
+    origin: "group",
+    originRef: null,
+    importedId: null,
+    transferAccountId: null,
+    transferGroupId: null,
+    parentId: null,
+    splitTotalCents: null,
+    groupParentId: null,
+    isGroupParent: true,
+    originalAmountCents: null,
+    originalCurrency: null,
+    createdAt: at,
+    updatedAt: at,
+  };
+
+  db.transaction((tx) => {
+    tx.insert(transactions).values(parent).run();
+    recordChange(tx, {
+      resource: "transactions",
+      resourceId: parentId,
+      op: "upsert",
+      payload: parent,
+    });
+    for (const r of rows) {
+      const next = { ...r, groupParentId: parentId, updatedAt: at };
+      tx.update(transactions).set(next).where(eq(transactions.id, r.id)).run();
+      recordChange(tx, {
+        resource: "transactions",
+        resourceId: r.id,
+        op: "upsert",
+        payload: next,
+      });
+    }
+  });
+
+  return c.json({ parent, childIds: rows.map((r) => r.id), groupTotalCents }, 201);
+});
+
+transactionsRouter.post("/ungroup/:parentId", (c) => {
+  const db = c.get("db");
+  const parentId = c.req.param("parentId");
+  const parent = db
+    .select()
+    .from(transactions)
+    .where(eq(transactions.id, parentId))
+    .get();
+  if (!parent || !parent.isGroupParent) {
+    return c.json({ error: "Not a group parent" }, 404);
+  }
+
+  const children = db
+    .select()
+    .from(transactions)
+    .where(eq(transactions.groupParentId, parentId))
+    .all();
+  const at = nowMs();
+
+  db.transaction((tx) => {
+    for (const ch of children) {
+      const next = { ...ch, groupParentId: null, updatedAt: at };
+      tx.update(transactions).set(next).where(eq(transactions.id, ch.id)).run();
+      recordChange(tx, {
+        resource: "transactions",
+        resourceId: ch.id,
+        op: "upsert",
+        payload: next,
+      });
+    }
+    tx.delete(transactions).where(eq(transactions.id, parentId)).run();
+    recordChange(tx, {
+      resource: "transactions",
+      resourceId: parentId,
+      op: "delete",
+    });
+  });
+
+  return c.json({ ungrouped: true, childIds: children.map((ch) => ch.id) });
 });
 
 transactionsRouter.get("/:id", (c) => {

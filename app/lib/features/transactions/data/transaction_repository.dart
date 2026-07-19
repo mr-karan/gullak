@@ -20,6 +20,8 @@ class TransactionListItem {
     required this.cleared,
     required this.isTransfer,
     required this.isSplit,
+    this.isGroupParent = false,
+    this.groupParentId,
     this.accountName,
     this.payeeName,
     this.categoryName,
@@ -38,6 +40,11 @@ class TransactionListItem {
   final bool cleared;
   final bool isTransfer;
   final bool isSplit;
+  // Grouping (#46): a group parent collapses N children; each child points back
+  // via [groupParentId]. The parent's stored amount is 0 — its shown total is
+  // derived from its children so aggregates never double-count.
+  final bool isGroupParent;
+  final String? groupParentId;
   final String? accountName;
   final String? payeeName;
   final String? categoryName;
@@ -750,6 +757,8 @@ class TransactionRepository {
       cleared: t.cleared,
       isTransfer: t.transferGroupId != null,
       isSplit: t.splitTotalCents != null,
+      isGroupParent: t.isGroupParent,
+      groupParentId: t.groupParentId,
       accountName: a?.name,
       payeeName: p?.name ?? t.payeeName,
       categoryName: c?.name,

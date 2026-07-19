@@ -40,3 +40,31 @@ export function usePatchTransactionCategory() {
     },
   });
 }
+
+/** Group N independent txns (#46) under one zero-amount parent. */
+export function useGroupTransactions() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: {
+      ids: string[];
+      date: string;
+      payeeName?: string;
+      categoryId?: string | null;
+    }) => api.post(`/v1/transactions/group`, vars),
+    onSuccess: () => {
+      void client.invalidateQueries({ queryKey: ["transactions"] });
+    },
+  });
+}
+
+/** Ungroup a group parent: unlink its children and delete the parent. */
+export function useUngroup() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (parentId: string) =>
+      api.post(`/v1/transactions/ungroup/${parentId}`, {}),
+    onSuccess: () => {
+      void client.invalidateQueries({ queryKey: ["transactions"] });
+    },
+  });
+}

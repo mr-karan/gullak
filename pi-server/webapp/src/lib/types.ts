@@ -51,6 +51,11 @@ export interface Transaction {
   accountId: string;
   categoryId: string | null;
   parentId?: string | null;
+  // Grouping (#46): a group parent has isGroupParent=true and amountCents=0
+  // (its total is derived from children); each child points back via
+  // groupParentId.
+  groupParentId?: string | null;
+  isGroupParent?: boolean;
 }
 export interface TransactionsResponse {
   transactions: Transaction[];
