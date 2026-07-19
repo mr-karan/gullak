@@ -318,6 +318,13 @@ async function handleLog(
         createdAt: at,
         updatedAt: at,
       };
+      // TODO(#41): the log path books each item as a single plain txn. When the
+      // parser can flag an item as an account-to-account transfer (e.g. "moved
+      // 5000 from HDFC to cash"), resolve both accounts and call
+      // createTransferPair(tx, primaryRow) from ../transactions/transfers.ts
+      // instead of this single insert, so the mirror leg is auto-created in one
+      // transaction. No transfer detection exists in parseWhatsappExpenses yet,
+      // so there is nothing to hook today.
       tx.insert(transactions)
         .values(row)
         .onConflictDoUpdate({ target: transactions.id, set: row })

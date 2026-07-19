@@ -5,6 +5,12 @@ import { z } from "zod";
 import type { AppEnv } from "../app.ts";
 import { transactions } from "../db/schema.ts";
 import { newId, nowMs, recordChange } from "../repos/changelog.ts";
+import {
+  createTransferPair,
+  deletePair,
+  findSibling,
+  propagateEdit,
+} from "../transactions/transfers.ts";
 import { nameField, textField } from "./_fields.ts";
 
 const upsertSchema = z.object({
@@ -247,6 +253,25 @@ transactionsRouter.post("/", async (c) => {
     createdAt: at,
     updatedAt: at,
   };
+
+  // Transfer create (#41): when the body names a target account, this is a
+  // transfer, not a plain txn. The helper mirrors it into the target account
+  // (negated amount, shared transferGroupId, categories cleared) and writes
+  // BOTH legs + change_log rows in one transaction. We return the primary leg.
+  if (row.transferAccountId) {
+    if (row.transferAccountId === row.accountId) {
+      return c.json(
+        { error: "transferAccountId must differ from accountId" },
+        400,
+      );
+    }
+    let primary = row;
+    db.transaction((tx) => {
+      primary = createTransferPair(tx, row).primary as typeof row;
+    });
+    return c.json({ transaction: primary }, 201);
+  }
+
   db.transaction((tx) => {
     tx.insert(transactions).values(row).onConflictDoUpdate({
       target: transactions.id,
@@ -273,6 +298,35 @@ transactionsRouter.patch("/:id", async (c) => {
     .get();
   if (!existing) return c.json({ error: "Not found" }, 404);
   const next = { ...existing, ...partial, updatedAt: nowMs() };
+
+  // Transfer edit (#41): when the target is part of a transfer, keep its
+  // sibling in lock-step — amount negated, date/notes mirrored, category null
+  // on both legs — in one transaction. propagateEdit writes the sibling
+  // directly (not via this route), so there is no recursion.
+  //
+  // v1 limitation: PATCH cannot convert a transfer to/from a plain txn or move
+  // it to different accounts. Any attempt to change transferAccountId /
+  // transferGroupId on an existing transfer is ignored (the linkage is frozen).
+  if (existing.transferGroupId) {
+    next.transferGroupId = existing.transferGroupId;
+    next.transferAccountId = existing.transferAccountId;
+    next.categoryId = null;
+    const sibling = findSibling(db, existing);
+    db.transaction((tx) => {
+      tx.update(transactions).set(next).where(eq(transactions.id, id)).run();
+      recordChange(tx, {
+        resource: "transactions",
+        resourceId: id,
+        op: "upsert",
+        payload: next,
+      });
+      // Guard half-linked legacy data: if the sibling is missing, treat this
+      // as a normal row and skip propagation rather than crash.
+      if (sibling) propagateEdit(tx, next, sibling);
+    });
+    return c.json({ transaction: next });
+  }
+
   db.transaction((tx) => {
     tx.update(transactions).set(next).where(eq(transactions.id, id)).run();
     recordChange(tx, {
@@ -288,22 +342,31 @@ transactionsRouter.patch("/:id", async (c) => {
 transactionsRouter.delete("/:id", (c) => {
   const db = c.get("db");
   const id = c.req.param("id");
-  let removed = 0;
+  const existing = db
+    .select()
+    .from(transactions)
+    .where(eq(transactions.id, id))
+    .get();
+  if (!existing) return c.json({ error: "Not found" }, 404);
+
+  // Transfer delete (#41): removing either leg removes BOTH, with a change_log
+  // delete for each, in one transaction. A missing sibling (legacy half-link)
+  // is tolerated — deletePair just removes the one row it has.
+  if (existing.transferGroupId) {
+    const sibling = findSibling(db, existing);
+    db.transaction((tx) => {
+      deletePair(tx, existing, sibling);
+    });
+    return c.json({ deleted: true, id });
+  }
+
   db.transaction((tx) => {
-    const rows = tx
-      .delete(transactions)
-      .where(eq(transactions.id, id))
-      .returning()
-      .all();
-    removed = rows.length;
-    if (removed > 0) {
-      recordChange(tx, {
-        resource: "transactions",
-        resourceId: id,
-        op: "delete",
-      });
-    }
+    tx.delete(transactions).where(eq(transactions.id, id)).run();
+    recordChange(tx, {
+      resource: "transactions",
+      resourceId: id,
+      op: "delete",
+    });
   });
-  if (removed === 0) return c.json({ error: "Not found" }, 404);
   return c.json({ deleted: true, id });
 });

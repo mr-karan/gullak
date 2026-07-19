@@ -54,6 +54,38 @@ function addTxn(
     .run();
 }
 
+async function postTxn(app: ReturnType<typeof makeApp>["app"], body: unknown) {
+  return app.request("/v1/transactions", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+async function patchTxn(
+  app: ReturnType<typeof makeApp>["app"],
+  id: string,
+  body: unknown,
+) {
+  return app.request(`/v1/transactions/${id}`, {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+async function deleteTxn(app: ReturnType<typeof makeApp>["app"], id: string) {
+  return app.request(`/v1/transactions/${id}`, { method: "DELETE" });
+}
+
+function rowById(db: Db, id: string) {
+  return db
+    .select()
+    .from(schema.transactions)
+    .where(eq(schema.transactions.id, id))
+    .get();
+}
+
 async function group(app: ReturnType<typeof makeApp>["app"], body: unknown) {
   return app.request("/v1/transactions/group", {
     method: "POST",
@@ -274,4 +306,232 @@ test("splits still work: a split parent (parentId-based) is unaffected by groupi
   const sc1 = db.select().from(schema.transactions).where(eq(schema.transactions.id, "sc1")).get();
   expect(sc1?.parentId).toBe("sp");
   expect(computeNetWorth(db)).toEqual(before);
+});
+
+// ── Transfers (#41): auto-mirrored linked pairs ────────────────────────────
+
+/** Fetch both legs of the transfer that primary `id` belongs to. */
+function transferLegs(db: Db, groupId: string) {
+  return db
+    .select()
+    .from(schema.transactions)
+    .where(eq(schema.transactions.transferGroupId, groupId))
+    .all();
+}
+
+test("transfer create: yields two mirrored legs, shared group, categories nulled", async () => {
+  const { app, db } = makeApp();
+  addAccount(db, "a1");
+  addAccount(db, "a2");
+
+  const res = await postTxn(app, {
+    accountId: "a1",
+    transferAccountId: "a2",
+    amountCents: -500_00, // 500 leaves a1
+    date: "2026-03-01",
+    notes: "rent move",
+    categoryId: "cat_should_be_nulled",
+  });
+  expect(res.status).toBe(201);
+  const primary = ((await res.json()) as { transaction: { id: string; transferGroupId: string } })
+    .transaction;
+
+  const legs = transferLegs(db, primary.transferGroupId);
+  expect(legs).toHaveLength(2);
+
+  const a1Leg = legs.find((l) => l.accountId === "a1")!;
+  const a2Leg = legs.find((l) => l.accountId === "a2")!;
+  expect(a1Leg).toBeDefined();
+  expect(a2Leg).toBeDefined();
+
+  // Opposite amounts that net to zero.
+  expect(a1Leg.amountCents).toBe(-500_00);
+  expect(a2Leg.amountCents).toBe(500_00);
+  expect(a1Leg.amountCents + a2Leg.amountCents).toBe(0);
+
+  // Shared group; each leg points at the OTHER account.
+  expect(a1Leg.transferGroupId).toBe(a2Leg.transferGroupId);
+  expect(a1Leg.transferAccountId).toBe("a2");
+  expect(a2Leg.transferAccountId).toBe("a1");
+
+  // Categories cleared on BOTH legs; date/notes mirrored.
+  expect(a1Leg.categoryId).toBeNull();
+  expect(a2Leg.categoryId).toBeNull();
+  expect(a2Leg.date).toBe("2026-03-01");
+  expect(a2Leg.notes).toBe("rent move");
+
+  // Both legs emit a change_log upsert.
+  const upserts = db
+    .select()
+    .from(schema.changeLog)
+    .all()
+    .filter((r) => r.op === "upsert" && r.resource === "transactions");
+  expect(upserts.filter((r) => r.resourceId === a1Leg.id)).toHaveLength(1);
+  expect(upserts.filter((r) => r.resourceId === a2Leg.id)).toHaveLength(1);
+});
+
+test("transfer create rejects same source and target account", async () => {
+  const { app, db } = makeApp();
+  addAccount(db, "a1");
+  const res = await postTxn(app, {
+    accountId: "a1",
+    transferAccountId: "a1",
+    amountCents: -100_00,
+    date: "2026-03-01",
+  });
+  expect(res.status).toBe(400);
+});
+
+test("transfer edit: amount/date/notes propagate to sibling, no recursion", async () => {
+  const { app, db } = makeApp();
+  addAccount(db, "a1");
+  addAccount(db, "a2");
+  const primary = ((await (
+    await postTxn(app, {
+      accountId: "a1",
+      transferAccountId: "a2",
+      amountCents: -500_00,
+      date: "2026-03-01",
+      notes: "orig",
+    })
+  ).json()) as { transaction: { id: string; transferGroupId: string } }).transaction;
+
+  const legs = transferLegs(db, primary.transferGroupId);
+  const primaryLeg = legs.find((l) => l.id === primary.id)!;
+  const siblingId = legs.find((l) => l.id !== primary.id)!.id;
+
+  const changeLogBefore = db.select().from(schema.changeLog).all().length;
+
+  // Edit amount + date + notes, and try to sneak a category back on.
+  const res = await patchTxn(app, primaryLeg.id, {
+    amountCents: -750_00,
+    date: "2026-03-05",
+    notes: "updated",
+    categoryId: "cat_should_be_nulled",
+  });
+  expect(res.status).toBe(200);
+
+  const primaryAfter = rowById(db, primaryLeg.id)!;
+  const siblingAfter = rowById(db, siblingId)!;
+
+  // Primary took the edit; category forced null despite the body.
+  expect(primaryAfter.amountCents).toBe(-750_00);
+  expect(primaryAfter.categoryId).toBeNull();
+  expect(primaryAfter.date).toBe("2026-03-05");
+  expect(primaryAfter.notes).toBe("updated");
+
+  // Sibling mirrors: negated amount, same date/notes, category null.
+  expect(siblingAfter.amountCents).toBe(750_00);
+  expect(siblingAfter.categoryId).toBeNull();
+  expect(siblingAfter.date).toBe("2026-03-05");
+  expect(siblingAfter.notes).toBe("updated");
+  expect(primaryAfter.amountCents + siblingAfter.amountCents).toBe(0);
+
+  // Exactly one propagation: one PATCH → one primary upsert + one sibling
+  // upsert = two new change_log rows, no runaway recursion.
+  const changeLogAfter = db.select().from(schema.changeLog).all().length;
+  expect(changeLogAfter - changeLogBefore).toBe(2);
+
+  // Editing the OTHER leg propagates back symmetrically (still one hop).
+  const res2 = await patchTxn(app, siblingId, { amountCents: 200_00 });
+  expect(res2.status).toBe(200);
+  expect(rowById(db, siblingId)!.amountCents).toBe(200_00);
+  expect(rowById(db, primaryLeg.id)!.amountCents).toBe(-200_00);
+  const changeLogFinal = db.select().from(schema.changeLog).all().length;
+  expect(changeLogFinal - changeLogAfter).toBe(2);
+});
+
+test("transfer delete: removing either leg removes both + logs two deletes", async () => {
+  const { app, db } = makeApp();
+  addAccount(db, "a1");
+  addAccount(db, "a2");
+  const primary = ((await (
+    await postTxn(app, {
+      accountId: "a1",
+      transferAccountId: "a2",
+      amountCents: -500_00,
+      date: "2026-03-01",
+    })
+  ).json()) as { transaction: { id: string; transferGroupId: string } }).transaction;
+  const legs = transferLegs(db, primary.transferGroupId);
+  const siblingId = legs.find((l) => l.id !== primary.id)!.id;
+
+  const res = await deleteTxn(app, siblingId); // delete the mirror leg
+  expect(res.status).toBe(200);
+
+  // Both legs gone.
+  expect(rowById(db, primary.id)).toBeUndefined();
+  expect(rowById(db, siblingId)).toBeUndefined();
+
+  const deletes = db
+    .select()
+    .from(schema.changeLog)
+    .all()
+    .filter((r) => r.op === "delete" && r.resource === "transactions");
+  expect(deletes.filter((r) => r.resourceId === primary.id)).toHaveLength(1);
+  expect(deletes.filter((r) => r.resourceId === siblingId)).toHaveLength(1);
+});
+
+test("no double-count: a transfer leaves computeNetWorth unchanged", async () => {
+  const { app, db } = makeApp();
+  addAccount(db, "a1", 1000_00);
+  addAccount(db, "a2", 500_00);
+  addTxn(db, "t1", "a1", -100_00, "2026-03-01");
+
+  const before = computeNetWorth(db);
+
+  await postTxn(app, {
+    accountId: "a1",
+    transferAccountId: "a2",
+    amountCents: -300_00,
+    date: "2026-03-02",
+  });
+
+  // The mirror negates the primary, so net worth is identical.
+  expect(computeNetWorth(db)).toEqual(before);
+});
+
+test("non-transfer create/patch/delete still behave as before (regression)", async () => {
+  const { app, db } = makeApp();
+  addAccount(db, "a1");
+
+  // Create: single row, single change_log upsert, no sibling.
+  const created = ((await (
+    await postTxn(app, {
+      accountId: "a1",
+      amountCents: -250_00,
+      date: "2026-03-01",
+      categoryId: "cat1",
+    })
+  ).json()) as { transaction: { id: string } }).transaction;
+  const row = rowById(db, created.id)!;
+  expect(row.amountCents).toBe(-250_00);
+  expect(row.categoryId).toBe("cat1"); // NOT nulled — plain txn keeps its category
+  expect(row.transferGroupId).toBeNull();
+  expect(
+    db
+      .select()
+      .from(schema.transactions)
+      .all()
+      .filter((r) => r.accountId === "a1"),
+  ).toHaveLength(1);
+
+  // Patch: category survives, only one row exists.
+  await patchTxn(app, created.id, { amountCents: -260_00, categoryId: "cat2" });
+  const patched = rowById(db, created.id)!;
+  expect(patched.amountCents).toBe(-260_00);
+  expect(patched.categoryId).toBe("cat2");
+  expect(db.select().from(schema.transactions).all()).toHaveLength(1);
+
+  // Delete: exactly one row removed, one change_log delete.
+  const del = await deleteTxn(app, created.id);
+  expect(del.status).toBe(200);
+  expect(rowById(db, created.id)).toBeUndefined();
+  expect(
+    db
+      .select()
+      .from(schema.changeLog)
+      .all()
+      .filter((r) => r.op === "delete" && r.resourceId === created.id),
+  ).toHaveLength(1);
 });

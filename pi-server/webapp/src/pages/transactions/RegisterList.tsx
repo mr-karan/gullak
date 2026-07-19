@@ -1,5 +1,12 @@
 import { useState } from "react";
-import { Check, ChevronDown, ChevronRight, MoreHorizontal, Ungroup } from "lucide-react";
+import {
+  ArrowLeftRight,
+  Check,
+  ChevronDown,
+  ChevronRight,
+  MoreHorizontal,
+  Ungroup,
+} from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { fmtCentsSigned, fmtDayMonth } from "@/lib/money";
@@ -128,8 +135,28 @@ function Row({
   const txn = row.txn;
   const [expanded, setExpanded] = useState(false);
   const isGroup = !!row.children;
+  // Transfer (#41): both legs are ordinary rows sharing a transferGroupId; the
+  // counterpart account is named by transferAccountId. Categories are null on a
+  // transfer, so the category slot shows the ⇄ affordance + counterpart instead.
+  const isTransfer = !isGroup && !!txn.transferGroupId;
   // A group parent can't itself be grouped; only plain rows are selectable.
   const selectable = selection?.active && !isGroup;
+
+  const transferCell = (
+    <span
+      className="flex min-w-0 items-center gap-1 text-sm text-ink-2"
+      title={
+        txn.transferAccountId
+          ? `Transfer · ${accountName(txn.transferAccountId)}`
+          : "Transfer"
+      }
+    >
+      <ArrowLeftRight className="size-3.5 shrink-0" aria-hidden />
+      <span className="truncate">
+        {txn.transferAccountId ? accountName(txn.transferAccountId) : "Transfer"}
+      </span>
+    </span>
+  );
 
   const amount = (
     <span
@@ -229,6 +256,8 @@ function Row({
             <span className="truncate text-sm text-ink-2">
               {categoryName(txn.categoryId) ?? "Group"}
             </span>
+          ) : isTransfer ? (
+            transferCell
           ) : (
             <CategoryCell
               transactionId={txn.id}
@@ -276,6 +305,8 @@ function Row({
               <span aria-hidden>·</span>
               {isGroup ? (
                 <span className="truncate">{categoryName(txn.categoryId) ?? "Group"}</span>
+              ) : isTransfer ? (
+                transferCell
               ) : (
                 <CategoryCell
                   transactionId={txn.id}

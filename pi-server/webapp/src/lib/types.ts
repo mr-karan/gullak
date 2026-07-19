@@ -56,6 +56,11 @@ export interface Transaction {
   // groupParentId.
   groupParentId?: string | null;
   isGroupParent?: boolean;
+  // Transfer (#41): a transfer is two ordinary txns sharing a transferGroupId;
+  // each leg's transferAccountId names the OTHER account. categoryId is null on
+  // both legs.
+  transferGroupId?: string | null;
+  transferAccountId?: string | null;
 }
 export interface TransactionsResponse {
   transactions: Transaction[];
