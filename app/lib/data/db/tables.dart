@@ -62,6 +62,9 @@ class Payees extends Table {
   TextColumn get id => text()();
   TextColumn get name => text()();
   IntColumn get useCount => integer().withDefault(const Constant(0))();
+  // Per-payee opt-out for server-side auto-learned category rules (#39).
+  BoolColumn get learnCategories =>
+      boolean().withDefault(const Constant(true))();
   IntColumn get updatedAt => integer()();
 
   @override
@@ -93,8 +96,13 @@ class Transactions extends Table {
   RealColumn get longitude => real().nullable()();
   TextColumn get locationName => text().nullable()();
   BoolColumn get cleared => boolean().withDefault(const Constant(false))();
+  // Reconciliation lock (#42): set when an account reconcile confirms this
+  // cleared row against the bank balance. Reconciled rows are frozen server-side.
+  BoolColumn get reconciled => boolean().withDefault(const Constant(false))();
   TextColumn get origin => text().withDefault(const Constant('manual'))();
   TextColumn get originRef => text().nullable()();
+  // Import-dedupe key (#38): stable per-source id used by the server matcher.
+  TextColumn get importedId => text().nullable()();
 
   // Transfer linkage.
   TextColumn get transferAccountId => text().nullable()();
@@ -103,6 +111,13 @@ class Transactions extends Table {
   // Split linkage.
   TextColumn get parentId => text().nullable()();
   IntColumn get splitTotalCents => integer().nullable()();
+
+  // Grouping (#46): N independent txns collapsed under one virtual parent.
+  // A group parent has [isGroupParent] = true and [amountCents] = sum of its
+  // children; children point back via [groupParentId]. Distinct from splits.
+  TextColumn get groupParentId => text().nullable()();
+  BoolColumn get isGroupParent =>
+      boolean().withDefault(const Constant(false))();
 
   // Foreign-currency metadata. Display-only: [amountCents] stays in the base
   // (home) currency; these record what the expense was in its original

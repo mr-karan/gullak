@@ -1572,6 +1572,21 @@ class $PayeesTable extends Payees with TableInfo<$PayeesTable, PayeeRow> {
     requiredDuringInsert: false,
     defaultValue: const Constant(0),
   );
+  static const VerificationMeta _learnCategoriesMeta = const VerificationMeta(
+    'learnCategories',
+  );
+  @override
+  late final GeneratedColumn<bool> learnCategories = GeneratedColumn<bool>(
+    'learn_categories',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("learn_categories" IN (0, 1))',
+    ),
+    defaultValue: const Constant(true),
+  );
   static const VerificationMeta _updatedAtMeta = const VerificationMeta(
     'updatedAt',
   );
@@ -1584,7 +1599,13 @@ class $PayeesTable extends Payees with TableInfo<$PayeesTable, PayeeRow> {
     requiredDuringInsert: true,
   );
   @override
-  List<GeneratedColumn> get $columns => [id, name, useCount, updatedAt];
+  List<GeneratedColumn> get $columns => [
+    id,
+    name,
+    useCount,
+    learnCategories,
+    updatedAt,
+  ];
   @override
   String get aliasedName => _alias ?? actualTableName;
   @override
@@ -1616,6 +1637,15 @@ class $PayeesTable extends Payees with TableInfo<$PayeesTable, PayeeRow> {
         useCount.isAcceptableOrUnknown(data['use_count']!, _useCountMeta),
       );
     }
+    if (data.containsKey('learn_categories')) {
+      context.handle(
+        _learnCategoriesMeta,
+        learnCategories.isAcceptableOrUnknown(
+          data['learn_categories']!,
+          _learnCategoriesMeta,
+        ),
+      );
+    }
     if (data.containsKey('updated_at')) {
       context.handle(
         _updatedAtMeta,
@@ -1645,6 +1675,10 @@ class $PayeesTable extends Payees with TableInfo<$PayeesTable, PayeeRow> {
         DriftSqlType.int,
         data['${effectivePrefix}use_count'],
       )!,
+      learnCategories: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}learn_categories'],
+      )!,
       updatedAt: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}updated_at'],
@@ -1662,11 +1696,13 @@ class PayeeRow extends DataClass implements Insertable<PayeeRow> {
   final String id;
   final String name;
   final int useCount;
+  final bool learnCategories;
   final int updatedAt;
   const PayeeRow({
     required this.id,
     required this.name,
     required this.useCount,
+    required this.learnCategories,
     required this.updatedAt,
   });
   @override
@@ -1675,6 +1711,7 @@ class PayeeRow extends DataClass implements Insertable<PayeeRow> {
     map['id'] = Variable<String>(id);
     map['name'] = Variable<String>(name);
     map['use_count'] = Variable<int>(useCount);
+    map['learn_categories'] = Variable<bool>(learnCategories);
     map['updated_at'] = Variable<int>(updatedAt);
     return map;
   }
@@ -1684,6 +1721,7 @@ class PayeeRow extends DataClass implements Insertable<PayeeRow> {
       id: Value(id),
       name: Value(name),
       useCount: Value(useCount),
+      learnCategories: Value(learnCategories),
       updatedAt: Value(updatedAt),
     );
   }
@@ -1697,6 +1735,7 @@ class PayeeRow extends DataClass implements Insertable<PayeeRow> {
       id: serializer.fromJson<String>(json['id']),
       name: serializer.fromJson<String>(json['name']),
       useCount: serializer.fromJson<int>(json['useCount']),
+      learnCategories: serializer.fromJson<bool>(json['learnCategories']),
       updatedAt: serializer.fromJson<int>(json['updatedAt']),
     );
   }
@@ -1707,6 +1746,7 @@ class PayeeRow extends DataClass implements Insertable<PayeeRow> {
       'id': serializer.toJson<String>(id),
       'name': serializer.toJson<String>(name),
       'useCount': serializer.toJson<int>(useCount),
+      'learnCategories': serializer.toJson<bool>(learnCategories),
       'updatedAt': serializer.toJson<int>(updatedAt),
     };
   }
@@ -1715,11 +1755,13 @@ class PayeeRow extends DataClass implements Insertable<PayeeRow> {
     String? id,
     String? name,
     int? useCount,
+    bool? learnCategories,
     int? updatedAt,
   }) => PayeeRow(
     id: id ?? this.id,
     name: name ?? this.name,
     useCount: useCount ?? this.useCount,
+    learnCategories: learnCategories ?? this.learnCategories,
     updatedAt: updatedAt ?? this.updatedAt,
   );
   PayeeRow copyWithCompanion(PayeesCompanion data) {
@@ -1727,6 +1769,9 @@ class PayeeRow extends DataClass implements Insertable<PayeeRow> {
       id: data.id.present ? data.id.value : this.id,
       name: data.name.present ? data.name.value : this.name,
       useCount: data.useCount.present ? data.useCount.value : this.useCount,
+      learnCategories: data.learnCategories.present
+          ? data.learnCategories.value
+          : this.learnCategories,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
     );
   }
@@ -1737,13 +1782,15 @@ class PayeeRow extends DataClass implements Insertable<PayeeRow> {
           ..write('id: $id, ')
           ..write('name: $name, ')
           ..write('useCount: $useCount, ')
+          ..write('learnCategories: $learnCategories, ')
           ..write('updatedAt: $updatedAt')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode => Object.hash(id, name, useCount, updatedAt);
+  int get hashCode =>
+      Object.hash(id, name, useCount, learnCategories, updatedAt);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -1751,6 +1798,7 @@ class PayeeRow extends DataClass implements Insertable<PayeeRow> {
           other.id == this.id &&
           other.name == this.name &&
           other.useCount == this.useCount &&
+          other.learnCategories == this.learnCategories &&
           other.updatedAt == this.updatedAt);
 }
 
@@ -1758,12 +1806,14 @@ class PayeesCompanion extends UpdateCompanion<PayeeRow> {
   final Value<String> id;
   final Value<String> name;
   final Value<int> useCount;
+  final Value<bool> learnCategories;
   final Value<int> updatedAt;
   final Value<int> rowid;
   const PayeesCompanion({
     this.id = const Value.absent(),
     this.name = const Value.absent(),
     this.useCount = const Value.absent(),
+    this.learnCategories = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.rowid = const Value.absent(),
   });
@@ -1771,6 +1821,7 @@ class PayeesCompanion extends UpdateCompanion<PayeeRow> {
     required String id,
     required String name,
     this.useCount = const Value.absent(),
+    this.learnCategories = const Value.absent(),
     required int updatedAt,
     this.rowid = const Value.absent(),
   }) : id = Value(id),
@@ -1780,6 +1831,7 @@ class PayeesCompanion extends UpdateCompanion<PayeeRow> {
     Expression<String>? id,
     Expression<String>? name,
     Expression<int>? useCount,
+    Expression<bool>? learnCategories,
     Expression<int>? updatedAt,
     Expression<int>? rowid,
   }) {
@@ -1787,6 +1839,7 @@ class PayeesCompanion extends UpdateCompanion<PayeeRow> {
       if (id != null) 'id': id,
       if (name != null) 'name': name,
       if (useCount != null) 'use_count': useCount,
+      if (learnCategories != null) 'learn_categories': learnCategories,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (rowid != null) 'rowid': rowid,
     });
@@ -1796,6 +1849,7 @@ class PayeesCompanion extends UpdateCompanion<PayeeRow> {
     Value<String>? id,
     Value<String>? name,
     Value<int>? useCount,
+    Value<bool>? learnCategories,
     Value<int>? updatedAt,
     Value<int>? rowid,
   }) {
@@ -1803,6 +1857,7 @@ class PayeesCompanion extends UpdateCompanion<PayeeRow> {
       id: id ?? this.id,
       name: name ?? this.name,
       useCount: useCount ?? this.useCount,
+      learnCategories: learnCategories ?? this.learnCategories,
       updatedAt: updatedAt ?? this.updatedAt,
       rowid: rowid ?? this.rowid,
     );
@@ -1820,6 +1875,9 @@ class PayeesCompanion extends UpdateCompanion<PayeeRow> {
     if (useCount.present) {
       map['use_count'] = Variable<int>(useCount.value);
     }
+    if (learnCategories.present) {
+      map['learn_categories'] = Variable<bool>(learnCategories.value);
+    }
     if (updatedAt.present) {
       map['updated_at'] = Variable<int>(updatedAt.value);
     }
@@ -1835,6 +1893,7 @@ class PayeesCompanion extends UpdateCompanion<PayeeRow> {
           ..write('id: $id, ')
           ..write('name: $name, ')
           ..write('useCount: $useCount, ')
+          ..write('learnCategories: $learnCategories, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('rowid: $rowid')
           ..write(')'))
@@ -1978,6 +2037,21 @@ class $TransactionsTable extends Transactions
     ),
     defaultValue: const Constant(false),
   );
+  static const VerificationMeta _reconciledMeta = const VerificationMeta(
+    'reconciled',
+  );
+  @override
+  late final GeneratedColumn<bool> reconciled = GeneratedColumn<bool>(
+    'reconciled',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("reconciled" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
   static const VerificationMeta _originMeta = const VerificationMeta('origin');
   @override
   late final GeneratedColumn<String> origin = GeneratedColumn<String>(
@@ -1994,6 +2068,17 @@ class $TransactionsTable extends Transactions
   @override
   late final GeneratedColumn<String> originRef = GeneratedColumn<String>(
     'origin_ref',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _importedIdMeta = const VerificationMeta(
+    'importedId',
+  );
+  @override
+  late final GeneratedColumn<String> importedId = GeneratedColumn<String>(
+    'imported_id',
     aliasedName,
     true,
     type: DriftSqlType.string,
@@ -2043,6 +2128,32 @@ class $TransactionsTable extends Transactions
     true,
     type: DriftSqlType.int,
     requiredDuringInsert: false,
+  );
+  static const VerificationMeta _groupParentIdMeta = const VerificationMeta(
+    'groupParentId',
+  );
+  @override
+  late final GeneratedColumn<String> groupParentId = GeneratedColumn<String>(
+    'group_parent_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _isGroupParentMeta = const VerificationMeta(
+    'isGroupParent',
+  );
+  @override
+  late final GeneratedColumn<bool> isGroupParent = GeneratedColumn<bool>(
+    'is_group_parent',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("is_group_parent" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
   );
   static const VerificationMeta _originalAmountCentsMeta =
       const VerificationMeta('originalAmountCents');
@@ -2101,12 +2212,16 @@ class $TransactionsTable extends Transactions
     longitude,
     locationName,
     cleared,
+    reconciled,
     origin,
     originRef,
+    importedId,
     transferAccountId,
     transferGroupId,
     parentId,
     splitTotalCents,
+    groupParentId,
+    isGroupParent,
     originalAmountCents,
     originalCurrency,
     createdAt,
@@ -2207,6 +2322,12 @@ class $TransactionsTable extends Transactions
         cleared.isAcceptableOrUnknown(data['cleared']!, _clearedMeta),
       );
     }
+    if (data.containsKey('reconciled')) {
+      context.handle(
+        _reconciledMeta,
+        reconciled.isAcceptableOrUnknown(data['reconciled']!, _reconciledMeta),
+      );
+    }
     if (data.containsKey('origin')) {
       context.handle(
         _originMeta,
@@ -2217,6 +2338,12 @@ class $TransactionsTable extends Transactions
       context.handle(
         _originRefMeta,
         originRef.isAcceptableOrUnknown(data['origin_ref']!, _originRefMeta),
+      );
+    }
+    if (data.containsKey('imported_id')) {
+      context.handle(
+        _importedIdMeta,
+        importedId.isAcceptableOrUnknown(data['imported_id']!, _importedIdMeta),
       );
     }
     if (data.containsKey('transfer_account_id')) {
@@ -2249,6 +2376,24 @@ class $TransactionsTable extends Transactions
         splitTotalCents.isAcceptableOrUnknown(
           data['split_total_cents']!,
           _splitTotalCentsMeta,
+        ),
+      );
+    }
+    if (data.containsKey('group_parent_id')) {
+      context.handle(
+        _groupParentIdMeta,
+        groupParentId.isAcceptableOrUnknown(
+          data['group_parent_id']!,
+          _groupParentIdMeta,
+        ),
+      );
+    }
+    if (data.containsKey('is_group_parent')) {
+      context.handle(
+        _isGroupParentMeta,
+        isGroupParent.isAcceptableOrUnknown(
+          data['is_group_parent']!,
+          _isGroupParentMeta,
         ),
       );
     }
@@ -2343,6 +2488,10 @@ class $TransactionsTable extends Transactions
         DriftSqlType.bool,
         data['${effectivePrefix}cleared'],
       )!,
+      reconciled: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}reconciled'],
+      )!,
       origin: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}origin'],
@@ -2350,6 +2499,10 @@ class $TransactionsTable extends Transactions
       originRef: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}origin_ref'],
+      ),
+      importedId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}imported_id'],
       ),
       transferAccountId: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
@@ -2367,6 +2520,14 @@ class $TransactionsTable extends Transactions
         DriftSqlType.int,
         data['${effectivePrefix}split_total_cents'],
       ),
+      groupParentId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}group_parent_id'],
+      ),
+      isGroupParent: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}is_group_parent'],
+      )!,
       originalAmountCents: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}original_amount_cents'],
@@ -2405,12 +2566,16 @@ class TransactionRow extends DataClass implements Insertable<TransactionRow> {
   final double? longitude;
   final String? locationName;
   final bool cleared;
+  final bool reconciled;
   final String origin;
   final String? originRef;
+  final String? importedId;
   final String? transferAccountId;
   final String? transferGroupId;
   final String? parentId;
   final int? splitTotalCents;
+  final String? groupParentId;
+  final bool isGroupParent;
   final int? originalAmountCents;
   final String? originalCurrency;
   final int createdAt;
@@ -2428,12 +2593,16 @@ class TransactionRow extends DataClass implements Insertable<TransactionRow> {
     this.longitude,
     this.locationName,
     required this.cleared,
+    required this.reconciled,
     required this.origin,
     this.originRef,
+    this.importedId,
     this.transferAccountId,
     this.transferGroupId,
     this.parentId,
     this.splitTotalCents,
+    this.groupParentId,
+    required this.isGroupParent,
     this.originalAmountCents,
     this.originalCurrency,
     required this.createdAt,
@@ -2468,9 +2637,13 @@ class TransactionRow extends DataClass implements Insertable<TransactionRow> {
       map['location_name'] = Variable<String>(locationName);
     }
     map['cleared'] = Variable<bool>(cleared);
+    map['reconciled'] = Variable<bool>(reconciled);
     map['origin'] = Variable<String>(origin);
     if (!nullToAbsent || originRef != null) {
       map['origin_ref'] = Variable<String>(originRef);
+    }
+    if (!nullToAbsent || importedId != null) {
+      map['imported_id'] = Variable<String>(importedId);
     }
     if (!nullToAbsent || transferAccountId != null) {
       map['transfer_account_id'] = Variable<String>(transferAccountId);
@@ -2484,6 +2657,10 @@ class TransactionRow extends DataClass implements Insertable<TransactionRow> {
     if (!nullToAbsent || splitTotalCents != null) {
       map['split_total_cents'] = Variable<int>(splitTotalCents);
     }
+    if (!nullToAbsent || groupParentId != null) {
+      map['group_parent_id'] = Variable<String>(groupParentId);
+    }
+    map['is_group_parent'] = Variable<bool>(isGroupParent);
     if (!nullToAbsent || originalAmountCents != null) {
       map['original_amount_cents'] = Variable<int>(originalAmountCents);
     }
@@ -2523,10 +2700,14 @@ class TransactionRow extends DataClass implements Insertable<TransactionRow> {
           ? const Value.absent()
           : Value(locationName),
       cleared: Value(cleared),
+      reconciled: Value(reconciled),
       origin: Value(origin),
       originRef: originRef == null && nullToAbsent
           ? const Value.absent()
           : Value(originRef),
+      importedId: importedId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(importedId),
       transferAccountId: transferAccountId == null && nullToAbsent
           ? const Value.absent()
           : Value(transferAccountId),
@@ -2539,6 +2720,10 @@ class TransactionRow extends DataClass implements Insertable<TransactionRow> {
       splitTotalCents: splitTotalCents == null && nullToAbsent
           ? const Value.absent()
           : Value(splitTotalCents),
+      groupParentId: groupParentId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(groupParentId),
+      isGroupParent: Value(isGroupParent),
       originalAmountCents: originalAmountCents == null && nullToAbsent
           ? const Value.absent()
           : Value(originalAmountCents),
@@ -2568,14 +2753,18 @@ class TransactionRow extends DataClass implements Insertable<TransactionRow> {
       longitude: serializer.fromJson<double?>(json['longitude']),
       locationName: serializer.fromJson<String?>(json['locationName']),
       cleared: serializer.fromJson<bool>(json['cleared']),
+      reconciled: serializer.fromJson<bool>(json['reconciled']),
       origin: serializer.fromJson<String>(json['origin']),
       originRef: serializer.fromJson<String?>(json['originRef']),
+      importedId: serializer.fromJson<String?>(json['importedId']),
       transferAccountId: serializer.fromJson<String?>(
         json['transferAccountId'],
       ),
       transferGroupId: serializer.fromJson<String?>(json['transferGroupId']),
       parentId: serializer.fromJson<String?>(json['parentId']),
       splitTotalCents: serializer.fromJson<int?>(json['splitTotalCents']),
+      groupParentId: serializer.fromJson<String?>(json['groupParentId']),
+      isGroupParent: serializer.fromJson<bool>(json['isGroupParent']),
       originalAmountCents: serializer.fromJson<int?>(
         json['originalAmountCents'],
       ),
@@ -2600,12 +2789,16 @@ class TransactionRow extends DataClass implements Insertable<TransactionRow> {
       'longitude': serializer.toJson<double?>(longitude),
       'locationName': serializer.toJson<String?>(locationName),
       'cleared': serializer.toJson<bool>(cleared),
+      'reconciled': serializer.toJson<bool>(reconciled),
       'origin': serializer.toJson<String>(origin),
       'originRef': serializer.toJson<String?>(originRef),
+      'importedId': serializer.toJson<String?>(importedId),
       'transferAccountId': serializer.toJson<String?>(transferAccountId),
       'transferGroupId': serializer.toJson<String?>(transferGroupId),
       'parentId': serializer.toJson<String?>(parentId),
       'splitTotalCents': serializer.toJson<int?>(splitTotalCents),
+      'groupParentId': serializer.toJson<String?>(groupParentId),
+      'isGroupParent': serializer.toJson<bool>(isGroupParent),
       'originalAmountCents': serializer.toJson<int?>(originalAmountCents),
       'originalCurrency': serializer.toJson<String?>(originalCurrency),
       'createdAt': serializer.toJson<int>(createdAt),
@@ -2626,12 +2819,16 @@ class TransactionRow extends DataClass implements Insertable<TransactionRow> {
     Value<double?> longitude = const Value.absent(),
     Value<String?> locationName = const Value.absent(),
     bool? cleared,
+    bool? reconciled,
     String? origin,
     Value<String?> originRef = const Value.absent(),
+    Value<String?> importedId = const Value.absent(),
     Value<String?> transferAccountId = const Value.absent(),
     Value<String?> transferGroupId = const Value.absent(),
     Value<String?> parentId = const Value.absent(),
     Value<int?> splitTotalCents = const Value.absent(),
+    Value<String?> groupParentId = const Value.absent(),
+    bool? isGroupParent,
     Value<int?> originalAmountCents = const Value.absent(),
     Value<String?> originalCurrency = const Value.absent(),
     int? createdAt,
@@ -2649,8 +2846,10 @@ class TransactionRow extends DataClass implements Insertable<TransactionRow> {
     longitude: longitude.present ? longitude.value : this.longitude,
     locationName: locationName.present ? locationName.value : this.locationName,
     cleared: cleared ?? this.cleared,
+    reconciled: reconciled ?? this.reconciled,
     origin: origin ?? this.origin,
     originRef: originRef.present ? originRef.value : this.originRef,
+    importedId: importedId.present ? importedId.value : this.importedId,
     transferAccountId: transferAccountId.present
         ? transferAccountId.value
         : this.transferAccountId,
@@ -2661,6 +2860,10 @@ class TransactionRow extends DataClass implements Insertable<TransactionRow> {
     splitTotalCents: splitTotalCents.present
         ? splitTotalCents.value
         : this.splitTotalCents,
+    groupParentId: groupParentId.present
+        ? groupParentId.value
+        : this.groupParentId,
+    isGroupParent: isGroupParent ?? this.isGroupParent,
     originalAmountCents: originalAmountCents.present
         ? originalAmountCents.value
         : this.originalAmountCents,
@@ -2690,8 +2893,14 @@ class TransactionRow extends DataClass implements Insertable<TransactionRow> {
           ? data.locationName.value
           : this.locationName,
       cleared: data.cleared.present ? data.cleared.value : this.cleared,
+      reconciled: data.reconciled.present
+          ? data.reconciled.value
+          : this.reconciled,
       origin: data.origin.present ? data.origin.value : this.origin,
       originRef: data.originRef.present ? data.originRef.value : this.originRef,
+      importedId: data.importedId.present
+          ? data.importedId.value
+          : this.importedId,
       transferAccountId: data.transferAccountId.present
           ? data.transferAccountId.value
           : this.transferAccountId,
@@ -2702,6 +2911,12 @@ class TransactionRow extends DataClass implements Insertable<TransactionRow> {
       splitTotalCents: data.splitTotalCents.present
           ? data.splitTotalCents.value
           : this.splitTotalCents,
+      groupParentId: data.groupParentId.present
+          ? data.groupParentId.value
+          : this.groupParentId,
+      isGroupParent: data.isGroupParent.present
+          ? data.isGroupParent.value
+          : this.isGroupParent,
       originalAmountCents: data.originalAmountCents.present
           ? data.originalAmountCents.value
           : this.originalAmountCents,
@@ -2728,12 +2943,16 @@ class TransactionRow extends DataClass implements Insertable<TransactionRow> {
           ..write('longitude: $longitude, ')
           ..write('locationName: $locationName, ')
           ..write('cleared: $cleared, ')
+          ..write('reconciled: $reconciled, ')
           ..write('origin: $origin, ')
           ..write('originRef: $originRef, ')
+          ..write('importedId: $importedId, ')
           ..write('transferAccountId: $transferAccountId, ')
           ..write('transferGroupId: $transferGroupId, ')
           ..write('parentId: $parentId, ')
           ..write('splitTotalCents: $splitTotalCents, ')
+          ..write('groupParentId: $groupParentId, ')
+          ..write('isGroupParent: $isGroupParent, ')
           ..write('originalAmountCents: $originalAmountCents, ')
           ..write('originalCurrency: $originalCurrency, ')
           ..write('createdAt: $createdAt, ')
@@ -2756,12 +2975,16 @@ class TransactionRow extends DataClass implements Insertable<TransactionRow> {
     longitude,
     locationName,
     cleared,
+    reconciled,
     origin,
     originRef,
+    importedId,
     transferAccountId,
     transferGroupId,
     parentId,
     splitTotalCents,
+    groupParentId,
+    isGroupParent,
     originalAmountCents,
     originalCurrency,
     createdAt,
@@ -2783,12 +3006,16 @@ class TransactionRow extends DataClass implements Insertable<TransactionRow> {
           other.longitude == this.longitude &&
           other.locationName == this.locationName &&
           other.cleared == this.cleared &&
+          other.reconciled == this.reconciled &&
           other.origin == this.origin &&
           other.originRef == this.originRef &&
+          other.importedId == this.importedId &&
           other.transferAccountId == this.transferAccountId &&
           other.transferGroupId == this.transferGroupId &&
           other.parentId == this.parentId &&
           other.splitTotalCents == this.splitTotalCents &&
+          other.groupParentId == this.groupParentId &&
+          other.isGroupParent == this.isGroupParent &&
           other.originalAmountCents == this.originalAmountCents &&
           other.originalCurrency == this.originalCurrency &&
           other.createdAt == this.createdAt &&
@@ -2808,12 +3035,16 @@ class TransactionsCompanion extends UpdateCompanion<TransactionRow> {
   final Value<double?> longitude;
   final Value<String?> locationName;
   final Value<bool> cleared;
+  final Value<bool> reconciled;
   final Value<String> origin;
   final Value<String?> originRef;
+  final Value<String?> importedId;
   final Value<String?> transferAccountId;
   final Value<String?> transferGroupId;
   final Value<String?> parentId;
   final Value<int?> splitTotalCents;
+  final Value<String?> groupParentId;
+  final Value<bool> isGroupParent;
   final Value<int?> originalAmountCents;
   final Value<String?> originalCurrency;
   final Value<int> createdAt;
@@ -2832,12 +3063,16 @@ class TransactionsCompanion extends UpdateCompanion<TransactionRow> {
     this.longitude = const Value.absent(),
     this.locationName = const Value.absent(),
     this.cleared = const Value.absent(),
+    this.reconciled = const Value.absent(),
     this.origin = const Value.absent(),
     this.originRef = const Value.absent(),
+    this.importedId = const Value.absent(),
     this.transferAccountId = const Value.absent(),
     this.transferGroupId = const Value.absent(),
     this.parentId = const Value.absent(),
     this.splitTotalCents = const Value.absent(),
+    this.groupParentId = const Value.absent(),
+    this.isGroupParent = const Value.absent(),
     this.originalAmountCents = const Value.absent(),
     this.originalCurrency = const Value.absent(),
     this.createdAt = const Value.absent(),
@@ -2857,12 +3092,16 @@ class TransactionsCompanion extends UpdateCompanion<TransactionRow> {
     this.longitude = const Value.absent(),
     this.locationName = const Value.absent(),
     this.cleared = const Value.absent(),
+    this.reconciled = const Value.absent(),
     this.origin = const Value.absent(),
     this.originRef = const Value.absent(),
+    this.importedId = const Value.absent(),
     this.transferAccountId = const Value.absent(),
     this.transferGroupId = const Value.absent(),
     this.parentId = const Value.absent(),
     this.splitTotalCents = const Value.absent(),
+    this.groupParentId = const Value.absent(),
+    this.isGroupParent = const Value.absent(),
     this.originalAmountCents = const Value.absent(),
     this.originalCurrency = const Value.absent(),
     required int createdAt,
@@ -2887,12 +3126,16 @@ class TransactionsCompanion extends UpdateCompanion<TransactionRow> {
     Expression<double>? longitude,
     Expression<String>? locationName,
     Expression<bool>? cleared,
+    Expression<bool>? reconciled,
     Expression<String>? origin,
     Expression<String>? originRef,
+    Expression<String>? importedId,
     Expression<String>? transferAccountId,
     Expression<String>? transferGroupId,
     Expression<String>? parentId,
     Expression<int>? splitTotalCents,
+    Expression<String>? groupParentId,
+    Expression<bool>? isGroupParent,
     Expression<int>? originalAmountCents,
     Expression<String>? originalCurrency,
     Expression<int>? createdAt,
@@ -2912,12 +3155,16 @@ class TransactionsCompanion extends UpdateCompanion<TransactionRow> {
       if (longitude != null) 'longitude': longitude,
       if (locationName != null) 'location_name': locationName,
       if (cleared != null) 'cleared': cleared,
+      if (reconciled != null) 'reconciled': reconciled,
       if (origin != null) 'origin': origin,
       if (originRef != null) 'origin_ref': originRef,
+      if (importedId != null) 'imported_id': importedId,
       if (transferAccountId != null) 'transfer_account_id': transferAccountId,
       if (transferGroupId != null) 'transfer_group_id': transferGroupId,
       if (parentId != null) 'parent_id': parentId,
       if (splitTotalCents != null) 'split_total_cents': splitTotalCents,
+      if (groupParentId != null) 'group_parent_id': groupParentId,
+      if (isGroupParent != null) 'is_group_parent': isGroupParent,
       if (originalAmountCents != null)
         'original_amount_cents': originalAmountCents,
       if (originalCurrency != null) 'original_currency': originalCurrency,
@@ -2940,12 +3187,16 @@ class TransactionsCompanion extends UpdateCompanion<TransactionRow> {
     Value<double?>? longitude,
     Value<String?>? locationName,
     Value<bool>? cleared,
+    Value<bool>? reconciled,
     Value<String>? origin,
     Value<String?>? originRef,
+    Value<String?>? importedId,
     Value<String?>? transferAccountId,
     Value<String?>? transferGroupId,
     Value<String?>? parentId,
     Value<int?>? splitTotalCents,
+    Value<String?>? groupParentId,
+    Value<bool>? isGroupParent,
     Value<int?>? originalAmountCents,
     Value<String?>? originalCurrency,
     Value<int>? createdAt,
@@ -2965,12 +3216,16 @@ class TransactionsCompanion extends UpdateCompanion<TransactionRow> {
       longitude: longitude ?? this.longitude,
       locationName: locationName ?? this.locationName,
       cleared: cleared ?? this.cleared,
+      reconciled: reconciled ?? this.reconciled,
       origin: origin ?? this.origin,
       originRef: originRef ?? this.originRef,
+      importedId: importedId ?? this.importedId,
       transferAccountId: transferAccountId ?? this.transferAccountId,
       transferGroupId: transferGroupId ?? this.transferGroupId,
       parentId: parentId ?? this.parentId,
       splitTotalCents: splitTotalCents ?? this.splitTotalCents,
+      groupParentId: groupParentId ?? this.groupParentId,
+      isGroupParent: isGroupParent ?? this.isGroupParent,
       originalAmountCents: originalAmountCents ?? this.originalAmountCents,
       originalCurrency: originalCurrency ?? this.originalCurrency,
       createdAt: createdAt ?? this.createdAt,
@@ -3018,11 +3273,17 @@ class TransactionsCompanion extends UpdateCompanion<TransactionRow> {
     if (cleared.present) {
       map['cleared'] = Variable<bool>(cleared.value);
     }
+    if (reconciled.present) {
+      map['reconciled'] = Variable<bool>(reconciled.value);
+    }
     if (origin.present) {
       map['origin'] = Variable<String>(origin.value);
     }
     if (originRef.present) {
       map['origin_ref'] = Variable<String>(originRef.value);
+    }
+    if (importedId.present) {
+      map['imported_id'] = Variable<String>(importedId.value);
     }
     if (transferAccountId.present) {
       map['transfer_account_id'] = Variable<String>(transferAccountId.value);
@@ -3035,6 +3296,12 @@ class TransactionsCompanion extends UpdateCompanion<TransactionRow> {
     }
     if (splitTotalCents.present) {
       map['split_total_cents'] = Variable<int>(splitTotalCents.value);
+    }
+    if (groupParentId.present) {
+      map['group_parent_id'] = Variable<String>(groupParentId.value);
+    }
+    if (isGroupParent.present) {
+      map['is_group_parent'] = Variable<bool>(isGroupParent.value);
     }
     if (originalAmountCents.present) {
       map['original_amount_cents'] = Variable<int>(originalAmountCents.value);
@@ -3069,12 +3336,16 @@ class TransactionsCompanion extends UpdateCompanion<TransactionRow> {
           ..write('longitude: $longitude, ')
           ..write('locationName: $locationName, ')
           ..write('cleared: $cleared, ')
+          ..write('reconciled: $reconciled, ')
           ..write('origin: $origin, ')
           ..write('originRef: $originRef, ')
+          ..write('importedId: $importedId, ')
           ..write('transferAccountId: $transferAccountId, ')
           ..write('transferGroupId: $transferGroupId, ')
           ..write('parentId: $parentId, ')
           ..write('splitTotalCents: $splitTotalCents, ')
+          ..write('groupParentId: $groupParentId, ')
+          ..write('isGroupParent: $isGroupParent, ')
           ..write('originalAmountCents: $originalAmountCents, ')
           ..write('originalCurrency: $originalCurrency, ')
           ..write('createdAt: $createdAt, ')
@@ -9842,6 +10113,7 @@ typedef $$PayeesTableCreateCompanionBuilder =
       required String id,
       required String name,
       Value<int> useCount,
+      Value<bool> learnCategories,
       required int updatedAt,
       Value<int> rowid,
     });
@@ -9850,6 +10122,7 @@ typedef $$PayeesTableUpdateCompanionBuilder =
       Value<String> id,
       Value<String> name,
       Value<int> useCount,
+      Value<bool> learnCategories,
       Value<int> updatedAt,
       Value<int> rowid,
     });
@@ -9875,6 +10148,11 @@ class $$PayeesTableFilterComposer
 
   ColumnFilters<int> get useCount => $composableBuilder(
     column: $table.useCount,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get learnCategories => $composableBuilder(
+    column: $table.learnCategories,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -9908,6 +10186,11 @@ class $$PayeesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<bool> get learnCategories => $composableBuilder(
+    column: $table.learnCategories,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get updatedAt => $composableBuilder(
     column: $table.updatedAt,
     builder: (column) => ColumnOrderings(column),
@@ -9931,6 +10214,11 @@ class $$PayeesTableAnnotationComposer
 
   GeneratedColumn<int> get useCount =>
       $composableBuilder(column: $table.useCount, builder: (column) => column);
+
+  GeneratedColumn<bool> get learnCategories => $composableBuilder(
+    column: $table.learnCategories,
+    builder: (column) => column,
+  );
 
   GeneratedColumn<int> get updatedAt =>
       $composableBuilder(column: $table.updatedAt, builder: (column) => column);
@@ -9967,12 +10255,14 @@ class $$PayeesTableTableManager
                 Value<String> id = const Value.absent(),
                 Value<String> name = const Value.absent(),
                 Value<int> useCount = const Value.absent(),
+                Value<bool> learnCategories = const Value.absent(),
                 Value<int> updatedAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => PayeesCompanion(
                 id: id,
                 name: name,
                 useCount: useCount,
+                learnCategories: learnCategories,
                 updatedAt: updatedAt,
                 rowid: rowid,
               ),
@@ -9981,12 +10271,14 @@ class $$PayeesTableTableManager
                 required String id,
                 required String name,
                 Value<int> useCount = const Value.absent(),
+                Value<bool> learnCategories = const Value.absent(),
                 required int updatedAt,
                 Value<int> rowid = const Value.absent(),
               }) => PayeesCompanion.insert(
                 id: id,
                 name: name,
                 useCount: useCount,
+                learnCategories: learnCategories,
                 updatedAt: updatedAt,
                 rowid: rowid,
               ),
@@ -10026,12 +10318,16 @@ typedef $$TransactionsTableCreateCompanionBuilder =
       Value<double?> longitude,
       Value<String?> locationName,
       Value<bool> cleared,
+      Value<bool> reconciled,
       Value<String> origin,
       Value<String?> originRef,
+      Value<String?> importedId,
       Value<String?> transferAccountId,
       Value<String?> transferGroupId,
       Value<String?> parentId,
       Value<int?> splitTotalCents,
+      Value<String?> groupParentId,
+      Value<bool> isGroupParent,
       Value<int?> originalAmountCents,
       Value<String?> originalCurrency,
       required int createdAt,
@@ -10052,12 +10348,16 @@ typedef $$TransactionsTableUpdateCompanionBuilder =
       Value<double?> longitude,
       Value<String?> locationName,
       Value<bool> cleared,
+      Value<bool> reconciled,
       Value<String> origin,
       Value<String?> originRef,
+      Value<String?> importedId,
       Value<String?> transferAccountId,
       Value<String?> transferGroupId,
       Value<String?> parentId,
       Value<int?> splitTotalCents,
+      Value<String?> groupParentId,
+      Value<bool> isGroupParent,
       Value<int?> originalAmountCents,
       Value<String?> originalCurrency,
       Value<int> createdAt,
@@ -10134,6 +10434,11 @@ class $$TransactionsTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<bool> get reconciled => $composableBuilder(
+    column: $table.reconciled,
+    builder: (column) => ColumnFilters(column),
+  );
+
   ColumnFilters<String> get origin => $composableBuilder(
     column: $table.origin,
     builder: (column) => ColumnFilters(column),
@@ -10141,6 +10446,11 @@ class $$TransactionsTableFilterComposer
 
   ColumnFilters<String> get originRef => $composableBuilder(
     column: $table.originRef,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get importedId => $composableBuilder(
+    column: $table.importedId,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -10161,6 +10471,16 @@ class $$TransactionsTableFilterComposer
 
   ColumnFilters<int> get splitTotalCents => $composableBuilder(
     column: $table.splitTotalCents,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get groupParentId => $composableBuilder(
+    column: $table.groupParentId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get isGroupParent => $composableBuilder(
+    column: $table.isGroupParent,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -10254,6 +10574,11 @@ class $$TransactionsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<bool> get reconciled => $composableBuilder(
+    column: $table.reconciled,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get origin => $composableBuilder(
     column: $table.origin,
     builder: (column) => ColumnOrderings(column),
@@ -10261,6 +10586,11 @@ class $$TransactionsTableOrderingComposer
 
   ColumnOrderings<String> get originRef => $composableBuilder(
     column: $table.originRef,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get importedId => $composableBuilder(
+    column: $table.importedId,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -10281,6 +10611,16 @@ class $$TransactionsTableOrderingComposer
 
   ColumnOrderings<int> get splitTotalCents => $composableBuilder(
     column: $table.splitTotalCents,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get groupParentId => $composableBuilder(
+    column: $table.groupParentId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get isGroupParent => $composableBuilder(
+    column: $table.isGroupParent,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -10356,11 +10696,21 @@ class $$TransactionsTableAnnotationComposer
   GeneratedColumn<bool> get cleared =>
       $composableBuilder(column: $table.cleared, builder: (column) => column);
 
+  GeneratedColumn<bool> get reconciled => $composableBuilder(
+    column: $table.reconciled,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<String> get origin =>
       $composableBuilder(column: $table.origin, builder: (column) => column);
 
   GeneratedColumn<String> get originRef =>
       $composableBuilder(column: $table.originRef, builder: (column) => column);
+
+  GeneratedColumn<String> get importedId => $composableBuilder(
+    column: $table.importedId,
+    builder: (column) => column,
+  );
 
   GeneratedColumn<String> get transferAccountId => $composableBuilder(
     column: $table.transferAccountId,
@@ -10377,6 +10727,16 @@ class $$TransactionsTableAnnotationComposer
 
   GeneratedColumn<int> get splitTotalCents => $composableBuilder(
     column: $table.splitTotalCents,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get groupParentId => $composableBuilder(
+    column: $table.groupParentId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get isGroupParent => $composableBuilder(
+    column: $table.isGroupParent,
     builder: (column) => column,
   );
 
@@ -10440,12 +10800,16 @@ class $$TransactionsTableTableManager
                 Value<double?> longitude = const Value.absent(),
                 Value<String?> locationName = const Value.absent(),
                 Value<bool> cleared = const Value.absent(),
+                Value<bool> reconciled = const Value.absent(),
                 Value<String> origin = const Value.absent(),
                 Value<String?> originRef = const Value.absent(),
+                Value<String?> importedId = const Value.absent(),
                 Value<String?> transferAccountId = const Value.absent(),
                 Value<String?> transferGroupId = const Value.absent(),
                 Value<String?> parentId = const Value.absent(),
                 Value<int?> splitTotalCents = const Value.absent(),
+                Value<String?> groupParentId = const Value.absent(),
+                Value<bool> isGroupParent = const Value.absent(),
                 Value<int?> originalAmountCents = const Value.absent(),
                 Value<String?> originalCurrency = const Value.absent(),
                 Value<int> createdAt = const Value.absent(),
@@ -10464,12 +10828,16 @@ class $$TransactionsTableTableManager
                 longitude: longitude,
                 locationName: locationName,
                 cleared: cleared,
+                reconciled: reconciled,
                 origin: origin,
                 originRef: originRef,
+                importedId: importedId,
                 transferAccountId: transferAccountId,
                 transferGroupId: transferGroupId,
                 parentId: parentId,
                 splitTotalCents: splitTotalCents,
+                groupParentId: groupParentId,
+                isGroupParent: isGroupParent,
                 originalAmountCents: originalAmountCents,
                 originalCurrency: originalCurrency,
                 createdAt: createdAt,
@@ -10490,12 +10858,16 @@ class $$TransactionsTableTableManager
                 Value<double?> longitude = const Value.absent(),
                 Value<String?> locationName = const Value.absent(),
                 Value<bool> cleared = const Value.absent(),
+                Value<bool> reconciled = const Value.absent(),
                 Value<String> origin = const Value.absent(),
                 Value<String?> originRef = const Value.absent(),
+                Value<String?> importedId = const Value.absent(),
                 Value<String?> transferAccountId = const Value.absent(),
                 Value<String?> transferGroupId = const Value.absent(),
                 Value<String?> parentId = const Value.absent(),
                 Value<int?> splitTotalCents = const Value.absent(),
+                Value<String?> groupParentId = const Value.absent(),
+                Value<bool> isGroupParent = const Value.absent(),
                 Value<int?> originalAmountCents = const Value.absent(),
                 Value<String?> originalCurrency = const Value.absent(),
                 required int createdAt,
@@ -10514,12 +10886,16 @@ class $$TransactionsTableTableManager
                 longitude: longitude,
                 locationName: locationName,
                 cleared: cleared,
+                reconciled: reconciled,
                 origin: origin,
                 originRef: originRef,
+                importedId: importedId,
                 transferAccountId: transferAccountId,
                 transferGroupId: transferGroupId,
                 parentId: parentId,
                 splitTotalCents: splitTotalCents,
+                groupParentId: groupParentId,
+                isGroupParent: isGroupParent,
                 originalAmountCents: originalAmountCents,
                 originalCurrency: originalCurrency,
                 createdAt: createdAt,

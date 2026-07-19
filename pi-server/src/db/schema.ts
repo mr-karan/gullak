@@ -45,6 +45,11 @@ export const payees = sqliteTable("payees", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
   useCount: integer("use_count").notNull().default(0),
+  // #39 opt-out: when false, the server stops auto-learning a payee→category
+  // rule from this payee's history (mirrors Actual's learn_categories).
+  learnCategories: integer("learn_categories", { mode: "boolean" })
+    .notNull()
+    .default(true),
   updatedAt: integer("updated_at").notNull().default(now),
 });
 
@@ -63,14 +68,31 @@ export const transactions = sqliteTable(
     longitude: real("longitude"),
     locationName: text("location_name"),
     cleared: integer("cleared", { mode: "boolean" }).notNull().default(false),
+    // Reconciliation lock (#42). Set when an account reconcile confirms this
+    // cleared row against the bank balance; reconciled rows are frozen
+    // (PATCH/DELETE 409 unless force) and import matching skips them.
+    reconciled: integer("reconciled", { mode: "boolean" })
+      .notNull()
+      .default(false),
     origin: text("origin").notNull().default("manual"),
     originRef: text("origin_ref"),
+    // Import-dedupe key (#38). Stable per-source id: SMS stableSmsId, future
+    // CSV FITID. The 3-pass matcher claims by (accountId, importedId) first.
+    importedId: text("imported_id"),
     // Transfer linkage
     transferAccountId: text("transfer_account_id"),
     transferGroupId: text("transfer_group_id"),
     // Split linkage
     parentId: text("parent_id"),
     splitTotalCents: integer("split_total_cents"),
+    // Grouping (#46): N independent txns collapsed under one virtual parent.
+    // Distinct from splits (one txn → children). A group parent has
+    // isGroupParent=1 and amountCents = sum of its children; each child points
+    // back via groupParentId. Both children and parent keep their own rows.
+    groupParentId: text("group_parent_id"),
+    isGroupParent: integer("is_group_parent", { mode: "boolean" })
+      .notNull()
+      .default(false),
     // Foreign-currency metadata (display-only; amountCents stays in base currency)
     originalAmountCents: integer("original_amount_cents"),
     originalCurrency: text("original_currency"),
@@ -83,6 +105,10 @@ export const transactions = sqliteTable(
     byDate: index("idx_tx_date").on(t.date),
     byAccountDate: index("idx_tx_account_date").on(t.accountId, t.date),
     byCategory: index("idx_tx_category").on(t.categoryId),
+    // #38 dedupe: exact-match pass looks up by (account, importedId).
+    byImported: index("idx_tx_imported").on(t.accountId, t.importedId),
+    // #46 grouping: fetch a parent's children.
+    byGroupParent: index("idx_tx_group_parent").on(t.groupParentId),
   }),
 );
 
@@ -117,14 +143,23 @@ export const transactionTags = sqliteTable(
   }),
 );
 
+// Categorization/normalization rules engine (#40). SERVER-ONLY config — like
+// the M5 tables, rules never get a recordChange() row and are not in the Drift
+// mirror; the webapp is their only client and the server is where they run.
+// triggerPayload holds the conditions JSON (array of {field, op, value});
+// actionPayload holds the actions JSON (array of {type, value}). triggerType is
+// the rule kind: 'user' (hand-authored) | 'learned' (auto-learned per #39).
+// stage orders execution: 'pre' (payee normalization) → 'main' (categorization)
+// → 'post'. priority orders within a stage (lower runs first).
 export const rules = sqliteTable("rules", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
   enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
+  stage: text("stage").notNull().default("main"), // 'pre' | 'main' | 'post'
   priority: integer("priority").notNull().default(100),
-  triggerType: text("trigger_type").notNull(),
-  triggerPayload: text("trigger_payload").notNull(),
-  actionPayload: text("action_payload").notNull(),
+  triggerType: text("trigger_type").notNull(), // 'user' | 'learned'
+  triggerPayload: text("trigger_payload").notNull(), // conditions JSON
+  actionPayload: text("action_payload").notNull(), // actions JSON
   createdAt: integer("created_at").notNull().default(now),
   updatedAt: integer("updated_at").notNull().default(now),
 });

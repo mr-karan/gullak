@@ -217,6 +217,7 @@ class RemoteApplier {
             id: Value(id),
             name: Value(payload['name'] as String? ?? ''),
             useCount: Value((payload['useCount'] as num?)?.toInt() ?? 0),
+            learnCategories: Value(payload['learnCategories'] as bool? ?? true),
             updatedAt: Value((payload['updatedAt'] as num).toInt()),
           ),
         );
@@ -257,14 +258,18 @@ class RemoteApplier {
             longitude: Value((payload['longitude'] as num?)?.toDouble()),
             locationName: Value(payload['locationName'] as String?),
             cleared: Value(payload['cleared'] as bool? ?? false),
+            reconciled: Value(payload['reconciled'] as bool? ?? false),
             origin: Value(payload['origin'] as String? ?? 'manual'),
             originRef: Value(payload['originRef'] as String?),
+            importedId: Value(payload['importedId'] as String?),
             transferAccountId: Value(payload['transferAccountId'] as String?),
             transferGroupId: Value(payload['transferGroupId'] as String?),
             parentId: Value(payload['parentId'] as String?),
             splitTotalCents: Value(
               (payload['splitTotalCents'] as num?)?.toInt(),
             ),
+            groupParentId: Value(payload['groupParentId'] as String?),
+            isGroupParent: Value(payload['isGroupParent'] as bool? ?? false),
             originalAmountCents: Value(
               (payload['originalAmountCents'] as num?)?.toInt(),
             ),

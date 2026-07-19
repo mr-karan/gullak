@@ -38,7 +38,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 12;
+  int get schemaVersion => 13;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -95,6 +95,11 @@ class AppDatabase extends _$AppDatabase {
       await customStatement(
         'CREATE INDEX IF NOT EXISTS idx_change_log_synced '
         'ON change_log(synced, id)',
+      );
+      // #46 grouping: fetch a parent's children.
+      await customStatement(
+        'CREATE INDEX IF NOT EXISTS idx_tx_group_parent '
+        'ON transactions(group_parent_id)',
       );
     },
     onUpgrade: (m, from, to) async {
@@ -221,6 +226,20 @@ class AppDatabase extends _$AppDatabase {
           'UPDATE recurrences '
           'SET anchor_day = CAST(substr(next_date, 9, 2) AS INTEGER) '
           'WHERE anchor_day IS NULL',
+        );
+      }
+      if (from < 13) {
+        // M6: reconciliation lock (#42), import-dedupe key (#38), grouping (#46),
+        // and the per-payee learn-category opt-out (#39). All additive columns
+        // synced from the server; defaults keep existing rows valid.
+        await m.addColumn(transactions, transactions.reconciled);
+        await m.addColumn(transactions, transactions.importedId);
+        await m.addColumn(transactions, transactions.groupParentId);
+        await m.addColumn(transactions, transactions.isGroupParent);
+        await m.addColumn(payees, payees.learnCategories);
+        await customStatement(
+          'CREATE INDEX IF NOT EXISTS idx_tx_group_parent '
+          'ON transactions(group_parent_id)',
         );
       }
     },
