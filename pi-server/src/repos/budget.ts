@@ -6,6 +6,8 @@ import {
   budgets,
   categories,
   categoryGroups,
+  categoryTargets,
+  recurrences,
   transactions,
 } from "../db/schema.ts";
 import { newId, nowMs, recordChange } from "./changelog.ts";
@@ -21,12 +23,25 @@ import { newId, nowMs, recordChange } from "./changelog.ts";
 //   - isGroupParent = 0         (group parents duplicate their children → skip)
 //   - transferGroupId IS NULL   (transfer legs aren't income/spend)
 
+export interface CategoryTargetView {
+  type: "monthly" | "by_date";
+  amountCents: number;
+  byDate: string | null;
+}
+
 export interface BudgetCategoryPlan {
   categoryId: string;
   categoryName: string;
   assignedCents: number;
   activityCents: number;
   availableCents: number;
+  // Per-category funding TARGET (server-only config), null when none is set.
+  target: CategoryTargetView | null;
+  // Still-needed THIS month to stay on track toward the target (>= 0).
+  targetNeededCents: number;
+  targetStatus: "funded" | "underfunded" | "none";
+  // Sum of scheduled recurrence outflows still upcoming in this month (>= 0).
+  upcomingCents: number;
 }
 
 export interface BudgetGroupPlan {
@@ -44,9 +59,74 @@ export interface BudgetPlan {
 // Reusable SQL for the four activity guards on the `transactions` table.
 const activityGuards = sql`${transactions.parentId} IS NULL AND ${transactions.isGroupParent} = 0 AND ${transactions.transferGroupId} IS NULL`;
 
+// Guards for the on-budget BALANCE query: like activityGuards but WITHOUT the
+// transfer exclusion. Transfers move real cash between accounts, so they must
+// count toward the balance (and hence Ready-to-Assign): a transfer between two
+// on-budget accounts nets to zero (both legs counted), while a transfer to an
+// OFF-budget account only leaves its on-budget leg here, correctly reducing the
+// on-budget balance. They stay excluded from category activity — a transfer
+// isn't category spend.
+const balanceGuards = sql`${transactions.parentId} IS NULL AND ${transactions.isGroupParent} = 0`;
+
+/** Today as YYYY-MM-DD from local Date parts (matches the route's currentMonth). */
+function todayLocal(now: Date): string {
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, "0");
+  const d = String(now.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+/// Resolve a category's funding target into the plan view + this-month's
+/// still-needed amount + status. See BudgetCategoryPlan for field meaning.
+function evalTarget(
+  target: typeof categoryTargets.$inferSelect | null,
+  ctx: { month: string; assignedCents: number; availableCents: number },
+): {
+  target: CategoryTargetView | null;
+  targetNeededCents: number;
+  targetStatus: "funded" | "underfunded" | "none";
+} {
+  if (!target) {
+    return { target: null, targetNeededCents: 0, targetStatus: "none" };
+  }
+
+  const view: CategoryTargetView = {
+    type: target.type as "monthly" | "by_date",
+    amountCents: target.amountCents,
+    byDate: target.byDate ?? null,
+  };
+
+  let neededThisMonth: number;
+  if (target.type === "by_date" && target.byDate) {
+    // Whole calendar months from `month` to byDate, inclusive; min 1 (a
+    // past-due date collapses to "fund the rest now").
+    const [my, mm] = ctx.month.split("-").map(Number);
+    const [ty, tm] = target.byDate.slice(0, 7).split("-").map(Number);
+    const diff = (ty! * 12 + tm!) - (my! * 12 + mm!) + 1;
+    const monthsLeft = Math.max(1, diff);
+    const remainingToGoal = Math.max(0, target.amountCents - ctx.availableCents);
+    const pace = Math.ceil(remainingToGoal / monthsLeft);
+    neededThisMonth = Math.max(0, pace - ctx.assignedCents);
+  } else {
+    // monthly (default): fund amountCents every month.
+    neededThisMonth = Math.max(0, target.amountCents - ctx.assignedCents);
+  }
+
+  return {
+    target: view,
+    targetNeededCents: neededThisMonth,
+    targetStatus: neededThisMonth === 0 ? "funded" : "underfunded",
+  };
+}
+
 /// Compute the full envelope plan for a month. Efficient: a handful of grouped
-/// queries, never N queries per category.
-export function computeBudgetPlan(db: Db, month: string): BudgetPlan {
+/// queries, never N queries per category. `now` (default today) drives which
+/// scheduled recurrences count as still-upcoming this month.
+export function computeBudgetPlan(
+  db: Db,
+  month: string,
+  now: Date = new Date(),
+): BudgetPlan {
   // 1. Assignable categories = every category in a NON-income group. Income
   //    groups aren't envelopes; their inflow lands in accounts → Ready-to-Assign.
   const catRows = db
@@ -137,9 +217,41 @@ export function computeBudgetPlan(db: Db, month: string): BudgetPlan {
       })
       .from(transactions)
       .innerJoin(accounts, eq(transactions.accountId, accounts.id))
-      .where(sql`${accounts.onBudget} = 1 AND ${activityGuards}`)
+      .where(sql`${accounts.onBudget} = 1 AND ${balanceGuards}`)
       .get()?.cents ?? 0;
   const onBudgetBalance = openingCents + balanceActivityCents;
+
+  // 6. Per-category funding TARGETS (server-only config).
+  const targetByCat = new Map(
+    db
+      .select()
+      .from(categoryTargets)
+      .all()
+      .map((t) => [t.categoryId, t]),
+  );
+
+  // 7. Scheduled recurrences still upcoming this month, summed per category.
+  //    For the CURRENT month only future-dated (>= today) recurrences count;
+  //    for a past/future plan month, every recurrence whose nextDate lands in
+  //    that month counts. Stored as absolute value — a planned outflow.
+  const today = todayLocal(now);
+  const currentMonth = today.slice(0, 7);
+  const upcomingFilter =
+    month === currentMonth
+      ? sql`substr(${recurrences.nextDate}, 1, 7) = ${month} AND ${recurrences.nextDate} >= ${today}`
+      : sql`substr(${recurrences.nextDate}, 1, 7) = ${month}`;
+  const upcomingByCat = new Map(
+    db
+      .select({
+        categoryId: recurrences.categoryId,
+        cents: sql<number>`COALESCE(SUM(ABS(${recurrences.amountCents})), 0)`,
+      })
+      .from(recurrences)
+      .where(sql`${recurrences.categoryId} IS NOT NULL AND ${upcomingFilter}`)
+      .groupBy(recurrences.categoryId)
+      .all()
+      .map((r) => [r.categoryId, r.cents]),
+  );
 
   // Assemble groups in sort order, tracking the total available so we can
   // derive Ready-to-Assign.
@@ -155,6 +267,12 @@ export function computeBudgetPlan(db: Db, month: string): BudgetPlan {
       (cumActivityByCat.get(row.categoryId) ?? 0);
     totalAvailable += availableCents;
 
+    const { target, targetNeededCents, targetStatus } = evalTarget(
+      targetByCat.get(row.categoryId) ?? null,
+      { month, assignedCents, availableCents },
+    );
+    const upcomingCents = upcomingByCat.get(row.categoryId) ?? 0;
+
     let group = groupIndex.get(row.groupId);
     if (!group) {
       group = { groupId: row.groupId, groupName: row.groupName, categories: [] };
@@ -167,6 +285,10 @@ export function computeBudgetPlan(db: Db, month: string): BudgetPlan {
       assignedCents,
       activityCents,
       availableCents,
+      target,
+      targetNeededCents,
+      targetStatus,
+      upcomingCents,
     });
   }
 
