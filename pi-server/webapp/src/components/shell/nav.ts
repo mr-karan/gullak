@@ -7,6 +7,7 @@ import {
   SlidersHorizontal,
   Target,
   TrendingUp,
+  Wallet,
   type LucideIcon,
 } from "lucide-react";
 
@@ -21,6 +22,7 @@ export interface NavItem {
 export const PRIMARY_NAV: NavItem[] = [
   { to: "/", label: "Overview", icon: LayoutDashboard },
   { to: "/transactions", label: "Transactions", icon: Coins },
+  { to: "/budget", label: "Budget", icon: Wallet },
   { to: "/calendar", label: "Calendar", icon: CalendarDays },
   { to: "/insights", label: "Insights", icon: TrendingUp },
   { to: "/rules", label: "Rules", icon: SlidersHorizontal },

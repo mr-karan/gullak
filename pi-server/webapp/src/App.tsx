@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from "react-router-dom";
 
 import { AppShell } from "@/components/shell/AppShell";
 import { AccountsPage } from "@/pages/AccountsPage";
+import { BudgetPage } from "@/pages/BudgetPage";
 import { CalendarPage } from "@/pages/CalendarPage";
 import { ChatPage } from "@/pages/ChatPage";
 import { GoalsPage } from "@/pages/GoalsPage";
@@ -17,6 +18,7 @@ export function App() {
       <Route element={<AppShell />}>
         <Route index element={<AccountsPage />} />
         <Route path="transactions" element={<TransactionsPage />} />
+        <Route path="budget" element={<BudgetPage />} />
         <Route path="calendar" element={<CalendarPage />} />
         <Route path="insights" element={<InsightsPage />} />
         <Route path="rules" element={<RulesPage />} />
