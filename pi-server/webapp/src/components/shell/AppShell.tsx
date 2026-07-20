@@ -7,7 +7,7 @@ import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { AssistantPanel } from "@/components/chat/AssistantPanel";
 import { ChatProvider } from "@/components/chat/ChatProvider";
 import { SelectionProvider } from "./SelectionProvider";
-import { NavRail } from "./NavRail";
+import { NavRail } from "./AccountSidebar";
 import { MobileBottomBar, MobilePersonRow, MobileTopBar } from "./MobileNav";
 import { CommandPalette } from "./CommandPalette";
 import { ConnectDialog } from "./ConnectDialog";
