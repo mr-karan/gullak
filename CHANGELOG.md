@@ -14,6 +14,27 @@ All notable changes to Gullak are documented here.
   delivery queue gained a `source` column so drafts label as SMS vs WhatsApp.
 - **End-user documentation site** built with Zensical (`website/`): home,
   install, SMS capture (incl. the iOS Shortcut recipe), and self-hosting.
+- **Envelope budgeting (YNAB-style "give every dollar a job").** A Budget view:
+  Ready-to-Assign, per-category Assigned / Activity / Available with automatic
+  rollover, inline reassignment, per-category **targets** (monthly or by-date,
+  funded/underfunded), **Age of Money**, upcoming scheduled outflows, and
+  off-budget transfers reducing Ready-to-Assign. Server-only; reuses the budgets
+  table plus a new `category_targets` table.
+- **Money-manager mechanics ported from Actual/YNAB:** import dedupe (3-pass
+  matcher), a rules engine + auto-learned payee→category rules, auto-mirrored
+  transfers, account reconciliation (cleared/reconciled lock + adjustment),
+  transaction grouping, net-worth + cash-flow history, a calendar month-grid,
+  and top-spends / new-payees insights.
+- **AI assistant can now edit finances** in real time (categorize, edit, delete,
+  log) with a clean read/write tool split, structured result cards + Undo, and
+  awareness of transactions selected in the web register.
+
+### Changed
+
+- **Full web app redesign** to a dense, operational "ledger-indigo" language
+  (YNAB-inspired): register/grouped tables, instrument summary bars,
+  traffic-light status pills, the Figtree typeface — replacing the earlier
+  card-dashboard look across every screen.
 
 ## [0.4.0] — 2026-07-13
 
