@@ -1,14 +1,16 @@
 import { Fragment, useMemo, useRef, useState } from "react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, RotateCcw, Target } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { fmtCents, fmtCentsSigned } from "@/lib/money";
 import { monthTitle } from "@/lib/dates";
 import {
+  useAgeOfMoney,
   useAssignBudget,
   useBudgetPlan,
   type BudgetCategoryPlan,
   type BudgetGroupPlan,
+  type BudgetTarget,
 } from "@/api/budget";
 import { useConnection } from "@/hooks/useConnection";
 import { PageHeader } from "@/components/PageHeader";
@@ -17,6 +19,7 @@ import { Pill } from "@/components/Pill";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState, ErrorState } from "@/components/states";
+import { TargetDialog } from "./budget/TargetDialog";
 
 // ===========================================================================
 // Budget — Gullak's YNAB-style envelope plan ("give every rupee a job"). Adopts
@@ -43,6 +46,10 @@ export function BudgetPage() {
     setAnchor((a) => new Date(a.getFullYear(), a.getMonth() + delta, 1));
 
   const planQ = useBudgetPlan(month, connected);
+  const ageQ = useAgeOfMoney(connected);
+
+  // Target editor — one dialog, retargeted per row.
+  const [targetFor, setTargetFor] = useState<BudgetCategoryPlan | null>(null);
 
   if (!connected) {
     return (
@@ -95,11 +102,29 @@ export function BudgetPage() {
         <div className="flex flex-col gap-4">
           <ReadyToAssignBar
             readyToAssign={planQ.data?.readyToAssign ?? 0}
+            ageDays={ageQ.data?.days ?? null}
+            ageHidden={ageQ.notDeployed}
             monthNav={monthNav}
           />
-          <EnvelopeTable groups={planQ.data?.groups ?? []} month={month} />
+          <EnvelopeTable
+            groups={planQ.data?.groups ?? []}
+            month={month}
+            onEditTarget={setTargetFor}
+          />
         </div>
       )}
+
+      <TargetDialog
+        open={targetFor !== null}
+        onOpenChange={(o) => {
+          if (!o) setTargetFor(null);
+        }}
+        category={
+          targetFor
+            ? { id: targetFor.categoryId, name: targetFor.categoryName, target: targetFor.target }
+            : null
+        }
+      />
     </>
   );
 }
@@ -107,9 +132,13 @@ export function BudgetPage() {
 // --- Instrument header: the Ready-to-Assign readout (the page's thesis) ------
 function ReadyToAssignBar({
   readyToAssign,
+  ageDays,
+  ageHidden,
   monthNav,
 }: {
   readyToAssign: number;
+  ageDays: number | null;
+  ageHidden: boolean;
   monthNav: React.ReactNode;
 }) {
   const tone: "pos" | "neg" | "neutral" =
@@ -122,20 +151,42 @@ function ReadyToAssignBar({
       {/* A thin indigo cap — the one confident brand touch, structural not loud. */}
       <div className="h-1 bg-brand" aria-hidden="true" />
       <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3 px-5 py-4">
-        <div className="min-w-0">
-          <p className="text-xs font-semibold uppercase tracking-wider text-ink-2">
-            Ready to assign
-          </p>
-          <p
-            className={cn(
-              "mt-0.5 font-display text-[2.5rem] font-bold leading-none tracking-tight tabular-nums sm:text-5xl",
-              tone === "pos" && "text-pos",
-              tone === "neg" && "text-neg",
-              tone === "neutral" && "text-ink",
-            )}
-          >
-            {fmtCents(Math.abs(readyToAssign))}
-          </p>
+        {/* RTA is the headline; Age of Money is a quiet companion stat beside it. */}
+        <div className="flex flex-wrap items-end gap-x-8 gap-y-3">
+          <div className="min-w-0">
+            <p className="text-xs font-semibold uppercase tracking-wider text-ink-2">
+              Ready to assign
+            </p>
+            <p
+              className={cn(
+                "mt-0.5 font-display text-[2.5rem] font-bold leading-none tracking-tight tabular-nums sm:text-5xl",
+                tone === "pos" && "text-pos",
+                tone === "neg" && "text-neg",
+                tone === "neutral" && "text-ink",
+              )}
+            >
+              {fmtCents(Math.abs(readyToAssign))}
+            </p>
+          </div>
+          {!ageHidden ? (
+            <div className="min-w-0">
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-ink-2">
+                Age of money
+              </p>
+              <p className="mt-0.5 text-2xl font-semibold leading-none tracking-tight tabular-nums text-ink">
+                {ageDays !== null ? (
+                  <>
+                    {ageDays}
+                    <span className="ml-1 text-sm font-normal text-ink-2">
+                      {ageDays === 1 ? "day" : "days"}
+                    </span>
+                  </>
+                ) : (
+                  <span className="text-ink-2">—</span>
+                )}
+              </p>
+            </div>
+          ) : null}
         </div>
         <div className="flex items-center gap-3">
           <Pill tone={tone} className="px-2.5 py-1 text-sm">
@@ -156,7 +207,15 @@ function ReadyToAssignBar({
 }
 
 // --- The envelope table: one real grouped table ----------------------------
-function EnvelopeTable({ groups, month }: { groups: BudgetGroupPlan[]; month: string }) {
+function EnvelopeTable({
+  groups,
+  month,
+  onEditTarget,
+}: {
+  groups: BudgetGroupPlan[];
+  month: string;
+  onEditTarget: (category: BudgetCategoryPlan) => void;
+}) {
   const totalCategories = groups.reduce((s, g) => s + g.categories.length, 0);
 
   return (
@@ -210,36 +269,12 @@ function EnvelopeTable({ groups, month }: { groups: BudgetGroupPlan[]; month: st
                       </td>
                     </tr>
                     {g.categories.map((c) => (
-                      <tr
+                      <CategoryRow
                         key={c.categoryId}
-                        className="border-t border-rule/60 transition-colors hover:bg-paper-2/60"
-                      >
-                        <td className="px-4 py-2.5">
-                          <span className="block truncate font-medium text-ink">
-                            {c.categoryName}
-                          </span>
-                        </td>
-                        <td className="px-4 py-1.5 text-right">
-                          <AssignedCell category={c} month={month} />
-                        </td>
-                        <td
-                          className={cn(
-                            "hidden px-4 py-2.5 text-right font-medium tabular-nums sm:table-cell",
-                            c.activityCents < 0
-                              ? "text-neg"
-                              : c.activityCents > 0
-                                ? "text-pos"
-                                : "text-ink-2",
-                          )}
-                        >
-                          {c.activityCents === 0 ? "—" : fmtCentsSigned(c.activityCents)}
-                        </td>
-                        <td className="px-4 py-2.5 text-right">
-                          <Pill tone={c.availableCents < 0 ? "neg" : "pos"}>
-                            {fmtCentsSigned(c.availableCents)}
-                          </Pill>
-                        </td>
-                      </tr>
+                        category={c}
+                        month={month}
+                        onEditTarget={onEditTarget}
+                      />
                     ))}
                   </Fragment>
                 );
@@ -249,6 +284,141 @@ function EnvelopeTable({ groups, month }: { groups: BudgetGroupPlan[]; month: st
         </div>
       )}
     </Panel>
+  );
+}
+
+// --- A category row: name + target/upcoming cues, assign, activity, available -
+function CategoryRow({
+  category,
+  month,
+  onEditTarget,
+}: {
+  category: BudgetCategoryPlan;
+  month: string;
+  onEditTarget: (category: BudgetCategoryPlan) => void;
+}) {
+  const c = category;
+  const assign = useAssignBudget();
+
+  // "Assign needed": top the envelope up to exactly hit its target this month.
+  const assignNeeded = () => {
+    if (c.targetNeededCents <= 0) return;
+    assign.mutate({
+      categoryId: c.categoryId,
+      month,
+      assignedCents: c.assignedCents + c.targetNeededCents,
+    });
+  };
+
+  const hasTarget = c.target !== null;
+
+  return (
+    <tr className="group border-t border-rule/60 transition-colors hover:bg-paper-2/60">
+      <td className="px-4 py-2.5">
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <span className="block truncate font-medium text-ink">{c.categoryName}</span>
+            <CategoryCues
+              category={c}
+              onAssignNeeded={assignNeeded}
+              assigning={assign.isPending}
+            />
+          </div>
+          <button
+            type="button"
+            onClick={() => onEditTarget(c)}
+            aria-label={hasTarget ? `Edit target for ${c.categoryName}` : `Set a target for ${c.categoryName}`}
+            title={hasTarget ? "Edit funding target" : "Set a funding target"}
+            className={cn(
+              "flex size-7 shrink-0 items-center justify-center rounded-md transition-colors hover:bg-paper-3 hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              hasTarget ? "text-brand" : "text-ink-2/70",
+            )}
+          >
+            <Target className="size-4" />
+          </button>
+        </div>
+      </td>
+      <td className="px-4 py-1.5 text-right">
+        <AssignedCell category={c} month={month} />
+      </td>
+      <td
+        className={cn(
+          "hidden px-4 py-2.5 text-right font-medium tabular-nums sm:table-cell",
+          c.activityCents < 0 ? "text-neg" : c.activityCents > 0 ? "text-pos" : "text-ink-2",
+        )}
+      >
+        {c.activityCents === 0 ? "—" : fmtCentsSigned(c.activityCents)}
+      </td>
+      <td className="px-4 py-2.5 text-right">
+        <Pill tone={c.availableCents < 0 ? "neg" : "pos"}>{fmtCentsSigned(c.availableCents)}</Pill>
+      </td>
+    </tr>
+  );
+}
+
+/** "Jul 2026" from a "YYYY-MM-DD" target deadline. */
+function byDateLabel(d: string): string {
+  const [y, m] = d.split("-").map(Number);
+  if (!y || !m) return d;
+  return new Date(y, m - 1, 1).toLocaleDateString("en-IN", { month: "short", year: "numeric" });
+}
+
+function targetSummary(t: BudgetTarget): string {
+  if (t.type === "monthly") return `Target ${fmtCents(t.amountCents)}/mo`;
+  const when = t.byDate ? ` by ${byDateLabel(t.byDate)}` : "";
+  return `${fmtCents(t.amountCents)}${when}`;
+}
+
+/** The subtle sub-line under a category name: its target summary, funded/needs
+    status, an inline "assign needed" quick action, and any upcoming outflows.
+    Everything folds together here so it reads the same on mobile and desktop. */
+function CategoryCues({
+  category: c,
+  onAssignNeeded,
+  assigning,
+}: {
+  category: BudgetCategoryPlan;
+  onAssignNeeded: () => void;
+  assigning: boolean;
+}) {
+  const hasTarget = c.target !== null;
+  const hasUpcoming = c.upcomingCents > 0;
+  if (!hasTarget && !hasUpcoming) return null;
+
+  return (
+    <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+      {hasTarget && c.target ? (
+        <span className="text-ink-2">{targetSummary(c.target)}</span>
+      ) : null}
+
+      {hasTarget && c.targetStatus === "underfunded" && c.targetNeededCents > 0 ? (
+        <>
+          <Pill tone="warn">needs {fmtCents(c.targetNeededCents)}</Pill>
+          <button
+            type="button"
+            onClick={onAssignNeeded}
+            disabled={assigning}
+            className="rounded font-medium text-brand transition-colors hover:text-brand-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+          >
+            {assigning ? "assigning…" : "assign needed"}
+          </button>
+        </>
+      ) : null}
+
+      {hasTarget && c.targetStatus === "funded" ? (
+        <span className="inline-flex items-center gap-1 font-medium text-pos">
+          <Check className="size-3" aria-hidden="true" />
+          funded
+        </span>
+      ) : null}
+
+      {hasUpcoming ? (
+        <span className="inline-flex items-center gap-1 text-ink-2">
+          <RotateCcw className="size-3" aria-hidden="true" />
+          {fmtCents(c.upcomingCents)} upcoming
+        </span>
+      ) : null}
+    </div>
   );
 }
 
