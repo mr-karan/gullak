@@ -114,13 +114,13 @@ export function CategoryCell({
         <button
           type="button"
           className={cn(
-            "-mx-1 max-w-full truncate rounded px-1 py-0.5 text-left text-sm transition-colors",
-            "hover:bg-paper-3 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
+            "-mx-1.5 inline-flex max-w-full items-center gap-1 truncate rounded-md border border-transparent px-1.5 py-0.5 text-left text-sm transition-colors",
+            "hover:border-rule hover:bg-paper-2 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
             categoryName ? "text-ink" : "text-ink-2",
             className,
           )}
         >
-          {categoryName ?? "Uncategorized"}
+          <span className="truncate">{categoryName ?? "Uncategorized"}</span>
         </button>
       </PopoverTrigger>
       <PopoverContent align={align} className="w-64 p-0">

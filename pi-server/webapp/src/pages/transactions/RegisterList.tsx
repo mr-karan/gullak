@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import {
   ArrowLeftRight,
   Check,
@@ -11,6 +11,7 @@ import {
 
 import { cn } from "@/lib/utils";
 import { fmtCentsSigned, fmtDayMonth } from "@/lib/money";
+import { Panel } from "@/components/Panel";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -45,7 +46,7 @@ function SelectBox({
       className={cn(
         "flex size-4 shrink-0 items-center justify-center rounded border transition-colors",
         "focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
-        checked ? "border-ink bg-ink text-paper" : "border-rule bg-paper hover:border-ink-2",
+        checked ? "border-brand bg-brand text-brand-ink" : "border-rule bg-paper hover:border-ink-2",
       )}
     >
       {checked ? <Check className="size-3" /> : null}
@@ -59,13 +60,17 @@ export interface SelectionApi {
   toggle: (id: string) => void;
 }
 
+// The register as a real, dense table — same language as the Accounts screen:
+// column headers, right-aligned tabular figures, hairline row separators, and
+// bg-paper-2 date-group rows carrying the day's net. Wide content scrolls inside
+// the Panel; on narrow widths date/category/account fold into a payee subline.
 export function RegisterList({
   groups,
   categoryGroups,
   categoryName,
   accountName,
   showAccount,
-  stickyTop,
+  entryCount,
   selection,
   onUngroup,
 }: {
@@ -74,45 +79,81 @@ export function RegisterList({
   categoryName: (id: string | null) => string | null;
   accountName: (id: string) => string;
   showAccount: boolean;
-  stickyTop: number;
+  entryCount: number;
   selection?: SelectionApi;
   onUngroup?: (parentId: string) => void;
 }) {
+  const selecting = !!selection?.active;
+  // Columns left of the amount (colSpan target for the group-net row): optional
+  // checkbox + date + payee + category + optional account. Hidden-at-narrow
+  // columns still occupy DOM columns, so colSpan stays correct.
+  const leftCols = 1 /* date */ + 1 /* payee */ + 1 /* category */ + (selecting ? 1 : 0) + (showAccount ? 1 : 0);
+
   return (
-    <div>
-      {groups.map((g) => (
-        <section key={g.date}>
-          <header
-            className="sticky z-10 flex items-baseline justify-between gap-3 border-b border-rule bg-paper/95 py-1.5 backdrop-blur"
-            style={{ top: stickyTop }}
-          >
-            <span className="text-xs font-medium text-ink-2">{dateHeaderLabel(g.date)}</span>
-            <span
-              className={cn(
-                "text-xs tnum tracking-tight",
-                g.netCents < 0 ? "text-neg" : "text-pos",
-              )}
-            >
-              {fmtCentsSigned(g.netCents)}
-            </span>
-          </header>
-          <ul>
-            {g.rows.map((r) => (
-              <Row
-                key={r.txn.id}
-                row={r}
-                categoryGroups={categoryGroups}
-                categoryName={categoryName}
-                accountName={accountName}
-                showAccount={showAccount}
-                selection={selection}
-                onUngroup={onUngroup}
-              />
+    <Panel
+      title="Register"
+      right={
+        <span className="text-xs tabular-nums text-ink-2">
+          {entryCount} {entryCount === 1 ? "entry" : "entries"}
+        </span>
+      }
+    >
+      <div className="overflow-x-auto">
+        <table className="w-full border-collapse text-sm">
+          <thead>
+            <tr className="border-b border-rule text-[11px] uppercase tracking-wider text-ink-2">
+              {selecting ? <th className="w-8 px-2 py-2" /> : null}
+              <th className="px-4 py-2 text-left font-medium">Date</th>
+              <th className="px-4 py-2 text-left font-medium">Payee</th>
+              <th className="hidden px-4 py-2 text-left font-medium sm:table-cell">Category</th>
+              {showAccount ? (
+                <th className="hidden px-4 py-2 text-left font-medium md:table-cell">Account</th>
+              ) : null}
+              <th className="px-4 py-2 text-right font-medium">Amount</th>
+              <th className="w-8" />
+            </tr>
+          </thead>
+          <tbody>
+            {groups.map((g) => (
+              <Fragment key={g.date}>
+                <tr className="bg-paper-2">
+                  <td className="px-4 py-1.5" colSpan={leftCols}>
+                    <span className="flex items-center gap-2">
+                      <span className="h-3 w-1 rounded-full bg-brand" />
+                      <span className="text-[11px] font-semibold uppercase tracking-wider text-ink-2">
+                        {dateHeaderLabel(g.date)}
+                      </span>
+                    </span>
+                  </td>
+                  <td
+                    className={cn(
+                      "px-4 py-1.5 text-right text-xs font-semibold tabular-nums",
+                      g.netCents < 0 ? "text-neg" : "text-ink-2",
+                    )}
+                  >
+                    {fmtCentsSigned(g.netCents)}
+                  </td>
+                  <td className="bg-paper-2" />
+                </tr>
+                {g.rows.map((r) => (
+                  <Row
+                    key={r.txn.id}
+                    row={r}
+                    categoryGroups={categoryGroups}
+                    categoryName={categoryName}
+                    accountName={accountName}
+                    showAccount={showAccount}
+                    selecting={selecting}
+                    selection={selection}
+                    onUngroup={onUngroup}
+                  />
+                ))}
+              </Fragment>
             ))}
-          </ul>
-        </section>
-      ))}
-    </div>
+          </tbody>
+        </table>
+      </div>
+    </Panel>
   );
 }
 
@@ -122,6 +163,7 @@ function Row({
   categoryName,
   accountName,
   showAccount,
+  selecting,
   selection,
   onUngroup,
 }: {
@@ -130,6 +172,7 @@ function Row({
   categoryName: (id: string | null) => string | null;
   accountName: (id: string) => string;
   showAccount: boolean;
+  selecting: boolean;
   selection?: SelectionApi;
   onUngroup?: (parentId: string) => void;
 }) {
@@ -141,15 +184,13 @@ function Row({
   // transfer, so the category slot shows the ⇄ affordance + counterpart instead.
   const isTransfer = !isGroup && !!txn.transferGroupId;
   // A group parent can't itself be grouped; only plain rows are selectable.
-  const selectable = selection?.active && !isGroup;
+  const selectable = selecting && !isGroup;
 
   const transferCell = (
     <span
-      className="flex min-w-0 items-center gap-1 text-sm text-ink-2"
+      className="flex min-w-0 items-center gap-1 text-ink-2"
       title={
-        txn.transferAccountId
-          ? `Transfer · ${accountName(txn.transferAccountId)}`
-          : "Transfer"
+        txn.transferAccountId ? `Transfer · ${accountName(txn.transferAccountId)}` : "Transfer"
       }
     >
       <ArrowLeftRight className="size-3.5 shrink-0" aria-hidden />
@@ -159,17 +200,25 @@ function Row({
     </span>
   );
 
-  const amount = (
-    <span
-      className={cn(
-        "shrink-0 text-sm tnum tracking-tight tabular-nums",
-        row.displayCents < 0 ? "text-neg" : "text-pos",
-      )}
-    >
-      {fmtCentsSigned(row.displayCents)}
-    </span>
-  );
-  const payee = (
+  // The category slot, shared by the desktop cell and the mobile subline.
+  const categorySlot = (opts?: { className?: string }) =>
+    isGroup ? (
+      <span className={cn("truncate text-ink-2", opts?.className)}>
+        {categoryName(txn.categoryId) ?? "Group"}
+      </span>
+    ) : isTransfer ? (
+      transferCell
+    ) : (
+      <CategoryCell
+        transactionId={txn.id}
+        categoryId={txn.categoryId}
+        categoryName={categoryName(txn.categoryId)}
+        groups={categoryGroups}
+        className={opts?.className}
+      />
+    );
+
+  const payeeLine = (
     <span className="flex min-w-0 items-center gap-1.5">
       {isGroup ? (
         <button
@@ -177,22 +226,15 @@ function Row({
           onClick={() => setExpanded((v) => !v)}
           aria-expanded={expanded}
           aria-label={expanded ? "Collapse group" : "Expand group"}
-          className="-ml-1 flex items-center rounded p-0.5 text-ink-2 hover:text-ink focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+          className="-ml-1 flex items-center rounded p-0.5 text-ink-2 transition-colors hover:text-ink focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
         >
-          {expanded ? (
-            <ChevronDown className="size-4" />
-          ) : (
-            <ChevronRight className="size-4" />
-          )}
+          {expanded ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}
         </button>
       ) : null}
-      <span className="truncate font-[550] text-ink">{txn.payeeName || "Unknown"}</span>
+      <span className="truncate font-medium text-ink">{txn.payeeName || "Unknown"}</span>
       {/* Reconciliation lock (#42): a reconciled row is frozen server-side. */}
       {txn.reconciled ? (
-        <Lock
-          className="size-3 shrink-0 text-ink-2"
-          aria-label="Reconciled (locked)"
-        />
+        <Lock className="size-3 shrink-0 text-ink-2" aria-label="Reconciled (locked)" />
       ) : null}
       {isGroup ? (
         <span className="shrink-0 rounded border border-rule px-1 text-[10px] uppercase tracking-wide text-ink-2">
@@ -233,137 +275,103 @@ function Row({
     ) : null;
 
   return (
-    <li className="border-b border-rule/70 last:border-b-0">
-      <div className="transition-colors hover:bg-paper-3">
-        {/* Desktop: dense columnar register */}
-        <div
-          className={cn(
-            "hidden min-h-10 items-center gap-3 py-1.5 sm:grid",
-            showAccount
-              ? "grid-cols-[auto_4.25rem_minmax(0,1fr)_9rem_8rem_auto]"
-              : "grid-cols-[auto_4.25rem_minmax(0,1fr)_9rem_auto]",
-          )}
-        >
-          <span className="flex w-4 items-center justify-center">
+    <>
+      <tr className="group border-t border-rule/60 align-top transition-colors hover:bg-paper-2/60">
+        {selecting ? (
+          <td className="px-2 py-2.5">
             {selectable ? (
-              <SelectBox
-                checked={selection!.isSelected(txn.id)}
-                onChange={() => selection!.toggle(txn.id)}
-                label={`Select ${txn.payeeName || "transaction"}`}
-              />
+              <span className="flex justify-center">
+                <SelectBox
+                  checked={selection!.isSelected(txn.id)}
+                  onChange={() => selection!.toggle(txn.id)}
+                  label={`Select ${txn.payeeName || "transaction"}`}
+                />
+              </span>
             ) : null}
-          </span>
-          <span className="text-xs tnum text-ink-2">{fmtDayMonth(txn.date)}</span>
-          <span className="flex min-w-0 flex-col">
-            {payee}
+          </td>
+        ) : null}
+        <td className="whitespace-nowrap px-4 py-2.5 text-xs tabular-nums text-ink-2">
+          {fmtDayMonth(txn.date)}
+        </td>
+        <td className="px-4 py-2.5">
+          <span className="flex min-w-0 flex-col gap-0.5">
+            {payeeLine}
             {txn.notes ? (
               <span className="truncate text-xs text-ink-2">{txn.notes}</span>
             ) : null}
-          </span>
-          {isGroup ? (
-            <span className="truncate text-sm text-ink-2">
-              {categoryName(txn.categoryId) ?? "Group"}
-            </span>
-          ) : isTransfer ? (
-            transferCell
-          ) : (
-            <CategoryCell
-              transactionId={txn.id}
-              categoryId={txn.categoryId}
-              categoryName={categoryName(txn.categoryId)}
-              groups={categoryGroups}
-            />
-          )}
-          {showAccount ? (
-            <span className="truncate text-sm text-ink-2">{accountName(txn.accountId)}</span>
-          ) : null}
-          <span className="flex items-center justify-end gap-1 justify-self-end">
-            {amount}
-            {groupMenu}
-          </span>
-        </div>
-
-        {/* Mobile: two lines */}
-        <div className="flex items-start gap-2 py-2 sm:hidden">
-          {selectable ? (
-            <span className="pt-1">
-              <SelectBox
-                checked={selection!.isSelected(txn.id)}
-                onChange={() => selection!.toggle(txn.id)}
-                label={`Select ${txn.payeeName || "transaction"}`}
-              />
-            </span>
-          ) : null}
-          <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-            <div className="flex items-baseline justify-between gap-3">
-              {payee}
-              <span className="flex items-center gap-1">
-                {amount}
-                {groupMenu}
-              </span>
-            </div>
-            <div className="flex items-center gap-1.5 text-xs text-ink-2">
-              <span className="tnum">{fmtDayMonth(txn.date)}</span>
+            {/* Mobile: category + account fold under the payee. */}
+            <span className="flex items-center gap-1.5 text-xs text-ink-2 sm:hidden">
+              {categorySlot({ className: "text-xs" })}
               {showAccount ? (
                 <>
                   <span aria-hidden>·</span>
                   <span className="truncate">{accountName(txn.accountId)}</span>
                 </>
               ) : null}
-              <span aria-hidden>·</span>
-              {isGroup ? (
-                <span className="truncate">{categoryName(txn.categoryId) ?? "Group"}</span>
-              ) : isTransfer ? (
-                transferCell
-              ) : (
-                <CategoryCell
-                  transactionId={txn.id}
-                  categoryId={txn.categoryId}
-                  categoryName={categoryName(txn.categoryId)}
-                  groups={categoryGroups}
-                  align="end"
-                  className="text-xs"
-                />
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
+            </span>
+          </span>
+        </td>
+        <td className="hidden px-4 py-2.5 sm:table-cell">{categorySlot()}</td>
+        {showAccount ? (
+          <td className="hidden px-4 py-2.5 text-ink-2 md:table-cell">
+            <span className="block truncate">{accountName(txn.accountId)}</span>
+          </td>
+        ) : null}
+        <td
+          className={cn(
+            "whitespace-nowrap px-4 py-2.5 text-right font-semibold tabular-nums",
+            row.displayCents < 0 ? "text-neg" : "text-pos",
+          )}
+        >
+          {fmtCentsSigned(row.displayCents)}
+        </td>
+        <td className="pr-2">
+          <span className="flex justify-end">{groupMenu}</span>
+        </td>
+      </tr>
 
-      {/* Expanded group children (read-only, indented) */}
-      {isGroup && expanded ? (
-        <ul className="border-t border-rule/50 bg-paper-2/40">
-          {row.children!.map((c) => (
-            <li
-              key={c.id}
-              className="flex items-center justify-between gap-3 border-b border-rule/40 py-1.5 pl-7 pr-1 last:border-b-0"
-            >
-              <span className="flex min-w-0 flex-col">
-                <span className="truncate text-sm text-ink">{c.payeeName || "Unknown"}</span>
-                <span className="flex items-center gap-1.5 text-xs text-ink-2">
-                  <span className="tnum">{fmtDayMonth(c.date)}</span>
-                  <span aria-hidden>·</span>
-                  <span className="truncate">{categoryName(c.categoryId) ?? "Uncategorized"}</span>
-                  {showAccount ? (
-                    <>
-                      <span aria-hidden>·</span>
-                      <span className="truncate">{accountName(c.accountId)}</span>
-                    </>
-                  ) : null}
+      {/* Expanded group children (read-only, indented). */}
+      {isGroup && expanded
+        ? row.children!.map((c) => (
+            <tr key={c.id} className="border-t border-rule/40 bg-paper-2/40 align-top">
+              {selecting ? <td /> : null}
+              <td className="whitespace-nowrap px-4 py-2 text-xs tabular-nums text-ink-2">
+                {fmtDayMonth(c.date)}
+              </td>
+              <td className="px-4 py-2 pl-8">
+                <span className="flex min-w-0 flex-col gap-0.5">
+                  <span className="truncate text-ink">{c.payeeName || "Unknown"}</span>
+                  <span className="flex items-center gap-1.5 text-xs text-ink-2 sm:hidden">
+                    <span className="truncate">{categoryName(c.categoryId) ?? "Uncategorized"}</span>
+                    {showAccount ? (
+                      <>
+                        <span aria-hidden>·</span>
+                        <span className="truncate">{accountName(c.accountId)}</span>
+                      </>
+                    ) : null}
+                  </span>
                 </span>
-              </span>
-              <span
+              </td>
+              <td className="hidden px-4 py-2 text-ink-2 sm:table-cell">
+                {categoryName(c.categoryId) ?? "Uncategorized"}
+              </td>
+              {showAccount ? (
+                <td className="hidden px-4 py-2 text-ink-2 md:table-cell">
+                  <span className="block truncate">{accountName(c.accountId)}</span>
+                </td>
+              ) : null}
+              <td
                 className={cn(
-                  "shrink-0 text-sm tnum tracking-tight tabular-nums",
+                  "whitespace-nowrap px-4 py-2 text-right tabular-nums",
                   c.amountCents < 0 ? "text-neg" : "text-pos",
                 )}
               >
                 {fmtCentsSigned(c.amountCents)}
-              </span>
-            </li>
-          ))}
-        </ul>
-      ) : null}
-    </li>
+              </td>
+              <td className="pr-2" />
+            </tr>
+          ))
+        : null}
+    </>
   );
 }

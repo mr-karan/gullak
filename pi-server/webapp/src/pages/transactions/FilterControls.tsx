@@ -192,7 +192,7 @@ export function FilterControls(props: FilterControlsProps) {
           className={cn(
             "gap-1.5 border border-transparent",
             uncategorizedOnly
-              ? "border-rule bg-paper-3 text-ink"
+              ? "border-warn/40 bg-pill-warn-bg text-pill-warn-ink hover:bg-pill-warn-bg"
               : "text-ink-2 hover:text-ink",
             !bar && "w-full justify-start",
           )}

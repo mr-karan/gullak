@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { CheckSquare, SlidersHorizontal } from "lucide-react";
 import { toast } from "sonner";
@@ -13,6 +13,7 @@ import { useGroupTransactions, useTransactions, useUngroup } from "@/api/transac
 import { useConnection } from "@/hooks/useConnection";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { PageHeader } from "@/components/PageHeader";
+import { Panel } from "@/components/Panel";
 import { useSelection } from "@/components/shell/SelectionProvider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -202,19 +203,6 @@ export function TransactionsPage() {
     (uncategorizedOnly ? 1 : 0) +
     (search.trim() ? 1 : 0);
 
-  // --- Sticky offset so date headers park below the filter bar --------------
-  const toolbarRef = useRef<HTMLDivElement>(null);
-  const [toolbarH, setToolbarH] = useState(0);
-  useLayoutEffect(() => {
-    const el = toolbarRef.current;
-    if (!el || typeof ResizeObserver === "undefined") return;
-    const update = () => setToolbarH(el.offsetHeight);
-    update();
-    const ro = new ResizeObserver(update);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [isMobile, rangeKey]);
-
   const [filtersOpen, setFiltersOpen] = useState(false);
 
   if (!connected) {
@@ -257,36 +245,45 @@ export function TransactionsPage() {
       />
 
       {scoped ? (
-        <div className="mb-5 flex items-baseline justify-between gap-3">
-          <div className="min-w-0">
-            <p className="truncate font-display text-lg tracking-tight text-ink">
-              {scopedAccount?.name ?? "Account"}
-            </p>
-            <p className="text-xs text-ink-2">Account register</p>
+        // Account-scoped register: the instrument idiom — a thin indigo cap, the
+        // account name, and its live balance, matching the Accounts screen.
+        <section className="mb-4 overflow-hidden rounded-xl border border-rule bg-card">
+          <div className="h-1 bg-brand" aria-hidden="true" />
+          <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-2 px-5 py-3.5">
+            <div className="min-w-0">
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-ink-2">
+                Account register
+              </p>
+              <p className="mt-0.5 truncate font-display text-xl tracking-tight text-ink">
+                {scopedAccount?.name ?? "Account"}
+              </p>
+            </div>
+            <div className="text-right">
+              <p className="text-[11px] font-medium uppercase tracking-wider text-ink-2">Balance</p>
+              <p
+                className={cn(
+                  "mt-0.5 text-2xl font-semibold tracking-tight tabular-nums",
+                  scopedBalanceCents < 0 ? "text-neg" : "text-ink",
+                )}
+              >
+                {fmtCentsSigned(scopedBalanceCents)}
+              </p>
+            </div>
           </div>
-          <div className="text-right">
-            <p className="text-xs text-ink-2">Balance</p>
-            <p
-              className={cn(
-                "text-lg font-[620] tnum tracking-tight",
-                scopedBalanceCents < 0 ? "text-neg" : "text-ink",
-              )}
-            >
-              {fmtCentsSigned(scopedBalanceCents)}
-            </p>
-          </div>
-        </div>
+        </section>
       ) : null}
 
-      {/* Sticky filter toolbar */}
+      {/* Sticky filter toolbar — a clean strip in the new language. */}
       <div
-        ref={toolbarRef}
         className="sticky top-0 z-20 -mx-5 border-b border-rule bg-paper/95 px-5 py-3 backdrop-blur sm:-mx-8 sm:px-8"
       >
         {selectMode ? (
           <div className="flex items-center justify-between gap-3">
-            <span className="text-sm font-medium text-ink">
-              {selectedIds.size} selected
+            <span className="flex items-center gap-2">
+              <span className="h-4 w-1 rounded-full bg-brand" aria-hidden="true" />
+              <span className="text-sm font-semibold text-ink">
+                {selectedIds.size} selected
+              </span>
             </span>
             <div className="flex items-center gap-2">
               <Button type="button" variant="ghost" size="sm" onClick={exitSelect}>
@@ -322,21 +319,16 @@ export function TransactionsPage() {
                 <FilterControls {...controlProps} layout="sheet" />
               </SheetContent>
             </Sheet>
-            <div className="flex items-center gap-2">
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="gap-1.5"
-                onClick={() => setSelectMode(true)}
-              >
-                <CheckSquare className="size-4" />
-                Select
-              </Button>
-              <span className="text-xs text-ink-2">
-                {filtered.length} {filtered.length === 1 ? "entry" : "entries"}
-              </span>
-            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="gap-1.5"
+              onClick={() => setSelectMode(true)}
+            >
+              <CheckSquare className="size-4" />
+              Select
+            </Button>
           </div>
         ) : (
           <div className="flex items-center justify-between gap-3">
@@ -358,10 +350,13 @@ export function TransactionsPage() {
       </div>
 
       {txnQ.data?.capped ? (
-        <p className="mt-3 text-xs text-ink-2">Showing first 1000 — narrow the range.</p>
+        <div className="mt-3 flex items-center gap-2 rounded-lg border border-warn/40 bg-pill-warn-bg px-3 py-2 text-xs text-pill-warn-ink">
+          <span className="size-1.5 shrink-0 rounded-full bg-warn" aria-hidden="true" />
+          Showing the first 1000 entries — narrow the range to see the rest.
+        </div>
       ) : null}
 
-      <div className="mt-2">
+      <div className="mt-3">
         {txnQ.isError ? (
           <ErrorState message={txnQ.error?.message} onRetry={() => void txnQ.refetch()} />
         ) : txnQ.isLoading ? (
@@ -382,7 +377,7 @@ export function TransactionsPage() {
             categoryName={categoryName}
             accountName={accountName}
             showAccount={!scoped}
-            stickyTop={toolbarH}
+            entryCount={filtered.length}
             selection={selection}
             onUngroup={handleUngroup}
           />
@@ -483,10 +478,12 @@ function GroupDialog({
 
 function RegisterSkeleton() {
   return (
-    <div className="flex flex-col gap-2 py-2">
-      {Array.from({ length: 10 }).map((_, i) => (
-        <Skeleton key={i} className="h-10 w-full" />
-      ))}
-    </div>
+    <Panel title="Register">
+      <div className="flex flex-col gap-px p-4">
+        {Array.from({ length: 10 }).map((_, i) => (
+          <Skeleton key={i} className="h-10 w-full" />
+        ))}
+      </div>
+    </Panel>
   );
 }
