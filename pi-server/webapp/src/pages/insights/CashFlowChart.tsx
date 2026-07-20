@@ -11,10 +11,9 @@ import {
 
 import { fmtCompact } from "@/lib/money";
 import { useSummaries } from "@/api/summary";
-import { Card } from "@/components/ui/card";
+import { Panel } from "@/components/Panel";
 import { Skeleton } from "@/components/ui/skeleton";
 
-import { SectionTitle } from "./CompareSection";
 import { lastNMonths } from "./months";
 
 interface Datum {
@@ -39,9 +38,8 @@ export function CashFlowChart({ enabled }: { enabled: boolean }) {
   }));
 
   return (
-    <section>
-      <SectionTitle>Cash-flow trend</SectionTitle>
-      <Card className="mt-3 p-5">
+    <Panel title="Cash-flow trend">
+      <div className="p-4">
         {loading ? (
           <Skeleton className="h-64 w-full" />
         ) : (
@@ -72,8 +70,8 @@ export function CashFlowChart({ enabled }: { enabled: boolean }) {
             </ResponsiveContainer>
           </div>
         )}
-      </Card>
-    </section>
+      </div>
+    </Panel>
   );
 }
 

@@ -4,27 +4,27 @@ import { fmtCompact } from "@/lib/money";
 import { currentMonthRange } from "@/lib/dates";
 import { useCategories } from "@/api/categories";
 import { useTransactions } from "@/api/transactions";
-import { Card } from "@/components/ui/card";
+import { Panel } from "@/components/Panel";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CenterNote } from "@/components/states";
-
-import { SectionTitle } from "./CompareSection";
 
 interface Row {
   name: string;
   cents: number;
 }
 
-/** Flat horizontal bar list: thin accent fill on a paper-3 track, value right. */
+/** Flat horizontal bar list: an indigo fill on a paper-3 track, value right. */
 function BarList({ rows }: { rows: Row[] }) {
   const max = rows[0]?.cents || 1;
   return (
-    <ul className="flex flex-col gap-3">
+    <ul className="flex flex-col divide-y divide-rule/60">
       {rows.map((r) => (
-        <li key={r.name} className="flex flex-col gap-1">
+        <li key={r.name} className="flex flex-col gap-1.5 px-4 py-2.5">
           <div className="flex items-baseline justify-between gap-3">
             <span className="min-w-0 truncate text-sm text-ink">{r.name}</span>
-            <span className="shrink-0 text-sm tnum text-ink">{fmtCompact(r.cents)}</span>
+            <span className="shrink-0 text-sm font-semibold tabular-nums text-ink">
+              {fmtCompact(r.cents)}
+            </span>
           </div>
           <div className="h-1.5 w-full overflow-hidden rounded-full bg-paper-3">
             <div
@@ -73,35 +73,33 @@ function useMonthOutflow(enabled: boolean) {
 export function CategorySection({ enabled }: { enabled: boolean }) {
   const { loading, byCategory } = useMonthOutflow(enabled);
   return (
-    <section>
-      <SectionTitle>Spending by category</SectionTitle>
-      <Card className="mt-3 p-5">
-        {loading ? (
-          <Skeleton className="h-52 w-full" />
-        ) : byCategory.length === 0 ? (
+    <Panel title="Spending by category">
+      {loading ? (
+        <Skeleton className="m-4 h-52" />
+      ) : byCategory.length === 0 ? (
+        <div className="px-4">
           <CenterNote>Nothing spent this month yet.</CenterNote>
-        ) : (
-          <BarList rows={byCategory} />
-        )}
-      </Card>
-    </section>
+        </div>
+      ) : (
+        <BarList rows={byCategory} />
+      )}
+    </Panel>
   );
 }
 
 export function PayeeSection({ enabled }: { enabled: boolean }) {
   const { loading, byPayee } = useMonthOutflow(enabled);
   return (
-    <section>
-      <SectionTitle>Top payees</SectionTitle>
-      <Card className="mt-3 p-5">
-        {loading ? (
-          <Skeleton className="h-52 w-full" />
-        ) : byPayee.length === 0 ? (
+    <Panel title="Top payees">
+      {loading ? (
+        <Skeleton className="m-4 h-52" />
+      ) : byPayee.length === 0 ? (
+        <div className="px-4">
           <CenterNote>No outflow to show this month.</CenterNote>
-        ) : (
-          <BarList rows={byPayee} />
-        )}
-      </Card>
-    </section>
+        </div>
+      ) : (
+        <BarList rows={byPayee} />
+      )}
+    </Panel>
   );
 }

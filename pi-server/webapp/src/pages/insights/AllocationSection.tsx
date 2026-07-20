@@ -3,10 +3,8 @@ import { useMemo } from "react";
 import { fmtCompact } from "@/lib/money";
 import { useHoldings } from "@/api/holdings";
 import { useNetWorth } from "@/api/networth";
-import { Card } from "@/components/ui/card";
+import { Panel } from "@/components/Panel";
 import { Skeleton } from "@/components/ui/skeleton";
-
-import { SectionTitle } from "./CompareSection";
 
 // Where the net worth sits: equity vs mutual funds (live holdings) vs cash
 // (net-worth). Flat bars sized by share of the total. Hidden entirely when
@@ -38,35 +36,33 @@ export function AllocationSection({ enabled }: { enabled: boolean }) {
   if (holdingsQ.notDeployed || (!loading && (parts.length === 0 || total === 0))) return null;
 
   return (
-    <section>
-      <SectionTitle>Allocation</SectionTitle>
-      <Card className="mt-3 p-5">
-        {loading ? (
-          <Skeleton className="h-32 w-full" />
-        ) : (
-          <ul className="flex flex-col gap-3">
-            {parts.map((p) => {
-              const pct = (p.cents / total) * 100;
-              return (
-                <li key={p.label} className="flex flex-col gap-1">
-                  <div className="flex items-baseline justify-between gap-3">
-                    <span className="text-sm text-ink">{p.label}</span>
-                    <span className="text-sm text-ink-2 tnum">
-                      {fmtCompact(p.cents)} · {pct.toFixed(0)}%
-                    </span>
-                  </div>
-                  <div className="h-1.5 w-full overflow-hidden rounded-full bg-paper-3">
-                    <div
-                      className="h-full rounded-full bg-brand"
-                      style={{ width: `${Math.max(2, pct)}%` }}
-                    />
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </Card>
-    </section>
+    <Panel title="Allocation">
+      {loading ? (
+        <Skeleton className="m-4 h-32" />
+      ) : (
+        <ul className="flex flex-col divide-y divide-rule/60">
+          {parts.map((p) => {
+            const pct = (p.cents / total) * 100;
+            return (
+              <li key={p.label} className="flex flex-col gap-1.5 px-4 py-2.5">
+                <div className="flex items-baseline justify-between gap-3">
+                  <span className="text-sm text-ink">{p.label}</span>
+                  <span className="text-sm tabular-nums text-ink-2">
+                    <span className="font-semibold text-ink">{fmtCompact(p.cents)}</span> ·{" "}
+                    {pct.toFixed(0)}%
+                  </span>
+                </div>
+                <div className="h-1.5 w-full overflow-hidden rounded-full bg-paper-3">
+                  <div
+                    className="h-full rounded-full bg-brand"
+                    style={{ width: `${Math.max(2, pct)}%` }}
+                  />
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </Panel>
   );
 }

@@ -1,6 +1,5 @@
 import { useState } from "react";
 
-import { cn } from "@/lib/utils";
 import { useConnection } from "@/hooks/useConnection";
 import { PageHeader } from "@/components/PageHeader";
 import { EmptyState } from "@/components/states";
@@ -37,19 +36,19 @@ export function InsightsPage() {
     <>
       <PageHeader title="Insights" subtitle="Where the money went, month by month." />
 
-      <div className="flex flex-col gap-8">
+      <div className="flex flex-col gap-4">
         <CompareSection enabled={connected} />
 
         <NetWorthHistorySection enabled={connected} />
 
         <CashTrendSection enabled={connected} />
 
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-2">
           <CategorySection enabled={connected} />
           <PayeeSection enabled={connected} />
         </div>
 
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-2">
           <TopSpendsSection enabled={connected} />
           <NewPayeesSection enabled={connected} />
         </div>
@@ -58,42 +57,13 @@ export function InsightsPage() {
 
         <AllocationSection enabled={connected} />
 
-        <div className="flex flex-col gap-3">
-          <div className="flex items-center gap-4">
-            <YearToggle active={year === thisYear} onClick={() => setYear(thisYear)}>
-              This year
-            </YearToggle>
-            <YearToggle active={year === thisYear - 1} onClick={() => setYear(thisYear - 1)}>
-              Last year
-            </YearToggle>
-          </div>
-          <CategoryMonthGrid year={year} enabled={connected} />
-        </div>
+        <CategoryMonthGrid
+          year={year}
+          thisYear={thisYear}
+          onYearChange={setYear}
+          enabled={connected}
+        />
       </div>
     </>
-  );
-}
-
-function YearToggle({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      aria-pressed={active}
-      onClick={onClick}
-      className={cn(
-        "rounded text-sm transition-colors focus-visible:ring-2 focus-visible:ring-ring",
-        active ? "font-medium text-ink" : "text-ink-2 hover:text-ink",
-      )}
-    >
-      {children}
-    </button>
   );
 }

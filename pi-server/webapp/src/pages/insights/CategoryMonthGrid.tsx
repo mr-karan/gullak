@@ -5,13 +5,9 @@ import { fmtCompact } from "@/lib/money";
 import { MONTHS_SHORT, type DateRange } from "@/lib/dates";
 import { useCategories } from "@/api/categories";
 import { useTransactions } from "@/api/transactions";
-import { Card } from "@/components/ui/card";
-import { LedgerRule } from "@/components/LedgerRule";
+import { Panel } from "@/components/Panel";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CenterNote } from "@/components/states";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-
-import { SectionTitle } from "./CompareSection";
 
 interface GridRow {
   name: string;
@@ -23,10 +19,21 @@ function cell(cents: number): string {
   return cents > 0 ? fmtCompact(cents) : "—";
 }
 
-// Yearly category × month spend grid, ported from the legacy Reports view.
-// Aggregated client-side from a whole year of transactions. No drill-down in
-// v1 (the legacy cell drawer is out of scope).
-export function CategoryMonthGrid({ year, enabled }: { year: number; enabled: boolean }) {
+// Yearly category × month spend grid. Aggregated client-side from a whole year
+// of transactions. The table idiom from the register: column headers, tabular
+// cells, hairline rows, and a sticky first column so category names stay pinned
+// while months scroll. The year toggle rides in the Panel header.
+export function CategoryMonthGrid({
+  year,
+  thisYear,
+  onYearChange,
+  enabled,
+}: {
+  year: number;
+  thisYear: number;
+  onYearChange: (year: number) => void;
+  enabled: boolean;
+}) {
   const range = useMemo<DateRange>(
     () => ({ startDate: `${year}-01-01`, endDate: `${year}-12-31` }),
     [year],
@@ -61,67 +68,107 @@ export function CategoryMonthGrid({ year, enabled }: { year: number; enabled: bo
   const loading = txnQ.isLoading || catQ.isLoading;
 
   return (
-    <section>
-      <SectionTitle>Category by month</SectionTitle>
-      <Card className="mt-3 p-0">
-        {loading ? (
-          <Skeleton className="m-5 h-64" />
-        ) : rows.length === 0 ? (
-          <div className="px-5">
-            <CenterNote>Nothing logged in {year} yet.</CenterNote>
-          </div>
-        ) : (
-          <Table>
-            <TableHeader>
-              <TableRow className="hover:bg-transparent">
-                <TableHead className="sticky left-0 bg-card">Category</TableHead>
+    <Panel
+      title="Category by month"
+      right={
+        <div className="flex items-center gap-0.5 rounded-md bg-paper-3 p-0.5">
+          <YearTab active={year === thisYear} onClick={() => onYearChange(thisYear)}>
+            This year
+          </YearTab>
+          <YearTab active={year === thisYear - 1} onClick={() => onYearChange(thisYear - 1)}>
+            Last year
+          </YearTab>
+        </div>
+      }
+    >
+      {loading ? (
+        <Skeleton className="m-4 h-64" />
+      ) : rows.length === 0 ? (
+        <div className="px-4">
+          <CenterNote>Nothing logged in {year} yet.</CenterNote>
+        </div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full border-collapse text-sm">
+            <thead>
+              <tr className="border-b border-rule text-[11px] uppercase tracking-wider text-ink-2">
+                <th className="sticky left-0 z-10 bg-card px-4 py-2 text-left font-medium">
+                  Category
+                </th>
                 {MONTHS_SHORT.map((m) => (
-                  <TableHead key={m} className="text-right">
+                  <th key={m} className="px-3 py-2 text-right font-medium">
                     {m}
-                  </TableHead>
+                  </th>
                 ))}
-                <TableHead className="text-right">Total</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              <tr aria-hidden>
-                <td colSpan={14} className="p-0">
-                  <LedgerRule />
-                </td>
+                <th className="px-4 py-2 text-right font-medium">Total</th>
               </tr>
+            </thead>
+            <tbody>
               {rows.map((r) => (
-                <TableRow key={r.name}>
-                  <TableCell className="sticky left-0 bg-card font-medium text-ink">
+                <tr
+                  key={r.name}
+                  className="border-t border-rule/60 transition-colors hover:bg-paper-2/60"
+                >
+                  <td className="sticky left-0 z-10 whitespace-nowrap bg-card px-4 py-2 font-medium text-ink">
                     {r.name}
-                  </TableCell>
+                  </td>
                   {r.months.map((v, i) => (
-                    <TableCell
+                    <td
                       key={i}
-                      className={cn("text-right tnum", v > 0 ? "text-ink" : "text-ink-2")}
+                      className={cn(
+                        "px-3 py-2 text-right tabular-nums",
+                        v > 0 ? "text-ink" : "text-ink-2",
+                      )}
                     >
                       {cell(v)}
-                    </TableCell>
+                    </td>
                   ))}
-                  <TableCell className="text-right tnum font-[620] text-ink">
+                  <td className="px-4 py-2 text-right font-semibold tabular-nums text-ink">
                     {cell(r.total)}
-                  </TableCell>
-                </TableRow>
+                  </td>
+                </tr>
               ))}
-              <TableRow className="hover:bg-transparent">
-                <TableCell className="sticky left-0 bg-card font-medium text-ink">Total</TableCell>
+              <tr className="border-t-2 border-rule bg-paper-2">
+                <td className="sticky left-0 z-10 bg-paper-2 px-4 py-2 text-[11px] font-semibold uppercase tracking-wider text-ink-2">
+                  Total
+                </td>
                 {monthTotals.map((v, i) => (
-                  <TableCell key={i} className="text-right tnum font-medium text-ink">
+                  <td key={i} className="px-3 py-2 text-right font-medium tabular-nums text-ink">
                     {cell(v)}
-                  </TableCell>
+                  </td>
                 ))}
-                <TableCell className="text-right tnum font-[620] text-ink">
+                <td className="px-4 py-2 text-right font-semibold tabular-nums text-ink">
                   {cell(grandTotal)}
-                </TableCell>
-              </TableRow>
-            </TableBody>
-          </Table>
-        )}
-      </Card>
-    </section>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      )}
+    </Panel>
+  );
+}
+
+function YearTab({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      aria-pressed={active}
+      onClick={onClick}
+      className={cn(
+        "rounded px-2.5 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        active ? "bg-card text-ink shadow-sm" : "text-ink-2 hover:text-ink",
+      )}
+    >
+      {children}
+    </button>
   );
 }

@@ -11,10 +11,8 @@ import {
 import { MONTHS_SHORT } from "@/lib/dates";
 import { fmtCompact } from "@/lib/money";
 import { useCashFlow } from "@/api/insights";
-import { Card } from "@/components/ui/card";
+import { Panel } from "@/components/Panel";
 import { Skeleton } from "@/components/ui/skeleton";
-
-import { SectionTitle } from "./CompareSection";
 
 function monthLabel(ym: string): string {
   const m = Number(ym.split("-")[1]);
@@ -43,9 +41,8 @@ export function CashTrendSection({ enabled }: { enabled: boolean }) {
   if (!loading && data.length === 0) return null;
 
   return (
-    <section>
-      <SectionTitle>Cash flow · last 12 months</SectionTitle>
-      <Card className="mt-3 p-5">
+    <Panel title="Cash flow · last 12 months">
+      <div className="p-4">
         {loading ? (
           <Skeleton className="h-64 w-full" />
         ) : (
@@ -73,8 +70,8 @@ export function CashTrendSection({ enabled }: { enabled: boolean }) {
             </ResponsiveContainer>
           </div>
         )}
-      </Card>
-    </section>
+      </div>
+    </Panel>
   );
 }
 

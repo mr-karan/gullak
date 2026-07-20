@@ -10,7 +10,7 @@ import { useConnection } from "@/hooks/useConnection";
 import { useCalendar, type CalendarDay } from "@/api/calendar";
 import { useRecurrences, type Recurrence } from "@/api/recurrences";
 import { PageHeader } from "@/components/PageHeader";
-import { LedgerRule } from "@/components/LedgerRule";
+import { Panel } from "@/components/Panel";
 import { EmptyState, ErrorState } from "@/components/states";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
@@ -44,10 +44,8 @@ export function CalendarPage() {
 
   const year = anchor.getFullYear();
   const monthIndex = anchor.getMonth();
-  const range = useMemo<DateRange>(
-    () => fullMonthRange(year, monthIndex),
-    [year, monthIndex],
-  );
+  const range = useMemo<DateRange>(() => fullMonthRange(year, monthIndex), [year, monthIndex]);
+  const todayStr = useMemo(() => iso(new Date()), []);
 
   const calQ = useCalendar(range, undefined, connected);
   const recQ = useRecurrences(connected);
@@ -119,72 +117,80 @@ export function CalendarPage() {
 
   const loading = calQ.isLoading || recQ.isLoading;
 
+  const monthNav = (
+    <div className="flex items-center gap-1">
+      <Button
+        variant="ghost"
+        size="icon"
+        className="size-7"
+        aria-label="Previous month"
+        onClick={() => shiftMonth(-1)}
+      >
+        <ChevronLeft className="size-4" />
+      </Button>
+      <span className="min-w-[8.5rem] text-center text-xs font-semibold uppercase tracking-wider text-ink">
+        {monthTitle(anchor)}
+      </span>
+      <Button
+        variant="ghost"
+        size="icon"
+        className="size-7"
+        aria-label="Next month"
+        onClick={() => shiftMonth(1)}
+      >
+        <ChevronRight className="size-4" />
+      </Button>
+    </div>
+  );
+
   return (
     <>
-      <PageHeader
-        title="Calendar"
-        subtitle="Your month, day by day."
-        actions={
-          <div className="flex items-center gap-1">
-            <Button
-              variant="ghost"
-              size="icon"
-              aria-label="Previous month"
-              onClick={() => shiftMonth(-1)}
-            >
-              <ChevronLeft />
-            </Button>
-            <span className="min-w-[9.5rem] text-center text-sm font-medium text-ink">
-              {monthTitle(anchor)}
-            </span>
-            <Button
-              variant="ghost"
-              size="icon"
-              aria-label="Next month"
-              onClick={() => shiftMonth(1)}
-            >
-              <ChevronRight />
-            </Button>
-          </div>
-        }
-      />
+      <PageHeader title="Calendar" subtitle="Your month, day by day." />
 
       {calQ.isError ? (
         <ErrorState message={(calQ.error as Error)?.message} onRetry={() => calQ.refetch()} />
-      ) : loading ? (
-        <Skeleton className="h-96" />
       ) : (
-        <>
-          {/* Desktop / tablet: the 7-column month grid. */}
-          <div className="hidden md:block">
-            <div className="grid grid-cols-7 gap-px">
-              {WEEKDAYS.map((w) => (
-                <div key={w} className="pb-1 text-center text-xs font-medium text-ink-2">
-                  {w}
+        <Panel title="Month" right={monthNav}>
+          {loading ? (
+            <Skeleton className="m-4 h-96" />
+          ) : (
+            <>
+              {/* Desktop / tablet: the 7-column month grid, hairline dividers. */}
+              <div className="hidden md:block">
+                <div className="grid grid-cols-7 border-b border-rule bg-card">
+                  {WEEKDAYS.map((w) => (
+                    <div
+                      key={w}
+                      className="px-2 py-2 text-center text-[11px] font-medium uppercase tracking-wider text-ink-2"
+                    >
+                      {w}
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-            <LedgerRule className="mb-px" />
-            <div className="grid grid-cols-7 gap-px">
-              {cells.map((c) => (
-                <DayCell key={c.date} cell={c} onClick={goToDay} />
-              ))}
-            </div>
-          </div>
+                <div className="grid grid-cols-7 gap-px bg-rule">
+                  {cells.map((c) => (
+                    <DayCell key={c.date} cell={c} isToday={c.date === todayStr} onClick={goToDay} />
+                  ))}
+                </div>
+              </div>
 
-          {/* Mobile: a vertical list of days with activity. */}
-          <div className="md:hidden">
-            {activeCells.length === 0 ? (
-              <EmptyState title={`Nothing logged in ${monthTitle(anchor)}.`} />
-            ) : (
-              <ul className="flex flex-col">
-                {activeCells.map((c) => (
-                  <DayRow key={c.date} cell={c} onClick={goToDay} />
-                ))}
-              </ul>
-            )}
-          </div>
-        </>
+              {/* Mobile: a vertical list of days with activity. */}
+              <div className="md:hidden">
+                {activeCells.length === 0 ? (
+                  <div className="px-4">
+                    <EmptyState title={`Nothing logged in ${monthTitle(anchor)}.`} />
+                  </div>
+                ) : (
+                  <ul className="flex flex-col">
+                    {activeCells.map((c) => (
+                      <DayRow key={c.date} cell={c} isToday={c.date === todayStr} onClick={goToDay} />
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </>
+          )}
+        </Panel>
       )}
     </>
   );
@@ -209,11 +215,19 @@ function netClass(netCents: number | undefined): string {
   return netCents < 0 ? "text-neg" : "text-pos";
 }
 
-function DayCell({ cell, onClick }: { cell: Cell; onClick: (date: string) => void }) {
+function DayCell({
+  cell,
+  isToday,
+  onClick,
+}: {
+  cell: Cell;
+  isToday: boolean;
+  onClick: (date: string) => void;
+}) {
   if (!cell.inMonth) {
     return (
-      <div className="min-h-20 bg-card/40 p-1.5 text-right">
-        <span className="tnum text-xs text-ink-2">{cell.day}</span>
+      <div className="min-h-20 bg-paper-2/50 p-1.5 text-right">
+        <span className="tabular-nums text-xs text-ink-2/60">{cell.day}</span>
       </div>
     );
   }
@@ -224,41 +238,71 @@ function DayCell({ cell, onClick }: { cell: Cell; onClick: (date: string) => voi
       onClick={() => onClick(cell.date)}
       className={cn(
         "flex min-h-20 flex-col gap-1 bg-card p-1.5 text-left transition-colors",
-        "hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
+        "hover:bg-paper-2/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        isToday && "bg-pill-brand-bg ring-1 ring-inset ring-brand/40 hover:bg-pill-brand-bg",
       )}
     >
       <div className="flex items-start justify-between">
-        <span className="tnum text-xs font-medium text-ink">{cell.day}</span>
+        <span
+          className={cn(
+            "tabular-nums text-xs font-semibold",
+            isToday ? "text-brand" : "text-ink",
+          )}
+        >
+          {cell.day}
+        </span>
         <RecurrenceDots recurrences={cell.recurrences} />
       </div>
       {net ? (
-        <span className={cn("tnum mt-auto text-xs", netClass(net))}>{fmtCentsSigned(net)}</span>
+        <span className={cn("mt-auto text-xs font-semibold tabular-nums", netClass(net))}>
+          {fmtCentsSigned(net)}
+        </span>
       ) : null}
     </button>
   );
 }
 
-function DayRow({ cell, onClick }: { cell: Cell; onClick: (date: string) => void }) {
+function DayRow({
+  cell,
+  isToday,
+  onClick,
+}: {
+  cell: Cell;
+  isToday: boolean;
+  onClick: (date: string) => void;
+}) {
   const net = cell.data?.netCents;
   return (
     <li>
       <button
         type="button"
         onClick={() => onClick(cell.date)}
-        className="flex w-full items-center justify-between gap-3 border-b border-border py-3 text-left"
+        className={cn(
+          "flex w-full items-center justify-between gap-3 border-b border-rule px-4 py-3 text-left transition-colors hover:bg-paper-2/60",
+          isToday && "bg-pill-brand-bg",
+        )}
       >
         <div className="flex items-center gap-3">
-          <span className="tnum w-8 text-lg font-medium text-ink">{cell.day}</span>
+          <span
+            className={cn(
+              "w-8 text-lg font-semibold tabular-nums",
+              isToday ? "text-brand" : "text-ink",
+            )}
+          >
+            {cell.day}
+          </span>
           <RecurrenceDots recurrences={cell.recurrences} />
         </div>
         <div className="flex items-center gap-3">
           {cell.data ? (
-            <span className="text-xs text-ink-2">
+            <span className="text-xs tabular-nums text-ink-2">
               {cell.data.txnCount} txn{cell.data.txnCount === 1 ? "" : "s"}
             </span>
           ) : null}
           {net ? (
-            <span className={cn("tnum text-sm", netClass(net))}>{fmtCentsSigned(net)}</span>
+            <span className={cn("text-sm font-semibold tabular-nums", netClass(net))}>
+              {fmtCentsSigned(net)}
+            </span>
           ) : null}
         </div>
       </button>
