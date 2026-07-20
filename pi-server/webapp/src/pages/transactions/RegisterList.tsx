@@ -55,9 +55,10 @@ function SelectBox({
 }
 
 export interface SelectionApi {
-  active: boolean;
   isSelected: (id: string) => boolean;
   toggle: (id: string) => void;
+  /** Bulk set (used by the header select-all). */
+  setMany: (ids: string[], selected: boolean) => void;
 }
 
 // The register as a real, dense table — same language as the Accounts screen:
@@ -83,11 +84,19 @@ export function RegisterList({
   selection?: SelectionApi;
   onUngroup?: (parentId: string) => void;
 }) {
-  const selecting = !!selection?.active;
-  // Columns left of the amount (colSpan target for the group-net row): optional
-  // checkbox + date + payee + category + optional account. Hidden-at-narrow
-  // columns still occupy DOM columns, so colSpan stays correct.
-  const leftCols = 1 /* date */ + 1 /* payee */ + 1 /* category */ + (selecting ? 1 : 0) + (showAccount ? 1 : 0);
+  // The checkbox column is ALWAYS rendered (leftmost) so entering/leaving
+  // selection never shifts the layout. Columns left of the amount (the colSpan
+  // target for the group-net row): checkbox + date + payee + category +
+  // optional account. Hidden-at-narrow columns still occupy DOM columns, so
+  // colSpan stays correct.
+  const leftCols = 1 /* checkbox */ + 1 /* date */ + 1 /* payee */ + 1 /* category */ + (showAccount ? 1 : 0);
+
+  // Header select-all covers every selectable (non-group) row currently shown.
+  const selectableIds = groups.flatMap((g) =>
+    g.rows.filter((r) => !r.children).map((r) => r.txn.id),
+  );
+  const allSelected =
+    !!selection && selectableIds.length > 0 && selectableIds.every((id) => selection.isSelected(id));
 
   return (
     <Panel
@@ -102,7 +111,17 @@ export function RegisterList({
         <table className="w-full border-collapse text-sm">
           <thead>
             <tr className="border-b border-rule text-[11px] uppercase tracking-wider text-ink-2">
-              {selecting ? <th className="w-8 px-2 py-2" /> : null}
+              <th className="w-8 px-2 py-2">
+                {selection && selectableIds.length > 0 ? (
+                  <span className="flex justify-center">
+                    <SelectBox
+                      checked={allSelected}
+                      onChange={() => selection.setMany(selectableIds, !allSelected)}
+                      label={allSelected ? "Clear all" : "Select all"}
+                    />
+                  </span>
+                ) : null}
+              </th>
               <th className="px-4 py-2 text-left font-medium">Date</th>
               <th className="px-4 py-2 text-left font-medium">Payee</th>
               <th className="hidden px-4 py-2 text-left font-medium sm:table-cell">Category</th>
@@ -143,7 +162,6 @@ export function RegisterList({
                     categoryName={categoryName}
                     accountName={accountName}
                     showAccount={showAccount}
-                    selecting={selecting}
                     selection={selection}
                     onUngroup={onUngroup}
                   />
@@ -163,7 +181,6 @@ function Row({
   categoryName,
   accountName,
   showAccount,
-  selecting,
   selection,
   onUngroup,
 }: {
@@ -172,7 +189,6 @@ function Row({
   categoryName: (id: string | null) => string | null;
   accountName: (id: string) => string;
   showAccount: boolean;
-  selecting: boolean;
   selection?: SelectionApi;
   onUngroup?: (parentId: string) => void;
 }) {
@@ -184,7 +200,7 @@ function Row({
   // transfer, so the category slot shows the ⇄ affordance + counterpart instead.
   const isTransfer = !isGroup && !!txn.transferGroupId;
   // A group parent can't itself be grouped; only plain rows are selectable.
-  const selectable = selecting && !isGroup;
+  const selectable = !!selection && !isGroup;
 
   const transferCell = (
     <span
@@ -277,19 +293,19 @@ function Row({
   return (
     <>
       <tr className="group border-t border-rule/60 align-top transition-colors hover:bg-paper-2/60">
-        {selecting ? (
-          <td className="px-2 py-2.5">
-            {selectable ? (
-              <span className="flex justify-center">
-                <SelectBox
-                  checked={selection!.isSelected(txn.id)}
-                  onChange={() => selection!.toggle(txn.id)}
-                  label={`Select ${txn.payeeName || "transaction"}`}
-                />
-              </span>
-            ) : null}
-          </td>
-        ) : null}
+        {/* Leftmost checkbox cell — always present so selection never shifts the
+            layout. Group parents get an aligned empty cell. */}
+        <td className="px-2 py-2.5">
+          {selectable ? (
+            <span className="flex justify-center">
+              <SelectBox
+                checked={selection!.isSelected(txn.id)}
+                onChange={() => selection!.toggle(txn.id)}
+                label={`Select ${txn.payeeName || "transaction"}`}
+              />
+            </span>
+          ) : null}
+        </td>
         <td className="whitespace-nowrap px-4 py-2.5 text-xs tabular-nums text-ink-2">
           {fmtDayMonth(txn.date)}
         </td>
@@ -334,7 +350,7 @@ function Row({
       {isGroup && expanded
         ? row.children!.map((c) => (
             <tr key={c.id} className="border-t border-rule/40 bg-paper-2/40 align-top">
-              {selecting ? <td /> : null}
+              <td className="px-2 py-2" />
               <td className="whitespace-nowrap px-4 py-2 text-xs tabular-nums text-ink-2">
                 {fmtDayMonth(c.date)}
               </td>

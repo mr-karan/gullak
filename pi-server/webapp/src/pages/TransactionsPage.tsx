@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { CheckSquare, SlidersHorizontal } from "lucide-react";
+import { SlidersHorizontal } from "lucide-react";
 import { toast } from "sonner";
 
 import { cn } from "@/lib/utils";
@@ -99,36 +99,43 @@ export function TransactionsPage() {
   }, [searchInput]);
 
   // --- Grouping selection (#46) ---------------------------------------------
-  const [selectMode, setSelectMode] = useState(false);
+  // Selection is always available — the register renders a leftmost checkbox on
+  // every row, and the selection toolbar simply appears once ≥1 row is checked.
+  // There is no select-mode toggle, so nothing shifts the layout.
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [groupDialogOpen, setGroupDialogOpen] = useState(false);
   const groupMut = useGroupTransactions();
   const ungroupMut = useUngroup();
 
-  const exitSelect = () => {
-    setSelectMode(false);
-    setSelectedIds(new Set());
-  };
+  const clearSelection = () => setSelectedIds(new Set());
 
   // Publish the current selection so the assistant chat can act on "these" rows.
-  // Only while actively selecting; clear it when leaving the page so a stale
-  // selection can't follow the user to another view.
+  // Clear it when leaving the page so a stale selection can't follow the user to
+  // another view.
   const { setSelectedTransactionIds } = useSelection();
   useEffect(() => {
-    setSelectedTransactionIds(selectMode ? [...selectedIds] : []);
-  }, [selectMode, selectedIds, setSelectedTransactionIds]);
+    setSelectedTransactionIds([...selectedIds]);
+  }, [selectedIds, setSelectedTransactionIds]);
   useEffect(
     () => () => setSelectedTransactionIds([]),
     [setSelectedTransactionIds],
   );
   const selection: SelectionApi = {
-    active: selectMode,
     isSelected: (id) => selectedIds.has(id),
     toggle: (id) =>
       setSelectedIds((prev) => {
         const next = new Set(prev);
         if (next.has(id)) next.delete(id);
         else next.add(id);
+        return next;
+      }),
+    setMany: (ids, selected) =>
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        for (const id of ids) {
+          if (selected) next.add(id);
+          else next.delete(id);
+        }
         return next;
       }),
   };
@@ -143,7 +150,7 @@ export function TransactionsPage() {
         onSuccess: () => {
           toast.success("Transactions grouped.");
           setGroupDialogOpen(false);
-          exitSelect();
+          clearSelection();
         },
         onError: (e) => toast.error(e instanceof Error ? e.message : "Couldn't group."),
       },
@@ -277,7 +284,10 @@ export function TransactionsPage() {
       <div
         className="sticky top-0 z-20 -mx-5 border-b border-rule bg-paper/95 px-5 py-3 backdrop-blur sm:-mx-8 sm:px-8"
       >
-        {selectMode ? (
+        {selectedIds.size > 0 ? (
+          // Selection strip — replaces the filter toolbar in place only while
+          // rows are checked. The checkbox column stays put either way, so this
+          // swap never moves the register.
           <div className="flex items-center justify-between gap-3">
             <span className="flex items-center gap-2">
               <span className="h-4 w-1 rounded-full bg-brand" aria-hidden="true" />
@@ -286,7 +296,7 @@ export function TransactionsPage() {
               </span>
             </span>
             <div className="flex items-center gap-2">
-              <Button type="button" variant="ghost" size="sm" onClick={exitSelect}>
+              <Button type="button" variant="ghost" size="sm" onClick={clearSelection}>
                 Cancel
               </Button>
               <Button
@@ -319,35 +329,9 @@ export function TransactionsPage() {
                 <FilterControls {...controlProps} layout="sheet" />
               </SheetContent>
             </Sheet>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="gap-1.5"
-              onClick={() => setSelectMode(true)}
-            >
-              <CheckSquare className="size-4" />
-              Select
-            </Button>
           </div>
         ) : (
-          // items-start so Select aligns to the dropdown row, not the centre of
-          // the wrapped filter block (dropdowns + the Uncategorized toggle).
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0 flex-1">
-              <FilterControls {...controlProps} layout="bar" />
-            </div>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="h-9 shrink-0 gap-1.5 px-2 text-ink-2 hover:text-ink"
-              onClick={() => setSelectMode(true)}
-            >
-              <CheckSquare className="size-4" />
-              Select
-            </Button>
-          </div>
+          <FilterControls {...controlProps} layout="bar" />
         )}
       </div>
 
