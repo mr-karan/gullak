@@ -1,33 +1,41 @@
 @import "tailwindcss";
 
-/* Gullak "bahi-khata" design system. Two surfaces: warm paper for content,
-   a dark inked "binding" for the nav shell. Single fixed light identity — the
-   app is not theme-toggled; the dark shell IS the composition. */
+/* Gullak design system — "tally" DNA (Hallmark redesign 2026-07).
+   Near-white neutral paper, a single teal accent, clean sans throughout, flat
+   (no shadows), generous whitespace. Replaces the earlier warm-clay + oxblood
+   "bahi-khata" look. Token names are kept so components need no rewrite; the
+   nav rail flips light because it consumes the semantic bind/bind-ink pair. */
 
 @custom-variant dark (&:is(.dark *));
 
 :root {
   --radius: 0.5rem;
 
-  /* --- Raw bahi-khata tokens ------------------------------------------- */
-  --paper: oklch(96.5% 0.009 80);
-  --paper-2: oklch(94% 0.012 80);
-  --paper-3: oklch(91% 0.015 80);
+  /* --- Raw tally tokens ------------------------------------------------- */
+  /* Paper: near-white with the faintest cool tint. Flat, roomy. */
+  --paper: oklch(99.2% 0.003 230);
+  --paper-2: oklch(97.6% 0.004 230);
+  --paper-3: oklch(94.6% 0.005 230);
 
-  --ink: oklch(25% 0.02 40);
-  --ink-2: oklch(48% 0.02 50);
-  --rule: oklch(86% 0.02 70);
+  /* Ink: neutral charcoal, hierarchy by weight/size not colour. */
+  --ink: oklch(24% 0.012 255);
+  --ink-2: oklch(50% 0.012 255);
+  --rule: oklch(90% 0.006 235);
 
-  --bind: oklch(28% 0.06 25);
-  --bind-2: oklch(33% 0.06 25);
-  --bind-ink: oklch(94% 0.015 75);
-  --bind-mut: oklch(72% 0.03 50);
+  /* Nav rail: LIGHT now. bind = rail surface, bind-ink = dark text on it,
+     bind-2 = a faint teal wash for the active item. */
+  --bind: oklch(97.6% 0.004 230);
+  --bind-2: oklch(93% 0.03 200);
+  --bind-ink: oklch(24% 0.012 255);
+  --bind-mut: oklch(52% 0.012 255);
 
-  --brand: oklch(46% 0.13 27);
-  --brand-ink: oklch(97% 0.01 80);
-  --pos: oklch(48% 0.09 150);
-  --neg: oklch(48% 0.14 28);
-  --warn: oklch(60% 0.11 70);
+  /* Accent: a single confident teal. Carries buttons (white text), links,
+     marks, and the nav active tint (via bind-2). */
+  --brand: oklch(50% 0.10 202);
+  --brand-ink: oklch(99% 0 0);
+  --pos: oklch(52% 0.11 155);
+  --neg: oklch(55% 0.17 25);
+  --warn: oklch(70% 0.13 75);
 
   /* --- shadcn variable mapping ----------------------------------------- */
   --background: var(--paper);
@@ -53,14 +61,14 @@
   --chart-1: var(--brand);
   --chart-2: var(--pos);
   --chart-3: var(--warn);
-  --chart-4: oklch(52% 0.08 250);
-  --chart-5: oklch(58% 0.06 320);
+  --chart-4: oklch(62% 0.09 220);
+  --chart-5: oklch(72% 0.06 195);
 
   --sidebar: var(--bind);
   --sidebar-foreground: var(--bind-ink);
   --sidebar-accent: var(--bind-2);
   --sidebar-accent-foreground: var(--bind-ink);
-  --sidebar-border: oklch(38% 0.05 25);
+  --sidebar-border: oklch(90% 0.006 235);
   --sidebar-ring: var(--brand);
 }
 
@@ -113,10 +121,13 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
 
-  --font-display: "Gambarino", ui-serif, Georgia, serif;
+  /* tally is sans-only — hierarchy comes from size + weight, not a serif.
+     Display and body share the system sans; .font-display just tightens
+     tracking and leans heavier at the component level. */
   --font-sans:
     system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial,
     sans-serif;
+  --font-display: var(--font-sans);
 
   --color-chart-1: var(--chart-1);
   --color-chart-2: var(--chart-2);
