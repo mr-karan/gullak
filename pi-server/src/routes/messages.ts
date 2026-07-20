@@ -17,17 +17,23 @@ const messageBody = z.object({
   // opaque object; the agent renders it into prose for the model and silently
   // drops anything invalid/oversized. Never parsed, never drives writes.
   context: z.record(z.string(), z.unknown()).optional(),
+  // Trusted structured selection from the web register — the ids of the
+  // transactions the user ticked. The agent resolves these to concrete rows so
+  // "categorize/delete these" acts on exactly this set. Capped at 200 ids.
+  selection: z
+    .object({ transactionIds: z.array(z.string().min(1)).max(200) })
+    .optional(),
 });
 
 messagesRouter.post("/", async (c) => {
   const db = c.get("db");
   const config = c.get("config");
   const parsed = messageBody.parse(await c.req.json());
-  // TODO(rules): the agent (handleMessage) is read-only today — it answers
-  // questions via ask_tools and does not build a transaction/draft server-side.
-  // When the agent gains a "log this expense" write path, thread the parsed
-  // candidate through runRules(db, txn) here (as the SMS ingest path does in
-  // routes/sms.ts) BEFORE the txn/draft is finalized, so rules normalize it too.
+  // The agent can now WRITE via write_tools (categorize/edit/delete/log) when the
+  // user clearly asks, in addition to answering via ask_tools. The response may
+  // carry an `actions` array the web UI renders as a result card + Undo.
+  // TODO(rules): when the agent books a fresh txn (log_transaction), thread it
+  // through runRules(db, txn) (as routes/sms.ts does) so rules normalize it too.
   const result = await handleMessage(db, config, parsed);
   return c.json(result);
 });

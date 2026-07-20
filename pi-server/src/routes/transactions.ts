@@ -3,15 +3,14 @@ import { Hono } from "hono";
 import { z } from "zod";
 
 import type { AppEnv } from "../app.ts";
-import { accounts, transactionTags, transactions } from "../db/schema.ts";
-import { newId, nowMs, recordChange, type DbOrTx } from "../repos/changelog.ts";
-import { learnCategory } from "../rules/learn.ts";
+import { accounts, transactions } from "../db/schema.ts";
+import { newId, nowMs, recordChange } from "../repos/changelog.ts";
 import {
-  createTransferPair,
-  deletePair,
-  findSibling,
-  propagateEdit,
-} from "../transactions/transfers.ts";
+  deleteTransactionCore,
+  patchTransaction,
+  type DeleteCoreResult,
+} from "../transactions/mutations.ts";
+import { createTransferPair } from "../transactions/transfers.ts";
 import { nameField, textField } from "./_fields.ts";
 
 const upsertSchema = z.object({
@@ -332,197 +331,25 @@ transactionsRouter.patch("/:id", async (c) => {
     c.req.query("force") === "true" ||
     (raw != null && typeof raw === "object" && (raw as { force?: unknown }).force === true);
   const partial = upsertSchema.partial().parse(raw);
-  const existing = db
-    .select()
-    .from(transactions)
-    .where(eq(transactions.id, id))
-    .get();
-  if (!existing) return c.json({ error: "Not found" }, 404);
-  // Lock check goes FIRST — before transfer propagation — so a locked leg can't
-  // be edited without force.
-  if (existing.reconciled && !forced) {
-    return c.json(
-      { error: "Transaction is reconciled (locked). Pass force=true to override." },
-      409,
-    );
-  }
-
-  // FIX 11: a group parent's money invariant is amountCents=0 (its total is
-  // derived from children). A generic PATCH must not give it real money. Reject
-  // an explicit non-zero amountCents; any accepted value is forced back to 0
-  // below. isGroupParent/groupParentId aren't in upsertSchema, so a generic
-  // PATCH can't touch them.
-  if (existing.isGroupParent && partial.amountCents != null && partial.amountCents !== 0) {
-    return c.json({ error: "A group parent's amountCents is derived and stays 0" }, 400);
-  }
-
-  const next = { ...existing, ...partial, updatedAt: nowMs() };
-  if (existing.isGroupParent) next.amountCents = 0;
-
-  // Transfer edit (#41): when the target is part of a transfer, keep its
-  // sibling in lock-step — amount negated, date/notes mirrored, category null
-  // on both legs — in one transaction. propagateEdit writes the sibling
-  // directly (not via this route), so there is no recursion.
-  //
-  // v1 limitation: PATCH cannot convert a transfer to/from a plain txn or move
-  // it to different accounts. Any attempt to change transferAccountId /
-  // transferGroupId on an existing transfer is ignored (the linkage is frozen).
-  if (existing.transferGroupId) {
-    const sibling = findSibling(db, existing);
-    // FIX 2: the reconciliation lock must cover BOTH legs. Editing one leg
-    // propagates to its sibling, so if EITHER leg is reconciled (locked) the
-    // edit is blocked unless force=true — checking only the addressed row let a
-    // locked sibling be mutated through its unlocked partner.
-    if (sibling?.reconciled && !forced) {
-      return c.json(
-        { error: "Transfer sibling is reconciled (locked). Pass force=true to override." },
-        409,
-      );
-    }
-    next.transferGroupId = existing.transferGroupId;
-    next.transferAccountId = existing.transferAccountId;
-    // FIX 9: a transfer leg's account is frozen. PATCH cannot move a leg to
-    // another account (that would desync the pair's accountId/transferAccountId
-    // linkage); ignore any accountId in the body.
-    next.accountId = existing.accountId;
-    next.categoryId = null;
-    db.transaction((tx) => {
-      tx.update(transactions).set(next).where(eq(transactions.id, id)).run();
-      recordChange(tx, {
-        resource: "transactions",
-        resourceId: id,
-        op: "upsert",
-        payload: next,
-      });
-      // Guard half-linked legacy data: if the sibling is missing, treat this
-      // as a normal row and skip propagation rather than crash.
-      if (sibling) propagateEdit(tx, next, sibling);
-    });
-    return c.json({ transaction: next });
-  }
-
-  db.transaction((tx) => {
-    tx.update(transactions).set(next).where(eq(transactions.id, id)).run();
-    recordChange(tx, {
-      resource: "transactions",
-      resourceId: id,
-      op: "upsert",
-      payload: next,
-    });
-  });
-
-  // #39: when this edit set a category, auto-learn a payee→category rule from
-  // the payee's recent history. This is the primary server-side categorize path
-  // (web register inline edit). Best-effort and run AFTER the write commits so
-  // the just-categorized row is counted; it never throws into this handler.
-  if (partial.categoryId != null && next.categoryId != null) {
-    learnCategory(db, {
-      payeeId: next.payeeId,
-      payeeName: next.payeeName,
-      categoryId: next.categoryId,
-    });
-  }
-
-  return c.json({ transaction: next });
+  // The write invariants (reconcile lock, group-parent freeze, transfer
+  // propagation, learnCategory) live in patchTransaction so the route and the
+  // agent write tools share one implementation.
+  const outcome = patchTransaction(db, id, partial, { force: forced });
+  if (!outcome.ok) return c.json({ error: outcome.error }, outcome.status);
+  return c.json({ transaction: outcome.transaction });
 });
 
 transactionsRouter.delete("/:id", (c) => {
   const db = c.get("db");
   const id = c.req.param("id");
-  const existing = db
-    .select()
-    .from(transactions)
-    .where(eq(transactions.id, id))
-    .get();
-  if (!existing) return c.json({ error: "Not found" }, 404);
-
-  // Reconciliation lock (#42): a reconciled row is frozen unless ?force=true.
-  // Check FIRST, before transfer handling, so a locked leg can't be deleted.
-  if (existing.reconciled && c.req.query("force") !== "true") {
-    return c.json(
-      { error: "Transaction is reconciled (locked). Pass force=true to override." },
-      409,
-    );
-  }
-
-  // Transfer delete (#41): removing either leg removes BOTH, with a change_log
-  // delete for each, in one transaction. A missing sibling (legacy half-link)
-  // is tolerated — deletePair just removes the one row it has.
-  if (existing.transferGroupId) {
-    const sibling = findSibling(db, existing);
-    // FIX 2: deleting one leg deletes BOTH, so a reconciled (locked) sibling
-    // must block the delete just as a locked addressed row does. Require force.
-    if (sibling?.reconciled && c.req.query("force") !== "true") {
-      return c.json(
-        { error: "Transfer sibling is reconciled (locked). Pass force=true to override." },
-        409,
-      );
-    }
-    db.transaction((tx) => {
-      deletePair(tx, existing, sibling);
-    });
-    return c.json({ deleted: true, id });
-  }
-
-  db.transaction((tx) => {
-    // #47: a group PARENT is a virtual header over independent child txns — a
-    // direct delete must ungroup them (clear groupParentId + sync), never delete
-    // them. This mirrors POST /ungroup so a delete can't strand real money.
-    if (existing.isGroupParent) {
-      const kids = tx
-        .select()
-        .from(transactions)
-        .where(eq(transactions.groupParentId, id))
-        .all();
-      const at = nowMs();
-      for (const k of kids) {
-        const next = { ...k, groupParentId: null, updatedAt: at };
-        tx.update(transactions).set(next).where(eq(transactions.id, k.id)).run();
-        recordChange(tx, {
-          resource: "transactions",
-          resourceId: k.id,
-          op: "upsert",
-          payload: next,
-        });
-      }
-    } else {
-      // #47: a split PARENT carries the money; its children hold only the
-      // category breakdown and are excluded from every sum (parentId IS NULL).
-      // Deleting only the parent stranded them — junk rows the phone kept
-      // because no change_log delete was emitted. Cascade the children.
-      const children = tx
-        .select({ id: transactions.id })
-        .from(transactions)
-        .where(eq(transactions.parentId, id))
-        .all();
-      for (const child of children) deleteTxnFully(tx, child.id);
-    }
-    deleteTxnFully(tx, id);
-  });
+  const forced = c.req.query("force") === "true";
+  // The cascade/lock semantics (reconcile lock on both transfer legs, transfer
+  // pair delete, split cascade, group ungroup) live in deleteTransactionCore so
+  // the route and the agent delete tool share one implementation.
+  const result: DeleteCoreResult = db.transaction((tx) =>
+    deleteTransactionCore(tx, id, { force: forced }),
+  );
+  if (result.status === "not_found") return c.json({ error: "Not found" }, 404);
+  if (result.status === "locked") return c.json({ error: result.error }, 409);
   return c.json({ deleted: true, id });
 });
-
-// Delete one transaction row plus its transaction_tags, emitting a change_log
-// delete for the row and each tag link so sync clients converge. Assumes it runs
-// inside a db.transaction.
-function deleteTxnFully(tx: DbOrTx, txnId: string): void {
-  const tagLinks = tx
-    .select({ id: transactionTags.id })
-    .from(transactionTags)
-    .where(eq(transactionTags.transactionId, txnId))
-    .all();
-  for (const link of tagLinks) {
-    tx.delete(transactionTags).where(eq(transactionTags.id, link.id)).run();
-    recordChange(tx, {
-      resource: "transaction_tags",
-      resourceId: link.id,
-      op: "delete",
-    });
-  }
-  tx.delete(transactions).where(eq(transactions.id, txnId)).run();
-  recordChange(tx, {
-    resource: "transactions",
-    resourceId: txnId,
-    op: "delete",
-  });
-}

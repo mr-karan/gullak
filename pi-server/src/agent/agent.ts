@@ -1,4 +1,4 @@
-import { and, desc, eq, gt } from "drizzle-orm";
+import { and, desc, eq, gt, inArray } from "drizzle-orm";
 import { z } from "zod";
 
 import {
@@ -29,6 +29,14 @@ import {
   type AskToolCall,
   type AskToolName,
 } from "./ask_tools.ts";
+import {
+  runWriteTool,
+  WRITE_TOOL_NAMES,
+  WRITE_TOOL_SCHEMAS,
+  type WriteAction,
+  type WriteToolName,
+  type WriteToolResult,
+} from "./write_tools.ts";
 
 /// Conversational entry point used by /v1/messages and the WhatsApp
 /// webhook. Splits into:
@@ -56,7 +64,21 @@ export interface AgentRequest {
   // appended to the model turn to steer answers, NEVER parsed and never allowed
   // to drive writes. Oversized/invalid values are dropped.
   context?: unknown;
+  // Trusted structured selection from the web register: the ids of the
+  // transactions the user has ticked. DISTINCT from the advisory `context` —
+  // these are resolved to concrete rows and rendered into the model turn so a
+  // bare "categorize these" / "delete these" acts on exactly this set. Capped
+  // at 200; invalid entries are dropped.
+  selection?: { transactionIds?: string[] };
 }
+
+// A write the agent performed, echoed to the UI so it can render a result card
+// and an Undo. `undo` names a write tool + server-authored args the UI replays.
+export type { WriteAction };
+
+const MAX_SELECTION_IDS = 200;
+// How many selected rows to spell out in the prompt before summarizing.
+const MAX_SELECTION_SHOWN = 30;
 
 // Cap the serialized context so a bloated client payload can't blow up the
 // prompt. ~1 KB is plenty for {view, goalId, month} style breadcrumbs.
@@ -83,7 +105,11 @@ export interface AgentResponse {
   threadId: string;
   reply: string;
   queued?: number; // count of inbox candidates queued (log path)
-  tool?: AskToolName; // tool that answered (ask path)
+  tool?: string; // tool that answered/acted (ask or write path)
+  // Structured sidecar describing any writes the agent performed, so the web UI
+  // can render a result card + Undo. Additive — the natural-language `reply`
+  // stays the primary surface.
+  actions?: WriteAction[];
 }
 
 const HISTORY_LIMIT = 6;
@@ -157,6 +183,35 @@ Use the ₹ symbol for rupees. If a tool returned a bulleted breakdown,
 keep the bullets. No JSON, no markdown tables, no code fences. Keep it to
 1–2 sentences plus any bullets.`;
 
+const WRITE_AGENT_SYSTEM = `You are Gullak, a personal-finance assistant that
+can BOTH answer questions and MAKE CHANGES to the user's transactions when they
+clearly ask you to.
+
+You have two kinds of tools:
+- READ tools (summary, category_spend, search_transactions, recent_transactions,
+  account_balances, net_worth, …) ANSWER questions. They never change anything.
+- WRITE tools (categorize_transactions, edit_transaction, delete_transactions,
+  log_transaction) CHANGE data.
+
+Hard rules for writing:
+- Only call a WRITE tool when the user's message clearly asks to change, add, or
+  delete something ("recategorize these to Food", "delete the duplicate",
+  "change the Amazon one to 1560", "add a 450 groceries expense"). If the
+  message is a question or ambiguous, use READ tools only — never write.
+- "these" / "them" / "the selected ones" refer to the transactions listed under
+  "The user has selected …". Pass exactly those ids to the write tool.
+- If you need to find which rows to act on (e.g. "delete the duplicate Amazon
+  charge"), use a READ tool (search_transactions) FIRST to get their ids, then
+  call the write tool with those ids.
+- Pass categories by name (categoryName) — the server resolves it. Amounts are a
+  positive magnitude in paise; the expense/income sign is handled for you.
+- Reconciled (locked) rows are skipped by the tools; mention if some were
+  skipped.
+
+After the tool runs, write a SHORT, warm confirmation in plain text (₹ for
+rupees), e.g. "Done — recategorized 3 to Food." No JSON, no tables, no code
+fences. 1–2 sentences.`;
+
 export async function handleMessage(
   db: Db,
   config: AppConfig,
@@ -181,10 +236,10 @@ export async function handleMessage(
       return await handleLog(db, config, request, threadId, text);
     }
     if (mode === "ask") {
-      return await handleAsk(db, config, threadId, text, request.context);
+      return await handleAsk(db, config, threadId, text, request);
     }
     if (mode === "edit_or_delete") {
-      return handleEditOrDelete(db, threadId, text);
+      return await handleEditOrDelete(db, config, request, threadId, text);
     }
     // noop
     const ack =
@@ -229,7 +284,11 @@ async function classify(
   ) {
     return "ask";
   }
-  if (/(edit|change|update|delete|remove|undo|cancel)/.test(lower)) {
+  if (
+    /(edit|change|update|delete|remove|undo|cancel|categori|recategori|reclassif|\bmark\b|rename)/.test(
+      lower,
+    )
+  ) {
     return "edit_or_delete";
   }
   // Fall back to the model for the ambiguous middle.
@@ -384,17 +443,25 @@ function resolveByHint<T extends { id: string; name: string }>(
   );
 }
 
-function handleEditOrDelete(
+async function handleEditOrDelete(
   db: Db,
+  config: AppConfig,
+  request: AgentRequest,
   threadId: string,
   text: string,
-): AgentResponse {
+): Promise<AgentResponse> {
   const lower = text.toLowerCase();
+  // A bare "undo"/"scrap that" stays a deterministic, no-model shortcut that only
+  // ever removes the most-recent chat-booked expense within the freshness window.
+  // A selection makes "delete these"/"recategorize these" a targeted write, so a
+  // selection short-circuits the undo-last heuristic.
+  const hasSelection = (request.selection?.transactionIds?.length ?? 0) > 0;
   const undoLast =
-    /^(undo|scrap|nvm|never ?mind)\b/.test(lower) ||
-    /\b(undo|delete|remove|cancel|scrap)\b.*\b(last|that|it|previous|latest)\b/.test(
-      lower,
-    );
+    !hasSelection &&
+    (/^(undo|scrap|nvm|never ?mind)\b/.test(lower) ||
+      /\b(undo|delete|remove|cancel|scrap)\b.*\b(last|that|it|previous|latest)\b/.test(
+        lower,
+      ));
   if (undoLast) {
     // Only the most-recent chat-booked expense, and only if it's fresh (1h),
     // so a stray "undo" can never wipe an older transaction.
@@ -430,10 +497,9 @@ function handleEditOrDelete(
     appendTurn(db, threadId, "assistant", reply);
     return { threadId, reply };
   }
-  const reply =
-    'To change a specific past entry, open it in the Gullak app. I can "undo" the last thing you logged here though — just say "undo".';
-  appendTurn(db, threadId, "assistant", reply);
-  return { threadId, reply };
+  // Everything else — "recategorize these to Food", "delete the duplicate",
+  // "change the Amazon one to 1560" — goes through the write-capable tool loop.
+  return await handleWrite(db, config, request, threadId, text);
 }
 
 async function handleAsk(
@@ -441,7 +507,7 @@ async function handleAsk(
   config: AppConfig,
   threadId: string,
   text: string,
-  context?: unknown,
+  request: AgentRequest,
 ): Promise<AgentResponse> {
   // No model configured → the tool-calling loop can't run. Answer honestly
   // rather than firing a doomed request with the dummy key.
@@ -461,12 +527,14 @@ async function handleAsk(
     .select({ id: accounts.id, name: accounts.name })
     .from(accounts)
     .all();
-  const contextLine = renderContextLine(context);
+  const contextLine = renderContextLine(request.context);
+  const selectionLine = renderSelectionLine(db, request.selection);
   const toolUser = [
     `Today's date: ${today}. Currency: ${config.defaultCurrency}.`,
     `Accounts: ${accountList.map((a) => a.name).join(", ") || "(none)"}`,
     `Categories: ${categoryList.map((c) => c.name).join(", ") || "(none)"}`,
     ...(contextLine ? [contextLine] : []),
+    ...(selectionLine ? [selectionLine] : []),
     "",
     `Question: ${text}`,
   ].join("\n");
@@ -550,6 +618,183 @@ function runAskToolCall(
   return result.formatted;
 }
 
+/// The write-capable tool loop. Offers BOTH registries — read (ask_tools) to
+/// find/confirm rows, write (write_tools) to change them — with the write
+/// system prompt gating writes to explicit change requests. Collects the
+/// structured WriteActions each write produces so /v1/messages can return them.
+async function handleWrite(
+  db: Db,
+  config: AppConfig,
+  request: AgentRequest,
+  threadId: string,
+  text: string,
+): Promise<AgentResponse> {
+  if (!config.ai.enabled) {
+    const reply =
+      'To change a specific entry, open it in the Gullak app — the assistant model isn\'t configured here. I can still "undo" the last thing you logged.';
+    appendTurn(db, threadId, "assistant", reply);
+    return { threadId, reply };
+  }
+
+  const today = todayIso();
+  const history = recentHistory(db, threadId);
+  const categoryList = db
+    .select({ id: categories.id, name: categories.name })
+    .from(categories)
+    .all();
+  const accountList = db
+    .select({ id: accounts.id, name: accounts.name })
+    .from(accounts)
+    .all();
+  const contextLine = renderContextLine(request.context);
+  const selectionLine = renderSelectionLine(db, request.selection);
+  const toolUser = [
+    `Today's date: ${today}. Currency: ${config.defaultCurrency}.`,
+    `Accounts: ${accountList.map((a) => a.name).join(", ") || "(none)"}`,
+    `Categories: ${categoryList.map((c) => c.name).join(", ") || "(none)"}`,
+    ...(contextLine ? [contextLine] : []),
+    ...(selectionLine ? [selectionLine] : []),
+    "",
+    `Request: ${text}`,
+  ].join("\n");
+
+  const actions: WriteAction[] = [];
+  let lastTool: string | undefined;
+
+  try {
+    const answer = await chatTools(config, {
+      system: WRITE_AGENT_SYSTEM,
+      user: toolUser,
+      history,
+      temperature: 0,
+      tools: [...ASK_TOOL_SCHEMAS, ...WRITE_TOOL_SCHEMAS],
+      runTool: (call: ChatToolCall) => {
+        if (ASK_TOOL_NAMES.has(call.name)) {
+          return runAskToolCall(db, call, (name) => {
+            lastTool = name;
+          });
+        }
+        if (WRITE_TOOL_NAMES.has(call.name as WriteToolName)) {
+          lastTool = call.name;
+          const res = runWriteToolCall(db, call);
+          if (res.action) actions.push(res.action);
+          return res.formatted;
+        }
+        return `Unknown tool "${call.name}". Available: ${[...ASK_TOOL_NAMES, ...WRITE_TOOL_NAMES].join(", ")}.`;
+      },
+    });
+    const reply = sanitizeReply(answer.trim());
+    // Traceability: pin the assistant turn to the first row a write touched.
+    const firstAffected = actions.find((a) => a.affectedIds.length > 0)?.affectedIds[0];
+    appendTurn(db, threadId, "assistant", reply, firstAffected);
+    return {
+      threadId,
+      reply,
+      tool: lastTool,
+      actions: actions.length > 0 ? actions : undefined,
+    };
+  } catch (err) {
+    if (err instanceof LlmHttpError) {
+      const reply =
+        "The assistant is temporarily unavailable — I couldn't reach the model, so I didn't change anything. Try again in a moment.";
+      appendTurn(db, threadId, "assistant", reply);
+      return { threadId, reply };
+    }
+    throw err;
+  }
+}
+
+/// Adapt one raw model tool_call into a WriteToolCall and run it. Unknown names
+/// and malformed args degrade gracefully (the loop keeps going) — same contract
+/// as runAskToolCall, but this path MUTATES.
+function runWriteToolCall(db: Db, call: ChatToolCall): WriteToolResult {
+  let args: Record<string, unknown> = {};
+  try {
+    const parsed = JSON.parse(call.arguments || "{}");
+    if (parsed && typeof parsed === "object") {
+      args = parsed as Record<string, unknown>;
+    }
+  } catch {
+    // Malformed args — run with defaults; the tool reports if it lacks inputs.
+  }
+  return runWriteTool(db, {
+    tool: call.name as WriteToolName,
+    params: {
+      transactionIds: toStrArray(args.transactionIds),
+      id: toStr(args.id),
+      categoryId: args.categoryId === null ? null : toStr(args.categoryId),
+      categoryName: toStr(args.categoryName),
+      amountCents: toNum(args.amountCents),
+      payeeName: toStr(args.payeeName),
+      date: toStr(args.date),
+      notes: toStr(args.notes),
+      accountId: toStr(args.accountId),
+      accountName: toStr(args.accountName),
+      isIncome: typeof args.isIncome === "boolean" ? args.isIncome : undefined,
+    },
+  });
+}
+
+/// Render the trusted selection into concrete, actionable context. Only ids that
+/// exist are shown; >MAX_SELECTION_SHOWN rows are summarized so the prompt stays
+/// bounded. Returns "" when there's nothing usable.
+function renderSelectionLine(
+  db: Db,
+  selection: AgentRequest["selection"],
+): string {
+  const raw = selection?.transactionIds;
+  if (!Array.isArray(raw) || raw.length === 0) return "";
+  const ids = [
+    ...new Set(
+      raw.filter((id): id is string => typeof id === "string" && id.trim().length > 0),
+    ),
+  ].slice(0, MAX_SELECTION_IDS);
+  if (ids.length === 0) return "";
+
+  const rows = db
+    .select({
+      id: transactions.id,
+      date: transactions.date,
+      payeeName: transactions.payeeName,
+      amountCents: transactions.amountCents,
+      categoryId: transactions.categoryId,
+      accountId: transactions.accountId,
+    })
+    .from(transactions)
+    .where(inArray(transactions.id, ids))
+    .all();
+  if (rows.length === 0) return "";
+
+  const shown = rows.slice(0, MAX_SELECTION_SHOWN);
+  const lines = shown.map((r) => {
+    const catName = r.categoryId ? categoryNameById(db, r.categoryId) : "uncategorised";
+    const payee = r.payeeName ?? "—";
+    return `  - id=${r.id} | ${r.date} | ${payee} | ${formatMoney(Math.abs(r.amountCents))} | category: ${catName}`;
+  });
+  const more =
+    rows.length > shown.length ? `\n  …and ${rows.length - shown.length} more` : "";
+  return `The user has selected these ${rows.length} transaction${rows.length === 1 ? "" : "s"} — act on THESE when they say "these"/"them"/"the selected ones":\n${lines.join("\n")}${more}`;
+}
+
+function categoryNameById(db: Db, id: string): string {
+  return (
+    db
+      .select({ name: categories.name })
+      .from(categories)
+      .where(eq(categories.id, id))
+      .get()?.name ?? "uncategorised"
+  );
+}
+
+/** Coerce a model-supplied value into a string[] of non-empty ids. */
+function toStrArray(v: unknown): string[] | undefined {
+  if (!Array.isArray(v)) return undefined;
+  const out = v.filter(
+    (x): x is string => typeof x === "string" && x.trim().length > 0,
+  );
+  return out.length > 0 ? out : undefined;
+}
+
 function composeBookedReply(booked: BookedExpense[]): string {
   const money = (c: number) => formatMoney(Math.abs(c));
   if (booked.length === 1) {
@@ -608,9 +853,10 @@ function appendTurn(
   threadId: string,
   role: "user" | "assistant",
   content: string,
+  transactionId: string | null = null,
 ) {
   db.insert(agentTurns)
-    .values({ threadId, role, content, transactionId: null })
+    .values({ threadId, role, content, transactionId })
     .run();
 }
 
