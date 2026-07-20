@@ -1,12 +1,11 @@
 import { MessageSquare } from "lucide-react";
 
-import { cn } from "@/lib/utils";
 import { fmtCompact } from "@/lib/money";
 import type { Desire } from "@/lib/types";
 import { useDesirePhotoUrl } from "@/api/desires";
-import { Card } from "@/components/ui/card";
+import { Pill } from "@/components/Pill";
 
-import { statusLabel, statusTone } from "./status";
+import { statusLabel, statusPillTone } from "./status";
 
 export function DesireCard({
   desire,
@@ -23,7 +22,7 @@ export function DesireCard({
   const coverUrl = useDesirePhotoUrl(desire.id, coverId);
 
   return (
-    <Card className="flex flex-col overflow-hidden">
+    <section className="flex flex-col overflow-hidden rounded-xl border border-rule bg-card">
       <button
         type="button"
         onClick={onOpen}
@@ -49,7 +48,7 @@ export function DesireCard({
             <h3 className="min-w-0 truncate font-display text-lg leading-tight tracking-tight text-ink">
               {desire.title}
             </h3>
-            <span className="shrink-0 text-sm font-[620] tnum tracking-tight text-ink">
+            <span className="shrink-0 text-sm font-semibold tabular-nums tracking-tight text-ink">
               {fmtCompact(desire.estCostCents)}
             </span>
           </div>
@@ -57,19 +56,17 @@ export function DesireCard({
           <p className="text-xs text-ink-2">{personName(desire.person)}</p>
 
           {desire.why ? (
-            <p className="mt-0.5 line-clamp-2 text-sm text-ink-2 italic">{desire.why}</p>
+            <p className="mt-0.5 line-clamp-2 text-sm italic text-ink-2">{desire.why}</p>
           ) : null}
         </div>
       </button>
 
       <div className="mt-auto flex items-center justify-between gap-3 border-t border-rule px-4 py-2.5">
-        <span className={cn("text-sm font-medium", statusTone(desire.status))}>
-          {statusLabel(desire.status)}
-        </span>
+        <Pill tone={statusPillTone(desire.status)}>{statusLabel(desire.status)}</Pill>
 
         <div className="flex items-center gap-3">
           {desire.commentCount > 0 ? (
-            <span className="flex items-center gap-1 text-xs text-ink-2 tnum">
+            <span className="flex items-center gap-1 text-xs tabular-nums text-ink-2">
               <MessageSquare className="size-3.5" />
               {desire.commentCount}
             </span>
@@ -95,6 +92,6 @@ export function DesireCard({
           ) : null}
         </div>
       </div>
-    </Card>
+    </section>
   );
 }

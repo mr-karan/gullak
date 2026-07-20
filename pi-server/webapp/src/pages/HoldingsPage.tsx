@@ -7,7 +7,6 @@ import { useHoldings, useImportHoldings } from "@/api/holdings";
 import { useGoals } from "@/api/goals";
 import { useConnection } from "@/hooks/useConnection";
 import { PageHeader } from "@/components/PageHeader";
-import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "@/components/ui/sonner";
@@ -109,8 +108,8 @@ export function HoldingsPage() {
       ) : holdingsQ.isLoading ? (
         <HoldingsSkeleton />
       ) : (
-        <div className="flex flex-col gap-6">
-          <SummaryHero
+        <div className="flex flex-col gap-4">
+          <SummaryStrip
             investedCents={summary?.investedCents ?? 0}
             currentCents={summary?.currentCents ?? 0}
             pnlCents={summary?.pnlCents ?? 0}
@@ -125,11 +124,13 @@ export function HoldingsPage() {
           ) : null}
 
           {holdings.length === 0 ? (
-            <EmptyImport onImport={pickFile} />
+            <EmptyState
+              title="No holdings yet."
+              hint="In Kite: Console → Portfolio → Holdings → Download, then import that .xlsx here."
+              action={{ label: "Import a file", onClick: pickFile }}
+            />
           ) : (
-            <Card className="p-5">
-              <HoldingsTable holdings={holdings} goals={goals} />
-            </Card>
+            <HoldingsTable holdings={holdings} goals={goals} />
           )}
         </div>
       )}
@@ -137,8 +138,8 @@ export function HoldingsPage() {
   );
 }
 
-// --- Invested / Current / P&L hero -----------------------------------------
-function SummaryHero({
+// --- Invested / Current / P&L summary: the instrument stat-cell idiom -------
+function SummaryStrip({
   investedCents,
   currentCents,
   pnlCents,
@@ -149,20 +150,24 @@ function SummaryHero({
 }) {
   const pct = investedCents ? (pnlCents / investedCents) * 100 : 0;
   return (
-    <Card className="grid grid-cols-3 divide-x divide-rule">
-      <HeroCell label="Invested" value={fmtCents(investedCents)} />
-      <HeroCell label="Current" value={fmtCents(currentCents)} strong />
-      <HeroCell
-        label="P&L"
-        value={fmtCentsSigned(pnlCents)}
-        note={fmtPct(pct)}
-        tone={pnlCents < 0 ? "neg" : "pos"}
-      />
-    </Card>
+    <section className="overflow-hidden rounded-xl border border-rule bg-card">
+      {/* A thin indigo cap — the one confident brand touch, structural not loud. */}
+      <div className="h-1 bg-brand" aria-hidden="true" />
+      <div className="grid grid-cols-3 divide-x divide-rule">
+        <StatCell label="Invested" value={fmtCents(investedCents)} />
+        <StatCell label="Current" value={fmtCents(currentCents)} strong />
+        <StatCell
+          label="Unrealised P&L"
+          value={fmtCentsSigned(pnlCents)}
+          note={fmtPct(pct)}
+          tone={pnlCents < 0 ? "neg" : "pos"}
+        />
+      </div>
+    </section>
   );
 }
 
-function HeroCell({
+function StatCell({
   label,
   value,
   note,
@@ -176,12 +181,12 @@ function HeroCell({
   strong?: boolean;
 }) {
   return (
-    <div className="px-5 py-4">
-      <p className="text-xs text-ink-2">{label}</p>
+    <div className="min-w-0 px-5 py-3.5">
+      <p className="truncate text-[11px] font-medium uppercase tracking-wider text-ink-2">{label}</p>
       <p
         className={cn(
-          "mt-1 tnum tracking-tight",
-          strong ? "text-xl font-[650]" : "text-lg font-[620]",
+          "mt-0.5 truncate font-semibold tracking-tight tabular-nums",
+          strong ? "text-xl" : "text-lg",
           tone === "pos" && "text-pos",
           tone === "neg" && "text-neg",
           !tone && "text-ink",
@@ -190,30 +195,19 @@ function HeroCell({
         {value}
       </p>
       {note ? (
-        <p className={cn("text-xs tnum", tone === "neg" ? "text-neg" : "text-pos")}>{note}</p>
+        <p className={cn("truncate text-xs tabular-nums", tone === "neg" ? "text-neg" : "text-pos")}>
+          {note}
+        </p>
       ) : null}
     </div>
   );
 }
 
-// --- Empty state: how to get holdings in ------------------------------------
-function EmptyImport({ onImport }: { onImport: () => void }) {
-  return (
-    <Card className="p-5">
-      <EmptyState
-        title="No holdings yet."
-        hint="In Kite: Console → Portfolio → Holdings → Download, then import that .xlsx here."
-        action={{ label: "Import a file", onClick: onImport }}
-      />
-    </Card>
-  );
-}
-
 function HoldingsSkeleton() {
   return (
-    <div className="flex flex-col gap-6">
-      <Skeleton className="h-24 w-full rounded-lg" />
-      <Skeleton className="h-72 w-full rounded-lg" />
+    <div className="flex flex-col gap-4">
+      <Skeleton className="h-24 w-full rounded-xl" />
+      <Skeleton className="h-72 w-full rounded-xl" />
     </div>
   );
 }

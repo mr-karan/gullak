@@ -17,11 +17,12 @@ import { useSummaries } from "@/api/summary";
 import { useTransactions } from "@/api/transactions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Pill } from "@/components/Pill";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
 
 import { ConfirmDialog } from "./ConfirmDialog";
-import { statusLabel, statusTone } from "./status";
+import { statusLabel, statusPillTone } from "./status";
 
 const textareaClass =
   "flex w-full rounded-md border border-input bg-paper px-3 py-2 text-sm text-foreground transition-colors outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background";
@@ -63,11 +64,9 @@ export function DesireDetailSheet({
         <SheetHeader className="pr-8">
           <SheetTitle>{desire?.title ?? "Desire"}</SheetTitle>
           {desire ? (
-            <p className="text-sm text-ink-2">
-              {personName(desire.person)} ·{" "}
-              <span className={cn("font-medium", statusTone(desire.status))}>
-                {statusLabel(desire.status)}
-              </span>
+            <p className="flex items-center gap-2 text-sm text-ink-2">
+              <span className="truncate">{personName(desire.person)}</span>
+              <Pill tone={statusPillTone(desire.status)}>{statusLabel(desire.status)}</Pill>
             </p>
           ) : null}
         </SheetHeader>

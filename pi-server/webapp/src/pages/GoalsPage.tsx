@@ -8,7 +8,6 @@ import { useGoals, useDeleteGoal } from "@/api/goals";
 import { useHoldings } from "@/api/holdings";
 import { useConnection } from "@/hooks/useConnection";
 import { PageHeader } from "@/components/PageHeader";
-import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "@/components/ui/sonner";
@@ -105,7 +104,7 @@ export function GoalsPage() {
           action={{ label: "New goal", onClick: openCreate }}
         />
       ) : (
-        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {goals.map((goal) => (
             <GoalCard
               key={goal.id}
@@ -135,31 +134,33 @@ export function GoalsPage() {
   );
 }
 
-// A dashed card for the value that isn't working toward anything yet.
+// A dashed panel for the value that isn't working toward anything yet.
 function UnallocatedCard({ cents }: { cents: number }) {
   return (
-    <Card className="flex flex-col border-dashed p-5">
-      <p className="text-sm text-ink-2">Not yet allocated</p>
-      <p className="mt-2 text-lg font-[620] tnum tracking-tight text-ink">{fmtCents(cents)}</p>
+    <section className="flex flex-col rounded-xl border border-dashed border-rule bg-card p-5">
+      <p className="text-[11px] font-medium uppercase tracking-wider text-ink-2">Not yet allocated</p>
+      <p className="mt-1.5 text-lg font-semibold tabular-nums tracking-tight text-ink">
+        {fmtCents(cents)}
+      </p>
       <p className="mt-1 text-xs text-ink-2">
         {fmtCompact(cents)} not working toward anything yet.
       </p>
       <Link
         to="/holdings"
-        className="mt-auto pt-3 text-sm text-primary underline-offset-4 transition-colors hover:underline focus-visible:ring-2 focus-visible:ring-ring rounded"
+        className="mt-auto rounded pt-3 text-sm text-brand underline-offset-4 transition-colors hover:text-brand-2 hover:underline focus-visible:ring-2 focus-visible:ring-ring"
       >
-        Map holdings to a goal
+        Map holdings to a goal →
       </Link>
-    </Card>
+    </section>
   );
 }
 
 function GoalsSkeleton() {
   return (
-    <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-      <Skeleton className="h-48 w-full rounded-lg" />
-      <Skeleton className="h-48 w-full rounded-lg" />
-      <Skeleton className="h-48 w-full rounded-lg" />
+    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <Skeleton className="h-48 w-full rounded-xl" />
+      <Skeleton className="h-48 w-full rounded-xl" />
+      <Skeleton className="h-48 w-full rounded-xl" />
     </div>
   );
 }

@@ -1,5 +1,6 @@
-// Desire statuses are the server enum (dreaming | yes | nah | bought). Per the
-// bahi-khata law these render as plain tonal words — never capsule pills.
+import type { PillTone } from "@/components/Pill";
+
+// Desire statuses are the server enum (dreaming | yes | nah | bought).
 
 export const DESIRE_STATUSES = ["dreaming", "yes", "nah", "bought"] as const;
 export type DesireStatusValue = (typeof DESIRE_STATUSES)[number];
@@ -26,6 +27,19 @@ export function statusLabel(status: string): string {
 
 export function statusTone(status: string): string {
   return STATUS_TONE[status] ?? "text-ink-2";
+}
+
+/** The verdict as a traffic-light Pill tone: a green "Yes" reads as approval,
+    "Bought" takes the brand accent, dreaming/nah stay quiet neutral. */
+export const STATUS_PILL_TONE: Record<string, PillTone> = {
+  dreaming: "neutral",
+  yes: "pos",
+  nah: "neutral",
+  bought: "brand",
+};
+
+export function statusPillTone(status: string): PillTone {
+  return STATUS_PILL_TONE[status] ?? "neutral";
 }
 
 // The verb filter offers All + each status as sentence-case words.
