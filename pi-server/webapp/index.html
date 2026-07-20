@@ -4,14 +4,31 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/icon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="theme-color" content="#fbfbfc" />
+    <meta name="theme-color" content="#0c0d12" />
     <meta name="description" content="Gullak — local-first expense tracker and money manager." />
-    <!-- Figtree — the design system typeface (Hallmark redesign). CDN <link>
-         for this proof; can be self-hosted (woff2 in /public) later. -->
+    <!-- Vault theme init: set data-theme BEFORE first paint to avoid a flash.
+         Reads the persisted choice (raw "dark"/"light"), defaults to dark. -->
+    <script>
+      (function () {
+        try {
+          var t = localStorage.getItem("gullak_theme");
+          document.documentElement.setAttribute("data-theme", t === "light" ? "light" : "dark");
+        } catch (e) {
+          document.documentElement.setAttribute("data-theme", "dark");
+        }
+      })();
+    </script>
+    <!-- Figtree (body) + Clash Display (net-worth figure + page titles, "Vault"
+         design system). CDN <link> for this proof; self-host woff2 later. -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="preconnect" href="https://api.fontshare.com" crossorigin />
     <link
       href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      href="https://api.fontshare.com/v2/css?f[]=clash-display@600,700&display=swap"
       rel="stylesheet"
     />
     <title>Gullak</title>

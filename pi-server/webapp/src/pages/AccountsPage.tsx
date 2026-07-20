@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { ChevronRight, Scale } from "lucide-react";
 
@@ -8,6 +8,7 @@ import { currentMonthRange, monthTitle } from "@/lib/dates";
 import { useAccounts } from "@/api/accounts";
 import { useCategories } from "@/api/categories";
 import { useNetWorth } from "@/api/networth";
+import { useNetWorthHistory } from "@/api/insights";
 import { useAccountSummaries, useSummary } from "@/api/summary";
 import { useTransactions } from "@/api/transactions";
 import { useConnection } from "@/hooks/useConnection";
@@ -20,11 +21,11 @@ import { ReconcileDialog } from "./accounts/ReconcileDialog";
 import type { Account, NetWorth, Transaction } from "@/lib/types";
 
 // ===========================================================================
-// Accounts — a dense, operational "cockpit", not a stack of soft cards. The
-// REFERENCE implementation for the redesign: shared <Panel> + <Pill> primitives,
-// real TABLES with column headers + grouped rows + right-aligned tabular money,
-// an instrument summary bar, traffic-light state doing real work. Other views
-// adopt this exact language.
+// Overview — the "Vault" proof. A bold DARK-NATIVE hero: the net-worth figure
+// huge in Clash Display over a violet glow, with an integrated net-worth
+// sparkline; a divided stat rail; then the grouped accounts table, monthly
+// cash-flow rail, and recent register — all restyled to the Vault palette via
+// shared tokens. Every data hook, route and behaviour is preserved.
 // ===========================================================================
 
 type GroupKey = "cash" | "credit" | "investment";
@@ -47,6 +48,67 @@ function prettyKind(kind: string): string {
   return kind.charAt(0).toUpperCase() + kind.slice(1).replaceAll("_", " ");
 }
 
+// --- Motion helpers --------------------------------------------------------
+
+function usePrefersReducedMotion(): boolean {
+  const [reduced, setReduced] = useState(
+    () =>
+      typeof window !== "undefined" &&
+      window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true,
+  );
+  useEffect(() => {
+    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const on = () => setReduced(mq.matches);
+    mq.addEventListener("change", on);
+    return () => mq.removeEventListener("change", on);
+  }, []);
+  return reduced;
+}
+
+/** Count-up from 0 to `target` (~600ms ease-out). Renders the final value
+    instantly under prefers-reduced-motion. */
+function useCountUp(target: number, duration = 600): number {
+  const reduced = usePrefersReducedMotion();
+  const [value, setValue] = useState(reduced ? target : 0);
+  const rafRef = useRef(0);
+
+  useEffect(() => {
+    if (reduced) {
+      setValue(target);
+      return;
+    }
+    const start = performance.now();
+    const tick = (now: number) => {
+      const t = Math.min(1, (now - start) / duration);
+      const eased = 1 - Math.pow(1 - t, 3); // easeOutCubic
+      setValue(Math.round(target * eased));
+      if (t < 1) rafRef.current = requestAnimationFrame(tick);
+    };
+    rafRef.current = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(rafRef.current);
+  }, [target, duration, reduced]);
+
+  return value;
+}
+
+/** A quiet staggered fade + rise on mount. Reduced-motion is handled globally
+    (durations + delays collapsed in index.css). */
+function Reveal({
+  delay = 0,
+  className,
+  children,
+}: {
+  delay?: number;
+  className?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className={cn("vault-reveal", className)} style={{ animationDelay: `${delay}ms` }}>
+      {children}
+    </div>
+  );
+}
+
 // ---------------------------------------------------------------------------
 
 export function AccountsPage() {
@@ -57,6 +119,7 @@ export function AccountsPage() {
   const accountsQ = useAccounts(connected);
   const categoriesQ = useCategories(connected);
   const netWorthQ = useNetWorth(connected);
+  const historyQ = useNetWorthHistory(12, connected);
   const monthQ = useSummary(range, undefined, connected);
   const txnQ = useTransactions(range, undefined, connected);
 
@@ -90,11 +153,12 @@ export function AccountsPage() {
   }, [categoriesQ.data]);
 
   const recent = (txnQ.data?.transactions ?? []).slice(0, 10);
+  const history = historyQ.data?.history ?? [];
 
   if (!connected) {
     return (
       <>
-        <PageHeader title="Accounts" />
+        <PageHeader title="Overview" />
         <EmptyState
           title="Not connected."
           hint="Add your pi-server API key to load balances and activity."
@@ -108,7 +172,7 @@ export function AccountsPage() {
 
   return (
     <>
-      <PageHeader title="Accounts" subtitle="Where your money sits today." />
+      <PageHeader title="Overview" subtitle="Where your money sits today." />
 
       {accountsQ.isError ? (
         <ErrorState message={accountsQ.error?.message} onRetry={() => void accountsQ.refetch()} />
@@ -116,31 +180,46 @@ export function AccountsPage() {
         <AccountsSkeleton />
       ) : (
         <div className="flex flex-col gap-4">
-          <InstrumentBar
-            netWorth={netWorthQ.data}
-            notDeployed={netWorthQ.notDeployed}
-            cashSumCents={cashSumCents}
-          />
-
-          <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1.9fr)_minmax(0,1fr)]">
-            <AccountsTable
-              balances={balances}
-              onReconcile={(a) => setReconcileTarget({ id: a.id, name: a.name })}
+          <Reveal delay={0}>
+            <NetWorthHero
+              netWorth={netWorthQ.data}
+              notDeployed={netWorthQ.notDeployed}
+              cashSumCents={cashSumCents}
+              history={history}
             />
-            <MonthPanel
-              incomeCents={monthQ.data?.incomeCents ?? 0}
-              expenseCents={monthQ.data?.expenseCents ?? 0}
-              netCents={monthQ.data?.netCents ?? 0}
-              loading={monthQ.isLoading}
-            />
-          </div>
+          </Reveal>
 
-          <RecentRegister
-            rows={recent}
-            accountName={accountName}
-            categoryName={categoryName}
-            loading={txnQ.isLoading}
-          />
+          <Reveal delay={60}>
+            <StatRail
+              netWorth={netWorthQ.data}
+              notDeployed={netWorthQ.notDeployed}
+              cashSumCents={cashSumCents}
+            />
+          </Reveal>
+
+          <Reveal delay={120}>
+            <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1.9fr)_minmax(0,1fr)]">
+              <AccountsTable
+                balances={balances}
+                onReconcile={(a) => setReconcileTarget({ id: a.id, name: a.name })}
+              />
+              <MonthPanel
+                incomeCents={monthQ.data?.incomeCents ?? 0}
+                expenseCents={monthQ.data?.expenseCents ?? 0}
+                netCents={monthQ.data?.netCents ?? 0}
+                loading={monthQ.isLoading}
+              />
+            </div>
+          </Reveal>
+
+          <Reveal delay={180}>
+            <RecentRegister
+              rows={recent}
+              accountName={accountName}
+              categoryName={categoryName}
+              loading={txnQ.isLoading}
+            />
+          </Reveal>
         </div>
       )}
 
@@ -155,8 +234,156 @@ export function AccountsPage() {
   );
 }
 
-// --- Instrument bar: the wealth readout as a divided stat panel ------------
-function InstrumentBar({
+// --- Sparkline: smooth area + line, brand-violet, emphasised endpoint -------
+function smoothPath(pts: { x: number; y: number }[]): string {
+  if (pts.length === 0) return "";
+  if (pts.length === 1) return `M ${pts[0].x} ${pts[0].y}`;
+  let d = `M ${pts[0].x} ${pts[0].y}`;
+  const tension = 0.18;
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p0 = pts[i - 1] ?? pts[i];
+    const p1 = pts[i];
+    const p2 = pts[i + 1];
+    const p3 = pts[i + 2] ?? p2;
+    const c1x = p1.x + (p2.x - p0.x) * tension;
+    const c1y = p1.y + (p2.y - p0.y) * tension;
+    const c2x = p2.x - (p3.x - p1.x) * tension;
+    const c2y = p2.y - (p3.y - p1.y) * tension;
+    d += ` C ${c1x} ${c1y}, ${c2x} ${c2y}, ${p2.x} ${p2.y}`;
+  }
+  return d;
+}
+
+function Sparkline({ values }: { values: number[] }) {
+  const W = 100;
+  const H = 36;
+  const pad = 3;
+  const n = values.length;
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const span = max - min || 1;
+  const norm = (v: number) => (v - min) / span;
+  const yOf = (v: number) => pad + (1 - norm(v)) * (H - pad * 2);
+
+  const pts = values.map((v, i) => ({ x: n === 1 ? W : (i / (n - 1)) * W, y: yOf(v) }));
+  const line = smoothPath(pts);
+  const area = `${line} L ${W} ${H} L 0 ${H} Z`;
+  const lastTopPct = (yOf(values[n - 1]) / H) * 100;
+
+  return (
+    <div className="relative h-full w-full">
+      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="h-full w-full">
+        <defs>
+          <linearGradient id="vault-spark-fill" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" style={{ stopColor: "var(--brand)", stopOpacity: 0.32 }} />
+            <stop offset="100%" style={{ stopColor: "var(--brand)", stopOpacity: 0 }} />
+          </linearGradient>
+        </defs>
+        <path d={area} fill="url(#vault-spark-fill)" stroke="none" />
+        <path
+          d={line}
+          fill="none"
+          style={{ stroke: "var(--brand)" }}
+          strokeWidth={2}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          vectorEffect="non-scaling-stroke"
+        />
+      </svg>
+      <span
+        aria-hidden="true"
+        className="absolute size-2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-brand ring-2 ring-card"
+        style={{ left: "calc(100% - 5px)", top: `${lastTopPct}%` }}
+      />
+    </div>
+  );
+}
+
+// --- Hero: the net-worth readout, the boldest surface ----------------------
+function NetWorthHero({
+  netWorth,
+  notDeployed,
+  cashSumCents,
+  history,
+}: {
+  netWorth: NetWorth | undefined;
+  notDeployed: boolean;
+  cashSumCents: number;
+  history: { totalCents: number }[];
+}) {
+  const hasInvestments = Boolean(netWorth && netWorth.investedInvestedCents > 0);
+  const headlineCents = netWorth && !notDeployed ? netWorth.totalCents : cashSumCents;
+  const displayCents = useCountUp(headlineCents);
+
+  const pnlCents = netWorth?.investedPnlCents ?? 0;
+  const pnlPct =
+    netWorth && netWorth.investedInvestedCents
+      ? (netWorth.investedPnlCents / netWorth.investedInvestedCents) * 100
+      : 0;
+
+  const series = history.map((h) => h.totalCents);
+  const hasTrend = series.length >= 2;
+  const first = series[0] ?? 0;
+  const last = series[series.length - 1] ?? 0;
+  const deltaCents = last - first;
+
+  const caption = hasInvestments
+    ? netWorth?.lastImportAt
+      ? `Holdings as of the ${fmtEpochDate(netWorth.lastImportAt)} import — prices aren't live.`
+      : "Cash across your accounts plus tracked holdings."
+    : "Liquid cash across your accounts.";
+
+  return (
+    <section className="vault-hero-glow relative overflow-hidden rounded-2xl border border-rule">
+      {hasTrend ? (
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[46%] min-h-24">
+          <Sparkline values={series} />
+        </div>
+      ) : null}
+
+      <div className="relative px-6 py-7 sm:px-8 sm:py-9">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-ink-2">Net worth</p>
+
+        <div className="mt-2 flex flex-wrap items-end gap-x-4 gap-y-3">
+          <p
+            className="font-vault-figure leading-[0.9] text-ink"
+            style={{ fontSize: "clamp(3.5rem, 9vw, 6rem)" }}
+          >
+            {fmtCentsSigned(displayCents)}
+          </p>
+
+          {hasInvestments ? (
+            // Pill = real P&L% (meaningful). Caption carries the absolute 12-mo
+            // change — never a first→last% (early cash-only months are ~0 and
+            // make the % nonsensical).
+            <span className="mb-1.5 inline-flex items-center gap-2">
+              <Pill tone={pnlCents < 0 ? "neg" : "pos"} className="px-2.5 py-1 text-sm">
+                {fmtPct(pnlPct)}
+              </Pill>
+              {hasTrend ? (
+                <span className="text-xs text-ink-2">
+                  {fmtCentsSigned(deltaCents)} · {series.length}-mo
+                </span>
+              ) : null}
+            </span>
+          ) : hasTrend ? (
+            <span className="mb-1.5 inline-flex items-center gap-2">
+              <Pill tone={deltaCents < 0 ? "neg" : "pos"} className="px-2.5 py-1 text-sm">
+                {fmtCentsSigned(deltaCents)}
+              </Pill>
+              <span className="text-xs text-ink-2">{series.length}-mo change</span>
+            </span>
+          ) : null}
+        </div>
+
+        <p className="mt-4 max-w-prose text-xs text-ink-2">{caption}</p>
+      </div>
+    </section>
+  );
+}
+
+// --- Stat rail: divided cells beneath the hero -----------------------------
+function StatRail({
   netWorth,
   notDeployed,
   cashSumCents,
@@ -166,49 +393,18 @@ function InstrumentBar({
   cashSumCents: number;
 }) {
   const hasInvestments = Boolean(netWorth && netWorth.investedInvestedCents > 0);
-  const headlineCents = netWorth && !notDeployed ? netWorth.totalCents : cashSumCents;
-  const cashCents = netWorth && !notDeployed ? netWorth.cashCents : cashSumCents;
-  const pnlCents = netWorth?.investedPnlCents ?? 0;
-  const pnlPct =
-    netWorth && netWorth.investedInvestedCents
-      ? (netWorth.investedPnlCents / netWorth.investedInvestedCents) * 100
-      : 0;
+  if (!hasInvestments || !netWorth) return null;
+
+  const cashCents = notDeployed ? cashSumCents : netWorth.cashCents;
+  const pnlCents = netWorth.investedPnlCents;
 
   return (
     <section className="overflow-hidden rounded-xl border border-rule bg-card">
-      {/* A thin indigo cap — the one confident brand touch, structural not loud. */}
-      <div className="h-1 bg-brand" aria-hidden="true" />
-      <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-2 px-5 py-4">
-        <div className="min-w-0">
-          <p className="text-xs font-semibold uppercase tracking-wider text-ink-2">Net worth</p>
-          <p className="mt-0.5 font-display text-[2.5rem] font-bold leading-none tracking-tight tabular-nums text-ink sm:text-5xl">
-            {fmtCentsSigned(headlineCents)}
-          </p>
-        </div>
-        {hasInvestments ? (
-          <Pill tone={pnlCents < 0 ? "neg" : "pos"} className="px-2.5 py-1 text-sm">
-            {fmtPct(pnlPct)} all-time
-          </Pill>
-        ) : null}
+      <div className="grid grid-cols-3 divide-x divide-rule">
+        <StatCell label="Cash" valueCents={cashCents} />
+        <StatCell label="Invested" valueCents={netWorth.investedCurrentCents} />
+        <StatCell label="Unrealised P&L" valueCents={pnlCents} tone={pnlCents < 0 ? "neg" : "pos"} />
       </div>
-      {hasInvestments && netWorth ? (
-        <>
-          <div className="grid grid-cols-3 divide-x divide-rule border-t border-rule">
-            <StatCell label="Cash" valueCents={cashCents} />
-            <StatCell label="Invested" valueCents={netWorth.investedCurrentCents} />
-            <StatCell label="Unrealised P&L" valueCents={pnlCents} tone={pnlCents < 0 ? "neg" : "pos"} />
-          </div>
-          {netWorth.lastImportAt ? (
-            <p className="border-t border-rule px-5 py-2 text-xs text-ink-2">
-              Holdings as of the {fmtEpochDate(netWorth.lastImportAt)} import — prices aren't live.
-            </p>
-          ) : null}
-        </>
-      ) : (
-        <p className="border-t border-rule px-5 py-2 text-xs text-ink-2">
-          Liquid cash across your accounts.
-        </p>
-      )}
     </section>
   );
 }
@@ -223,11 +419,11 @@ function StatCell({
   tone?: "pos" | "neg";
 }) {
   return (
-    <div className="min-w-0 px-5 py-3">
+    <div className="min-w-0 px-5 py-3.5">
       <p className="truncate text-[11px] font-medium uppercase tracking-wider text-ink-2">{label}</p>
       <p
         className={cn(
-          "mt-0.5 truncate text-lg font-semibold tracking-tight tabular-nums",
+          "mt-1 truncate text-lg font-semibold tracking-tight tabular-nums",
           tone === "pos" && "text-pos",
           tone === "neg" && "text-neg",
           !tone && "text-ink",
@@ -277,10 +473,7 @@ function AccountsTable({
           <thead>
             <tr className="text-[11px] uppercase tracking-wider text-ink-2">
               <th className="px-4 py-2 text-left font-medium">Account</th>
-              <th className="hidden px-4 py-2 text-right font-medium tabular-nums sm:table-cell">
-                Balance
-              </th>
-              <th className="px-4 py-2 text-right font-medium tabular-nums sm:hidden">Balance</th>
+              <th className="px-4 py-2 text-right font-medium tabular-nums">Balance</th>
               <th className="w-8" />
             </tr>
           </thead>
@@ -372,10 +565,7 @@ function MonthPanel({
   const spentPct = inflow > 0 ? Math.min(100, Math.round((out / inflow) * 100)) : out > 0 ? 100 : 0;
 
   return (
-    <Panel
-      title="This month"
-      right={<span className="text-xs text-ink-2">{monthTitle()}</span>}
-    >
+    <Panel title="This month" right={<span className="text-xs text-ink-2">{monthTitle()}</span>}>
       {loading ? (
         <Skeleton className="m-4 h-28" />
       ) : (
@@ -515,7 +705,8 @@ function RecentRegister({
 function AccountsSkeleton() {
   return (
     <div className="flex flex-col gap-4">
-      <Skeleton className="h-36 w-full rounded-xl" />
+      <Skeleton className="h-48 w-full rounded-2xl" />
+      <Skeleton className="h-20 w-full rounded-xl" />
       <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1.9fr)_minmax(0,1fr)]">
         <Skeleton className="h-64 w-full rounded-xl" />
         <Skeleton className="h-52 w-full rounded-xl" />

@@ -1,80 +1,75 @@
 @import "tailwindcss";
 
 /* ============================================================================
-   Gullak design system — "ledger-indigo" (Hallmark redesign 2026-07).
+   Gullak design system — "Vault" (dark-native proof, 2026-07).
 
-   Studied DNA: YNAB (You Need A Budget). What we took, and how we made it ours:
-   - INDIGO PRIMARY. YNAB's signature is a confident blue-violet. Here --brand is
-     an indigo ~oklch(48% 0.20 274) ≈ #4a3 fd-ish, dark enough to carry white
-     text at AA. It fills primary buttons, the net-worth hero band, and the
-     ACTIVE nav item (a solid indigo pill with white icon + label).
-   - TRAFFIC-LIGHT SEMANTIC MONEY. green = positive / funded, red = negative /
-     overspent, amber = attention. These are FUNCTIONAL colours: balances, P&L,
-     cash-flow nets and status pills read state at a glance. YNAB surfaces
-     "Available" as a coloured PILL — we bring that pill treatment (--pill-*) to
-     P&L %, monthly net, and register amounts.
-   - A REAL TYPEFACE. Figtree (Google Fonts, self-hostable later) replaces the
-     plain system-ui stack — a friendly-precise grotesque that carries both
-     --font-sans and --font-display. This is what stops the UI reading generic.
-   - DENSITY + CRAFT. Flat (no drop shadows), but structured: grouped sections
-     with headers, fixed-height rows, solid cards defined by hairlines and an
-     indigo accent, not a sea of identical grey-bordered boxes.
+   A distinct, premium, DARK-NATIVE direction — NOT a recolour of ledger-indigo.
+   The hero is a deep near-black cool ground with a luminous VIOLET brand and a
+   Clash Display face reserved for the net-worth figure + page titles. Flat but
+   premium: subtle violet glow on the hero, hairline borders, no heavy shadows.
 
-   Token NAMES are preserved (paper/ink/rule/bind/brand/pos/neg/warn/chart-*) so
-   every other component keeps working; new semantic pill tokens are additive.
-   NOT a YNAB clone — its DNA, our ledger.
+   Theme-aware. DARK is the default (the hero). Light is an inverse-premium
+   override via `:root[data-theme="light"]` (set by the shell toggle / inline
+   init) and a `prefers-color-scheme` fallback for the no-JS first paint.
+
+   Token NAMES are preserved (paper, ink, rule, bind, brand, pos, neg, warn,
+   pill tints, chart series) so every existing component keeps working
+   unchanged — only the raw values swap per theme.
    ========================================================================== */
 
-@custom-variant dark (&:is(.dark *));
+@custom-variant dark (&:where([data-theme="dark"] *));
 
+/* --- DARK (default, the hero) --------------------------------------------- */
 :root {
   --radius: 0.625rem;
 
-  /* --- Neutrals: clean, faintly cool so indigo reads true over them ------- */
-  --paper: oklch(99% 0.002 270);
-  --paper-2: oklch(97.4% 0.003 270);
-  --paper-3: oklch(94.6% 0.006 274);
+  /* Ground: deep, faintly-cool near-black. Layers step lighter. */
+  --paper: oklch(16% 0.012 265);
+  --paper-2: oklch(20% 0.014 265);
+  --paper-3: oklch(26% 0.016 265);
 
-  /* Ink: charcoal with the faintest indigo cast; hierarchy by weight + size. */
-  --ink: oklch(23% 0.02 274);
-  --ink-2: oklch(48% 0.02 274);
-  --rule: oklch(90.5% 0.006 274);
+  /* Ink: near-white cool, muted step for secondary. */
+  --ink: oklch(96% 0.01 265);
+  --ink-2: oklch(72% 0.015 265);
+  --rule: oklch(30% 0.015 265);
 
-  /* --- Brand: confident indigo. Buttons (white text, AA), hero band, links,
-     and the nav active pill. Used boldly, not sparingly. ------------------- */
-  --brand: oklch(48% 0.2 274);
-  --brand-2: oklch(42% 0.19 274); /* pressed / darker step */
-  --brand-ink: oklch(99% 0 0);
+  /* Brand: luminous violet — bright enough to glow on the dark ground. */
+  --brand: oklch(70% 0.17 288);
+  --brand-2: oklch(62% 0.17 288);
+  --brand-ink: oklch(16% 0.02 288);
 
-  /* --- Traffic-light money states. Functional, not decorative. ----------- */
-  --pos: oklch(53% 0.14 152); /* green — positive / funded */
-  --neg: oklch(54% 0.2 25); /* red — negative / overspent */
-  --warn: oklch(72% 0.15 78); /* amber — attention */
+  /* Semantic money — tuned to read on the dark ground. */
+  --pos: oklch(74% 0.15 155);
+  --neg: oklch(70% 0.19 25);
+  --warn: oklch(80% 0.14 80);
 
-  /* --- Pills: the YNAB "Available" treatment. A tinted surface + a darker
-     same-hue ink so the state reads at a glance and stays AA on the tint. --- */
-  --pill-pos-bg: color-mix(in oklch, var(--pos) 15%, var(--paper));
-  --pill-pos-ink: color-mix(in oklch, var(--pos) 76%, black);
-  --pill-neg-bg: color-mix(in oklch, var(--neg) 14%, var(--paper));
-  --pill-neg-ink: color-mix(in oklch, var(--neg) 80%, black);
-  --pill-warn-bg: color-mix(in oklch, var(--warn) 22%, var(--paper));
-  --pill-warn-ink: color-mix(in oklch, var(--warn) 60%, black);
-  --pill-brand-bg: color-mix(in oklch, var(--brand) 12%, var(--paper));
-  --pill-brand-ink: color-mix(in oklch, var(--brand) 88%, black);
+  /* Card = paper-2. */
+  --card-raw: oklch(20% 0.014 265);
 
-  /* Nav rail: light surface. Active item is a solid indigo pill (set in the
-     component via --brand); bind-2 is the faint indigo hover wash. */
-  --bind: oklch(98% 0.003 274);
-  --bind-2: oklch(93% 0.03 274);
-  --bind-ink: oklch(24% 0.02 274);
-  --bind-mut: oklch(50% 0.02 274);
+  /* Pills: tint = accent mixed INTO paper-2 (dark tinted surface); ink = a
+     brightened same-hue so the state reads at a glance on the dark tint. */
+  --pill-pos-bg: color-mix(in oklch, var(--pos) 20%, var(--paper-2));
+  --pill-pos-ink: color-mix(in oklch, var(--pos) 76%, white);
+  --pill-neg-bg: color-mix(in oklch, var(--neg) 20%, var(--paper-2));
+  --pill-neg-ink: color-mix(in oklch, var(--neg) 82%, white);
+  --pill-warn-bg: color-mix(in oklch, var(--warn) 22%, var(--paper-2));
+  --pill-warn-ink: color-mix(in oklch, var(--warn) 88%, white);
+  --pill-brand-bg: color-mix(in oklch, var(--brand) 24%, var(--paper-2));
+  --pill-brand-ink: color-mix(in oklch, var(--brand) 82%, white);
+
+  /* Nav rail: a slightly DARKER panel than the ground; active = violet pill,
+     hover = a faint violet wash. */
+  --bind: oklch(13% 0.011 265);
+  --bind-2: color-mix(in oklch, var(--brand) 26%, var(--bind));
+  --bind-ink: var(--ink);
+  --bind-mut: var(--ink-2);
 
   /* --- shadcn variable mapping ----------------------------------------- */
   --background: var(--paper);
   --foreground: var(--ink);
-  --card: oklch(100% 0 0);
+  --card: var(--card-raw);
   --card-foreground: var(--ink);
-  --popover: oklch(100% 0 0);
+  --popover: var(--paper-2);
   --popover-foreground: var(--ink);
   --primary: var(--brand);
   --primary-foreground: var(--brand-ink);
@@ -93,15 +88,88 @@
   --chart-1: var(--brand);
   --chart-2: var(--pos);
   --chart-3: var(--warn);
-  --chart-4: oklch(60% 0.13 300);
-  --chart-5: oklch(66% 0.1 230);
+  --chart-4: oklch(66% 0.13 320);
+  --chart-5: oklch(70% 0.1 230);
 
   --sidebar: var(--bind);
   --sidebar-foreground: var(--bind-ink);
   --sidebar-accent: var(--bind-2);
   --sidebar-accent-foreground: var(--bind-ink);
-  --sidebar-border: oklch(91% 0.006 274);
+  --sidebar-border: oklch(24% 0.014 265);
   --sidebar-ring: var(--brand);
+}
+
+/* --- LIGHT (inverse premium) — token values only ------------------------- */
+:root[data-theme="light"] {
+  --paper: oklch(98.5% 0.004 265);
+  --paper-2: oklch(97% 0.005 265);
+  --paper-3: oklch(93.5% 0.007 265);
+
+  --ink: oklch(24% 0.02 274);
+  --ink-2: oklch(48% 0.02 274);
+  --rule: oklch(90% 0.006 274);
+
+  --brand: oklch(52% 0.17 288);
+  --brand-2: oklch(46% 0.17 288);
+  --brand-ink: oklch(99% 0 0);
+
+  --pos: oklch(53% 0.14 155);
+  --neg: oklch(54% 0.2 25);
+  --warn: oklch(72% 0.15 80);
+
+  --card-raw: oklch(100% 0 0);
+
+  --pill-pos-bg: color-mix(in oklch, var(--pos) 14%, var(--paper));
+  --pill-pos-ink: color-mix(in oklch, var(--pos) 76%, black);
+  --pill-neg-bg: color-mix(in oklch, var(--neg) 14%, var(--paper));
+  --pill-neg-ink: color-mix(in oklch, var(--neg) 80%, black);
+  --pill-warn-bg: color-mix(in oklch, var(--warn) 22%, var(--paper));
+  --pill-warn-ink: color-mix(in oklch, var(--warn) 60%, black);
+  --pill-brand-bg: color-mix(in oklch, var(--brand) 12%, var(--paper));
+  --pill-brand-ink: color-mix(in oklch, var(--brand) 88%, black);
+
+  --bind: oklch(98% 0.003 274);
+  --bind-2: color-mix(in oklch, var(--brand) 14%, var(--bind));
+  --bind-ink: oklch(24% 0.02 274);
+  --bind-mut: oklch(50% 0.02 274);
+
+  --chart-4: oklch(60% 0.13 300);
+  --chart-5: oklch(66% 0.1 230);
+
+  --sidebar-border: oklch(91% 0.006 274);
+}
+
+/* prefers-color-scheme fallback for the no-JS first paint (the inline init in
+   index.html normally sets data-theme before this ever applies). */
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme]) {
+    --paper: oklch(98.5% 0.004 265);
+    --paper-2: oklch(97% 0.005 265);
+    --paper-3: oklch(93.5% 0.007 265);
+    --ink: oklch(24% 0.02 274);
+    --ink-2: oklch(48% 0.02 274);
+    --rule: oklch(90% 0.006 274);
+    --brand: oklch(52% 0.17 288);
+    --brand-2: oklch(46% 0.17 288);
+    --brand-ink: oklch(99% 0 0);
+    --pos: oklch(53% 0.14 155);
+    --neg: oklch(54% 0.2 25);
+    --warn: oklch(72% 0.15 80);
+    --card-raw: oklch(100% 0 0);
+    --pill-pos-bg: color-mix(in oklch, var(--pos) 14%, var(--paper));
+    --pill-pos-ink: color-mix(in oklch, var(--pos) 76%, black);
+    --pill-neg-bg: color-mix(in oklch, var(--neg) 14%, var(--paper));
+    --pill-neg-ink: color-mix(in oklch, var(--neg) 80%, black);
+    --pill-warn-bg: color-mix(in oklch, var(--warn) 22%, var(--paper));
+    --pill-warn-ink: color-mix(in oklch, var(--warn) 60%, black);
+    --pill-brand-bg: color-mix(in oklch, var(--brand) 12%, var(--paper));
+    --pill-brand-ink: color-mix(in oklch, var(--brand) 88%, black);
+    --bind: oklch(98% 0.003 274);
+    --bind-2: color-mix(in oklch, var(--brand) 14%, var(--bind));
+    --bind-ink: oklch(24% 0.02 274);
+    --bind-mut: oklch(50% 0.02 274);
+    --sidebar-border: oklch(91% 0.006 274);
+  }
 }
 
 @theme inline {
@@ -164,13 +232,14 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
 
-  /* Figtree carries the whole app — friendly-precise grotesque, YNAB-adjacent.
-     Loaded via <link> in index.html for this proof; self-host later. Display
-     just leans heavier + tightens tracking at the component level. */
+  /* Figtree carries the whole app. Clash Display (--font-display) is reserved
+     for the net-worth figure + page titles only, loaded via <link> in
+     index.html. */
   --font-sans:
     "Figtree", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue",
     Arial, sans-serif;
-  --font-display: "Figtree", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-display:
+    "Clash Display", "Figtree", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 
   --color-chart-1: var(--chart-1);
   --color-chart-2: var(--chart-2);
@@ -187,6 +256,11 @@
   html {
     -webkit-text-size-adjust: 100%;
     text-rendering: optimizeLegibility;
+    color-scheme: dark;
+  }
+
+  html[data-theme="light"] {
+    color-scheme: light;
   }
 
   body {
@@ -215,14 +289,53 @@
     font-weight: 600;
   }
 
+  /* The hero net-worth figure: Clash Display, heavy, tight tracking, tabular. */
+  .font-vault-figure {
+    font-family: var(--font-display);
+    font-weight: 700;
+    letter-spacing: -0.03em;
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
+  }
+
+  /* The one signature premium touch: a subtle violet radial glow bleeding from
+     the top-left of the hero, over the card ground. Flat otherwise. */
+  .vault-hero-glow {
+    background:
+      radial-gradient(
+        130% 150% at 12% -25%,
+        color-mix(in oklch, var(--brand) 24%, transparent),
+        transparent 58%
+      ),
+      var(--card);
+  }
+
+  /* Staggered mount reveal: a quiet fade + 8px rise, ease-out, no bounce. */
+  @keyframes vault-reveal {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .vault-reveal {
+    animation: vault-reveal 0.38s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
   /* Never transition `all` — a transition:all scrollbar loop broke the legacy
-     app. Only color/opacity, and only when motion is allowed. */
+     app. Respect reduced-motion: collapse durations AND delays so nothing
+     lingers invisible mid-stagger. */
   @media (prefers-reduced-motion: reduce) {
     *,
     *::before,
     *::after {
       transition-duration: 0.01ms !important;
       animation-duration: 0.01ms !important;
+      animation-delay: 0ms !important;
       animation-iteration-count: 1 !important;
     }
   }
