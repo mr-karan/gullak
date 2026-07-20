@@ -299,6 +299,20 @@ export const exportState = sqliteTable("export_state", {
 // they live on the server only and never get a recordChange() row. The web
 // app is their only client. See the M5 epic.
 
+// Per-category budget TARGETS (YNAB "targets"): a funding goal for a category —
+// fund `amountCents` every month ('monthly'), or reach `amountCents` by `byDate`
+// ('by_date'). Server-only config (like goals/holdings): no change_log row, not
+// in the Drift mirror; the web Budget view is the only client. One target per
+// category, so categoryId is the primary key.
+export const categoryTargets = sqliteTable("category_targets", {
+  categoryId: text("category_id").primaryKey(),
+  type: text("type").notNull().default("monthly"), // 'monthly' | 'by_date'
+  amountCents: integer("amount_cents").notNull(),
+  byDate: text("by_date"), // YYYY-MM-DD, for type='by_date'
+  createdAt: integer("created_at").notNull().default(now),
+  updatedAt: integer("updated_at").notNull().default(now),
+});
+
 // Named wealth targets ("Kids' education", "BMW", "Retire early"). Holdings
 // map to a goal via holdings.goalId; progress = current value of mapped,
 // non-stale holdings vs targetCents.
@@ -511,6 +525,7 @@ export type SmsMessage = typeof smsMessages.$inferSelect;
 export type NewSmsMessage = typeof smsMessages.$inferInsert;
 export type Goal = typeof goals.$inferSelect;
 export type NewGoal = typeof goals.$inferInsert;
+export type CategoryTarget = typeof categoryTargets.$inferSelect;
 export type Holding = typeof holdings.$inferSelect;
 export type NewHolding = typeof holdings.$inferInsert;
 export type Desire = typeof desires.$inferSelect;
