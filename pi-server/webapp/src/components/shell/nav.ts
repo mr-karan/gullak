@@ -3,10 +3,10 @@ import {
   Coins,
   Gem,
   Landmark,
+  LayoutDashboard,
   SlidersHorizontal,
   Target,
   TrendingUp,
-  Wallet,
   type LucideIcon,
 } from "lucide-react";
 
@@ -19,7 +19,7 @@ export interface NavItem {
 // Primary destinations. Icons are bare marks used only for wayfinding in the
 // dark shell — never as content decoration, never in tiles.
 export const PRIMARY_NAV: NavItem[] = [
-  { to: "/", label: "Accounts", icon: Wallet },
+  { to: "/", label: "Overview", icon: LayoutDashboard },
   { to: "/transactions", label: "Transactions", icon: Coins },
   { to: "/calendar", label: "Calendar", icon: CalendarDays },
   { to: "/insights", label: "Insights", icon: TrendingUp },
