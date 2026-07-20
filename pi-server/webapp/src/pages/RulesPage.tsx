@@ -14,9 +14,9 @@ import type {
 import { useRules, useCreateRule, useUpdateRule, useDeleteRule } from "@/api/rules";
 import { useConnection } from "@/hooks/useConnection";
 import { PageHeader } from "@/components/PageHeader";
+import { Panel } from "@/components/Panel";
+import { Pill, type PillTone } from "@/components/Pill";
 import { EmptyState, ErrorState } from "@/components/states";
-import { Card } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -252,22 +252,31 @@ export function RulesPage() {
           action={{ label: "New rule", onClick: openCreate }}
         />
       ) : (
-        <div className="flex flex-col gap-2">
-          {rules.map((rule) => (
-            <RuleRow
-              key={rule.id}
-              rule={rule}
-              onEdit={() => openEdit(rule)}
-              onDelete={() =>
-                deleteM.mutate(rule.id, {
-                  onSuccess: () => toast.success("Rule deleted"),
-                  onError: (err) =>
-                    toast.error(err instanceof Error ? err.message : "Couldn't delete rule"),
-                })
-              }
-            />
-          ))}
-        </div>
+        <Panel
+          title="Rules"
+          right={
+            <span className="text-xs tabular-nums text-ink-2">
+              {rules.length} {rules.length === 1 ? "rule" : "rules"}
+            </span>
+          }
+        >
+          <ul className="divide-y divide-rule">
+            {rules.map((rule) => (
+              <RuleRow
+                key={rule.id}
+                rule={rule}
+                onEdit={() => openEdit(rule)}
+                onDelete={() =>
+                  deleteM.mutate(rule.id, {
+                    onSuccess: () => toast.success("Rule deleted"),
+                    onError: (err) =>
+                      toast.error(err instanceof Error ? err.message : "Couldn't delete rule"),
+                  })
+                }
+              />
+            ))}
+          </ul>
+        </Panel>
       )}
 
       <RuleDialog open={dialogOpen} onOpenChange={setDialogOpen} rule={editing} />
@@ -275,9 +284,9 @@ export function RulesPage() {
   );
 }
 
-const STAGE_VARIANT: Record<RuleStage, "default" | "pos" | "warn"> = {
+const STAGE_TONE: Record<RuleStage, PillTone> = {
   pre: "warn",
-  main: "default",
+  main: "neutral",
   post: "pos",
 };
 
@@ -295,7 +304,7 @@ function RuleRow({
   const nAct = rule.actionPayload.actions.length;
 
   return (
-    <Card className="flex items-center gap-3 p-3">
+    <li className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-paper-2/60">
       <button
         type="button"
         aria-pressed={rule.enabled}
@@ -310,10 +319,10 @@ function RuleRow({
           )
         }
         className={cn(
-          "shrink-0 rounded-full border px-2 py-0.5 text-xs font-medium transition-colors focus-visible:ring-2 focus-visible:ring-ring",
+          "shrink-0 rounded-md px-2 py-0.5 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
           rule.enabled
-            ? "border-transparent bg-[color-mix(in_oklch,var(--pos)_16%,var(--paper))] text-pos"
-            : "border-rule text-ink-2 hover:text-ink",
+            ? "bg-pill-pos-bg text-pill-pos-ink"
+            : "border border-rule text-ink-2 hover:text-ink",
         )}
       >
         {rule.enabled ? "On" : "Off"}
@@ -322,11 +331,11 @@ function RuleRow({
       <button
         type="button"
         onClick={onEdit}
-        className="min-w-0 flex-1 text-left focus-visible:ring-2 focus-visible:ring-ring rounded"
+        className="min-w-0 flex-1 rounded text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         <div className="flex items-center gap-2">
           <span className="truncate font-medium text-ink">{rule.name}</span>
-          <Badge variant={STAGE_VARIANT[rule.stage]}>{rule.stage}</Badge>
+          <Pill tone={STAGE_TONE[rule.stage]}>{rule.stage}</Pill>
         </div>
         <p className="mt-0.5 text-xs text-ink-2">
           priority {rule.priority} · {rule.triggerPayload.match} of {nCond}{" "}
@@ -344,7 +353,7 @@ function RuleRow({
       >
         <Trash2 className="size-4" />
       </Button>
-    </Card>
+    </li>
   );
 }
 
@@ -471,7 +480,9 @@ function RuleDialog({
           {/* Conditions */}
           <div className="flex flex-col gap-2 border-t border-rule pt-3">
             <div className="flex items-center justify-between">
-              <Label>When</Label>
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-ink-2">
+                When
+              </span>
               <Select value={form.match} onValueChange={(v) => setForm((f) => ({ ...f, match: v as MatchMode }))}>
                 <SelectTrigger className="h-7 w-28 text-xs">
                   <SelectValue />
@@ -555,7 +566,7 @@ function RuleDialog({
 
           {/* Actions */}
           <div className="flex flex-col gap-2 border-t border-rule pt-3">
-            <Label>Then</Label>
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-ink-2">Then</span>
             {form.actions.map((a, i) => (
               <div key={i} className="flex items-center gap-1.5">
                 <Select

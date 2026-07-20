@@ -3,6 +3,7 @@ import { useLocation } from "react-router-dom";
 import { ArrowUp } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import { Pill } from "@/components/Pill";
 import { useConnection } from "@/hooks/useConnection";
 import { useSelection } from "@/components/shell/SelectionProvider";
 import { ActionCard } from "./ActionCard";
@@ -68,20 +69,19 @@ export function ChatConversation({ className }: { className?: string }) {
                 key={m.id}
                 className={cn("flex flex-col", m.role === "user" ? "items-end" : "items-start")}
               >
-                <div
-                  className={cn(
-                    "max-w-[85%] rounded-lg px-3 py-2",
-                    m.role === "user"
-                      ? "bg-primary text-primary-foreground"
-                      : "border border-rule bg-paper text-foreground",
-                  )}
-                >
-                  {m.role === "user" ? (
-                    <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">{m.content}</p>
-                  ) : (
+                {m.role === "user" ? (
+                  // User: a subtle indigo-tinted bubble, right-aligned.
+                  <div className="max-w-[85%] rounded-lg bg-pill-brand-bg px-3 py-2">
+                    <p className="text-sm leading-relaxed whitespace-pre-wrap break-words text-ink">
+                      {m.content}
+                    </p>
+                  </div>
+                ) : (
+                  // Assistant: plain on paper, no bubble.
+                  <div className="max-w-[92%] text-foreground">
                     <MarkdownLite text={m.content} />
-                  )}
-                </div>
+                  </div>
+                )}
                 {m.role === "assistant" && m.actions?.length ? (
                   <div className="flex w-full max-w-[85%] flex-col">
                     {m.actions.map((a, i) => (
@@ -104,9 +104,8 @@ export function ChatConversation({ className }: { className?: string }) {
         className="border-t border-rule p-3"
       >
         {selectedCount > 0 ? (
-          <div className="mb-2 inline-flex items-center gap-1 rounded-md border border-rule px-2 py-0.5 text-xs text-ink-2">
-            <span className="tnum font-medium text-primary">{selectedCount}</span>
-            selected
+          <div className="mb-2">
+            <Pill tone="brand">{selectedCount} selected</Pill>
           </div>
         ) : null}
         <div className="flex items-end gap-2">
@@ -127,7 +126,7 @@ export function ChatConversation({ className }: { className?: string }) {
             type="submit"
             disabled={isPending || !input.trim()}
             aria-label="Send"
-            className="grid size-9 shrink-0 place-items-center rounded-md bg-primary text-primary-foreground transition-colors hover:bg-[color-mix(in_oklch,var(--primary)_94%,black)] disabled:opacity-40 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+            className="grid size-9 shrink-0 place-items-center rounded-md bg-brand text-brand-ink transition-colors hover:bg-brand-2 disabled:opacity-40 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
           >
             <ArrowUp className="size-4" />
           </button>
