@@ -280,36 +280,13 @@ export function TransactionsPage() {
         </section>
       ) : null}
 
-      {/* Sticky filter toolbar — a clean strip in the new language. */}
+      {/* Sticky filter toolbar — ALWAYS visible. Selection never replaces or
+          hides it (that shrank the toolbar and jumped the register, and lost the
+          filters mid-select); selection actions live in a floating bar instead. */}
       <div
         className="sticky top-0 z-20 -mx-5 border-b border-rule bg-paper/95 px-5 py-3 backdrop-blur sm:-mx-8 sm:px-8"
       >
-        {selectedIds.size > 0 ? (
-          // Selection strip — replaces the filter toolbar in place only while
-          // rows are checked. The checkbox column stays put either way, so this
-          // swap never moves the register.
-          <div className="flex items-center justify-between gap-3">
-            <span className="flex items-center gap-2">
-              <span className="h-4 w-1 rounded-full bg-brand" aria-hidden="true" />
-              <span className="text-sm font-semibold text-ink">
-                {selectedIds.size} selected
-              </span>
-            </span>
-            <div className="flex items-center gap-2">
-              <Button type="button" variant="ghost" size="sm" onClick={clearSelection}>
-                Cancel
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                disabled={selectedIds.size < 2 || groupMut.isPending}
-                onClick={() => setGroupDialogOpen(true)}
-              >
-                Group
-              </Button>
-            </div>
-          </div>
-        ) : isMobile ? (
+        {isMobile ? (
           <div className="flex items-center justify-between gap-3">
             <Sheet open={filtersOpen} onOpenChange={setFiltersOpen}>
               <SheetTrigger asChild>
@@ -334,6 +311,32 @@ export function TransactionsPage() {
           <FilterControls {...controlProps} layout="bar" />
         )}
       </div>
+
+      {/* Floating selection action bar — fixed to the viewport, so checking rows
+          never shifts the layout. Appears only while rows are selected. */}
+      {selectedIds.size > 0 ? (
+        <div className="pointer-events-none fixed inset-x-0 bottom-6 z-40 flex justify-center px-4">
+          <div className="pointer-events-auto flex items-center gap-3 rounded-full border border-rule bg-card px-4 py-2 shadow-lg">
+            <span className="flex items-center gap-2">
+              <span className="h-4 w-1 rounded-full bg-brand" aria-hidden="true" />
+              <span className="text-sm font-semibold tabular-nums text-ink">
+                {selectedIds.size} selected
+              </span>
+            </span>
+            <Button type="button" variant="ghost" size="sm" onClick={clearSelection}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              disabled={selectedIds.size < 2 || groupMut.isPending}
+              onClick={() => setGroupDialogOpen(true)}
+            >
+              Group {selectedIds.size >= 2 ? `(${selectedIds.size})` : ""}
+            </Button>
+          </div>
+        </div>
+      ) : null}
 
       {txnQ.data?.capped ? (
         <div className="mt-3 flex items-center gap-2 rounded-lg border border-warn/40 bg-pill-warn-bg px-3 py-2 text-xs text-pill-warn-ink">
