@@ -8,6 +8,7 @@ import type { AppConfig } from "./config.ts";
 import type { Db } from "./db/index.ts";
 import { accountsRouter } from "./routes/accounts.ts";
 import { aiRouter } from "./routes/ai.ts";
+import { budgetRouter } from "./routes/budget.ts";
 import { budgetsRouter } from "./routes/budgets.ts";
 import { calendarRouter } from "./routes/calendar.ts";
 import { categoriesRouter } from "./routes/categories.ts";
@@ -139,6 +140,9 @@ export function createApp(ctx: AppContext) {
   app.route("/v1/payees", payeesRouter);
   app.route("/v1/transactions", transactionsRouter);
   app.route("/v1/budgets", budgetsRouter);
+  // Envelope-budgeting plan (assigned/activity/available + Ready-to-Assign).
+  // Distinct from the raw /v1/budgets CRUD router above.
+  app.route("/v1/budget", budgetRouter);
   app.route("/v1/recurrences", recurrencesRouter);
   app.route("/v1/summary", summaryRouter);
   // Mounted at /v1/calendar (not /v1/summary/calendar) so it can't be shadowed
