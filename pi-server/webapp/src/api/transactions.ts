@@ -30,6 +30,29 @@ export function useTransactions(range: DateRange, accountId?: string, enabled = 
   });
 }
 
+/** Create a manual transaction. `origin`/`cleared` default server-side. */
+export function useCreateTransaction() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (body: {
+      accountId: string;
+      amountCents: number;
+      date: string;
+      categoryId?: string | null;
+      payeeName?: string | null;
+      notes?: string | null;
+    }) => api.post("/v1/transactions", body),
+    onSuccess: () => {
+      void client.invalidateQueries({ queryKey: ["transactions"] });
+      void client.invalidateQueries({ queryKey: ["summary"] });
+      void client.invalidateQueries({ queryKey: ["networth"] });
+      void client.invalidateQueries({ queryKey: ["calendar"] });
+      void client.invalidateQueries({ queryKey: ["insights"] });
+      void client.invalidateQueries({ queryKey: ["budget"] });
+    },
+  });
+}
+
 export function usePatchTransactionCategory() {
   const client = useQueryClient();
   return useMutation({
