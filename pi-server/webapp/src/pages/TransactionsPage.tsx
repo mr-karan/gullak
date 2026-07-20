@@ -331,15 +331,17 @@ export function TransactionsPage() {
             </Button>
           </div>
         ) : (
-          <div className="flex items-center justify-between gap-3">
+          // items-start so Select aligns to the dropdown row, not the centre of
+          // the wrapped filter block (dropdowns + the Uncategorized toggle).
+          <div className="flex items-start justify-between gap-3">
             <div className="min-w-0 flex-1">
               <FilterControls {...controlProps} layout="bar" />
             </div>
             <Button
               type="button"
-              variant="outline"
+              variant="ghost"
               size="sm"
-              className="shrink-0 gap-1.5"
+              className="h-9 shrink-0 gap-1.5 px-2 text-ink-2 hover:text-ink"
               onClick={() => setSelectMode(true)}
             >
               <CheckSquare className="size-4" />
