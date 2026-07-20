@@ -80,7 +80,8 @@ export function MobileBottomBar() {
             className={({ isActive }) =>
               cn(
                 "flex flex-col items-center gap-1 py-2.5 text-[11px] font-medium transition-colors outline-none",
-                isActive ? "text-bind-ink" : "text-bind-mut",
+                // Indigo accent marks the active tab on mobile.
+                isActive ? "font-semibold text-brand" : "text-bind-mut",
               )
             }
           >

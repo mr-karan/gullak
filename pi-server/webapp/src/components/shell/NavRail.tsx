@@ -15,10 +15,11 @@ function RailLink({ item }: { item: NavItem }) {
       className={({ isActive }) =>
         cn(
           "flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors outline-none focus-visible:ring-2 focus-visible:ring-brand",
-          // Active state = weight + colour shift + a quiet surface. No dot.
+          // Active state = a solid indigo pill with white icon + label (YNAB
+          // rail). Inactive is quiet ink that washes indigo on hover.
           isActive
-            ? "bg-bind-2 font-semibold text-bind-ink"
-            : "font-medium text-bind-mut hover:bg-bind-2/60 hover:text-bind-ink",
+            ? "bg-brand font-semibold text-brand-ink"
+            : "font-medium text-bind-mut hover:bg-bind-2/70 hover:text-bind-ink",
         )
       }
     >

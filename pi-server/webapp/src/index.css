@@ -1,48 +1,80 @@
 @import "tailwindcss";
 
-/* Gullak design system — "tally" DNA (Hallmark redesign 2026-07).
-   Near-white neutral paper, a single teal accent, clean sans throughout, flat
-   (no shadows), generous whitespace. Replaces the earlier warm-clay + oxblood
-   "bahi-khata" look. Token names are kept so components need no rewrite; the
-   nav rail flips light because it consumes the semantic bind/bind-ink pair. */
+/* ============================================================================
+   Gullak design system — "ledger-indigo" (Hallmark redesign 2026-07).
+
+   Studied DNA: YNAB (You Need A Budget). What we took, and how we made it ours:
+   - INDIGO PRIMARY. YNAB's signature is a confident blue-violet. Here --brand is
+     an indigo ~oklch(48% 0.20 274) ≈ #4a3 fd-ish, dark enough to carry white
+     text at AA. It fills primary buttons, the net-worth hero band, and the
+     ACTIVE nav item (a solid indigo pill with white icon + label).
+   - TRAFFIC-LIGHT SEMANTIC MONEY. green = positive / funded, red = negative /
+     overspent, amber = attention. These are FUNCTIONAL colours: balances, P&L,
+     cash-flow nets and status pills read state at a glance. YNAB surfaces
+     "Available" as a coloured PILL — we bring that pill treatment (--pill-*) to
+     P&L %, monthly net, and register amounts.
+   - A REAL TYPEFACE. Figtree (Google Fonts, self-hostable later) replaces the
+     plain system-ui stack — a friendly-precise grotesque that carries both
+     --font-sans and --font-display. This is what stops the UI reading generic.
+   - DENSITY + CRAFT. Flat (no drop shadows), but structured: grouped sections
+     with headers, fixed-height rows, solid cards defined by hairlines and an
+     indigo accent, not a sea of identical grey-bordered boxes.
+
+   Token NAMES are preserved (paper/ink/rule/bind/brand/pos/neg/warn/chart-*) so
+   every other component keeps working; new semantic pill tokens are additive.
+   NOT a YNAB clone — its DNA, our ledger.
+   ========================================================================== */
 
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  --radius: 0.5rem;
+  --radius: 0.625rem;
 
-  /* --- Raw tally tokens ------------------------------------------------- */
-  /* Paper: near-white with the faintest cool tint. Flat, roomy. */
-  --paper: oklch(99.2% 0.003 230);
-  --paper-2: oklch(97.6% 0.004 230);
-  --paper-3: oklch(94.6% 0.005 230);
+  /* --- Neutrals: clean, faintly cool so indigo reads true over them ------- */
+  --paper: oklch(99% 0.002 270);
+  --paper-2: oklch(97.4% 0.003 270);
+  --paper-3: oklch(94.6% 0.006 274);
 
-  /* Ink: neutral charcoal, hierarchy by weight/size not colour. */
-  --ink: oklch(24% 0.012 255);
-  --ink-2: oklch(50% 0.012 255);
-  --rule: oklch(90% 0.006 235);
+  /* Ink: charcoal with the faintest indigo cast; hierarchy by weight + size. */
+  --ink: oklch(23% 0.02 274);
+  --ink-2: oklch(48% 0.02 274);
+  --rule: oklch(90.5% 0.006 274);
 
-  /* Nav rail: LIGHT now. bind = rail surface, bind-ink = dark text on it,
-     bind-2 = a faint teal wash for the active item. */
-  --bind: oklch(97.6% 0.004 230);
-  --bind-2: oklch(93% 0.03 200);
-  --bind-ink: oklch(24% 0.012 255);
-  --bind-mut: oklch(52% 0.012 255);
-
-  /* Accent: a single confident teal. Carries buttons (white text), links,
-     marks, and the nav active tint (via bind-2). */
-  --brand: oklch(50% 0.10 202);
+  /* --- Brand: confident indigo. Buttons (white text, AA), hero band, links,
+     and the nav active pill. Used boldly, not sparingly. ------------------- */
+  --brand: oklch(48% 0.2 274);
+  --brand-2: oklch(42% 0.19 274); /* pressed / darker step */
   --brand-ink: oklch(99% 0 0);
-  --pos: oklch(52% 0.11 155);
-  --neg: oklch(55% 0.17 25);
-  --warn: oklch(70% 0.13 75);
+
+  /* --- Traffic-light money states. Functional, not decorative. ----------- */
+  --pos: oklch(53% 0.14 152); /* green — positive / funded */
+  --neg: oklch(54% 0.2 25); /* red — negative / overspent */
+  --warn: oklch(72% 0.15 78); /* amber — attention */
+
+  /* --- Pills: the YNAB "Available" treatment. A tinted surface + a darker
+     same-hue ink so the state reads at a glance and stays AA on the tint. --- */
+  --pill-pos-bg: color-mix(in oklch, var(--pos) 15%, var(--paper));
+  --pill-pos-ink: color-mix(in oklch, var(--pos) 76%, black);
+  --pill-neg-bg: color-mix(in oklch, var(--neg) 14%, var(--paper));
+  --pill-neg-ink: color-mix(in oklch, var(--neg) 80%, black);
+  --pill-warn-bg: color-mix(in oklch, var(--warn) 22%, var(--paper));
+  --pill-warn-ink: color-mix(in oklch, var(--warn) 60%, black);
+  --pill-brand-bg: color-mix(in oklch, var(--brand) 12%, var(--paper));
+  --pill-brand-ink: color-mix(in oklch, var(--brand) 88%, black);
+
+  /* Nav rail: light surface. Active item is a solid indigo pill (set in the
+     component via --brand); bind-2 is the faint indigo hover wash. */
+  --bind: oklch(98% 0.003 274);
+  --bind-2: oklch(93% 0.03 274);
+  --bind-ink: oklch(24% 0.02 274);
+  --bind-mut: oklch(50% 0.02 274);
 
   /* --- shadcn variable mapping ----------------------------------------- */
   --background: var(--paper);
   --foreground: var(--ink);
-  --card: var(--paper-2);
+  --card: oklch(100% 0 0);
   --card-foreground: var(--ink);
-  --popover: var(--paper-2);
+  --popover: oklch(100% 0 0);
   --popover-foreground: var(--ink);
   --primary: var(--brand);
   --primary-foreground: var(--brand-ink);
@@ -61,14 +93,14 @@
   --chart-1: var(--brand);
   --chart-2: var(--pos);
   --chart-3: var(--warn);
-  --chart-4: oklch(62% 0.09 220);
-  --chart-5: oklch(72% 0.06 195);
+  --chart-4: oklch(60% 0.13 300);
+  --chart-5: oklch(66% 0.1 230);
 
   --sidebar: var(--bind);
   --sidebar-foreground: var(--bind-ink);
   --sidebar-accent: var(--bind-2);
   --sidebar-accent-foreground: var(--bind-ink);
-  --sidebar-border: oklch(90% 0.006 235);
+  --sidebar-border: oklch(91% 0.006 274);
   --sidebar-ring: var(--brand);
 }
 
@@ -98,7 +130,7 @@
   --color-input: var(--input);
   --color-ring: var(--ring);
 
-  /* Brand tokens exposed as Tailwind utilities (bg-paper, text-bind-ink…). */
+  /* Brand tokens exposed as Tailwind utilities (bg-paper, text-brand…). */
   --color-paper: var(--paper);
   --color-paper-2: var(--paper-2);
   --color-paper-3: var(--paper-3);
@@ -110,10 +142,21 @@
   --color-bind-ink: var(--bind-ink);
   --color-bind-mut: var(--bind-mut);
   --color-brand: var(--brand);
+  --color-brand-2: var(--brand-2);
   --color-brand-ink: var(--brand-ink);
   --color-pos: var(--pos);
   --color-neg: var(--neg);
   --color-warn: var(--warn);
+
+  /* Pill tokens → bg-pill-pos-bg / text-pill-pos-ink, etc. */
+  --color-pill-pos-bg: var(--pill-pos-bg);
+  --color-pill-pos-ink: var(--pill-pos-ink);
+  --color-pill-neg-bg: var(--pill-neg-bg);
+  --color-pill-neg-ink: var(--pill-neg-ink);
+  --color-pill-warn-bg: var(--pill-warn-bg);
+  --color-pill-warn-ink: var(--pill-warn-ink);
+  --color-pill-brand-bg: var(--pill-brand-bg);
+  --color-pill-brand-ink: var(--pill-brand-ink);
 
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
@@ -121,13 +164,13 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
 
-  /* tally is sans-only — hierarchy comes from size + weight, not a serif.
-     Display and body share the system sans; .font-display just tightens
-     tracking and leans heavier at the component level. */
+  /* Figtree carries the whole app — friendly-precise grotesque, YNAB-adjacent.
+     Loaded via <link> in index.html for this proof; self-host later. Display
+     just leans heavier + tightens tracking at the component level. */
   --font-sans:
-    system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial,
-    sans-serif;
-  --font-display: var(--font-sans);
+    "Figtree", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue",
+    Arial, sans-serif;
+  --font-display: "Figtree", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 
   --color-chart-1: var(--chart-1);
   --color-chart-2: var(--chart-2);
@@ -150,7 +193,6 @@
     background-color: var(--color-background);
     color: var(--color-foreground);
     font-family: var(--font-sans);
-    font-feature-settings: "cv11", "ss01";
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
@@ -161,7 +203,7 @@
     outline-offset: 2px;
   }
 
-  /* Numeric cells: tabular figures, no font swap. */
+  /* Numeric cells: tabular figures so columns of money align. */
   .tnum {
     font-variant-numeric: tabular-nums;
     font-feature-settings: "tnum";
@@ -169,7 +211,8 @@
 
   .font-display {
     font-family: var(--font-display);
-    letter-spacing: -0.01em;
+    letter-spacing: -0.015em;
+    font-weight: 600;
   }
 
   /* Never transition `all` — a transition:all scrollbar loop broke the legacy
