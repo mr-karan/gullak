@@ -3,6 +3,7 @@ import { Hono } from "hono";
 import { z } from "zod";
 
 import { handleMessage, sanitizeReply } from "../agent/agent.ts";
+import { runWriteTool, type WriteToolCall } from "../agent/write_tools.ts";
 import type { AppEnv } from "../app.ts";
 import { whatsappInboxCandidates } from "../db/schema.ts";
 
@@ -36,6 +37,39 @@ messagesRouter.post("/", async (c) => {
   // through runRules(db, txn) (as routes/sms.ts does) so rules normalize it too.
   const result = await handleMessage(db, config, parsed);
   return c.json(result);
+});
+
+// Direct-action endpoint for the web UI's Undo button. Undo can't go through the
+// LLM: the restore_* tools are deliberately NOT offered to the model (their args
+// are full row payloads / prior categories the server authors). This endpoint
+// replays a server-authored `{tool, args}` directly. It is HARD-WHITELISTED to
+// the undo set so it can never become a general write bypass — the model-facing
+// creation tools (categorize/log) are not reachable here. Shares the same
+// x-api-key gate and aiPerMinute rate limit as POST /v1/messages (both live
+// under the /v1/messages path prefix in app.ts).
+const UNDO_TOOLS = [
+  "restore_categories",
+  "restore_transactions",
+  "edit_transaction",
+  "delete_transactions",
+] as const;
+
+const actionBody = z.object({
+  tool: z.enum(UNDO_TOOLS),
+  // Server-authored undo args (previous categories / full row payloads / edit
+  // fields). Passed straight to runWriteTool, which guards its own inputs.
+  args: z.unknown(),
+});
+
+messagesRouter.post("/action", async (c) => {
+  const db = c.get("db");
+  const parsed = actionBody.parse(await c.req.json());
+  const params =
+    parsed.args && typeof parsed.args === "object" && !Array.isArray(parsed.args)
+      ? (parsed.args as WriteToolCall["params"])
+      : {};
+  const result = runWriteTool(db, { tool: parsed.tool, params });
+  return c.json({ result });
 });
 
 export const whatsappRouter = new Hono<AppEnv>();

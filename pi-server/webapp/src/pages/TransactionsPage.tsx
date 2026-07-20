@@ -13,6 +13,7 @@ import { useGroupTransactions, useTransactions, useUngroup } from "@/api/transac
 import { useConnection } from "@/hooks/useConnection";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { PageHeader } from "@/components/PageHeader";
+import { useSelection } from "@/components/shell/SelectionProvider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -107,6 +108,18 @@ export function TransactionsPage() {
     setSelectMode(false);
     setSelectedIds(new Set());
   };
+
+  // Publish the current selection so the assistant chat can act on "these" rows.
+  // Only while actively selecting; clear it when leaving the page so a stale
+  // selection can't follow the user to another view.
+  const { setSelectedTransactionIds } = useSelection();
+  useEffect(() => {
+    setSelectedTransactionIds(selectMode ? [...selectedIds] : []);
+  }, [selectMode, selectedIds, setSelectedTransactionIds]);
+  useEffect(
+    () => () => setSelectedTransactionIds([]),
+    [setSelectedTransactionIds],
+  );
   const selection: SelectionApi = {
     active: selectMode,
     isSelected: (id) => selectedIds.has(id),

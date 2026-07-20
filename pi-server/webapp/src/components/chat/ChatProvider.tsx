@@ -2,12 +2,17 @@ import { createContext, useCallback, useContext, useMemo, useState, type ReactNo
 
 import { useSendMessage } from "@/api/messages";
 import { toast } from "@/components/ui/sonner";
+import { useSelection } from "@/components/shell/SelectionProvider";
+import type { WriteAction } from "@/lib/types";
 import { buildContext } from "./context";
 
 export interface ChatMessage {
   id: number;
   role: "user" | "assistant";
   content: string;
+  // Structured write-results the agent returned; the conversation renders each
+  // as a result card + Undo below the reply.
+  actions?: WriteAction[];
 }
 
 interface ChatState {
@@ -26,6 +31,7 @@ const ChatContext = createContext<ChatState | null>(null);
 // so the reply is always applied to the thread rather than discarded on unmount.
 export function ChatProvider({ children }: { children: ReactNode }) {
   const sendMut = useSendMessage();
+  const { selectedTransactionIds } = useSelection();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [threadId, setThreadId] = useState<string | undefined>();
 
@@ -35,13 +41,26 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       if (!trimmed || sendMut.isPending) return;
       setMessages((prev) => [...prev, { id: Date.now(), role: "user", content: trimmed }]);
       sendMut.mutate(
-        { text: trimmed, threadId, context: buildContext(pathname) },
+        {
+          text: trimmed,
+          threadId,
+          context: buildContext(pathname),
+          selection:
+            selectedTransactionIds.length > 0
+              ? { transactionIds: selectedTransactionIds }
+              : undefined,
+        },
         {
           onSuccess: (res) => {
             if (res.threadId) setThreadId(res.threadId);
             setMessages((prev) => [
               ...prev,
-              { id: Date.now() + 1, role: "assistant", content: res.reply || "No response." },
+              {
+                id: Date.now() + 1,
+                role: "assistant",
+                content: res.reply || "No response.",
+                actions: res.actions,
+              },
             ]);
           },
           onError: (err) => {
@@ -59,7 +78,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         },
       );
     },
-    [sendMut, threadId],
+    [sendMut, threadId, selectedTransactionIds],
   );
 
   const reset = useCallback(() => {

@@ -207,8 +207,24 @@ export interface ChatRequest {
   threadId?: string;
   source: "web";
   context: ChatContext;
+  // Trusted structured selection from the register — the ids of the ticked rows.
+  // Sent so a bare "categorize these" / "delete these" acts on exactly this set.
+  selection?: { transactionIds: string[] };
 }
+
+/** A write the agent performed, echoed so the UI can render a result card +
+    Undo. `undo` names a server-authored action the UI replays via
+    POST /v1/messages/action — never through the LLM. */
+export interface WriteAction {
+  kind: "write_result";
+  tool: string;
+  summary: string;
+  affectedIds: string[];
+  undo?: { tool: string; args: unknown };
+}
+
 export interface ChatResponse {
   threadId?: string;
   reply: string;
+  actions?: WriteAction[];
 }

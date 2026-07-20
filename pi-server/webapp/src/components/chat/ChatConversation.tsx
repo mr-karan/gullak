@@ -4,6 +4,8 @@ import { ArrowUp } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { useConnection } from "@/hooks/useConnection";
+import { useSelection } from "@/components/shell/SelectionProvider";
+import { ActionCard } from "./ActionCard";
 import { MarkdownLite } from "./MarkdownLite";
 import { useChat } from "./ChatProvider";
 import { suggestedPrompts } from "./context";
@@ -14,6 +16,8 @@ export function ChatConversation({ className }: { className?: string }) {
   // Conversation state + the send mutation live in ChatProvider (mounted above
   // this view) so a pending request survives panel collapse / route change.
   const { messages, isPending, send } = useChat();
+  const { selectedTransactionIds } = useSelection();
+  const selectedCount = selectedTransactionIds.length;
   const [input, setInput] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -62,7 +66,7 @@ export function ChatConversation({ className }: { className?: string }) {
             {messages.map((m) => (
               <div
                 key={m.id}
-                className={cn("flex", m.role === "user" ? "justify-end" : "justify-start")}
+                className={cn("flex flex-col", m.role === "user" ? "items-end" : "items-start")}
               >
                 <div
                   className={cn(
@@ -78,6 +82,13 @@ export function ChatConversation({ className }: { className?: string }) {
                     <MarkdownLite text={m.content} />
                   )}
                 </div>
+                {m.role === "assistant" && m.actions?.length ? (
+                  <div className="flex w-full max-w-[85%] flex-col">
+                    {m.actions.map((a, i) => (
+                      <ActionCard key={`${m.id}-${i}`} action={a} />
+                    ))}
+                  </div>
+                ) : null}
               </div>
             ))}
             {isPending ? <p className="text-sm text-ink-2">Thinking…</p> : null}
@@ -92,6 +103,12 @@ export function ChatConversation({ className }: { className?: string }) {
         }}
         className="border-t border-rule p-3"
       >
+        {selectedCount > 0 ? (
+          <div className="mb-2 inline-flex items-center gap-1 rounded-md border border-rule px-2 py-0.5 text-xs text-ink-2">
+            <span className="tnum font-medium text-primary">{selectedCount}</span>
+            selected
+          </div>
+        ) : null}
         <div className="flex items-end gap-2">
           <textarea
             value={input}
