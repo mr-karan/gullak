@@ -12,81 +12,20 @@ import { useAccountSummaries, useSummary } from "@/api/summary";
 import { useTransactions } from "@/api/transactions";
 import { useConnection } from "@/hooks/useConnection";
 import { PageHeader } from "@/components/PageHeader";
+import { Panel } from "@/components/Panel";
+import { Pill } from "@/components/Pill";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState, ErrorState } from "@/components/states";
 import { ReconcileDialog } from "./accounts/ReconcileDialog";
 import type { Account, NetWorth, Transaction } from "@/lib/types";
 
 // ===========================================================================
-// Accounts — a dense, operational "cockpit", not a stack of soft cards.
-// Reference implementation for the redesign: flat hairline PANELS, real TABLES
-// with column headers + grouped rows + right-aligned tabular money, an
-// instrument summary bar, and traffic-light state doing real work. Everything
-// below (Panel, Th/Td rhythm, group rows, the instrument bar, the pill) is the
-// shared language the other views adopt.
+// Accounts — a dense, operational "cockpit", not a stack of soft cards. The
+// REFERENCE implementation for the redesign: shared <Panel> + <Pill> primitives,
+// real TABLES with column headers + grouped rows + right-aligned tabular money,
+// an instrument summary bar, traffic-light state doing real work. Other views
+// adopt this exact language.
 // ===========================================================================
-
-type Tone = "pos" | "neg" | "warn" | "brand" | "neutral";
-
-/** A tinted status pill — money state that reads at a glance. */
-function Pill({
-  tone,
-  className,
-  children,
-}: {
-  tone: Tone;
-  className?: string;
-  children: React.ReactNode;
-}) {
-  const tones: Record<Tone, string> = {
-    pos: "bg-pill-pos-bg text-pill-pos-ink",
-    neg: "bg-pill-neg-bg text-pill-neg-ink",
-    warn: "bg-pill-warn-bg text-pill-warn-ink",
-    brand: "bg-pill-brand-bg text-pill-brand-ink",
-    neutral: "bg-paper-3 text-ink-2",
-  };
-  return (
-    <span
-      className={cn(
-        "inline-flex items-center rounded-md px-2 py-0.5 text-xs font-semibold tabular-nums",
-        tones[tone],
-        className,
-      )}
-    >
-      {children}
-    </span>
-  );
-}
-
-/** A flat, hairline-bordered section. Squared, edge-defined — not a floating
-    rounded card. Header is an uppercase tracked label + optional right slot. */
-function Panel({
-  title,
-  right,
-  children,
-  className,
-}: {
-  title?: string;
-  right?: React.ReactNode;
-  children: React.ReactNode;
-  className?: string;
-}) {
-  return (
-    <section className={cn("rounded-xl border border-rule bg-card", className)}>
-      {(title || right) && (
-        <header className="flex items-center justify-between gap-3 border-b border-rule px-4 py-2.5">
-          {title ? (
-            <h2 className="text-xs font-semibold uppercase tracking-wider text-ink-2">{title}</h2>
-          ) : (
-            <span />
-          )}
-          {right}
-        </header>
-      )}
-      {children}
-    </section>
-  );
-}
 
 type GroupKey = "cash" | "credit" | "investment";
 const GROUP_ORDER: GroupKey[] = ["cash", "credit", "investment"];
