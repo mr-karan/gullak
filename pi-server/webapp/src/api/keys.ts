@@ -16,4 +16,6 @@ export const qk = {
     ["summary", range?.startDate ?? "", range?.endDate ?? "", accountId ?? ""] as const,
   transactions: (range: DateRange, accountId?: string) =>
     ["transactions", range.startDate, range.endDate, accountId ?? ""] as const,
+  threads: ["threads"] as const,
+  thread: (threadId: string) => ["thread", threadId] as const,
 };
