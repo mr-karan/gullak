@@ -228,3 +228,10 @@ Android app state reset: `just clear-data` (`adb shell pm clear dev.mrkaran.gull
 - Express + tsx server; replaced by Hono + Bun.
 - `data/main.ledger`, `pi-state.json`; replaced by SQLite.
 - Old Vite UI, Rust rewrites, `flake.nix`, `.envrc`, `docs/architecture.md`.
+- The legacy conversational engine: the classifier (`classify` + the
+  `log`/`ask`/`edit_or_delete`/`noop` routing) and the split ask/write loops
+  driven by `llm/client`'s `chatTools`, plus `GULLAK_AGENT_ENGINE`. The single
+  pi-agent engine (`src/agent/pi/`) is the only conversational path now, for
+  every source including WhatsApp.
+- The no-build Alpine `web/` PWA and its `/static/*` serving; `routes/web.ts`
+  serves only the Vite/React SPA in `webapp/dist`.

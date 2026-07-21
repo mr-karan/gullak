@@ -42,14 +42,10 @@ COPY --from=install /app/node_modules ./node_modules
 COPY package.json drizzle.config.ts tsconfig.json ./
 COPY src ./src
 COPY drizzle ./drizzle
-# Static web PWA (index.html + static/). The webRouter reads these at runtime
-# via readFileSync / serveStatic (from an absolute root derived from the module
-# path, so it works regardless of CWD); without this COPY the shell 500s in the
-# container. Placed under /app to match the source layout web.ts resolves.
-COPY web ./web
 # The built SPA. web.ts resolves webapp/dist relative to WORKDIR=/app, matching
-# the runtime. Only dist ships — no webapp sources or node_modules in the image.
-# Kept alongside `web/` which stays the fallback until parity is reached.
+# the runtime, and reads it at request time via readFileSync / serveStatic (from
+# an absolute root derived from the module path, so it works regardless of CWD).
+# Only dist ships — no webapp sources or node_modules in the image.
 COPY --from=webapp /app/webapp/dist ./webapp/dist
 
 VOLUME ["/data"]
