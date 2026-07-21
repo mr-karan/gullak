@@ -234,3 +234,66 @@ test("with no model configured the ask path answers honestly without calling the
   expect(mockChatTools).not.toHaveBeenCalled();
   expect(res.reply.toLowerCase()).toContain("isn't configured");
 });
+
+// --- classification of advisory / question-shaped messages ------------------
+// "Where can I cut back?" is one of the app's own suggested prompts, yet the
+// old classifier binned it as noop (it has no data keyword) and replied with
+// the canned onboarding tip. These pin the fix: question-shaped text that
+// isn't a log/edit reaches the ask agent, deterministically (no model call).
+
+test("an advisory question reaches the ask agent, not the noop canned tip", async () => {
+  const db = makeDb();
+  mockChatTools.mockImplementation(async (_config, opts) => {
+    const toolResult = await opts.runTool({
+      id: "call_1",
+      name: "category_spend",
+      arguments: JSON.stringify({
+        categoryName: "Dining",
+        startDate: "2026-06-01",
+        endDate: "2026-06-30",
+      }),
+    });
+    return `Dining is your biggest lever. ${toolResult}`;
+  });
+
+  const res = await handleMessage(db, config, {
+    text: "Where can I cut back?",
+    source: "web",
+  });
+
+  // Routed to the tool-calling ask loop — and deterministically, so the
+  // classifier never paid for a model call.
+  expect(mockChatTools).toHaveBeenCalledTimes(1);
+  expect(mockChatJson).not.toHaveBeenCalled();
+  expect(res.reply).toContain("Dining is your biggest lever.");
+});
+
+test("a greeting PREFIX no longer swallows the message into noop", async () => {
+  const db = makeDb();
+  // "ok delete the last one" must route to edit_or_delete; with no fresh
+  // chat-booked rows the deterministic undo path answers — but the old prefix
+  // regex ("ok…") returned the noop canned tip before edit was ever checked.
+  const res = await handleMessage(db, config, {
+    text: "ok delete the last one",
+    source: "web",
+  });
+  expect(res.reply).toContain("Nothing recent from here to undo");
+  expect(mockChatJson).not.toHaveBeenCalled();
+});
+
+test("a question-shaped edit still routes to the write loop, not ask", async () => {
+  const db = makeDb();
+  mockChatTools.mockResolvedValue("Found it — deleted the duplicate.");
+
+  await handleMessage(db, config, {
+    text: "can you delete the duplicate Swiggy charge?",
+    source: "web",
+  });
+
+  // The edit check runs BEFORE the question-shape rule: the model must have
+  // been handed the write tools, not just the read set.
+  expect(mockChatTools).toHaveBeenCalledTimes(1);
+  const toolNames = mockChatTools.mock.calls[0]![1].tools.map((t) => t.name);
+  expect(toolNames).toContain("delete_transactions");
+  expect(toolNames).toContain("search_transactions");
+});

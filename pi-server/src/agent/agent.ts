@@ -126,7 +126,9 @@ ONE of these modes:
   any other transaction. Multiple expenses in one message still count
   as "log".
 - "ask": the user is asking a question about their finances — totals,
-  category spend, budget status, recent transactions, account balances.
+  category spend, budget status, recent transactions, account balances —
+  or an advisory/analysis question about their own money ("where can I
+  cut back", "tell me where the money goes", "am I overspending").
 - "edit_or_delete": the user wants to change or remove a previously
   logged transaction.
 - "noop": greetings, thanks, small talk, anything that isn't a clear
@@ -266,7 +268,10 @@ async function classify(
 ): Promise<"log" | "ask" | "edit_or_delete" | "noop"> {
   // Cheap deterministic shortcuts before paying for a model call.
   const lower = text.toLowerCase().trim();
-  if (/^(yes|yeah|sure|ok|nope|no|thanks|thank you|hi|hello|hey)\b/.test(lower)) {
+  // Whole-message greetings only. A greeting PREFIX must fall through — "ok
+  // delete it" is an edit and "hey, where can I cut back?" is an ask, but the
+  // old prefix match binned both as noop.
+  if (/^(yes|yeah|sure|ok|okay|nope|no|thanks|thank you|hi|hello|hey)[\s!.,]*$/.test(lower)) {
     return "noop";
   }
   // LOG before ASK: a message that STARTS with an amount or a spend/receive
@@ -290,6 +295,21 @@ async function classify(
     )
   ) {
     return "edit_or_delete";
+  }
+  // Open-ended/advisory questions ("Where can I cut back?", "Should we save
+  // more?") carry none of the ask-regex data keywords, so they used to fall
+  // through to the model and routinely land in "noop" — the canned tip — even
+  // though the ask agent's tools can answer them (the app's own suggested
+  // prompts include "Where can I cut back?"). Anything question-shaped that
+  // isn't already a log/edit is an ask. Runs AFTER the edit check so "can you
+  // delete the duplicate?" still routes to edit_or_delete.
+  if (
+    /\?\s*$/.test(lower) ||
+    /^(where|why|how|what|when|which|who|should|could|would|can|do|does|did|am|is|are|will)\b/.test(
+      lower,
+    )
+  ) {
+    return "ask";
   }
   // Fall back to the model for the ambiguous middle.
   try {
