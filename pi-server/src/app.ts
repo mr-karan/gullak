@@ -105,15 +105,20 @@ export function createApp(ctx: AppContext) {
       trustProxy,
     }),
   );
-  app.use(
-    "/v1/messages",
-    rateLimit({
-      max: ctx.config.rateLimit.aiPerMinute,
-      windowMs: 60_000,
-      bucket: "messages",
-      trustProxy,
-    }),
-  );
+  // Hono's use(path) matches the EXACT path (no implicit prefix), so the
+  // model-invoking/writing message endpoints each need the limiter registered
+  // explicitly — and it must be the SAME instance, since the counter lives in
+  // the middleware closure and the three surfaces should share one budget.
+  // GET /v1/messages/threads* stays uncapped: cheap authed reads for history.
+  const messagesLimiter = rateLimit({
+    max: ctx.config.rateLimit.aiPerMinute,
+    windowMs: 60_000,
+    bucket: "messages",
+    trustProxy,
+  });
+  app.use("/v1/messages", messagesLimiter);
+  app.use("/v1/messages/stream", messagesLimiter);
+  app.use("/v1/messages/action", messagesLimiter);
   app.use(
     "/v1/whatsapp/webhook",
     rateLimit({

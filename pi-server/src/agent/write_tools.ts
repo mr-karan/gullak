@@ -174,6 +174,20 @@ export const WRITE_TOOL_NAMES = new Set<WriteToolName>([
 
 export function runWriteTool(db: Db, call: WriteToolCall): WriteToolResult {
   const p = call.params ?? {};
+  // A categoryName that doesn't resolve must NOT fall through to null — null is
+  // the explicit "clear the category" contract (categoryId === null), and a
+  // model typo ("Grocery" vs "Groceries") would otherwise silently WIPE the
+  // category off every targeted row. Refuse instead so the model can correct.
+  if (
+    (call.tool === "categorize_transactions" || call.tool === "edit_transaction") &&
+    p.categoryName != null &&
+    resolveCategoryId(db, p.categoryName) === null
+  ) {
+    return {
+      formatted: `I couldn't find a category called "${p.categoryName}" — nothing was changed. Use one of the existing categories, or pass categoryId null to clear.`,
+      data: { kind: "error", error: "unresolved category name" },
+    };
+  }
   switch (call.tool) {
     case "categorize_transactions": {
       const categoryId =
@@ -365,8 +379,19 @@ function editSummary(before: Transaction, after: Transaction): string {
 
 // ── delete ───────────────────────────────────────────────────────────────────
 
+// Deletes are capped tighter than other batch writes, and HERE (not only in the
+// pi engine's beforeToolCall) so every caller shares the guard: the legacy write
+// loop and the /v1/messages/action undo endpoint included.
+const MAX_DELETE_IDS = 50;
+
 function deleteTransactions(db: Db, ids: string[]): WriteToolResult {
   const unique = boundedIds(ids);
+  if (unique.length > MAX_DELETE_IDS) {
+    return {
+      formatted: `Refusing to delete ${unique.length} transactions in one call (max ${MAX_DELETE_IDS}). Split the request, or narrow it.`,
+      data: { kind: "error", error: "delete cap exceeded" },
+    };
+  }
   const deleted: string[] = [];
   const skippedLocked: string[] = [];
   const payloads: Transaction[] = [];

@@ -1,11 +1,18 @@
-import { and, eq, inArray } from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray, max } from "drizzle-orm";
 import { Hono } from "hono";
+import { streamSSE } from "hono/streaming";
 import { z } from "zod";
 
-import { handleMessage, sanitizeReply } from "../agent/agent.ts";
+import {
+  dispatchMessage,
+  sanitizeReply,
+  wouldStreamViaPi,
+  type AgentResponse,
+} from "../agent/agent.ts";
+import { streamPiMessage } from "../agent/pi/engine.ts";
 import { runWriteTool, type WriteToolCall } from "../agent/write_tools.ts";
 import type { AppEnv } from "../app.ts";
-import { whatsappInboxCandidates } from "../db/schema.ts";
+import { agentTurns, whatsappInboxCandidates } from "../db/schema.ts";
 
 export const messagesRouter = new Hono<AppEnv>();
 
@@ -35,18 +42,154 @@ messagesRouter.post("/", async (c) => {
   // carry an `actions` array the web UI renders as a result card + Undo.
   // TODO(rules): when the agent books a fresh txn (log_transaction), thread it
   // through runRules(db, txn) (as routes/sms.ts does) so rules normalize it too.
-  const result = await handleMessage(db, config, parsed);
+  const result = await dispatchMessage(db, config, parsed);
   return c.json(result);
+});
+
+// Streaming variant of POST /v1/messages. Same request body; emits Server-Sent
+// Events as the pi agent works (text deltas + tool start/end), then a final
+// `done` event carrying the full AgentResponse. Cheap-path / legacy requests
+// (which don't stream) compute the response and emit it as a single `done`.
+// Auth + body limits come from the shared /v1 middleware in app.ts.
+messagesRouter.post("/stream", async (c) => {
+  const db = c.get("db");
+  const config = c.get("config");
+  const parsed = messageBody.parse(await c.req.json());
+  return streamSSE(c, async (stream) => {
+    try {
+      if (wouldStreamViaPi(config, parsed)) {
+        const gen = streamPiMessage(db, config, parsed);
+        let result: AgentResponse;
+        while (true) {
+          const next = await gen.next();
+          if (next.done) {
+            result = next.value;
+            break;
+          }
+          const ev = next.value;
+          if (ev.type === "delta") {
+            await stream.writeSSE({
+              event: "delta",
+              data: JSON.stringify({ text: ev.text }),
+            });
+          } else if (ev.type === "tool_start") {
+            await stream.writeSSE({
+              event: "tool_start",
+              data: JSON.stringify({ tool: ev.tool }),
+            });
+          } else {
+            await stream.writeSSE({
+              event: "tool_end",
+              data: JSON.stringify({ tool: ev.tool, ok: ev.ok }),
+            });
+          }
+        }
+        await stream.writeSSE({ event: "done", data: JSON.stringify(result) });
+      } else {
+        const result = await dispatchMessage(db, config, parsed);
+        await stream.writeSSE({ event: "done", data: JSON.stringify(result) });
+      }
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.warn(
+        `stream error: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      await stream.writeSSE({
+        event: "error",
+        data: JSON.stringify({ message: "The assistant hit an error." }),
+      });
+    }
+  });
+});
+
+// Chat history ("chatrooms"). Threads already exist server-side — every turn
+// lands in agent_turns keyed by threadId — these endpoints just expose them so
+// the web history view can list past conversations and resume one (sending with
+// the same threadId continues the server-side memory).
+const MAX_THREADS = 100;
+const TITLE_CHARS = 80;
+
+const threadsQuery = z.object({
+  limit: z.coerce.number().int().min(1).max(MAX_THREADS).optional(),
+});
+
+/// "web:1a2b" → "web"; "whatsapp:+91…" → "whatsapp"; anything else → "http".
+function threadSource(threadId: string): "web" | "whatsapp" | "http" {
+  const prefix = threadId.split(":", 1)[0];
+  return prefix === "web" || prefix === "whatsapp" ? prefix : "http";
+}
+
+messagesRouter.get("/threads", (c) => {
+  const db = c.get("db");
+  const { limit } = threadsQuery.parse(
+    Object.fromEntries(new URL(c.req.url).searchParams),
+  );
+  const summaries = db
+    .select({
+      threadId: agentTurns.threadId,
+      lastAt: max(agentTurns.at),
+      turnCount: count(),
+    })
+    .from(agentTurns)
+    .groupBy(agentTurns.threadId)
+    .orderBy(desc(max(agentTurns.at)))
+    .limit(limit ?? 50)
+    .all();
+
+  // Title = the thread's first user turn. One tiny indexed-scan per row is fine
+  // at this cap (better-sqlite3 is synchronous and agent_turns stays small).
+  const threads = summaries.map((s) => {
+    const first = db
+      .select({ content: agentTurns.content })
+      .from(agentTurns)
+      .where(and(eq(agentTurns.threadId, s.threadId), eq(agentTurns.role, "user")))
+      .orderBy(asc(agentTurns.id))
+      .limit(1)
+      .get();
+    const raw = (first?.content ?? "(no messages)").replace(/\s+/g, " ").trim();
+    const title = raw.length > TITLE_CHARS ? `${raw.slice(0, TITLE_CHARS).trimEnd()}…` : raw;
+    return {
+      threadId: s.threadId,
+      title,
+      lastAt: s.lastAt ?? 0,
+      turnCount: s.turnCount,
+      source: threadSource(s.threadId),
+    };
+  });
+  return c.json({ threads });
+});
+
+const MAX_THREAD_TURNS = 200;
+
+messagesRouter.get("/threads/:threadId", (c) => {
+  const db = c.get("db");
+  const threadId = c.req.param("threadId");
+  const turns = db
+    .select({
+      id: agentTurns.id,
+      role: agentTurns.role,
+      content: agentTurns.content,
+      at: agentTurns.at,
+    })
+    .from(agentTurns)
+    .where(eq(agentTurns.threadId, threadId))
+    .orderBy(asc(agentTurns.id))
+    .limit(MAX_THREAD_TURNS)
+    .all();
+  if (turns.length === 0) return c.json({ error: "Not found" }, 404);
+  return c.json({ turns });
 });
 
 // Direct-action endpoint for the web UI's Undo button. Undo can't go through the
 // LLM: the restore_* tools are deliberately NOT offered to the model (their args
 // are full row payloads / prior categories the server authors). This endpoint
-// replays a server-authored `{tool, args}` directly. It is HARD-WHITELISTED to
-// the undo set so it can never become a general write bypass — the model-facing
-// creation tools (categorize/log) are not reachable here. Shares the same
-// x-api-key gate and aiPerMinute rate limit as POST /v1/messages (both live
-// under the /v1/messages path prefix in app.ts).
+// replays a server-authored `{tool, args}` directly. The whitelist is the undo
+// set — note that edit_transaction and delete_transactions ARE general write
+// tools (undoing an edit is an edit; undoing a log is a delete), so an
+// authenticated caller CAN reach them here. The blast radius is bounded by the
+// x-api-key gate, the shared messages rate limiter (registered explicitly per
+// path in app.ts — Hono use(path) does NOT prefix-match), and the write tools'
+// own guards (reconcile locks, the 50-id delete cap in deleteTransactions).
 const UNDO_TOOLS = [
   "restore_categories",
   "restore_transactions",
@@ -115,7 +258,7 @@ whatsappRouter.post("/webhook", async (c) => {
   if (!text) return c.json({ ignored: true });
 
   const receivedAtMs = toMs(parsed.payload.timestamp);
-  const result = await handleMessage(db, config, {
+  const result = await dispatchMessage(db, config, {
     text,
     source: "whatsapp",
     sourceUser: parsed.payload.authorPhone ?? parsed.payload.from,

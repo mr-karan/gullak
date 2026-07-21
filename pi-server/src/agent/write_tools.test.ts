@@ -305,3 +305,45 @@ test("log_transaction books income as a positive amount", () => {
   const data = res.data as Extract<WriteToolData, { kind: "log" }>;
   expect(rowById(db, data.id!)!.amountCents).toBe(2000_00);
 });
+
+test("an unresolved categoryName refuses instead of silently clearing categories", () => {
+  const db = makeDb();
+  addTxn(db, "t1", -200_00, { categoryId: "c-food" });
+  addTxn(db, "t2", -100_00, { categoryId: "c-food" });
+
+  // "Grocery" ≠ "Groceries" — a model typo. The old behavior resolved this to
+  // null (the explicit clear-category contract) and WIPED both rows' categories.
+  const res = runWriteTool(db, {
+    tool: "categorize_transactions",
+    params: { transactionIds: ["t1", "t2"], categoryName: "Grocery" },
+  });
+
+  expect(res.formatted).toContain('couldn\'t find a category called "Grocery"');
+  expect(res.data).toMatchObject({ kind: "error" });
+  // Nothing changed.
+  const rows = db.select().from(schema.transactions).all();
+  for (const r of rows) expect(r.categoryId).toBe("c-food");
+
+  // Explicit categoryId: null still clears — that contract is preserved.
+  const clear = runWriteTool(db, {
+    tool: "categorize_transactions",
+    params: { transactionIds: ["t1"], categoryId: null },
+  });
+  expect(clear.data).toMatchObject({ kind: "categorize" });
+  expect(
+    db.select().from(schema.transactions).where(eq(schema.transactions.id, "t1")).get()!
+      .categoryId,
+  ).toBeNull();
+});
+
+test("delete_transactions refuses batches over the 50-id cap without deleting", () => {
+  const db = makeDb();
+  addTxn(db, "keep1", -100_00, {});
+  const ids = Array.from({ length: 51 }, (_, i) => `missing-${i}`);
+  ids[0] = "keep1";
+
+  const res = runWriteTool(db, { tool: "delete_transactions", params: { transactionIds: ids } });
+
+  expect(res.formatted).toContain("Refusing to delete 51");
+  expect(db.select().from(schema.transactions).all()).toHaveLength(1);
+});

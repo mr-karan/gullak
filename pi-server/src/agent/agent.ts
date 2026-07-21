@@ -37,6 +37,8 @@ import {
   type WriteToolName,
   type WriteToolResult,
 } from "./write_tools.ts";
+import { handlePiMessage } from "./pi/engine.ts";
+import type { PiModelDeps } from "./pi/provider.ts";
 
 /// Conversational entry point used by /v1/messages and the WhatsApp
 /// webhook. Splits into:
@@ -85,7 +87,7 @@ const MAX_SELECTION_SHOWN = 30;
 const MAX_CONTEXT_BYTES = 1024;
 
 /// Render the advisory context breadcrumb, or "" if absent/invalid/oversized.
-function renderContextLine(context: unknown): string {
+export function renderContextLine(context: unknown): string {
   if (context === null || typeof context !== "object" || Array.isArray(context)) {
     return "";
   }
@@ -214,6 +216,15 @@ After the tool runs, write a SHORT, warm confirmation in plain text (₹ for
 rupees), e.g. "Done — recategorized 3 to Food." No JSON, no tables, no code
 fences. 1–2 sentences.`;
 
+const EMPTY_REPLY =
+  "Send me an expense or ask a question — I can help with both.";
+const NOOP_ACK =
+  "Got it. Send an amount like \"480 groceries\" to log, or ask \"how much have I spent this month?\".";
+const CLASSIFY_FALLBACK =
+  "I didn't quite get that. Send the amount and what it was for, like \"480 groceries\".";
+
+/// The legacy engine: classifier + ask/write split. Still the WhatsApp path, the
+/// pi-engine fallback, and the surface every existing test drives.
 export async function handleMessage(
   db: Db,
   config: AppConfig,
@@ -221,17 +232,23 @@ export async function handleMessage(
 ): Promise<AgentResponse> {
   const text = request.text.trim();
   if (!text) {
-    return {
-      threadId: request.threadId ?? "",
-      reply: "Send me an expense or ask a question — I can help with both.",
-    };
+    return { threadId: request.threadId ?? "", reply: EMPTY_REPLY };
   }
   const threadId =
-    request.threadId ??
-    `${request.source ?? "http"}:${newId().slice(0, 8)}`;
-
+    request.threadId ?? `${request.source ?? "http"}:${newId().slice(0, 8)}`;
   appendTurn(db, threadId, "user", text);
+  return routeClassified(db, config, { ...request, threadId }, threadId, text);
+}
 
+/// classify → route. The user turn is assumed already appended by the caller;
+/// each branch appends only its assistant turn.
+async function routeClassified(
+  db: Db,
+  config: AppConfig,
+  request: AgentRequest,
+  threadId: string,
+  text: string,
+): Promise<AgentResponse> {
   try {
     const mode = await classify(config, text);
     if (mode === "log") {
@@ -244,22 +261,98 @@ export async function handleMessage(
       return await handleEditOrDelete(db, config, request, threadId, text);
     }
     // noop
-    const ack =
-      "Got it. Send an amount like \"480 groceries\" to log, or ask \"how much have I spent this month?\".";
-    appendTurn(db, threadId, "assistant", ack);
-    return { threadId, reply: ack };
+    appendTurn(db, threadId, "assistant", NOOP_ACK);
+    return { threadId, reply: NOOP_ACK };
   } catch (err) {
-    const fallback =
-      "I didn't quite get that. Send the amount and what it was for, like \"480 groceries\".";
-    appendTurn(db, threadId, "assistant", fallback);
+    appendTurn(db, threadId, "assistant", CLASSIFY_FALLBACK);
     // Keep the original error visible in pi-server logs without leaking
     // model internals back to the user.
     // eslint-disable-next-line no-console
     console.warn(
       `agent failed: ${err instanceof Error ? err.message : String(err)}`,
     );
-    return { threadId, reply: fallback };
+    return { threadId, reply: CLASSIFY_FALLBACK };
   }
+}
+
+/// The routing entry point /v1/messages and the WhatsApp webhook call. Cheap
+/// deterministic paths (empty, greeting, amount-prefix log, undo-last) run FIRST
+/// and never touch the LLM. Everything else goes to the pi engine when it's
+/// enabled and the source isn't WhatsApp, with an automatic fall back to the
+/// legacy classifier on an unexpected (non-LLM) engine error. WhatsApp and
+/// GULLAK_AGENT_ENGINE=legacy stay on the legacy flow.
+export async function dispatchMessage(
+  db: Db,
+  config: AppConfig,
+  request: AgentRequest,
+  // Optional model deps, forwarded to the pi engine. Production leaves this
+  // unset (the engine builds from config); tests inject a faux provider.
+  deps?: PiModelDeps,
+): Promise<AgentResponse> {
+  const text = request.text.trim();
+  if (!text) {
+    return { threadId: request.threadId ?? "", reply: EMPTY_REPLY };
+  }
+  const threadId =
+    request.threadId ?? `${request.source ?? "http"}:${newId().slice(0, 8)}`;
+  const req: AgentRequest = { ...request, threadId };
+  const lower = text.toLowerCase().trim();
+  const hasSelection = (request.selection?.transactionIds?.length ?? 0) > 0;
+
+  // Cheap deterministic paths — identical to the legacy classifier's shortcuts,
+  // engine-independent, never an LLM call.
+  if (isWholeGreeting(lower)) {
+    appendTurn(db, threadId, "user", text);
+    appendTurn(db, threadId, "assistant", NOOP_ACK);
+    return { threadId, reply: NOOP_ACK };
+  }
+  if (isLogPrefix(lower)) {
+    appendTurn(db, threadId, "user", text);
+    return await handleLog(db, config, req, threadId, text);
+  }
+  if (!hasSelection && isUndoLastPhrase(lower)) {
+    appendTurn(db, threadId, "user", text);
+    return runUndoLast(db, threadId);
+  }
+
+  if (config.agentEngine === "pi" && request.source !== "whatsapp") {
+    try {
+      // handlePiMessage persists the user turn itself, and once it has, it
+      // never throws — run failures come back as honest replies (with any
+      // committed write actions attached). A throw can therefore only mean a
+      // PRE-persist failure (history read / model construction).
+      return await handlePiMessage(db, config, req, deps);
+    } catch (err) {
+      // Nothing was persisted, so run the full legacy flow — handleMessage
+      // appends its own user turn. No double-log, no orphan.
+      // eslint-disable-next-line no-console
+      console.warn(
+        `pi engine error, falling back to legacy: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      return await handleMessage(db, config, req);
+    }
+  }
+
+  // Legacy path (WhatsApp or engine=legacy): append the user turn, then route.
+  appendTurn(db, threadId, "user", text);
+  return await routeClassified(db, config, req, threadId, text);
+}
+
+/// True when POST /v1/messages/stream should drive the pi engine (and therefore
+/// emit real deltas/tool events) rather than compute a one-shot AgentResponse.
+/// Mirrors dispatchMessage's routing decision for the streaming endpoint.
+export function wouldStreamViaPi(
+  config: AppConfig,
+  request: AgentRequest,
+): boolean {
+  if (config.agentEngine !== "pi" || request.source === "whatsapp") return false;
+  const text = request.text.trim();
+  if (!text) return false;
+  const lower = text.toLowerCase().trim();
+  const hasSelection = (request.selection?.transactionIds?.length ?? 0) > 0;
+  if (isWholeGreeting(lower) || isLogPrefix(lower)) return false;
+  if (!hasSelection && isUndoLastPhrase(lower)) return false;
+  return true;
 }
 
 async function classify(
@@ -271,14 +364,14 @@ async function classify(
   // Whole-message greetings only. A greeting PREFIX must fall through — "ok
   // delete it" is an edit and "hey, where can I cut back?" is an ask, but the
   // old prefix match binned both as noop.
-  if (/^(yes|yeah|sure|ok|okay|nope|no|thanks|thank you|hi|hello|hey)[\s!.,]*$/.test(lower)) {
+  if (isWholeGreeting(lower)) {
     return "noop";
   }
   // LOG before ASK: a message that STARTS with an amount or a spend/receive
   // verb ("spent 480 …", "got 2000 refund") is recording, even though words
   // like "spent" also appear in the ask-regex. Questions start with how/what/
   // show/etc., so they fall through to the ask check below.
-  if (/^(\d|rs\.?|inr|₹|spent|paid|got|received|refund|salary)\b/.test(lower)) {
+  if (isLogPrefix(lower)) {
     return "log";
   }
   if (
@@ -476,50 +569,71 @@ async function handleEditOrDelete(
   // A selection makes "delete these"/"recategorize these" a targeted write, so a
   // selection short-circuits the undo-last heuristic.
   const hasSelection = (request.selection?.transactionIds?.length ?? 0) > 0;
-  const undoLast =
-    !hasSelection &&
-    (/^(undo|scrap|nvm|never ?mind)\b/.test(lower) ||
-      /\b(undo|delete|remove|cancel|scrap)\b.*\b(last|that|it|previous|latest)\b/.test(
-        lower,
-      ));
-  if (undoLast) {
-    // Only the most-recent chat-booked expense, and only if it's fresh (1h),
-    // so a stray "undo" can never wipe an older transaction.
-    const cutoff = nowMs() - 60 * 60 * 1000;
-    const last = db
-      .select()
-      .from(transactions)
-      .where(
-        and(
-          eq(transactions.origin, "whatsapp"),
-          gt(transactions.createdAt, cutoff),
-        ),
-      )
-      .orderBy(desc(transactions.createdAt))
-      .limit(1)
-      .get();
-    if (!last) {
-      const reply =
-        "Nothing recent from here to undo — open the app to edit older entries.";
-      appendTurn(db, threadId, "assistant", reply);
-      return { threadId, reply };
-    }
-    db.transaction((tx) => {
-      tx.delete(transactions).where(eq(transactions.id, last.id)).run();
-      recordChange(tx, {
-        resource: "transactions",
-        resourceId: last.id,
-        op: "delete",
-      });
-    });
-    const what = last.payeeName ? ` — ${last.payeeName}` : "";
-    const reply = `Deleted ${formatMoney(Math.abs(last.amountCents))}${what}. It's gone from all your devices.`;
-    appendTurn(db, threadId, "assistant", reply);
-    return { threadId, reply };
+  if (!hasSelection && isUndoLastPhrase(lower)) {
+    return runUndoLast(db, threadId);
   }
   // Everything else — "recategorize these to Food", "delete the duplicate",
   // "change the Amazon one to 1560" — goes through the write-capable tool loop.
   return await handleWrite(db, config, request, threadId, text);
+}
+
+// ── deterministic cheap-path predicates (no model) ────────────────────────────
+// Shared by the legacy classifier and dispatchMessage so both agree on which
+// messages never touch the LLM. Kept as pure string tests.
+
+/// Whole-message greeting/ack → noop.
+export function isWholeGreeting(lower: string): boolean {
+  return /^(yes|yeah|sure|ok|okay|nope|no|thanks|thank you|hi|hello|hey)[\s!.,]*$/.test(
+    lower,
+  );
+}
+
+/// Starts with an amount or a spend/receive verb → a log.
+export function isLogPrefix(lower: string): boolean {
+  return /^(\d|rs\.?|inr|₹|spent|paid|got|received|refund|salary)\b/.test(lower);
+}
+
+/// "undo" / "scrap that" / "delete the last one" → the deterministic undo-last.
+export function isUndoLastPhrase(lower: string): boolean {
+  return (
+    /^(undo|scrap|nvm|never ?mind)\b/.test(lower) ||
+    /\b(undo|delete|remove|cancel|scrap)\b.*\b(last|that|it|previous|latest)\b/.test(
+      lower,
+    )
+  );
+}
+
+/// Delete the most-recent chat-booked expense, but only if it's fresh (1h), so a
+/// stray "undo" can never wipe an older transaction. Appends the assistant turn.
+function runUndoLast(db: Db, threadId: string): AgentResponse {
+  const cutoff = nowMs() - 60 * 60 * 1000;
+  const last = db
+    .select()
+    .from(transactions)
+    .where(
+      and(eq(transactions.origin, "whatsapp"), gt(transactions.createdAt, cutoff)),
+    )
+    .orderBy(desc(transactions.createdAt))
+    .limit(1)
+    .get();
+  if (!last) {
+    const reply =
+      "Nothing recent from here to undo — open the app to edit older entries.";
+    appendTurn(db, threadId, "assistant", reply);
+    return { threadId, reply };
+  }
+  db.transaction((tx) => {
+    tx.delete(transactions).where(eq(transactions.id, last.id)).run();
+    recordChange(tx, {
+      resource: "transactions",
+      resourceId: last.id,
+      op: "delete",
+    });
+  });
+  const what = last.payeeName ? ` — ${last.payeeName}` : "";
+  const reply = `Deleted ${formatMoney(Math.abs(last.amountCents))}${what}. It's gone from all your devices.`;
+  appendTurn(db, threadId, "assistant", reply);
+  return { threadId, reply };
 }
 
 async function handleAsk(
@@ -758,7 +872,7 @@ function runWriteToolCall(db: Db, call: ChatToolCall): WriteToolResult {
 /// Render the trusted selection into concrete, actionable context. Only ids that
 /// exist are shown; >MAX_SELECTION_SHOWN rows are summarized so the prompt stays
 /// bounded. Returns "" when there's nothing usable.
-function renderSelectionLine(
+export function renderSelectionLine(
   db: Db,
   selection: AgentRequest["selection"],
 ): string {
@@ -857,7 +971,7 @@ export function sanitizeReply(reply: string): string {
   return cleaned;
 }
 
-function recentHistory(db: Db, threadId: string) {
+export function recentHistory(db: Db, threadId: string) {
   return db
     .select({ role: agentTurns.role, content: agentTurns.content })
     .from(agentTurns)
@@ -868,7 +982,7 @@ function recentHistory(db: Db, threadId: string) {
     .reverse();
 }
 
-function appendTurn(
+export function appendTurn(
   db: Db,
   threadId: string,
   role: "user" | "assistant",
