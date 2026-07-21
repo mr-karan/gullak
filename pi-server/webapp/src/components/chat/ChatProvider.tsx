@@ -13,6 +13,11 @@ export interface ChatMessage {
   // Structured write-results the agent returned; the conversation renders each
   // as a result card + Undo below the reply.
   actions?: WriteAction[];
+  // Last tool the agent used this turn; drives a tiny "what I did" caption.
+  tool?: string;
+  // Set on an error reply so the conversation can offer a one-tap Retry that
+  // re-sends the original text without the user retyping.
+  retryText?: string;
 }
 
 interface ChatState {
@@ -60,6 +65,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
                 role: "assistant",
                 content: res.reply || "No response.",
                 actions: res.actions,
+                tool: res.tool,
               },
             ]);
           },
@@ -71,6 +77,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
                 id: Date.now() + 1,
                 role: "assistant",
                 content: `The assistant is unavailable right now (${msg}). Try again once the server has a model configured.`,
+                retryText: trimmed,
               },
             ]);
             toast.error(msg);

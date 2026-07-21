@@ -326,6 +326,23 @@
     animation: vault-reveal 0.38s cubic-bezier(0.22, 1, 0.36, 1) both;
   }
 
+  /* Typing indicator: three dots breathe in a staggered loop. The global
+     reduced-motion override below collapses this to a static row. */
+  @keyframes vault-typing {
+    0%,
+    80%,
+    100% {
+      opacity: 0.25;
+    }
+    40% {
+      opacity: 1;
+    }
+  }
+
+  .vault-typing-dot {
+    animation: vault-typing 1.2s ease-in-out infinite;
+  }
+
   /* Never transition `all` — a transition:all scrollbar loop broke the legacy
      app. Respect reduced-motion: collapse durations AND delays so nothing
      lingers invisible mid-stagger. */

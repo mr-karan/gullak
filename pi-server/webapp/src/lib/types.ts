@@ -227,4 +227,7 @@ export interface ChatResponse {
   threadId?: string;
   reply: string;
   actions?: WriteAction[];
+  // Names the last tool the agent used this turn (e.g. "summary",
+  // "search_transactions") so the UI can show a "what I did" caption.
+  tool?: string;
 }

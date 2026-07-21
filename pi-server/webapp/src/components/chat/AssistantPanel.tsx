@@ -12,7 +12,14 @@ export function AssistantPanel({ onCollapse }: { onCollapse: () => void }) {
   // send is pending so a committed transaction's reply isn't orphaned.
   const { reset, isPending } = useChat();
   return (
-    <aside className="flex h-full w-[360px] shrink-0 flex-col border-l border-rule bg-paper-2">
+    <aside
+      // Esc collapses the panel. The listener sits on the root, so any focused
+      // child (composer, buttons) bubbles up here.
+      onKeyDown={(e) => {
+        if (e.key === "Escape") onCollapse();
+      }}
+      className="flex h-full w-[360px] shrink-0 flex-col border-l border-rule bg-paper-2"
+    >
       <div className="flex items-center justify-between px-4 pt-4 pb-3">
         <h2 className="font-display text-lg tracking-tight text-ink">Assistant</h2>
         <div className="flex items-center gap-1">
