@@ -232,14 +232,13 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
 
-  /* Figtree carries the whole app. Clash Display (--font-display) is reserved
-     for the net-worth figure + page titles only, loaded via <link> in
-     index.html. */
+  /* Figtree carries the WHOLE app, display roles included — one face, weights
+     and tracking do the differentiation. (Clash Display was tried for the hero
+     and rejected: inconsistent with the rest of the app.) */
   --font-sans:
     "Figtree", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue",
     Arial, sans-serif;
-  --font-display:
-    "Clash Display", "Figtree", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-display: var(--font-sans);
 
   --color-chart-1: var(--chart-1);
   --color-chart-2: var(--chart-2);
@@ -285,15 +284,16 @@
 
   .font-display {
     font-family: var(--font-display);
-    letter-spacing: -0.015em;
-    font-weight: 600;
+    letter-spacing: -0.02em;
+    font-weight: 700;
   }
 
-  /* The hero net-worth figure: Clash Display, heavy, tight tracking, tabular. */
+  /* The hero net-worth figure: Figtree extrabold, tight tracking, tabular —
+     same face as the rest of the app, differentiated by weight alone. */
   .font-vault-figure {
     font-family: var(--font-display);
-    font-weight: 700;
-    letter-spacing: -0.03em;
+    font-weight: 800;
+    letter-spacing: -0.035em;
     font-variant-numeric: tabular-nums;
     font-feature-settings: "tnum";
   }
