@@ -67,7 +67,7 @@ export class ApiError extends Error {
   }
 }
 
-function authHeaders(extra?: HeadersInit): Headers {
+export function authHeaders(extra?: HeadersInit): Headers {
   const headers = new Headers(extra);
   const key = getApiKey();
   if (key) headers.set("x-api-key", key);

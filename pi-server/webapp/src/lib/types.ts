@@ -230,4 +230,36 @@ export interface ChatResponse {
   // Names the last tool the agent used this turn (e.g. "summary",
   // "search_transactions") so the UI can show a "what I did" caption.
   tool?: string;
+  // Set when the agent queued the turn for async processing rather than
+  // replying inline (e.g. a long write handed to a background worker).
+  queued?: number;
+}
+
+/** Where a chat thread originated. "web" = this app, "whatsapp" = the bridge,
+    "http" = a raw /v1/messages caller. Drives the cross-device source chip. */
+export type ThreadSource = "web" | "whatsapp" | "http";
+
+/** One row in the chat-history ("chatrooms") list. `title` is the first user
+    message, server-truncated; `lastAt` is epoch ms of the newest turn. */
+export interface ThreadSummary {
+  threadId: string;
+  title: string;
+  lastAt: number;
+  turnCount: number;
+  source: ThreadSource;
+}
+export interface ThreadsResponse {
+  threads: ThreadSummary[];
+}
+
+/** One historical turn when resuming a thread. Plain text — no tool/action
+    metadata is replayed (historical turns render as flat markdown). */
+export interface ThreadTurn {
+  id: number;
+  role: "user" | "assistant";
+  content: string;
+  at: number;
+}
+export interface ThreadResponse {
+  turns: ThreadTurn[];
 }

@@ -6,7 +6,7 @@ import type { ChatContext, ChatResponse } from "@/lib/types";
 // A chat write (the agent categorizing/editing/deleting/logging) OR an Undo
 // changes financial rows on the server. Invalidate every query that reflects
 // that data so the register, insights, and balances update in real time.
-function invalidateFinancial(client: QueryClient): void {
+export function invalidateFinancial(client: QueryClient): void {
   for (const key of [
     ["transactions"],
     ["summary"],

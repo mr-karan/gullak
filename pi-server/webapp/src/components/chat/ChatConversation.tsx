@@ -33,6 +33,37 @@ function toolLabel(tool: string): string {
   return TOOL_LABELS[tool] ?? `Used ${tool.replace(/_/g, " ")}`;
 }
 
+// Present-tense counterparts, shown live under a streaming reply while a tool is
+// mid-flight. Same key set as TOOL_LABELS; unknown tools humanize their name.
+const TOOL_LABELS_PRESENT: Record<string, string> = {
+  summary: "Checking your monthly summary…",
+  category_spend: "Checking category spend…",
+  search_transactions: "Searching your transactions…",
+  net_worth: "Computing net worth…",
+  top_payees: "Ranking your top payees…",
+  afford_check: "Running the affordability math…",
+  categorize_transactions: "Recategorizing…",
+  edit_transaction: "Editing…",
+  delete_transactions: "Deleting…",
+  log_transaction: "Logging…",
+};
+
+function toolLabelPresent(tool: string): string {
+  return TOOL_LABELS_PRESENT[tool] ?? `Using ${tool.replace(/_/g, " ")}…`;
+}
+
+// The three-dot "typing" indicator, reused by the per-message tool status row
+// and the global fallback pending row.
+function TypingDots() {
+  return (
+    <span className="flex items-center gap-1" aria-hidden>
+      <span className="vault-typing-dot size-1.5 rounded-full bg-ink-2" />
+      <span className="vault-typing-dot size-1.5 rounded-full bg-ink-2" style={{ animationDelay: "0.15s" }} />
+      <span className="vault-typing-dot size-1.5 rounded-full bg-ink-2" style={{ animationDelay: "0.3s" }} />
+    </span>
+  );
+}
+
 export function ChatConversation({ className }: { className?: string }) {
   const { pathname } = useLocation();
   const { connected, openDialog } = useConnection();
@@ -62,6 +93,9 @@ export function ChatConversation({ className }: { className?: string }) {
   }
 
   const empty = messages.length === 0;
+  // Once a streaming placeholder exists, its own cursor / tool-status rows stand
+  // in for the global "Looking at your data…" indicator.
+  const hasStreamingMessage = messages.some((m) => m.role === "assistant" && m.streaming);
 
   return (
     <div className={cn("flex min-h-0 flex-1 flex-col", className)}>
@@ -103,11 +137,26 @@ export function ChatConversation({ className }: { className?: string }) {
                     </p>
                   </div>
                 ) : (
-                  // Assistant: plain on paper, no bubble.
+                  // Assistant: plain on paper, no bubble. A subtle trailing
+                  // cursor block pulses while the reply is still streaming.
                   <div className="max-w-[92%] text-foreground">
                     <MarkdownLite text={m.content} />
+                    {m.streaming ? (
+                      <span
+                        className="vault-typing-dot ml-0.5 inline-block align-baseline text-ink-2"
+                        aria-hidden
+                      >
+                        ▍
+                      </span>
+                    ) : null}
                   </div>
                 )}
+                {m.role === "assistant" && m.activeTool ? (
+                  <div className="mt-1.5 flex items-center gap-2" aria-live="polite">
+                    <TypingDots />
+                    <span className="text-sm text-ink-2">{toolLabelPresent(m.activeTool)}</span>
+                  </div>
+                ) : null}
                 {m.role === "assistant" && m.actions?.length ? (
                   <div className="flex w-full max-w-[85%] flex-col">
                     {m.actions.map((a, i) => (
@@ -135,19 +184,12 @@ export function ChatConversation({ className }: { className?: string }) {
                 ) : null}
               </div>
             ))}
-            {isPending ? (
+            {/* Global pending row — only the fallback mutation path (no
+                streaming placeholder yet); for streams the placeholder + its
+                own cursor / tool status rows take over. */}
+            {isPending && !hasStreamingMessage ? (
               <div className="flex items-center gap-2" aria-live="polite">
-                <span className="flex items-center gap-1" aria-hidden>
-                  <span className="vault-typing-dot size-1.5 rounded-full bg-ink-2" />
-                  <span
-                    className="vault-typing-dot size-1.5 rounded-full bg-ink-2"
-                    style={{ animationDelay: "0.15s" }}
-                  />
-                  <span
-                    className="vault-typing-dot size-1.5 rounded-full bg-ink-2"
-                    style={{ animationDelay: "0.3s" }}
-                  />
-                </span>
+                <TypingDots />
                 <span className="text-sm text-ink-2">Looking at your data…</span>
               </div>
             ) : null}
