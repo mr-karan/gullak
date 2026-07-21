@@ -144,10 +144,6 @@ export interface AppConfig {
   modelApiKey: string;
   modelReasoning: boolean;
   modelThinkingLevel: ThinkingLevel;
-  /** Which conversational engine /v1/messages uses. "pi" = the single
-   *  tool-calling pi-agent; "legacy" = the classifier + ask/write split.
-   *  WhatsApp always stays legacy regardless of this. */
-  agentEngine: "pi" | "legacy";
   /** Per-call LLM request timeout in ms. Generous — vision calls are slow. */
   modelTimeoutMs: number;
   /** Fixed-window rate caps (requests/min/IP). 0 disables a limiter. */
@@ -240,11 +236,6 @@ export function loadConfig(): AppConfig {
         ? "GPT-4.1 Mini"
         : "GPT-OSS 20B");
 
-  // Conversational engine selection. Defaults to the new single tool-calling pi
-  // agent; any value other than "legacy" is treated as "pi".
-  const agentEngine: "pi" | "legacy" =
-    getEnv("GULLAK_AGENT_ENGINE", "pi") === "legacy" ? "legacy" : "pi";
-
   const port = getIntEnv("GULLAK_PORT", 8787);
   const syncIntervalMinutes = getIntEnv("GULLAK_SHEETS_SYNC_INTERVAL_MIN", 0);
   const host = getEnv("GULLAK_HOST", "127.0.0.1");
@@ -285,7 +276,6 @@ export function loadConfig(): AppConfig {
     modelApiKey: realModelApiKey ?? "dummy",
     modelReasoning: getBooleanEnv("GULLAK_MODEL_REASONING", true),
     modelThinkingLevel: getThinkingLevel(),
-    agentEngine,
     modelTimeoutMs: getIntEnv("GULLAK_MODEL_TIMEOUT_MS", 60_000),
     rateLimit: {
       aiPerMinute: getIntEnv("GULLAK_AI_RATE_PER_MIN", 30),

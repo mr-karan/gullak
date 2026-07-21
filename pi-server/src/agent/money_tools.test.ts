@@ -1,25 +1,15 @@
 import Database from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import { migrate } from "drizzle-orm/better-sqlite3/migrator";
-import { beforeEach, expect, test, vi } from "vitest";
+import { expect, test } from "vitest";
 
-// Drive the real read-only SQL tools; stub only the model calls (as in
-// ask_agent.test.ts). runTool below runs against a seeded in-memory DB so the
-// numbers the model would see are the numbers we assert.
-vi.mock("../llm/client.ts", async () => {
-  const actual =
-    await vi.importActual<typeof import("../llm/client.ts")>("../llm/client.ts");
-  return { ...actual, chatJson: vi.fn(), chatTools: vi.fn() };
-});
+// Tool-level tests: drive the real read-only money-manager SQL tools directly via
+// runAskTool against a seeded in-memory DB, so the numbers the tools return are
+// the numbers we assert. The engine-level "these tools are offered to the model"
+// and context-breadcrumb coverage lives in pi/engine.test.ts.
 
-import type { AppConfig } from "../config.ts";
 import * as schema from "../db/schema.ts";
-import { chatJson, chatTools, type ChatToolCall } from "../llm/client.ts";
-import { handleMessage } from "./agent.ts";
 import { runAskTool } from "./ask_tools.ts";
-
-const mockChatTools = vi.mocked(chatTools);
-const mockChatJson = vi.mocked(chatJson);
 
 /** A YYYY-MM-DD date inside the previous (last full) calendar month. */
 function lastFullMonthDate(): string {
@@ -100,14 +90,6 @@ function seed() {
   return db;
 }
 
-const config = { ai: { enabled: true }, defaultCurrency: "INR" } as unknown as AppConfig;
-
-beforeEach(() => {
-  mockChatTools.mockReset();
-  mockChatJson.mockReset();
-  mockChatJson.mockResolvedValue({ mode: "ask", confidence: 0.9 });
-});
-
 test("portfolio_summary: totals, P&L, equity/MF split over non-stale rows", () => {
   const db = seed();
   const r = runAskTool(db, { tool: "portfolio_summary", params: {} });
@@ -176,46 +158,4 @@ test("all new tools are read-only (no mutation to any seeded table)", () => {
   expect(db.select().from(schema.holdings).all()).toHaveLength(3);
   expect(db.select().from(schema.desires).all()).toHaveLength(2);
   expect(db.select().from(schema.goals).all()).toHaveLength(2);
-});
-
-test("the new tools are offered to the model in the ask path", async () => {
-  const db = seed();
-  mockChatTools.mockImplementation(async (_c, opts) => {
-    return opts.runTool({ id: "c", name: "net_worth", arguments: "{}" });
-  });
-  const res = await handleMessage(db, config, { text: "what are we worth?", source: "web" });
-  const toolNames = mockChatTools.mock.calls[0]![1].tools.map((t) => t.name);
-  for (const t of ["portfolio_summary", "goal_progress", "list_desires", "afford_check", "net_worth"]) {
-    expect(toolNames).toContain(t);
-  }
-  expect(res.reply).toContain("₹6,01,000"); // net worth total
-});
-
-test("context breadcrumb is appended to the model turn as advisory prose", async () => {
-  const db = seed();
-  let seenUser = "";
-  mockChatTools.mockImplementation(async (_c, opts) => {
-    seenUser = opts.user;
-    return "ok";
-  });
-  await handleMessage(db, config, {
-    text: "how are my goals?",
-    source: "web",
-    context: { view: "goals", goalId: "g-bmw" },
-  });
-  expect(seenUser).toContain('User is currently viewing: {"view":"goals","goalId":"g-bmw"}');
-});
-
-test("invalid/oversized context is silently dropped", async () => {
-  const db = seed();
-  let seenUser = "";
-  mockChatTools.mockImplementation(async (_c, opts) => {
-    seenUser = opts.user;
-    return "ok";
-  });
-  // Oversized: a >1KB serialized object.
-  const big: Record<string, string> = {};
-  for (let i = 0; i < 200; i++) big[`k${i}`] = "xxxxxxxx";
-  await handleMessage(db, config, { text: "how are my goals?", source: "web", context: big });
-  expect(seenUser).not.toContain("User is currently viewing");
 });

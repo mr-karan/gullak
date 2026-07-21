@@ -173,9 +173,9 @@ export function createApp(ctx: AppContext) {
   app.route("/v1/net-worth", netWorthRouter);
   app.route("/v1/profiles", profilesRouter);
 
-  // Static web PWA (flattened legacy UI). Mounted last so it can never shadow
-  // a /v1/* route; it only claims "/", "/offline", "/manifest.json", "/sw.js"
-  // and "/static/*".
+  // The web SPA (webapp/dist). Mounted last so it can never shadow a /v1/*
+  // route; it serves the app shell, hashed static assets, and a history-mode
+  // fallback for everything else.
   app.route("/", webRouter);
 
   app.onError((error, c) => {

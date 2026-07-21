@@ -1,5 +1,4 @@
 import { and, desc, eq, gt, inArray } from "drizzle-orm";
-import { z } from "zod";
 
 import {
   parseWhatsappExpenses,
@@ -7,51 +6,24 @@ import {
 } from "../ai/whatsapp_parser.ts";
 import type { AppConfig } from "../config.ts";
 import type { Db } from "../db/index.ts";
-import {
-  accounts,
-  agentTurns,
-  categories,
-  payees,
-  transactions,
-} from "../db/schema.ts";
-import {
-  chatJson,
-  chatTools,
-  LlmHttpError,
-  type ChatToolCall,
-} from "../llm/client.ts";
+import { accounts, agentTurns, categories, transactions } from "../db/schema.ts";
 import { newId, nowMs, recordChange } from "../repos/changelog.ts";
 import { learnCategory } from "../rules/learn.ts";
-import {
-  ASK_TOOL_NAMES,
-  ASK_TOOL_SCHEMAS,
-  runAskTool,
-  type AskToolCall,
-  type AskToolName,
-} from "./ask_tools.ts";
-import {
-  runWriteTool,
-  WRITE_TOOL_NAMES,
-  WRITE_TOOL_SCHEMAS,
-  type WriteAction,
-  type WriteToolName,
-  type WriteToolResult,
-} from "./write_tools.ts";
 import { handlePiMessage } from "./pi/engine.ts";
 import type { PiModelDeps } from "./pi/provider.ts";
+import type { WriteAction } from "./write_tools.ts";
 
-/// Conversational entry point used by /v1/messages and the WhatsApp
-/// webhook. Splits into:
+/// Conversational entry point used by /v1/messages and the WhatsApp webhook.
+/// Cheap deterministic paths run first and never touch the LLM:
 ///   - log: parse N expenses and BOOK each straight into the server DB
 ///     (with a change_log row), so the phone, sheets, and every other client
 ///     pull them via normal sync. The reply states what was booked (account +
 ///     category) so the user can correct it in-app — the app remains the place
 ///     to review/edit, but the server is the source of truth.
-///   - ask: pick one pre-canned aggregation tool and answer with concrete
-///     numbers from the server DB.
-///
-/// Edit/delete via chat still nudges to the app (identifying the exact row
-/// conversationally is a follow-up).
+///   - undo-last: delete the most-recent chat-booked expense within a freshness
+///     window.
+/// Everything else goes to the single pi tool-calling engine (handlePiMessage),
+/// which answers questions (read tools) OR makes changes (write tools).
 
 export interface AgentRequest {
   text: string;
@@ -116,106 +88,6 @@ export interface AgentResponse {
 
 const HISTORY_LIMIT = 6;
 
-const classifierSchema = z.object({
-  mode: z.enum(["log", "ask", "edit_or_delete", "noop"]),
-  confidence: z.number().nullish(),
-});
-
-const CLASSIFIER_SYSTEM = `You classify a personal-finance message into
-ONE of these modes:
-
-- "log": the user is recording a spend, refund, salary, transfer, or
-  any other transaction. Multiple expenses in one message still count
-  as "log".
-- "ask": the user is asking a question about their finances — totals,
-  category spend, budget status, recent transactions, account balances —
-  or an advisory/analysis question about their own money ("where can I
-  cut back", "tell me where the money goes", "am I overspending").
-- "edit_or_delete": the user wants to change or remove a previously
-  logged transaction.
-- "noop": greetings, thanks, small talk, anything that isn't a clear
-  log/ask/edit.
-
-Output ONLY a single JSON object: {"mode": "<one of the above>", "confidence": 0.0–1.0}.
-No prose.`;
-
-const ASK_AGENT_SYSTEM = `You are Gullak, a friendly personal-finance
-assistant answering questions about the user's own transaction data over
-WhatsApp / in-app chat.
-
-You have TOOLS that run real SQL over the user's database. To answer any
-question about spending, income, balances, budgets, or specific
-transactions, you MUST call the relevant tool(s) — never invent numbers.
-Call more than one tool when a question needs it (e.g. "how does this
-month compare to last month?" → call summary twice with different months).
-
-Resolving dates:
-- The current date and the user's accounts/categories are in the first
-  user message.
-- "this month" = the current YYYY-MM. "last month" = the previous one.
-- Pass a category or account by NAME (categoryName/accountName); the
-  server matches it.
-
-Judgement rules (learned from the owner — apply them, don't recite them):
-- Before calling a month's spend "high", check whether one or two one-shot
-  purchases dominate it (furniture, trip prep, gadgets, medical). Call
-  top_payees or search_transactions to spot them, name the one-shots, and
-  quote the recurring run-rate without them.
-- Headline merchants land better than categories: "Zomato ₹8,898 in one
-  order" beats "Eating Out ₹18K". Lead with the merchant when one stands out.
-- Quick-commerce (Blinkit) sits inside Groceries and inflates it; mention
-  that when Groceries looks unusually high.
-- State numbers plainly. Never moralise about spending or suggest cuts
-  unless asked.
-
-Wealth, goals, and desires (the money-manager tools):
-- When a money question spans cash AND investments ("what are we worth",
-  "can we afford X"), use net_worth or afford_check — not just
-  account_balances. Account balances alone are the wrong answer for
-  net-worth questions.
-- For desire / "can we afford it" questions, state the surplus math plainly
-  (monthly surplus, months-of-surplus, cash on hand) and STOP. NEVER moralise,
-  never recommend, never say whether to buy it — present the numbers and let
-  the humans decide. This is a hard rule.
-- Goals language: speak in "on pace / needs ₹X per month" terms, never in
-  financial-advice terms. No "you should invest more", no verdicts.
-- Investment values are as-of-import; when you quote a blended/net-worth
-  number, mention it's as of the import date if the tool gives one.
-
-When you have the numbers, write a SHORT, warm reply in plain text.
-Use the ₹ symbol for rupees. If a tool returned a bulleted breakdown,
-keep the bullets. No JSON, no markdown tables, no code fences. Keep it to
-1–2 sentences plus any bullets.`;
-
-const WRITE_AGENT_SYSTEM = `You are Gullak, a personal-finance assistant that
-can BOTH answer questions and MAKE CHANGES to the user's transactions when they
-clearly ask you to.
-
-You have two kinds of tools:
-- READ tools (summary, category_spend, search_transactions, recent_transactions,
-  account_balances, net_worth, …) ANSWER questions. They never change anything.
-- WRITE tools (categorize_transactions, edit_transaction, delete_transactions,
-  log_transaction) CHANGE data.
-
-Hard rules for writing:
-- Only call a WRITE tool when the user's message clearly asks to change, add, or
-  delete something ("recategorize these to Food", "delete the duplicate",
-  "change the Amazon one to 1560", "add a 450 groceries expense"). If the
-  message is a question or ambiguous, use READ tools only — never write.
-- "these" / "them" / "the selected ones" refer to the transactions listed under
-  "The user has selected …". Pass exactly those ids to the write tool.
-- If you need to find which rows to act on (e.g. "delete the duplicate Amazon
-  charge"), use a READ tool (search_transactions) FIRST to get their ids, then
-  call the write tool with those ids.
-- Pass categories by name (categoryName) — the server resolves it. Amounts are a
-  positive magnitude in paise; the expense/income sign is handled for you.
-- Reconciled (locked) rows are skipped by the tools; mention if some were
-  skipped.
-
-After the tool runs, write a SHORT, warm confirmation in plain text (₹ for
-rupees), e.g. "Done — recategorized 3 to Food." No JSON, no tables, no code
-fences. 1–2 sentences.`;
-
 const EMPTY_REPLY =
   "Send me an expense or ask a question — I can help with both.";
 const NOOP_ACK =
@@ -223,64 +95,10 @@ const NOOP_ACK =
 const CLASSIFY_FALLBACK =
   "I didn't quite get that. Send the amount and what it was for, like \"480 groceries\".";
 
-/// The legacy engine: classifier + ask/write split. Still the WhatsApp path, the
-/// pi-engine fallback, and the surface every existing test drives.
-export async function handleMessage(
-  db: Db,
-  config: AppConfig,
-  request: AgentRequest,
-): Promise<AgentResponse> {
-  const text = request.text.trim();
-  if (!text) {
-    return { threadId: request.threadId ?? "", reply: EMPTY_REPLY };
-  }
-  const threadId =
-    request.threadId ?? `${request.source ?? "http"}:${newId().slice(0, 8)}`;
-  appendTurn(db, threadId, "user", text);
-  return routeClassified(db, config, { ...request, threadId }, threadId, text);
-}
-
-/// classify → route. The user turn is assumed already appended by the caller;
-/// each branch appends only its assistant turn.
-async function routeClassified(
-  db: Db,
-  config: AppConfig,
-  request: AgentRequest,
-  threadId: string,
-  text: string,
-): Promise<AgentResponse> {
-  try {
-    const mode = await classify(config, text);
-    if (mode === "log") {
-      return await handleLog(db, config, request, threadId, text);
-    }
-    if (mode === "ask") {
-      return await handleAsk(db, config, threadId, text, request);
-    }
-    if (mode === "edit_or_delete") {
-      return await handleEditOrDelete(db, config, request, threadId, text);
-    }
-    // noop
-    appendTurn(db, threadId, "assistant", NOOP_ACK);
-    return { threadId, reply: NOOP_ACK };
-  } catch (err) {
-    appendTurn(db, threadId, "assistant", CLASSIFY_FALLBACK);
-    // Keep the original error visible in pi-server logs without leaking
-    // model internals back to the user.
-    // eslint-disable-next-line no-console
-    console.warn(
-      `agent failed: ${err instanceof Error ? err.message : String(err)}`,
-    );
-    return { threadId, reply: CLASSIFY_FALLBACK };
-  }
-}
-
 /// The routing entry point /v1/messages and the WhatsApp webhook call. Cheap
 /// deterministic paths (empty, greeting, amount-prefix log, undo-last) run FIRST
-/// and never touch the LLM. Everything else goes to the pi engine when it's
-/// enabled and the source isn't WhatsApp, with an automatic fall back to the
-/// legacy classifier on an unexpected (non-LLM) engine error. WhatsApp and
-/// GULLAK_AGENT_ENGINE=legacy stay on the legacy flow.
+/// and never touch the LLM. Everything else — for every source, WhatsApp
+/// included — goes to the single pi tool-calling engine.
 export async function dispatchMessage(
   db: Db,
   config: AppConfig,
@@ -299,8 +117,7 @@ export async function dispatchMessage(
   const lower = text.toLowerCase().trim();
   const hasSelection = (request.selection?.transactionIds?.length ?? 0) > 0;
 
-  // Cheap deterministic paths — identical to the legacy classifier's shortcuts,
-  // engine-independent, never an LLM call.
+  // Cheap deterministic paths — engine-independent, never an LLM call.
   if (isWholeGreeting(lower)) {
     appendTurn(db, threadId, "user", text);
     appendTurn(db, threadId, "assistant", NOOP_ACK);
@@ -315,37 +132,30 @@ export async function dispatchMessage(
     return runUndoLast(db, threadId);
   }
 
-  if (config.agentEngine === "pi" && request.source !== "whatsapp") {
-    try {
-      // handlePiMessage persists the user turn itself, and once it has, it
-      // never throws — run failures come back as honest replies (with any
-      // committed write actions attached). A throw can therefore only mean a
-      // PRE-persist failure (history read / model construction).
-      return await handlePiMessage(db, config, req, deps);
-    } catch (err) {
-      // Nothing was persisted, so run the full legacy flow — handleMessage
-      // appends its own user turn. No double-log, no orphan.
-      // eslint-disable-next-line no-console
-      console.warn(
-        `pi engine error, falling back to legacy: ${err instanceof Error ? err.message : String(err)}`,
-      );
-      return await handleMessage(db, config, req);
-    }
+  // Everything else → the pi engine. handlePiMessage persists the user turn
+  // itself and, once it has, never throws — run failures come back as honest
+  // replies (with any committed write actions attached). A throw can therefore
+  // only mean a PRE-persist failure (history read / model construction) where
+  // nothing was persisted; append the user turn + a canned fallback here so the
+  // thread history stays consistent (mirroring what the persisting paths do).
+  try {
+    return await handlePiMessage(db, config, req, deps);
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn(
+      `pi engine error: ${err instanceof Error ? err.message : String(err)}`,
+    );
+    appendTurn(db, threadId, "user", text);
+    appendTurn(db, threadId, "assistant", CLASSIFY_FALLBACK);
+    return { threadId, reply: CLASSIFY_FALLBACK };
   }
-
-  // Legacy path (WhatsApp or engine=legacy): append the user turn, then route.
-  appendTurn(db, threadId, "user", text);
-  return await routeClassified(db, config, req, threadId, text);
 }
 
 /// True when POST /v1/messages/stream should drive the pi engine (and therefore
 /// emit real deltas/tool events) rather than compute a one-shot AgentResponse.
-/// Mirrors dispatchMessage's routing decision for the streaming endpoint.
-export function wouldStreamViaPi(
-  config: AppConfig,
-  request: AgentRequest,
-): boolean {
-  if (config.agentEngine !== "pi" || request.source === "whatsapp") return false;
+/// Mirrors dispatchMessage's routing decision for the streaming endpoint:
+/// everything that isn't a cheap deterministic path streams via pi.
+export function wouldStreamViaPi(request: AgentRequest): boolean {
   const text = request.text.trim();
   if (!text) return false;
   const lower = text.toLowerCase().trim();
@@ -353,68 +163,6 @@ export function wouldStreamViaPi(
   if (isWholeGreeting(lower) || isLogPrefix(lower)) return false;
   if (!hasSelection && isUndoLastPhrase(lower)) return false;
   return true;
-}
-
-async function classify(
-  config: AppConfig,
-  text: string,
-): Promise<"log" | "ask" | "edit_or_delete" | "noop"> {
-  // Cheap deterministic shortcuts before paying for a model call.
-  const lower = text.toLowerCase().trim();
-  // Whole-message greetings only. A greeting PREFIX must fall through — "ok
-  // delete it" is an edit and "hey, where can I cut back?" is an ask, but the
-  // old prefix match binned both as noop.
-  if (isWholeGreeting(lower)) {
-    return "noop";
-  }
-  // LOG before ASK: a message that STARTS with an amount or a spend/receive
-  // verb ("spent 480 …", "got 2000 refund") is recording, even though words
-  // like "spent" also appear in the ask-regex. Questions start with how/what/
-  // show/etc., so they fall through to the ask check below.
-  if (isLogPrefix(lower)) {
-    return "log";
-  }
-  if (
-    /(how much|how many|show|what.*spend|spent|balance|budget left|recent|last \d|this month|last month|net worth|worth|afford|portfolio|holdings|goal)/.test(
-      lower,
-    ) &&
-    !/^\d/.test(lower) // questions usually don't start with a digit
-  ) {
-    return "ask";
-  }
-  if (
-    /(edit|change|update|delete|remove|undo|cancel|categori|recategori|reclassif|\bmark\b|rename)/.test(
-      lower,
-    )
-  ) {
-    return "edit_or_delete";
-  }
-  // Open-ended/advisory questions ("Where can I cut back?", "Should we save
-  // more?") carry none of the ask-regex data keywords, so they used to fall
-  // through to the model and routinely land in "noop" — the canned tip — even
-  // though the ask agent's tools can answer them (the app's own suggested
-  // prompts include "Where can I cut back?"). Anything question-shaped that
-  // isn't already a log/edit is an ask. Runs AFTER the edit check so "can you
-  // delete the duplicate?" still routes to edit_or_delete.
-  if (
-    /\?\s*$/.test(lower) ||
-    /^(where|why|how|what|when|which|who|should|could|would|can|do|does|did|am|is|are|will)\b/.test(
-      lower,
-    )
-  ) {
-    return "ask";
-  }
-  // Fall back to the model for the ambiguous middle.
-  try {
-    const raw = await chatJson<unknown>(config, {
-      system: CLASSIFIER_SYSTEM,
-      user: text,
-      temperature: 0,
-    });
-    return classifierSchema.parse(raw).mode;
-  } catch {
-    return "noop";
-  }
 }
 
 async function handleLog(
@@ -556,30 +304,9 @@ function resolveByHint<T extends { id: string; name: string }>(
   );
 }
 
-async function handleEditOrDelete(
-  db: Db,
-  config: AppConfig,
-  request: AgentRequest,
-  threadId: string,
-  text: string,
-): Promise<AgentResponse> {
-  const lower = text.toLowerCase();
-  // A bare "undo"/"scrap that" stays a deterministic, no-model shortcut that only
-  // ever removes the most-recent chat-booked expense within the freshness window.
-  // A selection makes "delete these"/"recategorize these" a targeted write, so a
-  // selection short-circuits the undo-last heuristic.
-  const hasSelection = (request.selection?.transactionIds?.length ?? 0) > 0;
-  if (!hasSelection && isUndoLastPhrase(lower)) {
-    return runUndoLast(db, threadId);
-  }
-  // Everything else — "recategorize these to Food", "delete the duplicate",
-  // "change the Amazon one to 1560" — goes through the write-capable tool loop.
-  return await handleWrite(db, config, request, threadId, text);
-}
-
 // ── deterministic cheap-path predicates (no model) ────────────────────────────
-// Shared by the legacy classifier and dispatchMessage so both agree on which
-// messages never touch the LLM. Kept as pure string tests.
+// Shared by dispatchMessage and wouldStreamViaPi so both agree on which messages
+// never touch the LLM. Kept as pure string tests.
 
 /// Whole-message greeting/ack → noop.
 export function isWholeGreeting(lower: string): boolean {
@@ -636,239 +363,6 @@ function runUndoLast(db: Db, threadId: string): AgentResponse {
   return { threadId, reply };
 }
 
-async function handleAsk(
-  db: Db,
-  config: AppConfig,
-  threadId: string,
-  text: string,
-  request: AgentRequest,
-): Promise<AgentResponse> {
-  // No model configured → the tool-calling loop can't run. Answer honestly
-  // rather than firing a doomed request with the dummy key.
-  if (!config.ai.enabled) {
-    const reply =
-      "The assistant isn't configured with a model right now, so I can't answer questions yet. You can still log expenses (e.g. \"480 groceries\").";
-    appendTurn(db, threadId, "assistant", reply);
-    return { threadId, reply };
-  }
-  const today = todayIso();
-  const history = recentHistory(db, threadId);
-  const categoryList = db
-    .select({ id: categories.id, name: categories.name })
-    .from(categories)
-    .all();
-  const accountList = db
-    .select({ id: accounts.id, name: accounts.name })
-    .from(accounts)
-    .all();
-  const contextLine = renderContextLine(request.context);
-  const selectionLine = renderSelectionLine(db, request.selection);
-  const toolUser = [
-    `Today's date: ${today}. Currency: ${config.defaultCurrency}.`,
-    `Accounts: ${accountList.map((a) => a.name).join(", ") || "(none)"}`,
-    `Categories: ${categoryList.map((c) => c.name).join(", ") || "(none)"}`,
-    ...(contextLine ? [contextLine] : []),
-    ...(selectionLine ? [selectionLine] : []),
-    "",
-    `Question: ${text}`,
-  ].join("\n");
-
-  // Track which tool(s) the model invoked so /v1/messages can echo the last
-  // one back (kept for response-shape compatibility with the app/web chat).
-  let lastTool: AskToolName | undefined;
-
-  try {
-    const answer = await chatTools(config, {
-      system: ASK_AGENT_SYSTEM,
-      user: toolUser,
-      history,
-      temperature: 0,
-      tools: ASK_TOOL_SCHEMAS,
-      runTool: (call: ChatToolCall) =>
-        runAskToolCall(db, call, (name) => {
-          lastTool = name;
-        }),
-    });
-    const reply = sanitizeReply(answer.trim());
-    appendTurn(db, threadId, "assistant", reply);
-    return { threadId, reply, tool: lastTool };
-  } catch (err) {
-    // 402 (out of credits) / 503 / network → assistant unavailable, but never
-    // crash the request. LlmHttpError specifically covers the provider gate.
-    if (err instanceof LlmHttpError) {
-      const reply =
-        "The assistant is temporarily unavailable — I couldn't reach the model. You can still log expenses (e.g. \"480 groceries\") and I'll book them.";
-      appendTurn(db, threadId, "assistant", reply);
-      return { threadId, reply };
-    }
-    throw err;
-  }
-}
-
-/// Adapt one raw model tool_call into an AskToolCall, run it, and return the
-/// formatted string fed back to the model. Unknown tool names get a clear
-/// message instead of throwing so the loop keeps going. Args that fail to parse
-/// degrade to defaults (empty params) rather than crashing.
-function runAskToolCall(
-  db: Db,
-  call: ChatToolCall,
-  onTool: (name: AskToolName) => void,
-): string {
-  if (!ASK_TOOL_NAMES.has(call.name)) {
-    return `Unknown tool "${call.name}". Available: ${[...ASK_TOOL_NAMES].join(", ")}.`;
-  }
-  const tool = call.name as AskToolName;
-  onTool(tool);
-  let args: Record<string, unknown> = {};
-  try {
-    const parsed = JSON.parse(call.arguments || "{}");
-    if (parsed && typeof parsed === "object") {
-      args = parsed as Record<string, unknown>;
-    }
-  } catch {
-    // Malformed args JSON — run with defaults; most tools have a sensible
-    // current-month fallback.
-  }
-  const result = runAskTool(db, {
-    tool,
-    params: {
-      month: toStr(args.month),
-      startDate: toStr(args.startDate),
-      endDate: toStr(args.endDate),
-      accountId: toStr(args.accountId),
-      accountName: toStr(args.accountName),
-      categoryId: toStr(args.categoryId),
-      categoryName: toStr(args.categoryName),
-      payee: toStr(args.payee),
-      query: toStr(args.query),
-      limit: toNum(args.limit),
-      goalName: toStr(args.goalName),
-      person: toStr(args.person),
-      status: toStr(args.status),
-      amountCents: toNum(args.amountCents),
-      desireName: toStr(args.desireName),
-    },
-  });
-  return result.formatted;
-}
-
-/// The write-capable tool loop. Offers BOTH registries — read (ask_tools) to
-/// find/confirm rows, write (write_tools) to change them — with the write
-/// system prompt gating writes to explicit change requests. Collects the
-/// structured WriteActions each write produces so /v1/messages can return them.
-async function handleWrite(
-  db: Db,
-  config: AppConfig,
-  request: AgentRequest,
-  threadId: string,
-  text: string,
-): Promise<AgentResponse> {
-  if (!config.ai.enabled) {
-    const reply =
-      'To change a specific entry, open it in the Gullak app — the assistant model isn\'t configured here. I can still "undo" the last thing you logged.';
-    appendTurn(db, threadId, "assistant", reply);
-    return { threadId, reply };
-  }
-
-  const today = todayIso();
-  const history = recentHistory(db, threadId);
-  const categoryList = db
-    .select({ id: categories.id, name: categories.name })
-    .from(categories)
-    .all();
-  const accountList = db
-    .select({ id: accounts.id, name: accounts.name })
-    .from(accounts)
-    .all();
-  const contextLine = renderContextLine(request.context);
-  const selectionLine = renderSelectionLine(db, request.selection);
-  const toolUser = [
-    `Today's date: ${today}. Currency: ${config.defaultCurrency}.`,
-    `Accounts: ${accountList.map((a) => a.name).join(", ") || "(none)"}`,
-    `Categories: ${categoryList.map((c) => c.name).join(", ") || "(none)"}`,
-    ...(contextLine ? [contextLine] : []),
-    ...(selectionLine ? [selectionLine] : []),
-    "",
-    `Request: ${text}`,
-  ].join("\n");
-
-  const actions: WriteAction[] = [];
-  let lastTool: string | undefined;
-
-  try {
-    const answer = await chatTools(config, {
-      system: WRITE_AGENT_SYSTEM,
-      user: toolUser,
-      history,
-      temperature: 0,
-      tools: [...ASK_TOOL_SCHEMAS, ...WRITE_TOOL_SCHEMAS],
-      runTool: (call: ChatToolCall) => {
-        if (ASK_TOOL_NAMES.has(call.name)) {
-          return runAskToolCall(db, call, (name) => {
-            lastTool = name;
-          });
-        }
-        if (WRITE_TOOL_NAMES.has(call.name as WriteToolName)) {
-          lastTool = call.name;
-          const res = runWriteToolCall(db, call);
-          if (res.action) actions.push(res.action);
-          return res.formatted;
-        }
-        return `Unknown tool "${call.name}". Available: ${[...ASK_TOOL_NAMES, ...WRITE_TOOL_NAMES].join(", ")}.`;
-      },
-    });
-    const reply = sanitizeReply(answer.trim());
-    // Traceability: pin the assistant turn to the first row a write touched.
-    const firstAffected = actions.find((a) => a.affectedIds.length > 0)?.affectedIds[0];
-    appendTurn(db, threadId, "assistant", reply, firstAffected);
-    return {
-      threadId,
-      reply,
-      tool: lastTool,
-      actions: actions.length > 0 ? actions : undefined,
-    };
-  } catch (err) {
-    if (err instanceof LlmHttpError) {
-      const reply =
-        "The assistant is temporarily unavailable — I couldn't reach the model, so I didn't change anything. Try again in a moment.";
-      appendTurn(db, threadId, "assistant", reply);
-      return { threadId, reply };
-    }
-    throw err;
-  }
-}
-
-/// Adapt one raw model tool_call into a WriteToolCall and run it. Unknown names
-/// and malformed args degrade gracefully (the loop keeps going) — same contract
-/// as runAskToolCall, but this path MUTATES.
-function runWriteToolCall(db: Db, call: ChatToolCall): WriteToolResult {
-  let args: Record<string, unknown> = {};
-  try {
-    const parsed = JSON.parse(call.arguments || "{}");
-    if (parsed && typeof parsed === "object") {
-      args = parsed as Record<string, unknown>;
-    }
-  } catch {
-    // Malformed args — run with defaults; the tool reports if it lacks inputs.
-  }
-  return runWriteTool(db, {
-    tool: call.name as WriteToolName,
-    params: {
-      transactionIds: toStrArray(args.transactionIds),
-      id: toStr(args.id),
-      categoryId: args.categoryId === null ? null : toStr(args.categoryId),
-      categoryName: toStr(args.categoryName),
-      amountCents: toNum(args.amountCents),
-      payeeName: toStr(args.payeeName),
-      date: toStr(args.date),
-      notes: toStr(args.notes),
-      accountId: toStr(args.accountId),
-      accountName: toStr(args.accountName),
-      isIncome: typeof args.isIncome === "boolean" ? args.isIncome : undefined,
-    },
-  });
-}
-
 /// Render the trusted selection into concrete, actionable context. Only ids that
 /// exist are shown; >MAX_SELECTION_SHOWN rows are summarized so the prompt stays
 /// bounded. Returns "" when there's nothing usable.
@@ -920,15 +414,6 @@ function categoryNameById(db: Db, id: string): string {
   );
 }
 
-/** Coerce a model-supplied value into a string[] of non-empty ids. */
-function toStrArray(v: unknown): string[] | undefined {
-  if (!Array.isArray(v)) return undefined;
-  const out = v.filter(
-    (x): x is string => typeof x === "string" && x.trim().length > 0,
-  );
-  return out.length > 0 ? out : undefined;
-}
-
 function composeBookedReply(booked: BookedExpense[]): string {
   const money = (c: number) => formatMoney(Math.abs(c));
   if (booked.length === 1) {
@@ -957,7 +442,7 @@ export function sanitizeReply(reply: string): string {
   if (!reply || typeof reply !== "string") return fallback;
   const cleaned = reply
     // eslint-disable-next-line no-control-regex
-    .replace(/[ --]/g, "")
+    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, "")
     .trim();
   if (!cleaned) return fallback;
   // Refuse outputs that look like raw JSON or model internals.
@@ -994,17 +479,6 @@ export function appendTurn(
     .run();
 }
 
-function toStr(v: unknown): string | undefined {
-  if (typeof v !== "string") return undefined;
-  const t = v.trim();
-  return t.length === 0 ? undefined : t;
-}
-
-function toNum(v: unknown): number | undefined {
-  if (typeof v !== "number" || !Number.isFinite(v)) return undefined;
-  return v;
-}
-
 function todayIso(): string {
   const d = new Date();
   const y = d.getFullYear();
@@ -1023,7 +497,3 @@ function formatMoney(minorCents: number): string {
 
 // Re-export shapes used by routes that previously consumed AgentResponse.
 export type { Db };
-
-// Silence unused-import warnings — payees may be reintroduced once we
-// wire payee-resolution shortcuts in the log branch.
-void payees;

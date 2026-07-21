@@ -57,7 +57,7 @@ messagesRouter.post("/stream", async (c) => {
   const parsed = messageBody.parse(await c.req.json());
   return streamSSE(c, async (stream) => {
     try {
-      if (wouldStreamViaPi(config, parsed)) {
+      if (wouldStreamViaPi(parsed)) {
         const gen = streamPiMessage(db, config, parsed);
         let result: AgentResponse;
         while (true) {

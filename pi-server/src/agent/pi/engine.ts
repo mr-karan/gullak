@@ -107,8 +107,8 @@ export async function* streamPiMessage(
   // Order matters for turn-persistence guarantees:
   //  1. Everything that can plausibly throw (history read, model construction)
   //     runs BEFORE the user turn is persisted — a throw here reaches
-  //     dispatchMessage's catch, whose legacy fallback (handleMessage) appends
-  //     its own user turn. No double-append, no orphan.
+  //     dispatchMessage's catch, which appends its own user + fallback turns.
+  //     No double-append, no orphan.
   //  2. After appendTurn, run failures are mapped to honest replies below and
   //     never escape the generator — a persisted user turn always gets an
   //     assistant turn, so the thread history can't hold orphaned questions.

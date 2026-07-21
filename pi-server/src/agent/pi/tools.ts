@@ -16,10 +16,10 @@ import {
   type WriteToolName,
 } from "../write_tools.ts";
 
-/// Wraps the existing ask/write tool registries as pi `AgentTool`s. The tool
-/// bodies delegate to the SAME runAskTool / runWriteTool functions the legacy
-/// engine uses (real synchronous SQL), so behaviour, coercion, and change-log
-/// semantics are identical — pi just drives the loop instead of chatTools.
+/// Wraps the ask/write tool registries as pi `AgentTool`s. The tool bodies call
+/// runAskTool / runWriteTool directly (real synchronous SQL), so behaviour, arg
+/// coercion, and change-log semantics live in one place shared with the HTTP
+/// action endpoint.
 
 /// Per-request sink for write side effects the engine returns to the UI.
 export interface WriteToolCollector {

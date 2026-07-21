@@ -13,7 +13,7 @@ vi.mock("../llm/client.ts", () => ({ chatJson: vi.fn() }));
 import type { AppConfig } from "../config.ts";
 import * as schema from "../db/schema.ts";
 import { chatJson } from "../llm/client.ts";
-import { handleMessage } from "./agent.ts";
+import { dispatchMessage } from "./agent.ts";
 
 const mockChatJson = vi.mocked(chatJson);
 
@@ -52,7 +52,7 @@ test("log path books a transaction and records a change_log row", async () => {
     ],
   });
 
-  const res = await handleMessage(db, config, {
+  const res = await dispatchMessage(db, config, {
     text: "spent 480 groceries",
     source: "whatsapp",
   });
@@ -80,7 +80,7 @@ test("income is booked as a positive amount", async () => {
       { amount_cents: 250000, is_income: true, payee: "Refund", text: "got 2500 refund" },
     ],
   });
-  await handleMessage(db, config, { text: "got 2500 refund", source: "whatsapp" });
+  await dispatchMessage(db, config, { text: "got 2500 refund", source: "whatsapp" });
   const txns = db.select().from(schema.transactions).all();
   expect(txns[0]!.amountCents).toBe(250000);
 });
@@ -90,11 +90,11 @@ test("undo deletes the most-recent chat-booked transaction (+ change_log)", asyn
   mockChatJson.mockResolvedValueOnce({
     items: [{ amount_cents: 10000, is_income: false, text: "spent 100 coffee" }],
   });
-  await handleMessage(db, config, { text: "spent 100 coffee", source: "whatsapp" });
+  await dispatchMessage(db, config, { text: "spent 100 coffee", source: "whatsapp" });
   expect(db.select().from(schema.transactions).all()).toHaveLength(1);
 
   // "undo" is fully deterministic — no model call.
-  const res = await handleMessage(db, config, { text: "undo", source: "whatsapp" });
+  const res = await dispatchMessage(db, config, { text: "undo", source: "whatsapp" });
   expect(res.reply.toLowerCase()).toContain("deleted");
   expect(db.select().from(schema.transactions).all()).toHaveLength(0);
   const deletes = db
@@ -120,7 +120,7 @@ test("undo refuses to touch a transaction older than the freshness window", asyn
       updatedAt: old,
     })
     .run();
-  const res = await handleMessage(db, config, { text: "undo", source: "whatsapp" });
+  const res = await dispatchMessage(db, config, { text: "undo", source: "whatsapp" });
   expect(res.reply.toLowerCase()).toContain("nothing recent");
   expect(db.select().from(schema.transactions).all()).toHaveLength(1); // untouched
 });
@@ -128,7 +128,7 @@ test("undo refuses to touch a transaction older than the freshness window", asyn
 test("a message with no extractable amount books nothing", async () => {
   const db = makeDb();
   mockChatJson.mockResolvedValueOnce({ items: [] });
-  const res = await handleMessage(db, config, {
+  const res = await dispatchMessage(db, config, {
     text: "paid the usual",
     source: "whatsapp",
   });
