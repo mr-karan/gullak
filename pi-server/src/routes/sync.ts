@@ -1,4 +1,4 @@
-import { and, eq, gt, lte, sql } from "drizzle-orm";
+import { and, eq, gte, lte, sql } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
 
@@ -35,13 +35,17 @@ syncRouter.get("/changes", (c) => {
   const callerId = c.req.query("clientId");
   const cursor = Number.isFinite(since) ? since : 0;
 
-  const baseFilter = gt(changeLog.id, cursor);
+  const baseFilter = gte(changeLog.id, cursor);
 
   // Scan the window by id (INCLUDING the caller's own rows) so the cursor can
   // advance past self-originated rows. Self rows are filtered from `changes`
-  // below, but the cursor moves to the last scanned id — otherwise a page that
+  // below, but the cursor moves past the last scanned id — otherwise a page that
   // is entirely self-originated returns empty and the cursor never advances,
   // forcing endless re-scans from the same point.
+  //
+  // Inclusive (gte) + cursor = lastScannedId + 1 prevents gaps: a row that
+  // lands at exactly the cursor boundary is never skipped. The client re-applies
+  // it idempotently (LWW upsert by id) so there is no double-count.
   const windowRows = db
     .select()
     .from(changeLog)
@@ -70,8 +74,10 @@ syncRouter.get("/changes", (c) => {
       return { ...row, payload: null, payloadError: true };
     }
   });
+  // Cursor points PAST the last scanned row so the next pull with the
+  // inclusive gte filter starts at the first unseen id with zero overlap.
   const newCursor =
-    windowRows.length > 0 ? windowRows[windowRows.length - 1]!.id : cursor;
+    windowRows.length > 0 ? windowRows[windowRows.length - 1]!.id + 1 : cursor;
   return c.json({ changes, cursor: newCursor });
 });
 

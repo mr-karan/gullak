@@ -120,6 +120,44 @@ test("no key configured = open (dev mode)", async () => {
   expect((await app.request("/v1/transactions")).status).toBe(200);
 });
 
+test("gte cursor: a row at exactly the cursor boundary is returned, not skipped", async () => {
+  const { app } = makeApp();
+  // Push two changes from phoneA. The second row lands at a known id.
+  await push(app, "phoneA", [txn({ ccid: "first" })]);
+  await push(app, "phoneB", [{
+    clientChangeId: "second",
+    resource: "transactions",
+    resourceId: "t2",
+    op: "upsert",
+    payload: { id: "t2", accountId: "a1", amountCents: -3000, date: "2026-06-30", updatedAt: 2000 },
+  }]);
+  // First pull: get ALL rows, note the cursor.
+  type ChangesBody = { changes: { resourceId: string }[]; cursor: number };
+  const firstPull = (await (
+    await app.request("/v1/sync/changes?since=0&clientId=phoneA")
+  ).json()) as ChangesBody;
+  const cursor = firstPull.cursor;
+  expect(cursor).toBeGreaterThan(0);
+  // Second pull with that exact cursor: must return zero rows (no new data).
+  const secondPull = (await (
+    await app.request(`/v1/sync/changes?since=${cursor}&clientId=phoneA`)
+  ).json()) as ChangesBody;
+  expect(secondPull.changes.length).toBe(0);
+  // Now the server writes a new change AFTER the cursor was captured.
+  await push(app, "phoneB", [{
+    clientChangeId: "third",
+    resource: "transactions",
+    resourceId: "t3",
+    op: "upsert",
+    payload: { id: "t3", accountId: "a1", amountCents: -1000, date: "2026-06-30", updatedAt: 3000 },
+  }]);
+  // Third pull at the SAME cursor: the new row MUST appear (gte, not gt).
+  const thirdPull = (await (
+    await app.request(`/v1/sync/changes?since=${cursor}&clientId=phoneA`)
+  ).json()) as ChangesBody;
+  expect(thirdPull.changes.some((c) => c.resourceId === "t3")).toBe(true);
+});
+
 test("a corrupt change_log payload is skipped, not a 500 for the whole pull", async () => {
   const { app, db } = makeApp();
   // A well-formed row plus a hand-corrupted one, simulating a truncated write.
