@@ -41,6 +41,7 @@ ENV NODE_ENV=production \
 COPY --from=install /app/node_modules ./node_modules
 COPY package.json drizzle.config.ts tsconfig.json ./
 COPY src ./src
+COPY scripts ./scripts
 COPY drizzle ./drizzle
 # The built SPA. web.ts resolves webapp/dist relative to WORKDIR=/app, matching
 # the runtime, and reads it at request time via readFileSync / serveStatic (from
