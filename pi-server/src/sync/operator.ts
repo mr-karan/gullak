@@ -698,13 +698,21 @@ export async function prepareWithGuardrails(
     ...ids,
     createdAt: options.createdAt,
   });
+  const preparedSummary = {
+    epochId: prepared.epochId,
+    checkpointId: prepared.checkpointId,
+    projectionHash: prepared.projectionHash,
+    checkpointContentHash: prepared.checkpointContentHash,
+    creationCursor: prepared.creationCursor,
+    eventCount: prepared.eventCount,
+  };
   return {
     action: "prepare",
     dryRun: false,
     backup,
     ids,
     projection,
-    prepared,
+    prepared: preparedSummary,
   };
 }
 

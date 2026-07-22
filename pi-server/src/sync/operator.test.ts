@@ -215,6 +215,7 @@ describe("sync v2 operator guardrails", () => {
         checkpointId: "epoch-operator:genesis",
       },
     });
+    expect(prepared.prepared).not.toHaveProperty("envelope");
     expect(db.select().from(schema.syncEpochs).get()).toMatchObject({
       id: "epoch-operator",
       status: "preparing",
