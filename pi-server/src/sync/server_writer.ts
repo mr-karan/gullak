@@ -211,6 +211,7 @@ export function authorServerCommand(
       .select({
         id: syncEpochs.id,
         schemaVersion: syncEpochs.schemaVersion,
+        status: syncEpochs.status,
       })
       .from(syncEpochs)
       .where(inArray(syncEpochs.status, ["preparing", "active"]))
@@ -305,6 +306,9 @@ export function authorServerCommand(
         resource: mutation.resource,
         entityId: mutation.entityId,
       })),
+      {
+        allowLegacyTransactionTagIds: activeEpoch.status === "preparing",
+      },
     );
 
     const advanced = tx

@@ -62,6 +62,10 @@ export type ProjectionOptions = {
     field: string;
     value: JsonValue;
   }[];
+  /** During the sealed mixed-version drain, legacy v1 relation rows may still
+   * have random physical ids. Their CRDT identity is already the canonical
+   * transaction/tag pair; activation normalizes the physical keys atomically. */
+  allowLegacyTransactionTagIds?: boolean;
 };
 
 const definitions: Record<SyncedResource, ResourceDefinition> = {
@@ -555,7 +559,9 @@ export function materializeChangeTargets(
     materializeEntity(tx, epoch, target.resource, target.entityId);
   }
   recomputeDerivedProjection(tx);
-  validateProjectedState(tx);
+  validateProjectedState(tx, {
+    allowLegacyTransactionTagIds: options.allowLegacyTransactionTagIds,
+  });
   if (reconciledBefore !== null) {
     assertReconciledRowsUnchanged(tx, reconciledBefore);
   }

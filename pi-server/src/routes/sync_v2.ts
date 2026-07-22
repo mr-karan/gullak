@@ -312,6 +312,8 @@ syncV2Router.post("/push", async (c) => {
             materializeChangeTargets(tx, envelope.epoch, envelope.ops, {
               protectReconciled: true,
               ops: envelope.ops,
+              allowLegacyTransactionTagIds:
+                c.get("config").syncV2Mode === "preparing",
             });
             if (c.get("config").syncV2Mode === "preparing") {
               bridgeAcceptedChangeToV1(tx, envelope);

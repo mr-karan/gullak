@@ -15,7 +15,7 @@ import { applySyncChange } from "./store.ts";
 
 const epoch = "active-epoch";
 
-function makeDb() {
+function makeDb(status: "preparing" | "active" = "active") {
   const sqlite = new Database(":memory:");
   const db = drizzle(sqlite, { schema });
   migrate(db, { migrationsFolder: "./drizzle" });
@@ -24,7 +24,7 @@ function makeDb() {
       id: epoch,
       protocol: 2,
       schemaVersion: 1,
-      status: "active",
+      status,
     })
     .run();
   db.insert(schema.syncLocalClocks)
@@ -120,6 +120,68 @@ function storedEnvelope(db: ReturnType<typeof makeDb>["db"], sequence: number) {
 }
 
 describe("trusted server command authoring", () => {
+  test("preparing commands tolerate legacy relation keys until activation", () => {
+    const { db } = makeDb("preparing");
+    db.insert(schema.transactions)
+      .values({ id: "txn-legacy", ...transactionPayload() } as typeof schema.transactions.$inferInsert)
+      .run();
+    db.insert(schema.tags)
+      .values({ id: "tag-legacy", name: "Legacy", createdAt: 1, updatedAt: 1 })
+      .run();
+    db.insert(schema.transactionTags)
+      .values({
+        id: "random-v1-id",
+        transactionId: "txn-legacy",
+        tagId: "tag-legacy",
+        updatedAt: 1,
+      })
+      .run();
+
+    const result = author(db, [
+      {
+        resource: "accounts",
+        entityId: "account-a",
+        op: "upsert",
+        payload: { name: "Renamed during drain" },
+      },
+    ]);
+
+    expect(result.status).toBe("accepted");
+    expect(db.select().from(schema.transactionTags).get()?.id).toBe(
+      "random-v1-id",
+    );
+  });
+
+  test("active commands reject legacy relation keys", () => {
+    const { db } = makeDb("active");
+    db.insert(schema.transactions)
+      .values({ id: "txn-legacy", ...transactionPayload() } as typeof schema.transactions.$inferInsert)
+      .run();
+    db.insert(schema.tags)
+      .values({ id: "tag-legacy", name: "Legacy", createdAt: 1, updatedAt: 1 })
+      .run();
+    db.insert(schema.transactionTags)
+      .values({
+        id: "random-v1-id",
+        transactionId: "txn-legacy",
+        tagId: "tag-legacy",
+        updatedAt: 1,
+      })
+      .run();
+
+    expect(() =>
+      author(db, [
+        {
+          resource: "accounts",
+          entityId: "account-a",
+          op: "upsert",
+          payload: { name: "Must fail" },
+        },
+      ]),
+    ).toThrow(ProjectionValidationError);
+    expect(db.select().from(schema.syncChanges).all()).toEqual([]);
+  });
+
   test("a split parent is replayable without an authored amount fact", () => {
     const { db } = makeDb();
     const structural = transactionPayload({
