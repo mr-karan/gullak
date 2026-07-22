@@ -204,6 +204,7 @@ describe("sync v2 operator guardrails", () => {
       ids: { epochId: "epoch-operator" },
       backup: { verified: true },
     });
+    expect(dryRun.projection).not.toHaveProperty("canonicalJson");
     expect(db.select().from(schema.syncEpochs).all()).toEqual([]);
 
     const prepared = await prepareWithGuardrails(db, options);

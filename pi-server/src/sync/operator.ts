@@ -684,9 +684,13 @@ export async function prepareWithGuardrails(
       `prepare refused: writable epoch already exists (${writable.map((row) => `${row.id}:${row.status}`).join(", ")})`,
     );
   }
-  const projection = syncedProjectionDigest(db, {
+  const projectionDigest = syncedProjectionDigest(db, {
     allowLegacyTransactionTagIds: true,
   });
+  const projection = {
+    hash: projectionDigest.hash,
+    entityCounts: projectionDigest.entityCounts,
+  };
   if (options.dryRun === true) {
     return { action: "prepare", dryRun: true, backup, ids, projection };
   }
