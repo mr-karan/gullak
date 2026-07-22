@@ -193,7 +193,15 @@ syncRouter.get("/changes", (c) => {
   const newCursor =
     windowRows.length > 0 ? windowRows[windowRows.length - 1]!.id : cursor;
   if (callerId) observeLegacyClient(db, callerId, { pullCursor: newCursor });
-  return c.json({ changes, cursor: newCursor });
+  return c.json({
+    changes,
+    cursor: newCursor,
+    // This describes the unfiltered scan window, not `changes`. A page can
+    // contain fewer than `limit` visible rows (or none) after self-origin,
+    // non-replicated-resource, and corrupt-payload filtering while more
+    // cursor-domain rows still exist.
+    hasMore: windowRows.length === limit,
+  });
 });
 
 // Per-resource handlers used by /v1/sync/push to actually apply

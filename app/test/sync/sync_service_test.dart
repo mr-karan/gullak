@@ -229,6 +229,50 @@ void main() {
     expect(row?.name, 'Pulled');
   });
 
+  test('pullChanges keeps scanning after a filtered short page', () async {
+    dio.pullPages = [
+      {'changes': <Object?>[], 'cursor': 500, 'hasMore': true},
+      {
+        'changes': [
+          {
+            'resource': 'accounts',
+            'resourceId': 'a-late',
+            'op': 'upsert',
+            'at': 20,
+            'payload': {
+              'id': 'a-late',
+              'name': 'Late row',
+              'kind': 'checking',
+              'openingBalanceCents': 0,
+              'onBudget': true,
+              'archived': false,
+              'sortOrder': 0,
+              'createdAt': 20,
+              'updatedAt': 20,
+            },
+          },
+        ],
+        'cursor': 900,
+        'hasMore': false,
+      },
+      // Inclusive cursor boundary: no progress means the client is at head.
+      {'changes': <Object?>[], 'cursor': 900, 'hasMore': false},
+    ];
+
+    final pulled = await sync.pullChanges();
+
+    expect(pulled, 1);
+    expect(prefs.syncCursor, 900);
+    expect(
+      dio.gets.where((call) => call.path.endsWith('/changes')),
+      hasLength(3),
+    );
+    final row = await (db.select(
+      db.accounts,
+    )..where((table) => table.id.equals('a-late'))).getSingleOrNull();
+    expect(row?.name, 'Late row');
+  });
+
   test('concurrent syncOnce callers share one reconciliation round', () async {
     final blockingDio = _BlockingCapabilitiesDio();
     sync = SyncService(db, secure, prefs, RemoteApplier(db), dio: blockingDio);

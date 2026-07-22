@@ -151,6 +151,39 @@ test("changes excludes the caller's own rows but returns others'", async () => {
   expect(other.changes.some((c) => c.resourceId === "t1")).toBe(true);
 });
 
+test("pull pagination reports the unfiltered scan window", async () => {
+  const { app, db } = makeApp();
+  db.insert(schema.changeLog)
+    .values([
+      {
+        clientId: "phoneA",
+        clientChangeId: "self-1",
+        resource: "accounts",
+        resourceId: "a1",
+        op: "upsert",
+        payload: "{}",
+      },
+      {
+        clientId: "phoneA",
+        clientChangeId: "self-2",
+        resource: "accounts",
+        resourceId: "a2",
+        op: "upsert",
+        payload: "{}",
+      },
+    ])
+    .run();
+
+  const response = await app.request(
+    "/v1/sync/changes?since=0&limit=2&clientId=phoneA",
+  );
+  expect(await response.json()).toMatchObject({
+    changes: [],
+    cursor: 2,
+    hasMore: true,
+  });
+});
+
 test("auth gate: required key rejects missing/wrong, exempts health", async () => {
   const { app } = makeApp("secret");
   expect((await app.request("/v1/transactions")).status).toBe(401);

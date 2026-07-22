@@ -435,8 +435,17 @@ class SyncService {
       if (data is! Map) break;
       final changes = data['changes'];
       final nextCursor = (data['cursor'] as num?)?.toInt() ?? cursor;
-      if (changes is! List || changes.isEmpty) {
-        if (nextCursor != cursor) await _prefs.setSyncCursor(nextCursor);
+      if (changes is! List) break;
+      if (nextCursor < cursor) {
+        throw StateError(
+          'Sync server cursor regressed from $cursor to $nextCursor.',
+        );
+      }
+      if (changes.isEmpty) {
+        if (nextCursor > cursor) {
+          await _prefs.setSyncCursor(nextCursor);
+          continue;
+        }
         break;
       }
       var allApplied = true;
@@ -456,7 +465,12 @@ class SyncService {
         break;
       }
       await _prefs.setSyncCursor(nextCursor);
-      if (changes.length < 500) break;
+      // Terminate on cursor progress, never on visible row count. The server
+      // scans the cursor domain before filtering self-originated, unsupported,
+      // or corrupt rows, so a non-final 500-row window may expose <500 changes
+      // (including zero). An extra inclusive-boundary request at the head is
+      // harmless and makes this safe with servers predating `hasMore`.
+      if (nextCursor == cursor) break;
     }
     return pulled;
   }
