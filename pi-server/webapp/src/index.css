@@ -310,6 +310,15 @@
       var(--card);
   }
 
+  .landing-grid {
+    background-image:
+      linear-gradient(to right, color-mix(in oklch, var(--rule) 55%, transparent) 1px, transparent 1px),
+      linear-gradient(to bottom, color-mix(in oklch, var(--rule) 55%, transparent) 1px, transparent 1px),
+      radial-gradient(circle at 76% 38%, color-mix(in oklch, var(--brand) 14%, transparent), transparent 34%);
+    background-size: 48px 48px, 48px 48px, 100% 100%;
+    mask-image: linear-gradient(to bottom, black 15%, transparent 95%);
+  }
+
   /* Staggered mount reveal: a quiet fade + 8px rise, ease-out, no bounce. */
   @keyframes vault-reveal {
     from {

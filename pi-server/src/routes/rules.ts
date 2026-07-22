@@ -5,6 +5,7 @@ import { z } from "zod";
 import type { AppEnv } from "../app.ts";
 import { rules, type Rule } from "../db/schema.ts";
 import { newId, nowMs } from "../repos/changelog.ts";
+import { ruleActionsSchema, ruleTriggerSchema } from "../rules/schema.ts";
 
 // Rules are SERVER-ONLY config (like M5 holdings/goals): NO recordChange, never
 // synced to the phone. The web app is their only editor.
@@ -14,40 +15,14 @@ import { newId, nowMs } from "../repos/changelog.ts";
 // envelopes with zod, stringifies them into the text columns, and parses them
 // back on read so callers always see objects — never JSON strings.
 
-const conditionSchema = z.object({
-  field: z.string().min(1).max(64),
-  op: z.string().min(1).max(64),
-  value: z.unknown().optional(),
-});
-
-const triggerSchema = z.object({
-  match: z.enum(["all", "any"]).default("all"),
-  conditions: z.array(conditionSchema).default([]),
-});
-
-const setNotesValue = z.object({
-  mode: z.enum(["replace", "append", "prepend"]),
-  text: z.string().max(2000),
-});
-
-const actionSchema = z.discriminatedUnion("type", [
-  z.object({ type: z.literal("set_payee"), value: z.string().min(1).max(200) }),
-  z.object({ type: z.literal("set_category"), value: z.string().min(1).max(64) }),
-  z.object({ type: z.literal("set_notes"), value: setNotesValue }),
-]);
-
-const actionsSchema = z.object({
-  actions: z.array(actionSchema).default([]),
-});
-
 const createSchema = z.object({
   name: z.string().min(1).max(200),
   enabled: z.boolean().default(true),
   stage: z.enum(["pre", "main", "post"]).default("main"),
   priority: z.number().int().default(100),
   triggerType: z.enum(["user", "learned"]).default("user"),
-  triggerPayload: triggerSchema,
-  actionPayload: actionsSchema,
+  triggerPayload: ruleTriggerSchema,
+  actionPayload: ruleActionsSchema,
 });
 
 const patchSchema = createSchema.partial();
@@ -55,20 +30,27 @@ const patchSchema = createSchema.partial();
 /** Row → API shape. Parses the JSON envelopes back into objects and lifts
     `stage` to the top level for convenient rendering (badge/ordering). */
 function serialize(row: Rule) {
-  let triggerPayload: z.infer<typeof triggerSchema> = {
+  let triggerPayload: z.infer<typeof ruleTriggerSchema> = {
     match: "all",
-    conditions: [],
+    conditions: [{ field: "payee", op: "is", value: "invalid" }],
   };
-  let actionPayload: z.infer<typeof actionsSchema> = { actions: [] };
+  let actionPayload: z.infer<typeof ruleActionsSchema> = {
+    actions: [{ type: "set_notes", value: { mode: "replace", text: "invalid" } }],
+  };
+  const validationErrors: string[] = [];
   try {
-    triggerPayload = triggerSchema.parse(JSON.parse(row.triggerPayload));
+    const parsed = ruleTriggerSchema.safeParse(JSON.parse(row.triggerPayload));
+    if (parsed.success) triggerPayload = parsed.data;
+    else validationErrors.push(`trigger: ${parsed.error.issues.map((issue) => issue.message).join(", ")}`);
   } catch {
-    // Leave the safe default; a corrupt row shouldn't 500 the whole list.
+    validationErrors.push("trigger: invalid JSON");
   }
   try {
-    actionPayload = actionsSchema.parse(JSON.parse(row.actionPayload));
+    const parsed = ruleActionsSchema.safeParse(JSON.parse(row.actionPayload));
+    if (parsed.success) actionPayload = parsed.data;
+    else validationErrors.push(`actions: ${parsed.error.issues.map((issue) => issue.message).join(", ")}`);
   } catch {
-    // Same — degrade to an empty action set rather than throwing.
+    validationErrors.push("actions: invalid JSON");
   }
   return {
     id: row.id,
@@ -79,6 +61,8 @@ function serialize(row: Rule) {
     triggerType: row.triggerType,
     triggerPayload,
     actionPayload,
+    valid: validationErrors.length === 0,
+    validationErrors,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };

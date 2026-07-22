@@ -80,7 +80,7 @@ export const smsRouter = new Hono<AppEnv>();
 // --- POST /v1/sms/bulk-ingest -----------------------------------------------
 // Phone pushes confirmed SMS bodies up to the server. Idempotent on `id`,
 // safe to retry. The body is kept server-side so the LLM cleanup job below
-// can re-parse and propagate fixes back to the phone via change_log.
+// can re-parse and propagate fixes back to the phone via causal events.
 
 const ingestItem = z.object({
   id: z.string().min(1),
@@ -171,6 +171,7 @@ smsRouter.post("/ingest", async (c) => {
   // map the rule outputs (payee, category) back onto the candidate. SmsCandidate
   // has no notes field, so set_notes actions have nowhere to land on this path.
   const ruled = runRules(db, {
+    smsBody: body,
     payeeName: result.candidate.payee,
     categoryId: result.candidate.categoryId,
     amountCents: result.candidate.isIncome
@@ -180,6 +181,7 @@ smsRouter.post("/ingest", async (c) => {
   });
   result.candidate.payee = ruled.payeeName ?? null;
   result.candidate.categoryId = ruled.categoryId ?? null;
+  const ruledAccountId = ruled.accountId ?? null;
 
   const cand = result.candidate;
   // Signed amount: candidate.amountCents is a magnitude + isIncome flag; the
@@ -203,7 +205,11 @@ smsRouter.post("/ingest", async (c) => {
     .select({ id: accounts.id, name: accounts.name })
     .from(accounts)
     .all();
-  const accountId = resolveAccountId(knownAccounts, cand.accountHint);
+  const ruledAccount = ruledAccountId
+    ? knownAccounts.find((account) => account.id === ruledAccountId)
+    : undefined;
+  if (ruledAccount) cand.accountHint = ruledAccount.name;
+  const accountId = ruledAccount?.id ?? resolveAccountId(knownAccounts, cand.accountHint);
 
   if (accountId) {
     // Single indexed lookup (idx_tx_account_date): same account, top-level rows

@@ -310,7 +310,7 @@ export function computeBudgetPlan(
 
 /// Upsert the assigned amount (budgets.targetCents) for a (categoryId, month).
 /// Finds an existing row by (categoryId, month) — not by id — so re-assigning
-/// the same envelope never creates a duplicate row. Emits a change_log upsert
+/// the same envelope never creates a duplicate row. Emits causal field ops
 /// so the mutation syncs to the phone. Runs in one transaction.
 export function assignBudget(
   db: Db,

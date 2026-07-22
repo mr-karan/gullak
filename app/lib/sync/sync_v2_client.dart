@@ -56,7 +56,6 @@ final class SyncV2Client {
        _uuid = uuid;
 
   static const _actorKvKey = 'sync.v2.actorId';
-  static const legacyDrainEpochKvKey = 'sync.v2.legacyDrainEpoch';
   static const _batchSize = 200;
 
   final AppDatabase _db;
@@ -69,14 +68,7 @@ final class SyncV2Client {
     required String baseUrl,
     required String epoch,
     String? apiKey,
-    String? legacyClientId,
-    int? legacyV1Cursor,
   }) async {
-    if ((legacyClientId == null) != (legacyV1Cursor == null)) {
-      throw ArgumentError(
-        'legacyClientId and legacyV1Cursor must be supplied together',
-      );
-    }
     var actorId = await _actorId();
     var token = await _secure.readSyncActorToken(actorId);
     if (token == null) {
@@ -84,7 +76,6 @@ final class SyncV2Client {
         baseUrl: baseUrl,
         apiKey: apiKey,
         actorId: actorId,
-        legacyClientId: legacyClientId,
       );
       actorId = registered.actorId;
       token = registered.token;
@@ -110,7 +101,6 @@ final class SyncV2Client {
         baseUrl: baseUrl,
         apiKey: apiKey,
         actorId: actorId,
-        legacyClientId: legacyClientId,
       );
       actorId = registered.actorId;
       token = registered.token;
@@ -124,6 +114,7 @@ final class SyncV2Client {
         epoch: epoch,
       );
     }
+    await _replayPrebootstrapCommands();
 
     final push = await _pushPending(
       baseUrl: baseUrl,
@@ -172,18 +163,6 @@ final class SyncV2Client {
       actorToken: token,
       state: state,
     );
-    if (legacyClientId != null && legacyV1Cursor != null) {
-      await _attestLegacyDrain(
-        baseUrl: baseUrl,
-        apiKey: apiKey,
-        actorId: actorId,
-        actorToken: token,
-        epoch: epoch,
-        legacyClientId: legacyClientId,
-        v1Cursor: legacyV1Cursor,
-      );
-      await _db.kvSet(legacyDrainEpochKvKey, epoch);
-    }
     return SyncV2Stats(
       pushed: push.accepted,
       pulled: pull.accepted,
@@ -223,7 +202,6 @@ final class SyncV2Client {
     required String baseUrl,
     required String? apiKey,
     required String actorId,
-    String? legacyClientId,
   }) async {
     var candidate = actorId;
     for (var attempt = 0; attempt < 2; attempt++) {
@@ -234,7 +212,6 @@ final class SyncV2Client {
             'actorId': candidate,
             'appVersion': buildVersion,
             'platform': Platform.operatingSystem,
-            'legacyClientId': ?legacyClientId,
           },
           options: _options(apiKey: apiKey),
         );
@@ -487,28 +464,34 @@ final class SyncV2Client {
     );
   }
 
-  Future<void> _attestLegacyDrain({
-    required String baseUrl,
-    required String? apiKey,
-    required String actorId,
-    required String actorToken,
-    required String epoch,
-    required String legacyClientId,
-    required int v1Cursor,
-  }) async {
-    await _dio.post<Object?>(
-      _join(baseUrl, '/v1/sync/v2/legacy-drain'),
-      data: {
-        'actorId': actorId,
-        'appVersion': buildVersion,
-        'platform': Platform.operatingSystem,
-        'epoch': epoch,
-        'legacyClientId': legacyClientId,
-        'v1Cursor': v1Cursor,
-        'pendingOutboxCount': 0,
-      },
-      options: _options(apiKey: apiKey, actorToken: actorToken),
-    );
+  Future<void> _replayPrebootstrapCommands() async {
+    while (true) {
+      final row =
+          await (_db.select(_db.syncPendingCommands)
+                ..orderBy([(item) => OrderingTerm.asc(item.id)])
+                ..limit(1))
+              .getSingleOrNull();
+      if (row == null) return;
+      final raw = jsonDecode(row.opsJson);
+      if (raw is! List || raw.isEmpty) {
+        throw const SyncV2Exception(
+          'A pre-bootstrap command has invalid operations.',
+          code: 'invalid_local_command',
+        );
+      }
+      final ops = raw
+          .map(
+            (value) =>
+                AssignOp.fromJson(Map<String, Object?>.from(value as Map)),
+          )
+          .toList(growable: false);
+      await _db.transaction(() async {
+        await _store.authorLocalChange(ops: ops);
+        await (_db.delete(
+          _db.syncPendingCommands,
+        )..where((item) => item.id.equals(row.id))).go();
+      });
+    }
   }
 
   Future<void> _ack({

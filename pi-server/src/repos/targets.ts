@@ -6,7 +6,7 @@ import type { CategoryTarget } from "../db/schema.ts";
 import { nowMs } from "./changelog.ts";
 
 // Per-category budget TARGETS (YNAB "targets"). Server-only config: like
-// goals/holdings these never get a change_log row and aren't in the Drift
+// goals/holdings these never get a sync event and aren't in the Drift
 // mirror. One target per category → categoryId is the primary key, so an
 // upsert replaces the existing row rather than duplicating it.
 

@@ -5,7 +5,6 @@ import { z } from "zod";
 // never used at all. Dropping both deps removes an unmaintained agent framework
 // from the supply chain for one type. Keep in sync if a consumer ever needs it.
 type ThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh";
-export type SyncV2Mode = "disabled" | "preparing" | "active";
 
 function getEnv(name: string, fallback: string): string {
   const value = process.env[name];
@@ -151,9 +150,6 @@ export interface AppConfig {
   rateLimit: { aiPerMinute: number; webhookPerMinute: number };
   /** Trust X-Forwarded-For for rate-limit keying (set only behind a proxy). */
   trustProxy: boolean;
-  /** CRDT rollout gate. `preparing` permits explicit shadow/bootstrap work but
-   * keeps protocol-v1 authoritative; `active` makes v2 financial sync live. */
-  syncV2Mode: SyncV2Mode;
   /** True when a real model key is configured; /v1/ai/* 503s otherwise. */
   ai: { enabled: boolean };
   whatsappBridgeUrl: string;
@@ -165,8 +161,7 @@ export interface AppConfig {
     webAppUrl?: string;
     /** Shared secret matching GULLAK_SECRET in the Apps Script. */
     secret?: string;
-    /** Optional periodic push cadence in minutes; 0 disables the interval
-     *  (the push also fires after each /v1/sync/push). */
+    /** Optional periodic push cadence in minutes; 0 disables the interval. */
     syncIntervalMinutes: number;
   };
   /** Actual Budget export destination (opt-in). Enabled when serverUrl +
@@ -247,9 +242,6 @@ export function loadConfig(): AppConfig {
   const host = getEnv("GULLAK_HOST", "127.0.0.1");
   const httpApiKey = getOptionalEnv("GULLAK_HTTP_API_KEY");
   const requireAuth = getBooleanEnv("GULLAK_REQUIRE_AUTH", false);
-  const syncV2Mode = z
-    .enum(["disabled", "preparing", "active"])
-    .parse(getEnv("GULLAK_SYNC_V2_MODE", "disabled"));
 
   // Fail fast on malformed critical values.
   const parsed = criticalSchema.safeParse({
@@ -293,7 +285,6 @@ export function loadConfig(): AppConfig {
       webhookPerMinute: getIntEnv("GULLAK_WHATSAPP_RATE_PER_MIN", 60),
     },
     trustProxy: getBooleanEnv("GULLAK_TRUST_PROXY", false),
-    syncV2Mode,
     ai: { enabled: Boolean(realModelApiKey) },
     whatsappBridgeUrl: getEnv(
       "GULLAK_WHATSAPP_BRIDGE_URL",
@@ -330,7 +321,6 @@ export function summarizeConfig(config: AppConfig): Record<string, unknown> {
     dbPath: config.dbPath.replace(/^.*\//, ".../"),
     timezone: config.timezone,
     auth: config.httpApiKey ? "required" : "OPEN (no key)",
-    syncV2Mode: config.syncV2Mode,
     ai: config.ai.enabled
       ? { enabled: true, provider: config.modelBaseUrl, model: config.modelId }
       : { enabled: false },

@@ -56,12 +56,8 @@ class Prefs {
   bool get smsEnabled => _inner.getBool(_kSmsEnabled) ?? false;
   Future<void> setSmsEnabled(bool v) => _inner.setBool(_kSmsEnabled, v);
 
-  static const _kSyncCursor = 'gullak.sync.cursor';
   static const _kSyncLastAt = 'gullak.sync.lastAt';
   static const _kSyncQuarantined = 'gullak.sync.quarantined';
-
-  int get syncCursor => _inner.getInt(_kSyncCursor) ?? 0;
-  Future<void> setSyncCursor(int v) => _inner.setInt(_kSyncCursor, v);
 
   int? get syncLastAt => _inner.getInt(_kSyncLastAt);
   Future<void> setSyncLastAt(int v) => _inner.setInt(_kSyncLastAt, v);

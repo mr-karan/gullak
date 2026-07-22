@@ -26,7 +26,6 @@ import type {
   JsonValue,
   RegisterState,
 } from "./crdt.ts";
-import { seedLegacyCutoverState } from "./legacy.ts";
 import {
   candidateFor,
   mergeCandidate,
@@ -401,7 +400,7 @@ function snapshotProjection(tx: DbOrTx): ProjectionSnapshot {
  */
 export function syncedProjectionDigest(
   db: DbOrTx,
-  options: { allowLegacyTransactionTagIds?: boolean } = {},
+  options: { allowNonCanonicalTransactionTagIds?: boolean } = {},
 ): SyncedProjectionDigest {
   validateProjectedState(db, options);
   return rawSyncedProjectionDigest(db);
@@ -1065,7 +1064,7 @@ export function auditEpochIntegrity(
 
     try {
       validateProjectedState(db, {
-        allowLegacyTransactionTagIds: epoch?.status === "preparing",
+        allowNonCanonicalTransactionTagIds: epoch?.status === "preparing",
       });
       relationalProjectionHash = snapshotProjection(db).hash;
     } catch (error) {
@@ -1129,8 +1128,7 @@ export function prepareGenesis(
   const createdAt = requireTimestamp(options.createdAt);
 
   return db.transaction((tx) => {
-    validateProjectedState(tx, { allowLegacyTransactionTagIds: true });
-    seedLegacyCutoverState(tx);
+    validateProjectedState(tx, { allowNonCanonicalTransactionTagIds: true });
     const before = snapshotProjection(tx);
     tx.insert(syncEpochs)
       .values({
@@ -1170,6 +1168,7 @@ export function prepareGenesis(
       const applied = applySyncChange(tx, envelope, {
         source: "genesis",
         acceptedAt: createdAt,
+        allowPreparing: true,
       });
       if (applied.status !== "accepted") {
         throw new GenesisValidationError(

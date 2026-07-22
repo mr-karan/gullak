@@ -12,7 +12,7 @@ import 'package:gullak/features/recurrences/data/recurrence_repository.dart';
 import 'package:gullak/features/rules/data/rule_repository.dart';
 import 'package:gullak/features/tags/data/tag_repository.dart';
 import 'package:gullak/features/transactions/data/transaction_repository.dart';
-import 'package:gullak/sync/changelog_writer.dart';
+import 'package:gullak/sync/sync_writer.dart';
 import 'package:gullak/sync/crdt.dart';
 import 'package:gullak/sync/crdt_resources.dart';
 import 'package:gullak/sync/crdt_store.dart';
@@ -20,7 +20,7 @@ import 'package:gullak/sync/crdt_store.dart';
 void main() {
   late AppDatabase db;
   late CrdtStore store;
-  late ChangeLogWriter writer;
+  late SyncWriter writer;
   late AccountRepository accounts;
   late TransactionRepository transactions;
   late String accountId;
@@ -29,7 +29,7 @@ void main() {
     db = AppDatabase.forTesting(NativeDatabase.memory());
     store = CrdtStore(db, nowMs: () => 1700000000000);
     await store.bootstrapEmptyReplica(epoch: 'epoch', actorId: 'phone');
-    writer = ChangeLogWriter(db, crdtStore: store);
+    writer = SyncWriter(db, crdtStore: store);
     accounts = AccountRepository(db, changes: writer);
     transactions = TransactionRepository(db, changes: writer);
     accountId = await accounts.create(name: 'Bank', kind: AccountKind.savings);
@@ -103,7 +103,7 @@ void main() {
           if (point == 'local.after_change') throw StateError('power loss');
         },
       );
-      final failingWriter = ChangeLogWriter(db, crdtStore: failingStore);
+      final failingWriter = SyncWriter(db, crdtStore: failingStore);
       final failingRepo = TransactionRepository(db, changes: failingWriter);
       final before = await db.select(db.syncChanges).get();
 
@@ -284,7 +284,7 @@ void main() {
     );
     await emitsOne(() => recurrences.delete(recurrenceId));
     await emitsOne(() => categories.deleteCategory(categoryId));
-    expect(await db.select(db.changeLog).get(), isEmpty);
+    expect(await db.select(db.syncPendingCommands).get(), isEmpty);
   });
 
   test('rules and rule matches remain local-only', () async {
@@ -303,22 +303,33 @@ void main() {
       outcome: 'matched',
     );
     expect((await db.select(db.syncChanges).get()).length, before.length);
-    expect(await db.select(db.changeLog).get(), isEmpty);
+    expect(await db.select(db.syncPendingCommands).get(), isEmpty);
   });
 
-  test('pre-bootstrap command atomically retains the v1 outbox', () async {
+  test('pre-bootstrap command atomically retains field intent', () async {
     await db.close();
     final legacyDb = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(legacyDb.close);
-    final legacyWriter = ChangeLogWriter(legacyDb);
-    final legacyAccounts = AccountRepository(legacyDb, changes: legacyWriter);
+    final offlineWriter = SyncWriter(legacyDb);
+    final legacyAccounts = AccountRepository(legacyDb, changes: offlineWriter);
 
     await legacyAccounts.create(name: 'Legacy', kind: AccountKind.cash);
 
     expect(await legacyDb.select(legacyDb.accounts).get(), hasLength(1));
-    final log = await legacyDb.select(legacyDb.changeLog).getSingle();
-    expect(log.resource, 'accounts');
-    expect(log.op, 'upsert');
+    final pending = await legacyDb
+        .select(legacyDb.syncPendingCommands)
+        .getSingle();
+    final ops = jsonDecode(pending.opsJson) as List;
+    expect(
+      ops,
+      contains(
+        predicate((Object? value) => (value as Map)['field'] == r'$exists'),
+      ),
+    );
+    expect(
+      ops,
+      contains(predicate((Object? value) => (value as Map)['field'] == 'name')),
+    );
     expect(await legacyDb.select(legacyDb.syncChanges).get(), isEmpty);
   });
 }

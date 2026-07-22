@@ -9,16 +9,16 @@ All notable changes to Gullak are documented here.
 
 - **Causal CRDT sync protocol v2.** Financial edits are immutable field-level
   events with exact causal context, deterministic multi-value conflict
-  projection, authenticated actors, verified checkpoints, explicit quarantine,
-  and guarded rollout tooling. Wall clocks and full-row LWW snapshots no longer
+  projection, authenticated actors, verified checkpoints, and explicit
+  quarantine. Wall clocks and full-row LWW snapshots no longer
   decide authoritative state. The Flutter app, sync server, web routes, agent,
   SMS pipeline, recurrences, transfers, splits, tags, budgets, and backup import
   all author through the same atomic command path.
 - **Sync recovery and observability.** Clients report duplicates, conflicts,
   quarantine, and protocol version; rebuild only from a content- and
   projection-hash-verified checkpoint; and acknowledge the exact integrated
-  frontier. Operators can audit, prepare, and activate an epoch only with a
-  verified backup, invariant-clean fold, and exact live-client acknowledgements.
+  frontier. Operators can audit the active epoch and retire replicas only with
+  a verified backup and invariant-clean fold.
 
 - **iOS SMS auto-capture** via `POST /v1/sms/ingest`. iOS has no SMS-read API,
   so a Shortcuts personal automation forwards bank/UPI messages to the server,

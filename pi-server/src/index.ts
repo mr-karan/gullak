@@ -41,7 +41,7 @@ if (!config.whatsappApiKey) {
 
 // Optional periodic push of categorised expenses to the Apps Script web app.
 // Disabled unless GULLAK_SHEETS_SYNC_INTERVAL_MIN > 0 and the web-app URL +
-// secret are set. The push also fires after each /v1/sync/push.
+// secret are set.
 if (config.sheets.syncIntervalMinutes > 0 && sheetsEnabled(config)) {
   const everyMs = config.sheets.syncIntervalMinutes * 60_000;
   setInterval(() => {

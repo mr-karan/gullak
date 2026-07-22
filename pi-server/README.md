@@ -35,7 +35,8 @@ GET    /v1/health                       (no auth)
 GET/POST/PATCH/DELETE  /v1/accounts /v1/category-groups /v1/categories
                        /v1/payees /v1/transactions /v1/budgets /v1/recurrences
 GET    /v1/summary?startDate=&endDate=&accountId=
-GET    /v1/sync/changes?since=&limit=&clientId=      POST /v1/sync/push
+GET    /v1/sync/v2/capabilities                     POST /v1/sync/v2/register
+GET    /v1/sync/v2/bootstrap /changes               POST /v1/sync/v2/push /ack
 POST   /v1/messages                     (agent; may write transactions)
 POST   /v1/whatsapp/webhook             (no auth; bridge → server)
 POST   /v1/ai/sms/parse                 (draft-only; 503 if no model key)
@@ -59,12 +60,13 @@ exports (Google Sheets + Actual Budget).
 
 ## Sync model
 
-Last-write-wins by `updatedAt`, enforced in SQL on push (an upsert wins only when
-`incoming.updated_at >= stored`; a delete only when its tombstone is newer).
-Retries are idempotent via a unique `(client_id, client_change_id)`. The app
-pushes its local change-log, then pulls server changes (filtering out its own)
-and applies them. See [../docs/architecture.md](../docs/architecture.md) for the
-end-to-end picture.
+Every command authors an immutable causal event containing only the fields it
+changed. Replicas merge the same event union into per-field multi-value
+registers; Lamport/actor/sequence ordering chooses a deterministic visible value
+only for concurrent candidates. Wall clocks never decide correctness. Event
+dots make retries idempotent, checkpoints provide verified bootstrap/recovery,
+and malformed events are quarantined explicitly. See
+[../docs/sync-crdt-v2.md](../docs/sync-crdt-v2.md).
 
 ## Exports (destinations)
 

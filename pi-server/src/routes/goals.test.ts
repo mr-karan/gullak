@@ -91,8 +91,8 @@ test("DELETE goal is blocked with 409 while holdings are mapped", async () => {
   expect(db.select().from(schema.goals).all()).toHaveLength(0);
 });
 
-test("goals never write a change_log row (server-only)", async () => {
+test("goals never write a sync event (server-only)", async () => {
   const { app, db } = makeApp();
   await createGoal(app, { name: "X", targetCents: 1 });
-  expect(db.select().from(schema.changeLog).all()).toHaveLength(0);
+  expect(db.select().from(schema.syncChanges).all()).toHaveLength(0);
 });

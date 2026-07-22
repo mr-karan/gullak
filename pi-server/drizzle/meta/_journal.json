@@ -148,6 +148,13 @@
       "when": 1784705049926,
       "tag": "0020_outgoing_nightcrawler",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "6",
+      "when": 1784731634785,
+      "tag": "0021_lovely_scrambler",
+      "breakpoints": true
     }
   ]
 }

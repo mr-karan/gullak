@@ -12,7 +12,7 @@ import '../../core/notification_service.dart';
 import '../../core/secure_store.dart';
 import '../../features/payees/data/payee_repository.dart';
 import '../../features/transactions/data/transaction_repository.dart';
-import '../../sync/changelog_writer.dart';
+import '../../sync/sync_writer.dart';
 import '../db/database.dart';
 import 'sms_background_parse_worker.dart';
 
@@ -226,7 +226,7 @@ class SmsEnrichmentWorker {
 
     if (!wantsCategory && !wantsPayee && !wantsNote) return;
 
-    final changes = ChangeLogWriter(db);
+    final changes = SyncWriter(db);
     await changes.command(() async {
       String? resolvedPayeeId;
       if (wantsPayee) {

@@ -57,13 +57,12 @@ final class _CommandCollector {
 
 /// Durable outbox boundary for one local domain command.
 ///
-/// Repositories must execute mutations with [command]. Before a replica has a
-/// v2 epoch, the command atomically writes the legacy v1 snapshot outbox. Once
-/// bootstrapped, it instead authors one causal v2 event containing only fields
-/// whose visible register value changed. Domain rows and their outbox fact
-/// therefore commit or roll back together.
-class ChangeLogWriter {
-  ChangeLogWriter(this._db, {SyncScheduler? scheduler, CrdtStore? crdtStore})
+/// Repositories must execute mutations with [command]. Before a replica joins
+/// an epoch, field-level intent is stored in [SyncPendingCommands]. Once
+/// bootstrapped, one causal event is authored directly. Domain rows and their
+/// durable intent therefore commit or roll back together.
+class SyncWriter {
+  SyncWriter(this._db, {SyncScheduler? scheduler, CrdtStore? crdtStore})
     : _scheduler = scheduler,
       _crdtStore = crdtStore ?? CrdtStore(_db);
 
@@ -74,8 +73,8 @@ class ChangeLogWriter {
   final _collectorKey = Object();
 
   /// Runs one user/domain action in one database transaction and emits exactly
-  /// one v2 envelope (or its v1 compatibility rows). Nested commands join the
-  /// outer command, which makes helpers safe to compose.
+  /// one causal envelope. Nested commands join the outer command, which makes
+  /// helpers safe to compose.
   Future<T> command<T>(Future<T> Function() callback) async {
     final existing = Zone.current[_collectorKey] as _CommandCollector?;
     if (existing != null) return callback();
@@ -121,7 +120,7 @@ class ChangeLogWriter {
     final collector = Zone.current[_collectorKey] as _CommandCollector?;
     if (collector == null) {
       throw StateError(
-        'sync mutations must be recorded inside ChangeLogWriter.command',
+        'sync mutations must be recorded inside SyncWriter.command',
       );
     }
     return collector;
@@ -140,7 +139,7 @@ class ChangeLogWriter {
     )..where((row) => row.id.equals(1))).getSingleOrNull();
     final epoch = state?.epoch;
     if (epoch == null) {
-      await _flushLegacy(collector.mutations.values);
+      await _flushPrebootstrap(collector.mutations.values);
       return;
     }
 
@@ -151,26 +150,93 @@ class ChangeLogWriter {
     if (ops.isNotEmpty) await _crdtStore.authorLocalChange(ops: ops);
   }
 
-  Future<void> _flushLegacy(Iterable<_PendingMutation> mutations) async {
-    final now = DateTime.now().millisecondsSinceEpoch;
+  Future<void> _flushPrebootstrap(Iterable<_PendingMutation> mutations) async {
+    final ops = <AssignOp>[];
     for (final mutation in mutations) {
-      await _db
-          .into(_db.changeLog)
-          .insert(
-            ChangeLogCompanion.insert(
-              at: now,
-              clientChangeId: Value(_uuid.v4()),
-              resource: mutation.resource,
-              resourceId: mutation.id,
-              op: mutation.deleted ? 'delete' : 'upsert',
-              payload: Value(
-                jsonEncode(
-                  mutation.deleted ? {'updatedAt': now} : mutation.payload,
-                ),
-              ),
-            ),
-          );
+      ops.addAll(_prebootstrapOps(mutation));
     }
+    if (ops.isEmpty) return;
+    await _db
+        .into(_db.syncPendingCommands)
+        .insert(
+          SyncPendingCommandsCompanion.insert(
+            commandId: _uuid.v4(),
+            opsJson: jsonEncode(ops.map((op) => op.toJson()).toList()),
+            createdAt: DateTime.now().millisecondsSinceEpoch,
+          ),
+        );
+  }
+
+  List<AssignOp> _prebootstrapOps(_PendingMutation mutation) {
+    final lifecycle = crdtLifecycleField(mutation.resource);
+    if (mutation.deleted) {
+      return [
+        AssignOp(
+          resource: mutation.resource,
+          entityId: mutation.id,
+          field: lifecycle,
+          value: false,
+        ),
+      ];
+    }
+    final result = <AssignOp>[];
+    final payload = mutation.payload!;
+    final allowedFields = crdtPayloadFields(mutation.resource);
+    final isCreate = mutation.changedFields == null;
+    if (isCreate) {
+      result.add(
+        AssignOp(
+          resource: mutation.resource,
+          entityId: mutation.id,
+          field: lifecycle,
+          value: true,
+        ),
+      );
+    }
+    final fields = mutation.changedFields ?? allowedFields;
+    for (final field in fields) {
+      if (!allowedFields.contains(field)) {
+        throw ArgumentError.value(
+          field,
+          'changedFields',
+          'is not replicated for ${mutation.resource}',
+        );
+      }
+      if (!payload.containsKey(field)) continue;
+      if (mutation.resource == 'transactions' &&
+          field == 'amountCents' &&
+          (payload['origin'] == 'split' || payload['isGroupParent'] == true)) {
+        continue;
+      }
+      if ((mutation.resource == 'transactions' ||
+              mutation.resource == 'recurrences') &&
+          field == 'payeeName' &&
+          payload['payeeId'] != null) {
+        continue;
+      }
+      result.add(
+        AssignOp(
+          resource: mutation.resource,
+          entityId: mutation.id,
+          field: field,
+          value: _normalizeField(mutation.resource, field, payload[field]),
+        ),
+      );
+    }
+    if ((mutation.resource == 'transactions' ||
+            mutation.resource == 'recurrences') &&
+        result.any((op) => op.field == 'payeeId' && op.value == null) &&
+        !result.any((op) => op.field == 'payeeName')) {
+      result.add(
+        AssignOp(
+          resource: mutation.resource,
+          entityId: mutation.id,
+          field: 'payeeName',
+          value: payload['payeeName'],
+        ),
+      );
+    }
+    return result;
   }
 
   Future<List<AssignOp>> _diffMutation(
@@ -291,10 +357,9 @@ double quantizeSyncCoordinate(double value) {
   return quantized == 0 ? 0 : quantized;
 }
 
-final Provider<ChangeLogWriter> changeLogWriterProvider =
-    Provider<ChangeLogWriter>(
-      (ref) => ChangeLogWriter(
-        ref.read(dbProvider),
-        scheduler: ref.read(syncSchedulerProvider),
-      ),
-    );
+final Provider<SyncWriter> syncWriterProvider = Provider<SyncWriter>(
+  (ref) => SyncWriter(
+    ref.read(dbProvider),
+    scheduler: ref.read(syncSchedulerProvider),
+  ),
+);

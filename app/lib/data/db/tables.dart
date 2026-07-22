@@ -246,7 +246,7 @@ class SmsMessages extends Table {
   // signal at SMS-time because the user still remembers the merchant
   // and reason ("decathlon hiking shoes", "tea with priya"). Stored as
   // a discrete column rather than buried in candidateJson so we can
-  // index by 'needs note' and apply LWW updates by [noteCapturedAt].
+  // index by 'needs note' and prefer the latest capture by [noteCapturedAt].
   TextColumn get userNote => text().nullable()();
   IntColumn get noteCapturedAt => integer().nullable()();
   // Best-effort location at the moment of capture. Source: cached
@@ -312,34 +312,21 @@ class SmsParseCache extends Table {
   Set<Column> get primaryKey => {key};
 }
 
-/// Local mutation log used by the sync layer. Every repository write
-/// inserts a row here; SyncService batch-pushes unsynced entries to
-/// the server's /v1/sync/push and marks them synced.
-///
-/// `clientChangeId` is a UUID generated when the row is logged. The
-/// server uses (clientId, clientChangeId) as a per-row idempotency
-/// key so a retried batch after a transient network failure doesn't
-/// produce duplicate change-log entries on the server.
-@DataClassName('ChangeLogRow')
-class ChangeLog extends Table {
+/// Field-level commands authored before the device has joined a server epoch.
+/// They preserve mutation intent while Gullak is used completely offline and
+/// are replayed causally over the first verified checkpoint.
+@DataClassName('SyncPendingCommandRow')
+class SyncPendingCommands extends Table {
   IntColumn get id => integer().autoIncrement()();
-  IntColumn get at => integer()();
-  // Default empty so the v2→v3 ALTER TABLE on existing installs
-  // doesn't blow up on populated rows. SyncService skips empty
-  // values so they don't reach the server.
-  TextColumn get clientChangeId => text().withDefault(const Constant(''))();
-  TextColumn get resource => text()();
-  TextColumn get resourceId => text()();
-  TextColumn get op => text()(); // 'upsert' | 'delete'
-  TextColumn get payload => text().nullable()(); // JSON snapshot
-  BoolColumn get synced => boolean().withDefault(const Constant(false))();
+  TextColumn get commandId => text().unique()();
+  TextColumn get opsJson =>
+      text().check(const CustomExpression<bool>('json_valid(ops_json)'))();
+  IntColumn get createdAt => integer()();
 }
 
 // ── Sync protocol v2: immutable causal CRDT persistence ──────────────────
 //
-// These tables are intentionally separate from the protocol-v1 ChangeLog.
-// They remain dormant until the negotiated v2 rollout; preserving both schemas
-// lets an installed v0.4 database drain its legacy outbox before cutover.
+// These tables are the only network sync protocol persistence surface.
 
 @DataClassName('SyncChangeRow')
 class SyncChanges extends Table {

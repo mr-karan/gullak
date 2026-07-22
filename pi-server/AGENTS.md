@@ -13,7 +13,7 @@ pi-server/
 │   │                  # quick_entry_parser) for the Flutter pipelines
 │   ├── llm/client.ts  # the only place a chat/completions fetch lives
 │   ├── db/            # Drizzle schema + bun:sqlite instance + migrate
-│   ├── repos/         # repos for sync changelog
+│   ├── repos/         # domain mutation/event boundary
 │   ├── routes/        # one Hono router per resource
 │   ├── app.ts         # Hono factory, auth middleware, route mounts
 │   ├── config.ts      # env → AppConfig (model creds live here)
@@ -28,8 +28,10 @@ GET  /v1/health
 … CRUD /v1/{accounts,categories,category-groups,payees,transactions,
           budgets,recurrences}
 GET  /v1/summary?startDate=&endDate=&accountId=
-GET  /v1/sync/changes?since=<id>&limit=<n>
-POST /v1/sync/push
+GET  /v1/sync/v2/capabilities
+POST /v1/sync/v2/register
+GET  /v1/sync/v2/bootstrap /changes
+POST /v1/sync/v2/push /ack
 POST /v1/messages              # multi-turn agent
 POST /v1/whatsapp/webhook      # Baileys bridge inbound
 POST /v1/ai/sms/parse          # bank/transaction SMS → SmsCandidate
@@ -45,7 +47,7 @@ POST /v1/ai/quick-entry/parse  # one-line note (or imageBase64) → ParsedExpens
 | HTTP surface + auth gate | `src/app.ts` |
 | New endpoint | `src/routes/<resource>.ts`, register in `app.ts` |
 | Drizzle schema | `src/db/schema.ts` |
-| Sync changelog helper | `src/repos/changelog.ts` |
+| Sync command/event helper | `src/repos/changelog.ts` |
 | LLM call (the one fetch) | `src/llm/client.ts` |
 | SMS parse prompt + zod | `src/ai/sms_parser.ts` |
 | QuickEntry parse prompt + zod | `src/ai/quick_entry_parser.ts` |
@@ -57,9 +59,12 @@ POST /v1/ai/quick-entry/parse  # one-line note (or imageBase64) → ParsedExpens
 - **Money**: integer minor units. Never decimal-string math.
 - **IDs**: UUIDs (text). Clients generate; server stores.
 - **Dates**: `YYYY-MM-DD` text columns. Timestamps are ms since epoch.
-- **Mutations** must call `recordChange(db, resource, id, op, payload)` so the change log captures every server-side write — sync clients pull from there.
-- **bun:sqlite** is sync. No `await` on `db.select().get()`.
-- **Conflict policy** (sync): last-write-wins by `updatedAt`. Single-user scope.
+- **Mutations** must run in `recordCommand(...)` and call `recordChange(...)` so
+  the financial write and its immutable causal operations commit atomically.
+- **better-sqlite3** is synchronous. No `await` on `db.select().get()`.
+- **Conflict policy** (sync): causal field registers retain concurrent
+  candidates and expose a deterministic visible projection. Wall clocks are
+  metadata, never causal ordering.
 - **AI routes do NOT mutate financial rows.** They are draft-only; the phone takes the response and decides whether to write a transaction. The multi-turn agent at `/v1/messages` is the only path that may write.
 
 ## Model config
@@ -76,11 +81,11 @@ Every LLM caller routes through `src/llm/client.ts:chatJson`. Don't add a second
 
 ```bash
 cd pi-server
-bun install
-bun run db:generate     # regenerate migrations from schema
-bun run dev             # hot-reload server on :8787
-bun run start
-bun run typecheck
+npm install
+npm run db:generate     # regenerate migrations from schema
+npm run dev             # hot-reload server on :8787
+npm run start
+npm run typecheck
 bun test
 GULLAK_DB_PATH=/path/gullak.db bun run start
 ```

@@ -1,6 +1,8 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 
 import { AppShell } from "@/components/shell/AppShell";
+import { PublicShell } from "@/components/marketing/PublicShell";
+import { useConnection } from "@/hooks/useConnection";
 import { AccountsPage } from "@/pages/AccountsPage";
 import { BudgetPage } from "@/pages/BudgetPage";
 import { CalendarPage } from "@/pages/CalendarPage";
@@ -11,12 +13,23 @@ import { RulesPage } from "@/pages/RulesPage";
 import { TransactionsPage } from "@/pages/TransactionsPage";
 import { DesiresPage } from "@/pages/DesiresPage";
 import { InsightsPage } from "@/pages/InsightsPage";
+import { DocsPage } from "@/pages/DocsPage";
+import { LandingPage } from "@/pages/LandingPage";
+
+function HomePage() {
+  const { connected } = useConnection();
+  return connected ? <Navigate to="/overview" replace /> : <LandingPage />;
+}
 
 export function App() {
   return (
     <Routes>
+      <Route element={<PublicShell />}>
+        <Route index element={<HomePage />} />
+        <Route path="docs" element={<DocsPage />} />
+      </Route>
       <Route element={<AppShell />}>
-        <Route index element={<AccountsPage />} />
+        <Route path="overview" element={<AccountsPage />} />
         <Route path="transactions" element={<TransactionsPage />} />
         <Route path="budget" element={<BudgetPage />} />
         <Route path="calendar" element={<CalendarPage />} />
@@ -26,8 +39,8 @@ export function App() {
         <Route path="holdings" element={<HoldingsPage />} />
         <Route path="desires" element={<DesiresPage />} />
         <Route path="chat" element={<ChatPage />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
+      <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
 }

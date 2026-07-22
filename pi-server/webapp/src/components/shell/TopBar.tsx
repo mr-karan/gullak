@@ -15,7 +15,7 @@ function TabLink({ item }: { item: NavItem }) {
   return (
     <NavLink
       to={item.to}
-      end={item.to === "/"}
+      end={item.to === "/overview"}
       className={({ isActive }) =>
         cn(
           "-mb-px flex h-full shrink-0 items-center border-b-2 px-3 text-sm transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring",
@@ -43,7 +43,7 @@ export function TopBar({
     <header className="sticky top-0 z-30 flex shrink-0 flex-col bg-paper/85 backdrop-blur-md">
       <div className="flex h-14 items-center gap-4 px-6">
         <Link
-          to="/"
+          to="/overview"
           className="shrink-0 rounded font-display text-xl tracking-tight text-ink outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           Gullak

@@ -4,7 +4,7 @@ import 'package:uuid/uuid.dart';
 
 import '../../../data/db/database.dart';
 import '../../../state/providers.dart';
-import '../../../sync/changelog_writer.dart';
+import '../../../sync/sync_writer.dart';
 import '../../../sync/crdt_resources.dart';
 
 export '../../../data/db/database.dart' show TagRow;
@@ -43,10 +43,10 @@ class TagTimelinePoint {
 }
 
 class TagRepository {
-  TagRepository(this._db, {ChangeLogWriter? changes}) : _changes = changes;
+  TagRepository(this._db, {SyncWriter? changes}) : _changes = changes;
 
   final AppDatabase _db;
-  final ChangeLogWriter? _changes;
+  final SyncWriter? _changes;
   static const _uuid = Uuid();
 
   Future<T> _command<T>(Future<T> Function() callback) =>
@@ -342,7 +342,7 @@ enum _Sentinel { value }
 final tagRepoProvider = Provider<TagRepository>(
   (ref) => TagRepository(
     ref.watch(dbProvider),
-    changes: ref.watch(changeLogWriterProvider),
+    changes: ref.watch(syncWriterProvider),
   ),
 );
 

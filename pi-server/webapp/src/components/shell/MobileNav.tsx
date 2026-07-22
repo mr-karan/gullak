@@ -76,7 +76,7 @@ export function MobileBottomBar() {
           <NavLink
             key={item.to}
             to={item.to}
-            end={item.to === "/"}
+            end={item.to === "/overview"}
             className={({ isActive }) =>
               cn(
                 "flex flex-col items-center gap-1 py-2.5 text-[11px] font-medium transition-colors outline-none",

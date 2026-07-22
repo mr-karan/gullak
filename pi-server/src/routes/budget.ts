@@ -58,7 +58,7 @@ budgetRouter.post("/assign", async (c) => {
   return c.json(computeBudgetPlan(db, month));
 });
 
-// ── Per-category TARGETS (server-only config; no change_log) ────────────────
+// ── Per-category TARGETS (server-only config; not replicated) ──────────────
 
 budgetRouter.get("/targets", (c) => {
   const db = c.get("db");

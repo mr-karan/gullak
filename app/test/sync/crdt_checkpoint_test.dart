@@ -1,7 +1,6 @@
 import 'dart:convert';
 
 import 'package:crypto/crypto.dart';
-import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gullak/data/db/database.dart';
@@ -54,7 +53,7 @@ void main() {
     },
   );
 
-  test('pending legacy data blocks bootstrap without touching rows', () async {
+  test('pre-bootstrap field commands survive checkpoint installation', () async {
     await db
         .into(db.accounts)
         .insert(
@@ -66,24 +65,21 @@ void main() {
           ),
         );
     await db
-        .into(db.changeLog)
+        .into(db.syncPendingCommands)
         .insert(
-          ChangeLogCompanion.insert(
-            at: 1,
-            clientChangeId: const Value('pending'),
-            resource: 'accounts',
-            resourceId: 'local',
-            op: 'upsert',
+          SyncPendingCommandsCompanion.insert(
+            commandId: 'pending',
+            opsJson:
+                '[{"kind":"assign","resource":"accounts","entityId":"local","field":"name","value":"Unsynced"}]',
+            createdAt: 1,
           ),
         );
-    await expectLater(
-      CrdtCheckpointInstaller(
-        db,
-        store,
-      ).install(_accountBundle(), actorId: 'phone'),
-      throwsA(isA<CrdtStoreException>()),
-    );
-    expect((await db.select(db.accounts).get()).single.name, 'Unsynced');
+    await CrdtCheckpointInstaller(
+      db,
+      store,
+    ).install(_accountBundle(), actorId: 'phone');
+    expect(await db.select(db.syncPendingCommands).get(), hasLength(1));
+    expect((await db.select(db.accounts).get()).single.name, 'Server truth');
   });
 
   test('tampered checkpoint fails before replacing local state', () async {

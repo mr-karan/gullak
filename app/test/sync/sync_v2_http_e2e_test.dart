@@ -2,12 +2,13 @@ import 'dart:convert';
 
 import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
+import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gullak/core/secure_store.dart';
 import 'package:gullak/data/db/database.dart';
 import 'package:gullak/features/payees/data/payee_repository.dart';
 import 'package:gullak/features/transactions/data/transaction_repository.dart';
-import 'package:gullak/sync/changelog_writer.dart';
+import 'package:gullak/sync/sync_writer.dart';
 import 'package:gullak/sync/crdt_store.dart';
 import 'package:gullak/sync/sync_v2_client.dart';
 
@@ -16,18 +17,30 @@ const _baseUrl = String.fromEnvironment(
   'GULLAK_HTTP_E2E_URL',
   defaultValue: 'http://127.0.0.1:18787',
 );
-const _epoch = String.fromEnvironment(
-  'GULLAK_HTTP_E2E_EPOCH',
-  defaultValue: 'e2e-epoch-1',
-);
-
 void main() {
   test(
     'two offline replicas merge intent and retain same-field concurrency',
     () async {
+      final dio = Dio();
+      await dio.post<Object?>(
+        '$_baseUrl/v1/accounts',
+        data: {
+          'id': 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+          'name': 'E2E account',
+          'kind': 'checking',
+          'openingBalanceCents': 0,
+        },
+      );
+      final capabilities = await dio.get<Object?>(
+        '$_baseUrl/v1/sync/v2/capabilities',
+      );
+      final epoch =
+          ((capabilities.data as Map<String, dynamic>)['v2']
+                  as Map<String, dynamic>)['epoch']
+              as String;
       final run = DateTime.now().microsecondsSinceEpoch;
-      final a = await _Replica.open('e2e-$run-a');
-      final b = await _Replica.open('e2e-$run-b');
+      final a = await _Replica.open('e2e-$run-a', epoch);
+      final b = await _Replica.open('e2e-$run-b', epoch);
       addTearDown(a.close);
       addTearDown(b.close);
 
@@ -132,18 +145,20 @@ void main() {
 final class _Replica {
   _Replica({
     required this.db,
+    required this.epoch,
     required this.client,
     required this.payees,
     required this.transactions,
   });
 
-  static Future<_Replica> open(String actorId) async {
+  static Future<_Replica> open(String actorId, String epoch) async {
     final db = AppDatabase.forTesting(NativeDatabase.memory());
     await db.kvSet('sync.v2.actorId', actorId);
     final store = CrdtStore(db);
-    final writer = ChangeLogWriter(db, crdtStore: store);
+    final writer = SyncWriter(db, crdtStore: store);
     return _Replica(
       db: db,
+      epoch: epoch,
       client: SyncV2Client(db, _MemorySecureStore(), store),
       payees: PayeeRepository(db, changes: writer),
       transactions: TransactionRepository(db, changes: writer),
@@ -151,11 +166,12 @@ final class _Replica {
   }
 
   final AppDatabase db;
+  final String epoch;
   final SyncV2Client client;
   final PayeeRepository payees;
   final TransactionRepository transactions;
 
-  Future<SyncV2Stats> sync() => client.sync(baseUrl: _baseUrl, epoch: _epoch);
+  Future<SyncV2Stats> sync() => client.sync(baseUrl: _baseUrl, epoch: epoch);
 
   Future<void> close() => db.close();
 }

@@ -34,7 +34,9 @@ const ConnectionContext = createContext<ConnectionState | null>(null);
 export function ConnectionProvider({ children }: { children: ReactNode }) {
   const client = useQueryClient();
   const [connected, setConnected] = useState(isConnectedNow);
-  const [dialogOpen, setDialogOpen] = useState(!isConnectedNow());
+  // Disconnected visitors now land on the public product page. Connection is
+  // an explicit action there; authentication failures still open the dialog.
+  const [dialogOpen, setDialogOpen] = useState(false);
 
   // A 401 anywhere means the key is stale/missing — surface the connect UI.
   useEffect(() => {

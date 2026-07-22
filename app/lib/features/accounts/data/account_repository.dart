@@ -4,7 +4,7 @@ import 'package:uuid/uuid.dart';
 
 import '../../../data/db/database.dart';
 import '../../../state/providers.dart';
-import '../../../sync/changelog_writer.dart';
+import '../../../sync/sync_writer.dart';
 import '../../transactions/data/transaction_repository.dart';
 
 export '../../../data/db/database.dart' show AccountRow;
@@ -49,9 +49,9 @@ enum AccountKind {
 }
 
 class AccountRepository {
-  AccountRepository(this._db, {ChangeLogWriter? changes}) : _changes = changes;
+  AccountRepository(this._db, {SyncWriter? changes}) : _changes = changes;
   final AppDatabase _db;
-  final ChangeLogWriter? _changes;
+  final SyncWriter? _changes;
   static const _uuid = Uuid();
 
   Future<T> _command<T>(Future<T> Function() callback) =>
@@ -287,7 +287,7 @@ final Provider<AccountRepository> accountRepoProvider =
     Provider<AccountRepository>(
       (ref) => AccountRepository(
         ref.watch(dbProvider),
-        changes: ref.watch(changeLogWriterProvider),
+        changes: ref.watch(syncWriterProvider),
       ),
     );
 

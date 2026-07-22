@@ -317,7 +317,7 @@ export function deleteTransactionCore(
 }
 
 /**
- * Delete one transaction row plus its transaction_tags, emitting a change_log
+ * Delete one transaction row plus its transaction_tags, emitting lifecycle
  * delete for the row and each tag link so sync clients converge. Assumes it runs
  * inside a db.transaction.
  */

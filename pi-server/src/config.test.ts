@@ -9,7 +9,6 @@ const KEYS = [
   "GULLAK_HOST",
   "GULLAK_HTTP_API_KEY",
   "GULLAK_REQUIRE_AUTH",
-  "GULLAK_SYNC_V2_MODE",
   "GULLAK_SHEETS_WEBAPP_URL",
   "GULLAK_SHEETS_SECRET",
   "GULLAK_SHEETS_SYNC_INTERVAL_MIN",
@@ -38,15 +37,7 @@ test("defaults load without any env", () => {
   expect(c.port).toBe(8787);
   expect(c.ai.enabled).toBe(false); // no key
   expect(c.sheets.syncIntervalMinutes).toBe(0);
-  expect(c.syncV2Mode).toBe("disabled");
   expect(summarizeConfig(c).auth).toBe("OPEN (no key)");
-});
-
-test("sync v2 rollout mode is strict and defaults disabled", () => {
-  process.env.GULLAK_SYNC_V2_MODE = "preparing";
-  expect(loadConfig().syncV2Mode).toBe("preparing");
-  process.env.GULLAK_SYNC_V2_MODE = "typo";
-  expect(() => loadConfig()).toThrow();
 });
 
 test("a malformed port fails fast", () => {

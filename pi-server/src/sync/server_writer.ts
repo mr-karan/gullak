@@ -1,6 +1,6 @@
 import { isDeepStrictEqual } from "node:util";
 
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 
 import {
   syncEpochs,
@@ -14,7 +14,7 @@ import {
   ProjectionValidationError,
   isSyncedResource,
   knownReplicatedFields,
-  legacySnapshotForEntity,
+  snapshotForEntity,
   lifecycleField,
   materializeChangeTargets,
 } from "./resources.ts";
@@ -151,7 +151,7 @@ function buildMutationOps(
   // first create. Revives and updates remain intent patches.
   let payload = mutation.payload ?? {};
   if (!current.has(lifecycle)) {
-    const snapshot = legacySnapshotForEntity(
+    const snapshot = snapshotForEntity(
       tx,
       mutation.resource,
       mutation.entityId,
@@ -214,7 +214,7 @@ export function authorServerCommand(
         status: syncEpochs.status,
       })
       .from(syncEpochs)
-      .where(inArray(syncEpochs.status, ["preparing", "active"]))
+      .where(eq(syncEpochs.status, "active"))
       .all();
     if (writableEpochs.length !== 1) {
       throw new ServerWriterError(
@@ -306,9 +306,7 @@ export function authorServerCommand(
         resource: mutation.resource,
         entityId: mutation.entityId,
       })),
-      {
-        allowLegacyTransactionTagIds: activeEpoch.status === "preparing",
-      },
+      {},
     );
 
     const advanced = tx

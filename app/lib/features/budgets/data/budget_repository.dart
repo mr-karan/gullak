@@ -5,7 +5,7 @@ import 'package:uuid/uuid.dart';
 import '../../../core/clock.dart';
 import '../../../data/db/database.dart';
 import '../../../state/providers.dart';
-import '../../../sync/changelog_writer.dart';
+import '../../../sync/sync_writer.dart';
 import '../../categories/data/category_repository.dart';
 import '../../transactions/data/transaction_repository.dart';
 
@@ -51,9 +51,9 @@ class BudgetMonthOverview {
 }
 
 class BudgetRepository {
-  BudgetRepository(this._db, {ChangeLogWriter? changes}) : _changes = changes;
+  BudgetRepository(this._db, {SyncWriter? changes}) : _changes = changes;
   final AppDatabase _db;
-  final ChangeLogWriter? _changes;
+  final SyncWriter? _changes;
   static const _uuid = Uuid();
 
   Future<T> _command<T>(Future<T> Function() callback) =>
@@ -232,7 +232,7 @@ final Provider<BudgetRepository> budgetRepoProvider =
     Provider<BudgetRepository>(
       (ref) => BudgetRepository(
         ref.watch(dbProvider),
-        changes: ref.watch(changeLogWriterProvider),
+        changes: ref.watch(syncWriterProvider),
       ),
     );
 

@@ -9,15 +9,15 @@ import 'package:path_provider/path_provider.dart';
 import '../../core/logger.dart';
 import '../../data/db/database.dart';
 import '../../state/providers.dart';
-import '../../sync/changelog_writer.dart';
+import '../../sync/sync_writer.dart';
 import '../../sync/crdt_resources.dart';
 
 /// Round-trippable JSON dump of every interesting table. Schema version
 /// is recorded so a future import can refuse mismatched payloads.
 class BackupService {
-  BackupService(this._db, {ChangeLogWriter? changes}) : _changes = changes;
+  BackupService(this._db, {SyncWriter? changes}) : _changes = changes;
   final AppDatabase _db;
-  final ChangeLogWriter? _changes;
+  final SyncWriter? _changes;
 
   Future<T> _command<T>(Future<T> Function() callback) =>
       _changes?.command(callback) ?? _db.transaction(callback);
@@ -616,7 +616,7 @@ class BackupService {
 final Provider<BackupService> backupServiceProvider = Provider<BackupService>(
   (ref) => BackupService(
     ref.watch(dbProvider),
-    changes: ref.watch(changeLogWriterProvider),
+    changes: ref.watch(syncWriterProvider),
   ),
 );
 

@@ -85,6 +85,8 @@ guidance, see **[website/docs/self-hosting.md](website/docs/self-hosting.md)**.
 
 ## Documentation
 
+- **Public server guide** — every self-hosted server serves a public landing
+  page at `/` and a compact architecture/recovery guide at `/docs`.
 - **[Install](website/docs/install.md)** — F-Droid, APK sideload, build from source, SMS permission.
 - **[Self-hosting](website/docs/self-hosting.md)** — run the sync server, Docker, env reference, backups.
 - **[Contributing](CONTRIBUTING.md)** — dev setup and conventions.

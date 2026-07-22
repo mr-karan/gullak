@@ -12,6 +12,7 @@ import { eq } from "drizzle-orm";
 import type { Db } from "../db/index.ts";
 import { rules } from "../db/schema.ts";
 import { applyActions, type ActionPayload } from "./actions.ts";
+import { ruleActionsSchema, ruleTriggerSchema } from "./schema.ts";
 import {
   matchesConditions,
   type Stage,
@@ -36,19 +37,25 @@ interface CompiledRule {
 }
 
 function compile(row: {
+  id: string;
   triggerPayload: string;
   actionPayload: string;
   stage: string;
   priority: number;
   createdAt: number;
 }): CompiledRule | null {
-  // A malformed rule must never crash the ingest path — skip it.
+  // A malformed rule must never crash the ingest path or become an accidental
+  // match-all. Strict validation makes invalid persisted config inert.
   try {
-    const trigger = JSON.parse(row.triggerPayload) as TriggerPayload;
-    const action = JSON.parse(row.actionPayload) as ActionPayload;
+    const trigger = ruleTriggerSchema.safeParse(JSON.parse(row.triggerPayload));
+    const action = ruleActionsSchema.safeParse(JSON.parse(row.actionPayload));
+    if (!trigger.success || !action.success) {
+      console.warn("rules_invalid_skipped", { ruleId: row.id });
+      return null;
+    }
     return {
-      trigger,
-      action,
+      trigger: trigger.data as TriggerPayload,
+      action: action.data as ActionPayload,
       rank: stageRank(row.stage),
       priority: row.priority,
       createdAt: row.createdAt,
@@ -67,6 +74,7 @@ export function runRules(db: Db, txn: TxnLike): TxnLike {
   const compiled = rows
     .map((r) =>
       compile({
+        id: r.id,
         triggerPayload: r.triggerPayload,
         actionPayload: r.actionPayload,
         stage: r.stage,

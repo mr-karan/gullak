@@ -1,7 +1,7 @@
 name: gullak
 description: "Gullak — local-first mobile expense tracker."
 publish_to: 'none'
-version: 0.5.0+6
+version: 0.6.0+7
 
 environment:
   sdk: ^3.11.5

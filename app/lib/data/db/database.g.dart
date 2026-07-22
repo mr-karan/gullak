@@ -8786,12 +8786,12 @@ class AuditLogCompanion extends UpdateCompanion<AuditLogRow> {
   }
 }
 
-class $ChangeLogTable extends ChangeLog
-    with TableInfo<$ChangeLogTable, ChangeLogRow> {
+class $SyncPendingCommandsTable extends SyncPendingCommands
+    with TableInfo<$SyncPendingCommandsTable, SyncPendingCommandRow> {
   @override
   final GeneratedDatabase attachedDatabase;
   final String? _alias;
-  $ChangeLogTable(this.attachedDatabase, [this._alias]);
+  $SyncPendingCommandsTable(this.attachedDatabase, [this._alias]);
   static const VerificationMeta _idMeta = const VerificationMeta('id');
   @override
   late final GeneratedColumn<int> id = GeneratedColumn<int>(
@@ -8805,101 +8805,51 @@ class $ChangeLogTable extends ChangeLog
       'PRIMARY KEY AUTOINCREMENT',
     ),
   );
-  static const VerificationMeta _atMeta = const VerificationMeta('at');
+  static const VerificationMeta _commandIdMeta = const VerificationMeta(
+    'commandId',
+  );
   @override
-  late final GeneratedColumn<int> at = GeneratedColumn<int>(
-    'at',
+  late final GeneratedColumn<String> commandId = GeneratedColumn<String>(
+    'command_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways('UNIQUE'),
+  );
+  static const VerificationMeta _opsJsonMeta = const VerificationMeta(
+    'opsJson',
+  );
+  @override
+  late final GeneratedColumn<String> opsJson = GeneratedColumn<String>(
+    'ops_json',
+    aliasedName,
+    false,
+    check: () => const CustomExpression<bool>('json_valid(ops_json)'),
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<int> createdAt = GeneratedColumn<int>(
+    'created_at',
     aliasedName,
     false,
     type: DriftSqlType.int,
     requiredDuringInsert: true,
   );
-  static const VerificationMeta _clientChangeIdMeta = const VerificationMeta(
-    'clientChangeId',
-  );
   @override
-  late final GeneratedColumn<String> clientChangeId = GeneratedColumn<String>(
-    'client_change_id',
-    aliasedName,
-    false,
-    type: DriftSqlType.string,
-    requiredDuringInsert: false,
-    defaultValue: const Constant(''),
-  );
-  static const VerificationMeta _resourceMeta = const VerificationMeta(
-    'resource',
-  );
-  @override
-  late final GeneratedColumn<String> resource = GeneratedColumn<String>(
-    'resource',
-    aliasedName,
-    false,
-    type: DriftSqlType.string,
-    requiredDuringInsert: true,
-  );
-  static const VerificationMeta _resourceIdMeta = const VerificationMeta(
-    'resourceId',
-  );
-  @override
-  late final GeneratedColumn<String> resourceId = GeneratedColumn<String>(
-    'resource_id',
-    aliasedName,
-    false,
-    type: DriftSqlType.string,
-    requiredDuringInsert: true,
-  );
-  static const VerificationMeta _opMeta = const VerificationMeta('op');
-  @override
-  late final GeneratedColumn<String> op = GeneratedColumn<String>(
-    'op',
-    aliasedName,
-    false,
-    type: DriftSqlType.string,
-    requiredDuringInsert: true,
-  );
-  static const VerificationMeta _payloadMeta = const VerificationMeta(
-    'payload',
-  );
-  @override
-  late final GeneratedColumn<String> payload = GeneratedColumn<String>(
-    'payload',
-    aliasedName,
-    true,
-    type: DriftSqlType.string,
-    requiredDuringInsert: false,
-  );
-  static const VerificationMeta _syncedMeta = const VerificationMeta('synced');
-  @override
-  late final GeneratedColumn<bool> synced = GeneratedColumn<bool>(
-    'synced',
-    aliasedName,
-    false,
-    type: DriftSqlType.bool,
-    requiredDuringInsert: false,
-    defaultConstraints: GeneratedColumn.constraintIsAlways(
-      'CHECK ("synced" IN (0, 1))',
-    ),
-    defaultValue: const Constant(false),
-  );
-  @override
-  List<GeneratedColumn> get $columns => [
-    id,
-    at,
-    clientChangeId,
-    resource,
-    resourceId,
-    op,
-    payload,
-    synced,
-  ];
+  List<GeneratedColumn> get $columns => [id, commandId, opsJson, createdAt];
   @override
   String get aliasedName => _alias ?? actualTableName;
   @override
   String get actualTableName => $name;
-  static const String $name = 'change_log';
+  static const String $name = 'sync_pending_commands';
   @override
   VerificationContext validateIntegrity(
-    Insertable<ChangeLogRow> instance, {
+    Insertable<SyncPendingCommandRow> instance, {
     bool isInserting = false,
   }) {
     final context = VerificationContext();
@@ -8907,52 +8857,29 @@ class $ChangeLogTable extends ChangeLog
     if (data.containsKey('id')) {
       context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
     }
-    if (data.containsKey('at')) {
-      context.handle(_atMeta, at.isAcceptableOrUnknown(data['at']!, _atMeta));
-    } else if (isInserting) {
-      context.missing(_atMeta);
-    }
-    if (data.containsKey('client_change_id')) {
+    if (data.containsKey('command_id')) {
       context.handle(
-        _clientChangeIdMeta,
-        clientChangeId.isAcceptableOrUnknown(
-          data['client_change_id']!,
-          _clientChangeIdMeta,
-        ),
-      );
-    }
-    if (data.containsKey('resource')) {
-      context.handle(
-        _resourceMeta,
-        resource.isAcceptableOrUnknown(data['resource']!, _resourceMeta),
+        _commandIdMeta,
+        commandId.isAcceptableOrUnknown(data['command_id']!, _commandIdMeta),
       );
     } else if (isInserting) {
-      context.missing(_resourceMeta);
+      context.missing(_commandIdMeta);
     }
-    if (data.containsKey('resource_id')) {
+    if (data.containsKey('ops_json')) {
       context.handle(
-        _resourceIdMeta,
-        resourceId.isAcceptableOrUnknown(data['resource_id']!, _resourceIdMeta),
+        _opsJsonMeta,
+        opsJson.isAcceptableOrUnknown(data['ops_json']!, _opsJsonMeta),
       );
     } else if (isInserting) {
-      context.missing(_resourceIdMeta);
+      context.missing(_opsJsonMeta);
     }
-    if (data.containsKey('op')) {
-      context.handle(_opMeta, op.isAcceptableOrUnknown(data['op']!, _opMeta));
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
     } else if (isInserting) {
-      context.missing(_opMeta);
-    }
-    if (data.containsKey('payload')) {
-      context.handle(
-        _payloadMeta,
-        payload.isAcceptableOrUnknown(data['payload']!, _payloadMeta),
-      );
-    }
-    if (data.containsKey('synced')) {
-      context.handle(
-        _syncedMeta,
-        synced.isAcceptableOrUnknown(data['synced']!, _syncedMeta),
-      );
+      context.missing(_createdAtMeta);
     }
     return context;
   }
@@ -8960,114 +8887,75 @@ class $ChangeLogTable extends ChangeLog
   @override
   Set<GeneratedColumn> get $primaryKey => {id};
   @override
-  ChangeLogRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+  SyncPendingCommandRow map(Map<String, dynamic> data, {String? tablePrefix}) {
     final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
-    return ChangeLogRow(
+    return SyncPendingCommandRow(
       id: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}id'],
       )!,
-      at: attachedDatabase.typeMapping.read(
+      commandId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}command_id'],
+      )!,
+      opsJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}ops_json'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
-        data['${effectivePrefix}at'],
-      )!,
-      clientChangeId: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}client_change_id'],
-      )!,
-      resource: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}resource'],
-      )!,
-      resourceId: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}resource_id'],
-      )!,
-      op: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}op'],
-      )!,
-      payload: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}payload'],
-      ),
-      synced: attachedDatabase.typeMapping.read(
-        DriftSqlType.bool,
-        data['${effectivePrefix}synced'],
+        data['${effectivePrefix}created_at'],
       )!,
     );
   }
 
   @override
-  $ChangeLogTable createAlias(String alias) {
-    return $ChangeLogTable(attachedDatabase, alias);
+  $SyncPendingCommandsTable createAlias(String alias) {
+    return $SyncPendingCommandsTable(attachedDatabase, alias);
   }
 }
 
-class ChangeLogRow extends DataClass implements Insertable<ChangeLogRow> {
+class SyncPendingCommandRow extends DataClass
+    implements Insertable<SyncPendingCommandRow> {
   final int id;
-  final int at;
-  final String clientChangeId;
-  final String resource;
-  final String resourceId;
-  final String op;
-  final String? payload;
-  final bool synced;
-  const ChangeLogRow({
+  final String commandId;
+  final String opsJson;
+  final int createdAt;
+  const SyncPendingCommandRow({
     required this.id,
-    required this.at,
-    required this.clientChangeId,
-    required this.resource,
-    required this.resourceId,
-    required this.op,
-    this.payload,
-    required this.synced,
+    required this.commandId,
+    required this.opsJson,
+    required this.createdAt,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
     map['id'] = Variable<int>(id);
-    map['at'] = Variable<int>(at);
-    map['client_change_id'] = Variable<String>(clientChangeId);
-    map['resource'] = Variable<String>(resource);
-    map['resource_id'] = Variable<String>(resourceId);
-    map['op'] = Variable<String>(op);
-    if (!nullToAbsent || payload != null) {
-      map['payload'] = Variable<String>(payload);
-    }
-    map['synced'] = Variable<bool>(synced);
+    map['command_id'] = Variable<String>(commandId);
+    map['ops_json'] = Variable<String>(opsJson);
+    map['created_at'] = Variable<int>(createdAt);
     return map;
   }
 
-  ChangeLogCompanion toCompanion(bool nullToAbsent) {
-    return ChangeLogCompanion(
+  SyncPendingCommandsCompanion toCompanion(bool nullToAbsent) {
+    return SyncPendingCommandsCompanion(
       id: Value(id),
-      at: Value(at),
-      clientChangeId: Value(clientChangeId),
-      resource: Value(resource),
-      resourceId: Value(resourceId),
-      op: Value(op),
-      payload: payload == null && nullToAbsent
-          ? const Value.absent()
-          : Value(payload),
-      synced: Value(synced),
+      commandId: Value(commandId),
+      opsJson: Value(opsJson),
+      createdAt: Value(createdAt),
     );
   }
 
-  factory ChangeLogRow.fromJson(
+  factory SyncPendingCommandRow.fromJson(
     Map<String, dynamic> json, {
     ValueSerializer? serializer,
   }) {
     serializer ??= driftRuntimeOptions.defaultSerializer;
-    return ChangeLogRow(
+    return SyncPendingCommandRow(
       id: serializer.fromJson<int>(json['id']),
-      at: serializer.fromJson<int>(json['at']),
-      clientChangeId: serializer.fromJson<String>(json['clientChangeId']),
-      resource: serializer.fromJson<String>(json['resource']),
-      resourceId: serializer.fromJson<String>(json['resourceId']),
-      op: serializer.fromJson<String>(json['op']),
-      payload: serializer.fromJson<String?>(json['payload']),
-      synced: serializer.fromJson<bool>(json['synced']),
+      commandId: serializer.fromJson<String>(json['commandId']),
+      opsJson: serializer.fromJson<String>(json['opsJson']),
+      createdAt: serializer.fromJson<int>(json['createdAt']),
     );
   }
   @override
@@ -9075,165 +8963,100 @@ class ChangeLogRow extends DataClass implements Insertable<ChangeLogRow> {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return <String, dynamic>{
       'id': serializer.toJson<int>(id),
-      'at': serializer.toJson<int>(at),
-      'clientChangeId': serializer.toJson<String>(clientChangeId),
-      'resource': serializer.toJson<String>(resource),
-      'resourceId': serializer.toJson<String>(resourceId),
-      'op': serializer.toJson<String>(op),
-      'payload': serializer.toJson<String?>(payload),
-      'synced': serializer.toJson<bool>(synced),
+      'commandId': serializer.toJson<String>(commandId),
+      'opsJson': serializer.toJson<String>(opsJson),
+      'createdAt': serializer.toJson<int>(createdAt),
     };
   }
 
-  ChangeLogRow copyWith({
+  SyncPendingCommandRow copyWith({
     int? id,
-    int? at,
-    String? clientChangeId,
-    String? resource,
-    String? resourceId,
-    String? op,
-    Value<String?> payload = const Value.absent(),
-    bool? synced,
-  }) => ChangeLogRow(
+    String? commandId,
+    String? opsJson,
+    int? createdAt,
+  }) => SyncPendingCommandRow(
     id: id ?? this.id,
-    at: at ?? this.at,
-    clientChangeId: clientChangeId ?? this.clientChangeId,
-    resource: resource ?? this.resource,
-    resourceId: resourceId ?? this.resourceId,
-    op: op ?? this.op,
-    payload: payload.present ? payload.value : this.payload,
-    synced: synced ?? this.synced,
+    commandId: commandId ?? this.commandId,
+    opsJson: opsJson ?? this.opsJson,
+    createdAt: createdAt ?? this.createdAt,
   );
-  ChangeLogRow copyWithCompanion(ChangeLogCompanion data) {
-    return ChangeLogRow(
+  SyncPendingCommandRow copyWithCompanion(SyncPendingCommandsCompanion data) {
+    return SyncPendingCommandRow(
       id: data.id.present ? data.id.value : this.id,
-      at: data.at.present ? data.at.value : this.at,
-      clientChangeId: data.clientChangeId.present
-          ? data.clientChangeId.value
-          : this.clientChangeId,
-      resource: data.resource.present ? data.resource.value : this.resource,
-      resourceId: data.resourceId.present
-          ? data.resourceId.value
-          : this.resourceId,
-      op: data.op.present ? data.op.value : this.op,
-      payload: data.payload.present ? data.payload.value : this.payload,
-      synced: data.synced.present ? data.synced.value : this.synced,
+      commandId: data.commandId.present ? data.commandId.value : this.commandId,
+      opsJson: data.opsJson.present ? data.opsJson.value : this.opsJson,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
     );
   }
 
   @override
   String toString() {
-    return (StringBuffer('ChangeLogRow(')
+    return (StringBuffer('SyncPendingCommandRow(')
           ..write('id: $id, ')
-          ..write('at: $at, ')
-          ..write('clientChangeId: $clientChangeId, ')
-          ..write('resource: $resource, ')
-          ..write('resourceId: $resourceId, ')
-          ..write('op: $op, ')
-          ..write('payload: $payload, ')
-          ..write('synced: $synced')
+          ..write('commandId: $commandId, ')
+          ..write('opsJson: $opsJson, ')
+          ..write('createdAt: $createdAt')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode => Object.hash(
-    id,
-    at,
-    clientChangeId,
-    resource,
-    resourceId,
-    op,
-    payload,
-    synced,
-  );
+  int get hashCode => Object.hash(id, commandId, opsJson, createdAt);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      (other is ChangeLogRow &&
+      (other is SyncPendingCommandRow &&
           other.id == this.id &&
-          other.at == this.at &&
-          other.clientChangeId == this.clientChangeId &&
-          other.resource == this.resource &&
-          other.resourceId == this.resourceId &&
-          other.op == this.op &&
-          other.payload == this.payload &&
-          other.synced == this.synced);
+          other.commandId == this.commandId &&
+          other.opsJson == this.opsJson &&
+          other.createdAt == this.createdAt);
 }
 
-class ChangeLogCompanion extends UpdateCompanion<ChangeLogRow> {
+class SyncPendingCommandsCompanion
+    extends UpdateCompanion<SyncPendingCommandRow> {
   final Value<int> id;
-  final Value<int> at;
-  final Value<String> clientChangeId;
-  final Value<String> resource;
-  final Value<String> resourceId;
-  final Value<String> op;
-  final Value<String?> payload;
-  final Value<bool> synced;
-  const ChangeLogCompanion({
+  final Value<String> commandId;
+  final Value<String> opsJson;
+  final Value<int> createdAt;
+  const SyncPendingCommandsCompanion({
     this.id = const Value.absent(),
-    this.at = const Value.absent(),
-    this.clientChangeId = const Value.absent(),
-    this.resource = const Value.absent(),
-    this.resourceId = const Value.absent(),
-    this.op = const Value.absent(),
-    this.payload = const Value.absent(),
-    this.synced = const Value.absent(),
+    this.commandId = const Value.absent(),
+    this.opsJson = const Value.absent(),
+    this.createdAt = const Value.absent(),
   });
-  ChangeLogCompanion.insert({
+  SyncPendingCommandsCompanion.insert({
     this.id = const Value.absent(),
-    required int at,
-    this.clientChangeId = const Value.absent(),
-    required String resource,
-    required String resourceId,
-    required String op,
-    this.payload = const Value.absent(),
-    this.synced = const Value.absent(),
-  }) : at = Value(at),
-       resource = Value(resource),
-       resourceId = Value(resourceId),
-       op = Value(op);
-  static Insertable<ChangeLogRow> custom({
+    required String commandId,
+    required String opsJson,
+    required int createdAt,
+  }) : commandId = Value(commandId),
+       opsJson = Value(opsJson),
+       createdAt = Value(createdAt);
+  static Insertable<SyncPendingCommandRow> custom({
     Expression<int>? id,
-    Expression<int>? at,
-    Expression<String>? clientChangeId,
-    Expression<String>? resource,
-    Expression<String>? resourceId,
-    Expression<String>? op,
-    Expression<String>? payload,
-    Expression<bool>? synced,
+    Expression<String>? commandId,
+    Expression<String>? opsJson,
+    Expression<int>? createdAt,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
-      if (at != null) 'at': at,
-      if (clientChangeId != null) 'client_change_id': clientChangeId,
-      if (resource != null) 'resource': resource,
-      if (resourceId != null) 'resource_id': resourceId,
-      if (op != null) 'op': op,
-      if (payload != null) 'payload': payload,
-      if (synced != null) 'synced': synced,
+      if (commandId != null) 'command_id': commandId,
+      if (opsJson != null) 'ops_json': opsJson,
+      if (createdAt != null) 'created_at': createdAt,
     });
   }
 
-  ChangeLogCompanion copyWith({
+  SyncPendingCommandsCompanion copyWith({
     Value<int>? id,
-    Value<int>? at,
-    Value<String>? clientChangeId,
-    Value<String>? resource,
-    Value<String>? resourceId,
-    Value<String>? op,
-    Value<String?>? payload,
-    Value<bool>? synced,
+    Value<String>? commandId,
+    Value<String>? opsJson,
+    Value<int>? createdAt,
   }) {
-    return ChangeLogCompanion(
+    return SyncPendingCommandsCompanion(
       id: id ?? this.id,
-      at: at ?? this.at,
-      clientChangeId: clientChangeId ?? this.clientChangeId,
-      resource: resource ?? this.resource,
-      resourceId: resourceId ?? this.resourceId,
-      op: op ?? this.op,
-      payload: payload ?? this.payload,
-      synced: synced ?? this.synced,
+      commandId: commandId ?? this.commandId,
+      opsJson: opsJson ?? this.opsJson,
+      createdAt: createdAt ?? this.createdAt,
     );
   }
 
@@ -9243,41 +9066,25 @@ class ChangeLogCompanion extends UpdateCompanion<ChangeLogRow> {
     if (id.present) {
       map['id'] = Variable<int>(id.value);
     }
-    if (at.present) {
-      map['at'] = Variable<int>(at.value);
+    if (commandId.present) {
+      map['command_id'] = Variable<String>(commandId.value);
     }
-    if (clientChangeId.present) {
-      map['client_change_id'] = Variable<String>(clientChangeId.value);
+    if (opsJson.present) {
+      map['ops_json'] = Variable<String>(opsJson.value);
     }
-    if (resource.present) {
-      map['resource'] = Variable<String>(resource.value);
-    }
-    if (resourceId.present) {
-      map['resource_id'] = Variable<String>(resourceId.value);
-    }
-    if (op.present) {
-      map['op'] = Variable<String>(op.value);
-    }
-    if (payload.present) {
-      map['payload'] = Variable<String>(payload.value);
-    }
-    if (synced.present) {
-      map['synced'] = Variable<bool>(synced.value);
+    if (createdAt.present) {
+      map['created_at'] = Variable<int>(createdAt.value);
     }
     return map;
   }
 
   @override
   String toString() {
-    return (StringBuffer('ChangeLogCompanion(')
+    return (StringBuffer('SyncPendingCommandsCompanion(')
           ..write('id: $id, ')
-          ..write('at: $at, ')
-          ..write('clientChangeId: $clientChangeId, ')
-          ..write('resource: $resource, ')
-          ..write('resourceId: $resourceId, ')
-          ..write('op: $op, ')
-          ..write('payload: $payload, ')
-          ..write('synced: $synced')
+          ..write('commandId: $commandId, ')
+          ..write('opsJson: $opsJson, ')
+          ..write('createdAt: $createdAt')
           ..write(')'))
         .toString();
   }
@@ -13405,7 +13212,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $SmsParseCacheTable smsParseCache = $SmsParseCacheTable(this);
   late final $AppKvTable appKv = $AppKvTable(this);
   late final $AuditLogTable auditLog = $AuditLogTable(this);
-  late final $ChangeLogTable changeLog = $ChangeLogTable(this);
+  late final $SyncPendingCommandsTable syncPendingCommands =
+      $SyncPendingCommandsTable(this);
   late final $SyncChangesTable syncChanges = $SyncChangesTable(this);
   late final $SyncRegistersTable syncRegisters = $SyncRegistersTable(this);
   late final $SyncFrontiersTable syncFrontiers = $SyncFrontiersTable(this);
@@ -13436,7 +13244,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     smsParseCache,
     appKv,
     auditLog,
-    changeLog,
+    syncPendingCommands,
     syncChanges,
     syncRegisters,
     syncFrontiers,
@@ -17712,32 +17520,24 @@ typedef $$AuditLogTableProcessedTableManager =
       AuditLogRow,
       PrefetchHooks Function()
     >;
-typedef $$ChangeLogTableCreateCompanionBuilder =
-    ChangeLogCompanion Function({
+typedef $$SyncPendingCommandsTableCreateCompanionBuilder =
+    SyncPendingCommandsCompanion Function({
       Value<int> id,
-      required int at,
-      Value<String> clientChangeId,
-      required String resource,
-      required String resourceId,
-      required String op,
-      Value<String?> payload,
-      Value<bool> synced,
+      required String commandId,
+      required String opsJson,
+      required int createdAt,
     });
-typedef $$ChangeLogTableUpdateCompanionBuilder =
-    ChangeLogCompanion Function({
+typedef $$SyncPendingCommandsTableUpdateCompanionBuilder =
+    SyncPendingCommandsCompanion Function({
       Value<int> id,
-      Value<int> at,
-      Value<String> clientChangeId,
-      Value<String> resource,
-      Value<String> resourceId,
-      Value<String> op,
-      Value<String?> payload,
-      Value<bool> synced,
+      Value<String> commandId,
+      Value<String> opsJson,
+      Value<int> createdAt,
     });
 
-class $$ChangeLogTableFilterComposer
-    extends Composer<_$AppDatabase, $ChangeLogTable> {
-  $$ChangeLogTableFilterComposer({
+class $$SyncPendingCommandsTableFilterComposer
+    extends Composer<_$AppDatabase, $SyncPendingCommandsTable> {
+  $$SyncPendingCommandsTableFilterComposer({
     required super.$db,
     required super.$table,
     super.joinBuilder,
@@ -17749,45 +17549,25 @@ class $$ChangeLogTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<int> get at => $composableBuilder(
-    column: $table.at,
+  ColumnFilters<String> get commandId => $composableBuilder(
+    column: $table.commandId,
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<String> get clientChangeId => $composableBuilder(
-    column: $table.clientChangeId,
+  ColumnFilters<String> get opsJson => $composableBuilder(
+    column: $table.opsJson,
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<String> get resource => $composableBuilder(
-    column: $table.resource,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get resourceId => $composableBuilder(
-    column: $table.resourceId,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get op => $composableBuilder(
-    column: $table.op,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get payload => $composableBuilder(
-    column: $table.payload,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<bool> get synced => $composableBuilder(
-    column: $table.synced,
+  ColumnFilters<int> get createdAt => $composableBuilder(
+    column: $table.createdAt,
     builder: (column) => ColumnFilters(column),
   );
 }
 
-class $$ChangeLogTableOrderingComposer
-    extends Composer<_$AppDatabase, $ChangeLogTable> {
-  $$ChangeLogTableOrderingComposer({
+class $$SyncPendingCommandsTableOrderingComposer
+    extends Composer<_$AppDatabase, $SyncPendingCommandsTable> {
+  $$SyncPendingCommandsTableOrderingComposer({
     required super.$db,
     required super.$table,
     super.joinBuilder,
@@ -17799,45 +17579,25 @@ class $$ChangeLogTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<int> get at => $composableBuilder(
-    column: $table.at,
+  ColumnOrderings<String> get commandId => $composableBuilder(
+    column: $table.commandId,
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<String> get clientChangeId => $composableBuilder(
-    column: $table.clientChangeId,
+  ColumnOrderings<String> get opsJson => $composableBuilder(
+    column: $table.opsJson,
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<String> get resource => $composableBuilder(
-    column: $table.resource,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get resourceId => $composableBuilder(
-    column: $table.resourceId,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get op => $composableBuilder(
-    column: $table.op,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get payload => $composableBuilder(
-    column: $table.payload,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<bool> get synced => $composableBuilder(
-    column: $table.synced,
+  ColumnOrderings<int> get createdAt => $composableBuilder(
+    column: $table.createdAt,
     builder: (column) => ColumnOrderings(column),
   );
 }
 
-class $$ChangeLogTableAnnotationComposer
-    extends Composer<_$AppDatabase, $ChangeLogTable> {
-  $$ChangeLogTableAnnotationComposer({
+class $$SyncPendingCommandsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $SyncPendingCommandsTable> {
+  $$SyncPendingCommandsTableAnnotationComposer({
     required super.$db,
     required super.$table,
     super.joinBuilder,
@@ -17847,100 +17607,80 @@ class $$ChangeLogTableAnnotationComposer
   GeneratedColumn<int> get id =>
       $composableBuilder(column: $table.id, builder: (column) => column);
 
-  GeneratedColumn<int> get at =>
-      $composableBuilder(column: $table.at, builder: (column) => column);
+  GeneratedColumn<String> get commandId =>
+      $composableBuilder(column: $table.commandId, builder: (column) => column);
 
-  GeneratedColumn<String> get clientChangeId => $composableBuilder(
-    column: $table.clientChangeId,
-    builder: (column) => column,
-  );
+  GeneratedColumn<String> get opsJson =>
+      $composableBuilder(column: $table.opsJson, builder: (column) => column);
 
-  GeneratedColumn<String> get resource =>
-      $composableBuilder(column: $table.resource, builder: (column) => column);
-
-  GeneratedColumn<String> get resourceId => $composableBuilder(
-    column: $table.resourceId,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<String> get op =>
-      $composableBuilder(column: $table.op, builder: (column) => column);
-
-  GeneratedColumn<String> get payload =>
-      $composableBuilder(column: $table.payload, builder: (column) => column);
-
-  GeneratedColumn<bool> get synced =>
-      $composableBuilder(column: $table.synced, builder: (column) => column);
+  GeneratedColumn<int> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
 }
 
-class $$ChangeLogTableTableManager
+class $$SyncPendingCommandsTableTableManager
     extends
         RootTableManager<
           _$AppDatabase,
-          $ChangeLogTable,
-          ChangeLogRow,
-          $$ChangeLogTableFilterComposer,
-          $$ChangeLogTableOrderingComposer,
-          $$ChangeLogTableAnnotationComposer,
-          $$ChangeLogTableCreateCompanionBuilder,
-          $$ChangeLogTableUpdateCompanionBuilder,
+          $SyncPendingCommandsTable,
+          SyncPendingCommandRow,
+          $$SyncPendingCommandsTableFilterComposer,
+          $$SyncPendingCommandsTableOrderingComposer,
+          $$SyncPendingCommandsTableAnnotationComposer,
+          $$SyncPendingCommandsTableCreateCompanionBuilder,
+          $$SyncPendingCommandsTableUpdateCompanionBuilder,
           (
-            ChangeLogRow,
-            BaseReferences<_$AppDatabase, $ChangeLogTable, ChangeLogRow>,
+            SyncPendingCommandRow,
+            BaseReferences<
+              _$AppDatabase,
+              $SyncPendingCommandsTable,
+              SyncPendingCommandRow
+            >,
           ),
-          ChangeLogRow,
+          SyncPendingCommandRow,
           PrefetchHooks Function()
         > {
-  $$ChangeLogTableTableManager(_$AppDatabase db, $ChangeLogTable table)
-    : super(
+  $$SyncPendingCommandsTableTableManager(
+    _$AppDatabase db,
+    $SyncPendingCommandsTable table,
+  ) : super(
         TableManagerState(
           db: db,
           table: table,
           createFilteringComposer: () =>
-              $$ChangeLogTableFilterComposer($db: db, $table: table),
+              $$SyncPendingCommandsTableFilterComposer($db: db, $table: table),
           createOrderingComposer: () =>
-              $$ChangeLogTableOrderingComposer($db: db, $table: table),
+              $$SyncPendingCommandsTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
           createComputedFieldComposer: () =>
-              $$ChangeLogTableAnnotationComposer($db: db, $table: table),
+              $$SyncPendingCommandsTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
           updateCompanionCallback:
               ({
                 Value<int> id = const Value.absent(),
-                Value<int> at = const Value.absent(),
-                Value<String> clientChangeId = const Value.absent(),
-                Value<String> resource = const Value.absent(),
-                Value<String> resourceId = const Value.absent(),
-                Value<String> op = const Value.absent(),
-                Value<String?> payload = const Value.absent(),
-                Value<bool> synced = const Value.absent(),
-              }) => ChangeLogCompanion(
+                Value<String> commandId = const Value.absent(),
+                Value<String> opsJson = const Value.absent(),
+                Value<int> createdAt = const Value.absent(),
+              }) => SyncPendingCommandsCompanion(
                 id: id,
-                at: at,
-                clientChangeId: clientChangeId,
-                resource: resource,
-                resourceId: resourceId,
-                op: op,
-                payload: payload,
-                synced: synced,
+                commandId: commandId,
+                opsJson: opsJson,
+                createdAt: createdAt,
               ),
           createCompanionCallback:
               ({
                 Value<int> id = const Value.absent(),
-                required int at,
-                Value<String> clientChangeId = const Value.absent(),
-                required String resource,
-                required String resourceId,
-                required String op,
-                Value<String?> payload = const Value.absent(),
-                Value<bool> synced = const Value.absent(),
-              }) => ChangeLogCompanion.insert(
+                required String commandId,
+                required String opsJson,
+                required int createdAt,
+              }) => SyncPendingCommandsCompanion.insert(
                 id: id,
-                at: at,
-                clientChangeId: clientChangeId,
-                resource: resource,
-                resourceId: resourceId,
-                op: op,
-                payload: payload,
-                synced: synced,
+                commandId: commandId,
+                opsJson: opsJson,
+                createdAt: createdAt,
               ),
           withReferenceMapper: (p0) => p0
               .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
@@ -17950,21 +17690,25 @@ class $$ChangeLogTableTableManager
       );
 }
 
-typedef $$ChangeLogTableProcessedTableManager =
+typedef $$SyncPendingCommandsTableProcessedTableManager =
     ProcessedTableManager<
       _$AppDatabase,
-      $ChangeLogTable,
-      ChangeLogRow,
-      $$ChangeLogTableFilterComposer,
-      $$ChangeLogTableOrderingComposer,
-      $$ChangeLogTableAnnotationComposer,
-      $$ChangeLogTableCreateCompanionBuilder,
-      $$ChangeLogTableUpdateCompanionBuilder,
+      $SyncPendingCommandsTable,
+      SyncPendingCommandRow,
+      $$SyncPendingCommandsTableFilterComposer,
+      $$SyncPendingCommandsTableOrderingComposer,
+      $$SyncPendingCommandsTableAnnotationComposer,
+      $$SyncPendingCommandsTableCreateCompanionBuilder,
+      $$SyncPendingCommandsTableUpdateCompanionBuilder,
       (
-        ChangeLogRow,
-        BaseReferences<_$AppDatabase, $ChangeLogTable, ChangeLogRow>,
+        SyncPendingCommandRow,
+        BaseReferences<
+          _$AppDatabase,
+          $SyncPendingCommandsTable,
+          SyncPendingCommandRow
+        >,
       ),
-      ChangeLogRow,
+      SyncPendingCommandRow,
       PrefetchHooks Function()
     >;
 typedef $$SyncChangesTableCreateCompanionBuilder =
@@ -19962,8 +19706,8 @@ class $AppDatabaseManager {
       $$AppKvTableTableManager(_db, _db.appKv);
   $$AuditLogTableTableManager get auditLog =>
       $$AuditLogTableTableManager(_db, _db.auditLog);
-  $$ChangeLogTableTableManager get changeLog =>
-      $$ChangeLogTableTableManager(_db, _db.changeLog);
+  $$SyncPendingCommandsTableTableManager get syncPendingCommands =>
+      $$SyncPendingCommandsTableTableManager(_db, _db.syncPendingCommands);
   $$SyncChangesTableTableManager get syncChanges =>
       $$SyncChangesTableTableManager(_db, _db.syncChanges);
   $$SyncRegistersTableTableManager get syncRegisters =>

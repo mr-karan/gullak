@@ -8,13 +8,8 @@ import { loadConfig } from "../src/config.ts";
 import { getDb } from "../src/db/index.ts";
 import * as schema from "../src/db/schema.ts";
 import {
-  activateWithGuardrails,
   collectSyncV2Status,
-  prepareWithGuardrails,
-  repairOrphanTransactionTagsWithGuardrails,
-  retireLegacyClientWithGuardrails,
   retireClientWithGuardrails,
-  sealLegacyInventoryWithGuardrails,
   SyncV2OperatorError,
 } from "../src/sync/operator.ts";
 
@@ -22,15 +17,10 @@ function usage(): never {
   throw new SyncV2OperatorError(`usage:
   npm run sync:v2 -- status
   npm run sync:v2 -- audit
-  npm run sync:v2 -- repair-orphan-tags --confirm REPAIR-ORPHAN-TAGS --backup PATH --backup-sha256 HEX [--dry-run]
-  npm run sync:v2 -- prepare --backup PATH --backup-sha256 HEX [--epoch ID] [--genesis-actor ID] [--server-actor ID] [--dry-run]
-  npm run sync:v2 -- seal-legacy --epoch ID --clients ID[,ID...] --confirm SEAL-LEGACY:ID --backup PATH --backup-sha256 HEX [--dry-run]
-  npm run sync:v2 -- activate --epoch ID --confirm ACTIVATE:ID --backup PATH --backup-sha256 HEX [--dry-run]
-  npm run sync:v2 -- retire-legacy --client ID --confirm RETIRE-LEGACY:ID --backup PATH --backup-sha256 HEX [--dry-run]
   npm run sync:v2 -- retire --actor ID --confirm RETIRE:ID --backup PATH --backup-sha256 HEX [--dry-run]
 
-status and audit are read-only. prepare/activate refuse to run unless a distinct,
-non-empty backup file exists and its SHA-256 matches. No command deletes data.`);
+status and audit are read-only. Retirement requires an exact confirmation and a
+current, checksummed SQLite backup. This tool never deletes CRDT history.`);
 }
 
 function parseArgs(argv: string[]) {
@@ -52,16 +42,10 @@ function parseArgs(argv: string[]) {
   return { command, flags };
 }
 
-function stringFlag(
-  flags: Map<string, string | true>,
-  name: string,
-  required = false,
-): string | undefined {
+function requiredFlag(flags: Map<string, string | true>, name: string): string {
   const value = flags.get(name);
-  if (required && typeof value !== "string") {
-    throw new SyncV2OperatorError(`${name} is required`);
-  }
-  return typeof value === "string" ? value : undefined;
+  if (typeof value !== "string") throw new SyncV2OperatorError(`${name} is required`);
+  return value;
 }
 
 async function main(): Promise<void> {
@@ -74,18 +58,13 @@ async function main(): Promise<void> {
       fileMustExist: true,
     });
     try {
-      const readOnlyDb = drizzle(sqlite, { schema });
-      const report = collectSyncV2Status(readOnlyDb, config.syncV2Mode);
+      const report = collectSyncV2Status(drizzle(sqlite, { schema }));
       console.log(JSON.stringify(report, null, 2));
       if (
         command === "audit" &&
-        (!report.config.matches ||
+        (!report.activeEpochInvariant.valid ||
           !report.projection.valid ||
-          report.epochs.some(
-            (epoch) =>
-              ["preparing", "active"].includes(epoch.status) &&
-              !epoch.integrity.clean,
-          ))
+          report.epochs.some((epoch) => !epoch.integrity.clean))
       ) {
         process.exitCode = 2;
       }
@@ -94,95 +73,27 @@ async function main(): Promise<void> {
     }
     return;
   }
-
-  const db = getDb();
-  const backupPath = stringFlag(flags, "--backup", true)!;
-  const backupSha256 = stringFlag(flags, "--backup-sha256", true)!;
-  const backup = {
-    path: resolve(backupPath),
-    sha256: backupSha256,
-    databasePath: resolve(config.dbPath),
-  };
-  if (command === "repair-orphan-tags") {
-    const result = await repairOrphanTransactionTagsWithGuardrails(db, {
-      confirmation: stringFlag(flags, "--confirm", true)!,
-      backup,
-      dryRun: flags.get("--dry-run") === true,
-      configuredMode: config.syncV2Mode,
-    });
-    console.log(JSON.stringify(result, null, 2));
-    return;
-  }
-  if (command === "prepare") {
-    const result = await prepareWithGuardrails(db, {
-      epochId: stringFlag(flags, "--epoch"),
-      genesisActorId: stringFlag(flags, "--genesis-actor"),
-      serverActorId: stringFlag(flags, "--server-actor"),
-      backup,
-      dryRun: flags.get("--dry-run") === true,
-      configuredMode: config.syncV2Mode,
-    });
-    console.log(JSON.stringify(result, null, 2));
-    return;
-  }
-  if (command === "activate") {
-    const epochId = stringFlag(flags, "--epoch", true)!;
-    const result = await activateWithGuardrails(db, {
-      epochId,
-      confirmation: stringFlag(flags, "--confirm", true)!,
-      backup,
-      dryRun: flags.get("--dry-run") === true,
-      configuredMode: config.syncV2Mode,
-    });
-    console.log(JSON.stringify(result, null, 2));
-    return;
-  }
-  if (command === "seal-legacy") {
-    const epochId = stringFlag(flags, "--epoch", true)!;
-    const clients = (stringFlag(flags, "--clients") ?? "")
-      .split(",")
-      .map((value) => value.trim())
-      .filter((value) => value.length > 0);
-    const result = await sealLegacyInventoryWithGuardrails(db, {
-      epochId,
-      clientIds: clients,
-      confirmation: stringFlag(flags, "--confirm", true)!,
-      backup,
-      dryRun: flags.get("--dry-run") === true,
-      configuredMode: config.syncV2Mode,
-    });
-    console.log(JSON.stringify(result, null, 2));
-    return;
-  }
-  if (command === "retire") {
-    const actorId = stringFlag(flags, "--actor", true)!;
-    const result = await retireClientWithGuardrails(db, {
-      actorId,
-      confirmation: stringFlag(flags, "--confirm", true)!,
-      backup,
-      dryRun: flags.get("--dry-run") === true,
-      configuredMode: config.syncV2Mode,
-    });
-    console.log(JSON.stringify(result, null, 2));
-    return;
-  }
-  if (command === "retire-legacy") {
-    const clientId = stringFlag(flags, "--client", true)!;
-    const result = await retireLegacyClientWithGuardrails(db, {
-      clientId,
-      confirmation: stringFlag(flags, "--confirm", true)!,
-      backup,
-      dryRun: flags.get("--dry-run") === true,
-      configuredMode: config.syncV2Mode,
-    });
-    console.log(JSON.stringify(result, null, 2));
-    return;
-  }
-  usage();
+  if (command !== "retire") usage();
+  const result = await retireClientWithGuardrails(getDb(), {
+    actorId: requiredFlag(flags, "--actor"),
+    confirmation: requiredFlag(flags, "--confirm"),
+    backup: {
+      path: resolve(requiredFlag(flags, "--backup")),
+      sha256: requiredFlag(flags, "--backup-sha256"),
+      databasePath: resolve(config.dbPath),
+    },
+    dryRun: flags.get("--dry-run") === true,
+  });
+  console.log(JSON.stringify(result, null, 2));
 }
 
 main().catch((error: unknown) => {
-  const message = error instanceof Error ? error.message : String(error);
-  console.error(JSON.stringify({ ok: false, error: message }, null, 2));
+  console.error(
+    JSON.stringify(
+      { ok: false, error: error instanceof Error ? error.message : String(error) },
+      null,
+      2,
+    ),
+  );
   process.exitCode = 1;
 });

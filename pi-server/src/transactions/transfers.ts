@@ -3,7 +3,7 @@ import { and, eq, ne } from "drizzle-orm";
 import type { NewTransaction, Transaction } from "../db/schema.ts";
 import { transactions } from "../db/schema.ts";
 import type { DbOrTx } from "../repos/changelog.ts";
-import { newId, recordChange } from "../repos/changelog.ts";
+import { newId, recordChange, recordCommand } from "../repos/changelog.ts";
 
 // Port of Actual's transfer model. A transfer is NOT a special row type: it is
 // TWO ordinary transactions linked by a shared `transferGroupId`, auto-mirrored
@@ -49,10 +49,17 @@ export function findSibling(
  * Create a transfer pair from a fully-built primary row whose
  * `transferAccountId` names the target account B. Assigns a fresh
  * `transferGroupId` to both legs, nulls both categories, and negates the mirror
- * amount. Writes both rows + a change_log upsert for each, all on the given
- * `tx` handle. Returns the persisted primary and mirror rows.
+ * amount. Writes both rows and one atomic multi-entity event. Returns the
+ * persisted primary and mirror rows.
  */
 export function createTransferPair(
+  db: DbOrTx,
+  primary: NewTransaction,
+): { primary: NewTransaction; mirror: NewTransaction } {
+  return recordCommand(db, (tx) => createTransferPairInCommand(tx, primary));
+}
+
+function createTransferPairInCommand(
   db: DbOrTx,
   primary: NewTransaction,
 ): { primary: NewTransaction; mirror: NewTransaction } {
@@ -120,10 +127,23 @@ export function createTransferPair(
  * Propagate an edit of one transfer leg to its sibling: the sibling's amount
  * becomes the negation of the edited leg's amount, its date/notes are kept in
  * sync, and its category is forced null. This is a DIRECT db write on the
- * sibling (plus its change_log upsert) — it does NOT go back through the PATCH
+ * sibling (plus its field ops) — it does NOT go back through the PATCH
  * route, so there is no recursion and exactly one propagation per edit.
  */
 export function propagateEdit(
+  db: DbOrTx,
+  editedLeg: Pick<
+    Transaction,
+    "amountCents" | "date" | "notes" | "updatedAt"
+  >,
+  sibling: Transaction,
+): Transaction {
+  return recordCommand(db, (tx) =>
+    propagateEditInCommand(tx, editedLeg, sibling),
+  );
+}
+
+function propagateEditInCommand(
   db: DbOrTx,
   editedLeg: Pick<
     Transaction,
@@ -153,11 +173,19 @@ export function propagateEdit(
 }
 
 /**
- * Delete both legs of a transfer, with a change_log delete for each. Safe to
+ * Delete both legs of a transfer, with a lifecycle tombstone for each. Safe to
  * call with a missing sibling (half-linked legacy data): it just deletes the
  * one row it was given.
  */
 export function deletePair(
+  db: DbOrTx,
+  row: Pick<Transaction, "id">,
+  sibling: Transaction | undefined,
+): void {
+  recordCommand(db, (tx) => deletePairInCommand(tx, row, sibling));
+}
+
+function deletePairInCommand(
   db: DbOrTx,
   row: Pick<Transaction, "id">,
   sibling: Transaction | undefined,

@@ -18,6 +18,9 @@ function makeDb() {
   const sqlite = new Database(":memory:");
   const db = drizzle(sqlite, { schema });
   migrate(db, { migrationsFolder: "./drizzle" });
+  db.insert(schema.categoryGroups)
+    .values({ id: "g1", name: "Everyday", sortOrder: 0 })
+    .run();
   db.insert(schema.accounts)
     .values({ id: "a1", name: "HDFC", openingBalanceCents: 0, createdAt: at, updatedAt: at })
     .run();
@@ -47,6 +50,7 @@ function addTxn(
       date: "2026-07-01",
       createdAt: at,
       updatedAt: at,
+      cleared: opts.reconciled === true,
       ...opts,
     })
     .run();
@@ -61,11 +65,19 @@ function rowById(db: ReturnType<typeof makeDb>, id: string) {
 }
 
 function changeLogFor(db: ReturnType<typeof makeDb>, id: string, op: string) {
-  return db
-    .select()
-    .from(schema.changeLog)
-    .all()
-    .filter((r) => r.resourceId === id && r.op === op);
+  return db.select().from(schema.syncChanges).all().filter((event) =>
+    event.source !== "genesis" &&
+    (JSON.parse(event.opsJson) as Array<{
+      entityId: string;
+      field: string;
+      value: unknown;
+    }>).some((item) =>
+      item.entityId === id &&
+      (op === "delete"
+        ? item.field.startsWith("$") && item.value === false
+        : !(item.field.startsWith("$") && item.value === false)),
+    ),
+  );
 }
 
 // ── categorize_transactions ──────────────────────────────────────────────────
@@ -86,7 +98,7 @@ test("categorize_transactions sets category, change-logs each, learns, undo rest
   expect(data.skippedLocked).toEqual([]);
   expect(rowById(db, "t1")!.categoryId).toBe("c-food");
   expect(rowById(db, "t2")!.categoryId).toBe("c-food");
-  // change_log upsert for each.
+  // The compound event names each updated transaction.
   expect(changeLogFor(db, "t1", "upsert")).toHaveLength(1);
   expect(changeLogFor(db, "t2", "upsert")).toHaveLength(1);
   // The action carries an undo referencing the previous categories.
@@ -198,6 +210,10 @@ test("delete_transactions cascades a split parent; undo re-creates parent+childr
   addTxn(db, "p", -100_00);
   addTxn(db, "c1", -60_00, { parentId: "p" });
   addTxn(db, "c2", -40_00, { parentId: "p" });
+  db.update(schema.transactions)
+    .set({ splitTotalCents: -100_00 })
+    .where(eq(schema.transactions.id, "p"))
+    .run();
 
   const res = runWriteTool(db, {
     tool: "delete_transactions",

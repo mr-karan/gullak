@@ -8,7 +8,6 @@ import 'package:gullak/core/secure_store.dart';
 import 'package:gullak/data/db/database.dart';
 import 'package:gullak/features/onboarding/onboarding_flow.dart';
 import 'package:gullak/state/providers.dart';
-import 'package:gullak/sync/remote_applier.dart';
 import 'package:gullak/sync/sync_service.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -61,13 +60,7 @@ void main() {
     final prefs = await Prefs.load();
     final db = AppDatabase.forTesting(NativeDatabase.memory());
     final secure = SecureStore();
-    final sync = SyncService(
-      db,
-      secure,
-      prefs,
-      RemoteApplier(db),
-      dio: syncDio,
-    );
+    final sync = SyncService(db, secure, prefs, dio: syncDio);
     addTearDown(db.close);
 
     await tester.binding.setSurfaceSize(surfaceSize);

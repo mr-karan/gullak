@@ -27,8 +27,8 @@ AI-assisted entry, Android SMS review, activity/reporting UI, and the sync
 client (push/pull + a scheduler that runs on foreground and after mutations).
 
 ### `pi-server/` — Node + Hono + Drizzle + better-sqlite3
-An HTTP API run with `tsx`. It mirrors the app's schema, stores the sync
-change-log, runs LLM extraction and the multi-turn agent, and pushes categorised
+An HTTP API run with `tsx`. It mirrors the app's schema, stores the immutable
+causal event journal, runs LLM extraction and the multi-turn agent, and pushes categorised
 activity to external destinations. It is the only place model/API credentials
 live. (It runs on Node specifically because the Actual Budget client needs the
 native `better-sqlite3` module.)
@@ -46,30 +46,31 @@ in a single local SQLite DB.
 | IDs | UUID text, **client-generated**; the server accepts and stores them. |
 | Dates | `YYYY-MM-DD` text. |
 | Timestamps | epoch-ms integers. |
-| Conflicts | **last-write-wins** by `updatedAt`. |
+| Conflicts | Causal per-field multi-value registers; deterministic projection of concurrent candidates. |
 
 The Drift schema (`app/lib/data/db/tables.dart`) and the Drizzle schema
 (`pi-server/src/db/schema.ts`) are deliberate mirrors of each other.
 
 ## Sync model
 
-Bidirectional, additive, and idempotent. Every mutation is also an append to a
-`change_log`.
+Bidirectional, append-only, and idempotent. The immutable event set is the
+replicated authority; relational rows are a materialized projection.
 
-1. App repositories write to Drift and append a local `change_log` row with a
-   `clientChangeId`.
-2. `SyncService.pushPending` batches unsynced mutations to `POST /v1/sync/push`.
-3. The server applies row changes and appends server `change_log` entries in a
-   single transaction. A unique `(client_id, client_change_id)` makes retries
-   idempotent. Last-write-wins is enforced in SQL: an upsert wins only when
-   `incoming.updated_at >= stored`; a delete only when its tombstone is newer.
-4. `SyncService.pullChanges` pages `GET /v1/sync/changes` and applies remote rows
-   via `RemoteApplier`, bypassing repositories so it never recurses into the
-   local change-log.
-5. The server filters out changes that originated from the requesting `clientId`,
-   so a client never re-applies its own writes.
+1. `SyncWriter.command` commits the local row changes and one event containing
+   only the fields that action changed in the same Drift transaction.
+2. `SyncService` registers an authenticated actor, bootstraps from a verified
+   checkpoint when necessary, and pushes exact event dots `(actorId, sequence)`.
+3. The server validates and folds events into causal per-field registers,
+   materializes affected rows, and advances frontiers in one SQLite transaction.
+4. Pull pages exchange immutable events. Duplicate delivery and echoes are
+   idempotent; malformed events are quarantined and surfaced without wedging the
+   cursor.
+5. Acknowledgements contain the exact cursor and causal frontier. A pruned or
+   invalid cursor requires checkpoint bootstrap rather than guessing.
 
-`syncOnce` = push → pull → prune synced log rows older than a retention window.
+Different-field concurrent edits both survive. Same-field concurrent candidates
+are retained; Lamport/actor/sequence ordering selects one visible projection on
+every replica. Wall-clock timestamps are audit metadata only.
 
 ## SMS + AI
 
@@ -101,10 +102,10 @@ official API) ship today. Full spec: [destinations.md](destinations.md).
 | Area | Path |
 | --- | --- |
 | Drift schema / database | `app/lib/data/db/` |
-| Sync client / remote applier | `app/lib/sync/` |
+| Sync client / CRDT fold | `app/lib/sync/` |
 | Drizzle schema | `pi-server/src/db/schema.ts` |
 | HTTP routers (one per resource) | `pi-server/src/routes/` |
-| Change-log helper | `pi-server/src/repos/changelog.ts` |
+| Command/event boundary | `pi-server/src/repos/changelog.ts` |
 | LLM extraction prompts | `pi-server/src/ai/` |
 | Multi-turn agent | `pi-server/src/agent/` |
 | Export destinations | `pi-server/src/destinations/` |

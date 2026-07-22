@@ -92,9 +92,8 @@ function apply(db: ReturnType<typeof makeDb>["db"], envelope: unknown) {
 }
 
 describe("immutable change admission", () => {
-  test("accepts in active and preparing epochs and advances durable metadata", () => {
-    for (const status of ["active", "preparing"]) {
-      const { db, sqlite } = makeDb(status);
+  test("accepts in the active epoch and advances durable metadata", () => {
+      const { db, sqlite } = makeDb("active");
       const envelope = change();
       const result = apply(db, envelope);
 
@@ -115,7 +114,14 @@ describe("immutable change admission", () => {
         integratedCursor: 1,
       });
       sqlite.close();
-    }
+  });
+
+  test("rejects runtime admission into a preparing epoch", () => {
+    const { db } = makeDb("preparing");
+    expect(apply(db, change())).toMatchObject({
+      status: "rejected",
+      code: "wrong_epoch",
+    });
   });
 
   test("an exact canonical duplicate is idempotent", () => {

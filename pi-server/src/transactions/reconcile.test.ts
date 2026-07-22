@@ -233,9 +233,9 @@ test("adjustment sign: target > cleared → positive; target < cleared → negat
   expect(rowById(db, negBody.adjustmentId)!.amountCents).toBe(-200_00);
 });
 
-// ── change_log ──────────────────────────────────────────────────────────────
+// ── causal event ────────────────────────────────────────────────────────────
 
-test("change_log: reconcile emits upserts for each locked txn + account + adjustment", async () => {
+test("reconcile emits one atomic event covering every affected entity", async () => {
   const { app, db } = makeApp();
   addAccount(db, "a1", 0);
   addTxn(db, { id: "c1", accountId: "a1", amountCents: -300_00, cleared: true });
@@ -245,16 +245,14 @@ test("change_log: reconcile emits upserts for each locked txn + account + adjust
     await reconcile(app, "a1", { targetBalanceCents: -500_00, createAdjustment: true })
   ).json()) as { adjustmentId: string };
 
-  const log = db.select().from(schema.changeLog).all();
-  // Each pre-existing cleared txn locked.
-  expect(log.filter((r) => r.resource === "transactions" && r.resourceId === "c1" && r.op === "upsert")).toHaveLength(1);
-  expect(log.filter((r) => r.resource === "transactions" && r.resourceId === "c2" && r.op === "upsert")).toHaveLength(1);
-  // The adjustment.
-  expect(
-    log.filter((r) => r.resource === "transactions" && r.resourceId === body.adjustmentId && r.op === "upsert"),
-  ).toHaveLength(1);
-  // The account.
-  expect(log.filter((r) => r.resource === "accounts" && r.resourceId === "a1" && r.op === "upsert")).toHaveLength(1);
+  const events = db.select().from(schema.syncChanges).all();
+  expect(events).toHaveLength(2);
+  const ids = new Set(
+    (JSON.parse(events.at(-1)!.opsJson) as Array<{ entityId: string }>).map(
+      (op) => op.entityId,
+    ),
+  );
+  expect(ids).toEqual(new Set(["c1", "c2", body.adjustmentId, "a1"]));
 });
 
 test("reconcile on a missing account is 404", async () => {

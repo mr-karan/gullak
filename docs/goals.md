@@ -20,9 +20,9 @@ subscription, and make manual logging slow. Gullak inverts that:
 
 ## Principles
 
-1. **Phone is the source of truth.** The app is fully functional offline. Sync
-   is additive, and conflicts resolve deterministically (last-write-wins by
-   `updatedAt`).
+1. **The app is fully functional offline.** Each replica records immutable,
+   field-level operations. Sync unions those operations and folds them into the
+   same deterministic projection without trusting wall-clock timestamps.
 2. **The server is optional and self-hosted.** No hosted SaaS, no telemetry.
    Point the app at your own server URL or run with none at all.
 3. **Own your credentials.** AI provider keys live only on the server. The app

@@ -7,16 +7,15 @@ import '../../../core/logger.dart';
 import '../../../data/db/database.dart';
 import '../../../state/providers.dart';
 import '../../../core/dates.dart';
-import '../../../sync/changelog_writer.dart';
+import '../../../sync/sync_writer.dart';
 
 export '../../../data/db/database.dart' show RecurrenceRow;
 
 class RecurrenceRepository {
-  RecurrenceRepository(this._db, {ChangeLogWriter? changes})
-    : _changes = changes;
+  RecurrenceRepository(this._db, {SyncWriter? changes}) : _changes = changes;
 
   final AppDatabase _db;
-  final ChangeLogWriter? _changes;
+  final SyncWriter? _changes;
   static const _uuid = Uuid();
 
   Future<T> _command<T>(Future<T> Function() callback) =>
@@ -104,7 +103,8 @@ class RecurrenceRepository {
   /// Idempotent by construction: each occurrence's transaction id is a
   /// deterministic UUIDv5 of (recurrenceId, occurrence date), so re-running —
   /// or a second device posting the same occurrence before sync — upserts the
-  /// same row rather than double-booking (LWW dedups by id on sync). Returns
+  /// same row rather than double-booking. The causal fold deduplicates the
+  /// identical entity id across replicas. Returns
   /// the number of transactions posted.
   Future<int> postDue({DateTime? asOf}) async {
     return _command(() async {
@@ -230,7 +230,7 @@ final Provider<RecurrenceRepository> recurrenceRepoProvider =
     Provider<RecurrenceRepository>(
       (ref) => RecurrenceRepository(
         ref.watch(dbProvider),
-        changes: ref.watch(changeLogWriterProvider),
+        changes: ref.watch(syncWriterProvider),
       ),
     );
 

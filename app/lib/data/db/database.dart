@@ -30,7 +30,7 @@ part 'database.g.dart';
     SmsParseCache,
     AppKv,
     AuditLog,
-    ChangeLog,
+    SyncPendingCommands,
     SyncChanges,
     SyncRegisters,
     SyncFrontiers,
@@ -44,7 +44,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 14;
+  int get schemaVersion => 15;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -98,10 +98,6 @@ class AppDatabase extends _$AppDatabase {
         'CREATE INDEX IF NOT EXISTS idx_sms_next_parse '
         'ON sms_messages(candidate_status, next_parse_after)',
       );
-      await customStatement(
-        'CREATE INDEX IF NOT EXISTS idx_change_log_synced '
-        'ON change_log(synced, id)',
-      );
       // #46 grouping: fetch a parent's children.
       await customStatement(
         'CREATE INDEX IF NOT EXISTS idx_tx_group_parent '
@@ -110,24 +106,6 @@ class AppDatabase extends _$AppDatabase {
       await _createSyncV2Indexes();
     },
     onUpgrade: (m, from, to) async {
-      if (from < 2) {
-        await m.createTable(changeLog);
-        await customStatement(
-          'CREATE INDEX IF NOT EXISTS idx_change_log_synced '
-          'ON change_log(synced, id)',
-        );
-      }
-      if (from < 3) {
-        // Schema v3 adds clientChangeId so server-side dedupe works.
-        // The column has DEFAULT '' so the ALTER TABLE on populated
-        // installs doesn't fail. Pre-existing rows predate sync; mark
-        // them synced=true so they never reach the push path with an
-        // empty client_change_id (the server requires non-empty).
-        await m.addColumn(changeLog, changeLog.clientChangeId);
-        await customStatement(
-          'UPDATE change_log SET synced = 1 WHERE client_change_id = ""',
-        );
-      }
       if (from < 4) {
         // Schema v4 introduces the SMS LLM-parse cache. The bank
         // regex parsers are gone; this table amortises the LLM cost
@@ -250,10 +228,8 @@ class AppDatabase extends _$AppDatabase {
         );
       }
       if (from < 14) {
-        // Protocol v2 is additive and dormant during rollout. Create its whole
-        // persistence surface in one transaction so a crash cannot leave a
-        // partially-created CRDT store. The legacy ChangeLog and rule tables
-        // remain intact until every v0.4 installation has drained.
+        // Create the causal sync persistence surface in one transaction so a
+        // crash cannot leave a partially-created CRDT store.
         await transaction(() async {
           await m.createTable(syncChanges);
           await m.createTable(syncRegisters);
@@ -264,10 +240,33 @@ class AppDatabase extends _$AppDatabase {
           await _createSyncV2Indexes();
         });
       }
+      if (from < 15) {
+        // Every known field replica drained this outbox before the v2 cutover.
+        // Refuse rather than silently discard an unknown offline edit from an
+        // abandoned installation.
+        final pending = await customSelect(
+          'SELECT count(*) AS n FROM change_log WHERE synced = 0',
+        ).getSingle();
+        if (pending.read<int>('n') != 0) {
+          throw StateError(
+            'Cannot remove legacy sync state while unsent changes remain.',
+          );
+        }
+        await m.deleteTable('change_log');
+        await m.createTable(syncPendingCommands);
+        await customStatement(
+          'CREATE INDEX IF NOT EXISTS idx_sync_pending_commands_created '
+          'ON sync_pending_commands(created_at, id)',
+        );
+      }
     },
   );
 
   Future<void> _createSyncV2Indexes() async {
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_sync_pending_commands_created '
+      'ON sync_pending_commands(created_at, id)',
+    );
     await customStatement(
       'CREATE INDEX IF NOT EXISTS idx_sync_changes_outbox '
       'ON sync_changes(outbox_state, created_at)',

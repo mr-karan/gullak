@@ -624,8 +624,8 @@ function restoreTransactions(db: Db, payloads: Transaction[]): WriteToolResult {
   const restored: string[] = [];
   recordCommand(db, (tx) => {
     for (const p of payloads) {
-      // Bump updatedAt so the re-created row wins LWW over the earlier delete on
-      // other clients.
+      // Keep updatedAt meaningful for presentation and exports. Causal sync
+      // ordering comes from the authored operations, not this wall clock.
       const row = { ...p, updatedAt: nowMs() };
       tx.insert(transactions)
         .values(row)

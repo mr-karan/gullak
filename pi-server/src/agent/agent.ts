@@ -26,7 +26,7 @@ import type { WriteAction } from "./write_tools.ts";
 /// Conversational entry point used by /v1/messages and the WhatsApp webhook.
 /// Cheap deterministic paths run first and never touch the LLM:
 ///   - log: parse N expenses and BOOK each straight into the server DB
-///     (with a change_log row), so the phone, sheets, and every other client
+///     (with a causal event), so the phone and every other client
 ///     pull them via normal sync. The reply states what was booked (account +
 ///     category) so the user can correct it in-app — the app remains the place
 ///     to review/edit, but the server is the source of truth.
@@ -272,7 +272,7 @@ async function handleLog(
         .values(row)
         .onConflictDoUpdate({ target: transactions.id, set: row })
         .run();
-      // change_log row → phone / sheets / any client pulls it via normal sync.
+      // Immutable event → every client converges through normal sync.
       recordChange(tx, {
         resource: "transactions",
         resourceId: id,

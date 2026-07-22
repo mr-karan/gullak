@@ -23,6 +23,9 @@ function makeDb() {
   migrate(db, { migrationsFolder: "./drizzle" });
   // A default account + category the log path can resolve against.
   const now = Date.now();
+  db.insert(schema.categoryGroups)
+    .values({ id: "g1", name: "Everyday", sortOrder: 0 })
+    .run();
   db.insert(schema.accounts)
     .values({ id: "a1", name: "HDFC", kind: "checking", createdAt: now, updatedAt: now })
     .run();
@@ -36,7 +39,7 @@ const config = { ai: { enabled: true } } as unknown as AppConfig;
 
 beforeEach(() => mockChatJson.mockReset());
 
-test("log path books a transaction and records a change_log row", async () => {
+test("log path books a transaction and records a causal event", async () => {
   const db = makeDb();
   // A spend-verb prefix takes the deterministic "log" classify branch, so the
   // only model call is the WhatsApp parser (mocked below).
@@ -64,13 +67,10 @@ test("log path books a transaction and records a change_log row", async () => {
   expect(txns[0]!.categoryId).toBe("c1");
   expect(txns[0]!.origin).toBe("whatsapp");
 
-  // The mutation must be change-logged so other clients pull it.
-  const changes = db
-    .select()
-    .from(schema.changeLog)
-    .where(eq(schema.changeLog.resourceId, txns[0]!.id))
-    .all();
-  expect(changes.some((c) => c.op === "upsert")).toBe(true);
+  const ops = db.select().from(schema.syncChanges).all().flatMap((event) =>
+    JSON.parse(event.opsJson) as Array<{ entityId: string }>,
+  );
+  expect(ops.some((op) => op.entityId === txns[0]!.id)).toBe(true);
 });
 
 test("income is booked as a positive amount", async () => {
@@ -85,7 +85,7 @@ test("income is booked as a positive amount", async () => {
   expect(txns[0]!.amountCents).toBe(250000);
 });
 
-test("undo deletes the most-recent chat-booked transaction (+ change_log)", async () => {
+test("undo deletes the most-recent chat-booked transaction with a tombstone", async () => {
   const db = makeDb();
   mockChatJson.mockResolvedValueOnce({
     items: [{ amount_cents: 10000, is_income: false, text: "spent 100 coffee" }],
@@ -97,12 +97,12 @@ test("undo deletes the most-recent chat-booked transaction (+ change_log)", asyn
   const res = await dispatchMessage(db, config, { text: "undo", source: "whatsapp" });
   expect(res.reply.toLowerCase()).toContain("deleted");
   expect(db.select().from(schema.transactions).all()).toHaveLength(0);
-  const deletes = db
-    .select()
-    .from(schema.changeLog)
-    .where(eq(schema.changeLog.op, "delete"))
-    .all();
-  expect(deletes).toHaveLength(1);
+  const ops = db.select().from(schema.syncChanges).all().flatMap((event) =>
+    JSON.parse(event.opsJson) as Array<{ field: string; value: unknown }>,
+  );
+  expect(ops).toContainEqual(
+    expect.objectContaining({ field: "$exists", value: false }),
+  );
 });
 
 test("undo refuses to touch a transaction older than the freshness window", async () => {

@@ -107,6 +107,24 @@ function rowById(db: Db, id: string) {
     .get();
 }
 
+type TestSyncOp = {
+  resource: string;
+  entityId: string;
+  field: string;
+  value: unknown;
+};
+
+function syncOps(db: Db): TestSyncOp[] {
+  return db.select().from(schema.syncChanges).all().flatMap(
+    (event) => JSON.parse(event.opsJson) as TestSyncOp[],
+  );
+}
+
+function lastSyncOps(db: Db): TestSyncOp[] {
+  const event = db.select().from(schema.syncChanges).all().at(-1);
+  return event === undefined ? [] : (JSON.parse(event.opsJson) as TestSyncOp[]);
+}
+
 async function group(app: ReturnType<typeof makeApp>["app"], body: unknown) {
   return app.request("/v1/transactions/group", {
     method: "POST",
@@ -166,13 +184,9 @@ test("linked payee rename updates canonical entity and every derived cache", asy
   const noteEdit = await patchTxn(app, "dyson", { notes: "probe" });
   expect(noteEdit.status).toBe(200);
   expect(rowById(db, "dyson")?.payeeName).toBe("Dyson V15");
-  expect(
-    db
-      .select()
-      .from(schema.changeLog)
-      .all()
-      .filter((row) => row.resource === "payees"),
-  ).toHaveLength(1);
+  expect(syncOps(db)).toContainEqual(
+    expect.objectContaining({ resource: "payees", entityId: "p1", field: "name" }),
+  );
 });
 
 test("clearing a linked payee requires an explicit detach command", async () => {
@@ -325,7 +339,7 @@ test("ungroup: clears children links, deletes parent, leaves child amounts intac
   expect(t2?.amountCents).toBe(-300_00);
 });
 
-test("change_log: group emits parent+children upserts; ungroup emits child upserts + parent delete", async () => {
+test("group and ungroup each emit one atomic multi-entity event", async () => {
   const { app, db } = makeApp();
   addAccount(db, "a1");
   addTxn(db, "t1", "a1", -500_00, "2026-02-01");
@@ -337,32 +351,22 @@ test("change_log: group emits parent+children upserts; ungroup emits child upser
     ).json()) as { parent: { id: string } }
   ).parent.id;
 
-  const afterGroup = db.select().from(schema.changeLog).all();
-  // parent upsert + t1 upsert + t2 upsert.
-  const groupParentRows = afterGroup.filter(
-    (r) => r.resourceId === parentId && r.op === "upsert",
-  );
-  expect(groupParentRows).toHaveLength(1);
-  expect(
-    afterGroup.filter((r) => r.resourceId === "t1" && r.op === "upsert"),
-  ).toHaveLength(1);
-  expect(
-    afterGroup.filter((r) => r.resourceId === "t2" && r.op === "upsert"),
-  ).toHaveLength(1);
+  const groupedEvents = db.select().from(schema.syncChanges).all();
+  expect(groupedEvents).toHaveLength(2);
+  const groupedIds = new Set(lastSyncOps(db).map((op) => op.entityId));
+  expect(groupedIds).toEqual(new Set([parentId, "t1", "t2"]));
 
   await ungroup(app, parentId);
-  const all = db.select().from(schema.changeLog).all();
-  // Parent now has a delete row.
-  expect(
-    all.filter((r) => r.resourceId === parentId && r.op === "delete"),
-  ).toHaveLength(1);
-  // Children got a second upsert (unlink).
-  expect(
-    all.filter((r) => r.resourceId === "t1" && r.op === "upsert"),
-  ).toHaveLength(2);
-  expect(
-    all.filter((r) => r.resourceId === "t2" && r.op === "upsert"),
-  ).toHaveLength(2);
+  expect(db.select().from(schema.syncChanges).all()).toHaveLength(3);
+  expect(syncOps(db)).toContainEqual(
+    expect.objectContaining({ entityId: parentId, field: "$exists", value: false }),
+  );
+  expect(syncOps(db)).toContainEqual(
+    expect.objectContaining({ entityId: "t1", field: "groupParentId", value: null }),
+  );
+  expect(syncOps(db)).toContainEqual(
+    expect.objectContaining({ entityId: "t2", field: "groupParentId", value: null }),
+  );
 });
 
 test("no double-count: computeNetWorth is IDENTICAL before/after group and after ungroup", async () => {
@@ -421,7 +425,12 @@ test("group rejects: <2 existing, split children, already-grouped, and group par
   addTxn(db, "t1", "a1", -500_00, "2026-02-01");
   addTxn(db, "t2", "a1", -300_00, "2026-02-02");
   addTxn(db, "split_p", "a1", -100_00, "2026-02-04");
-  addTxn(db, "split_c", "a1", -100_00, "2026-02-04", "split_p"); // split child
+  addTxn(db, "split_c", "a1", -50_00, "2026-02-04", "split_p"); // split child
+  addTxn(db, "split_c2", "a1", -50_00, "2026-02-04", "split_p");
+  db.update(schema.transactions)
+    .set({ splitTotalCents: -100_00 })
+    .where(eq(schema.transactions.id, "split_p"))
+    .run();
 
   // fewer than 2 exist
   expect(
@@ -464,6 +473,10 @@ test("splits still work: a split parent (parentId-based) is unaffected by groupi
   addTxn(db, "sp", "a1", -100_00, "2026-02-10");
   addTxn(db, "sc1", "a1", -60_00, "2026-02-10", "sp");
   addTxn(db, "sc2", "a1", -40_00, "2026-02-10", "sp");
+  db.update(schema.transactions)
+    .set({ splitTotalCents: -100_00 })
+    .where(eq(schema.transactions.id, "sp"))
+    .run();
   addTxn(db, "g1", "a1", -25_00, "2026-02-11");
   addTxn(db, "g2", "a1", -25_00, "2026-02-11");
 
@@ -542,14 +555,10 @@ test("transfer create: yields two mirrored legs, shared group, categories nulled
   expect(a2Leg.date).toBe("2026-03-01");
   expect(a2Leg.notes).toBe("rent move");
 
-  // Both legs emit a change_log upsert.
-  const upserts = db
-    .select()
-    .from(schema.changeLog)
-    .all()
-    .filter((r) => r.op === "upsert" && r.resource === "transactions");
-  expect(upserts.filter((r) => r.resourceId === a1Leg.id)).toHaveLength(1);
-  expect(upserts.filter((r) => r.resourceId === a2Leg.id)).toHaveLength(1);
+  expect(db.select().from(schema.syncChanges).all()).toHaveLength(2);
+  expect(new Set(lastSyncOps(db).map((op) => op.entityId))).toEqual(
+    new Set([a1Leg.id, a2Leg.id]),
+  );
 });
 
 test("transfer create rejects same source and target account", async () => {
@@ -584,7 +593,7 @@ test("transfer edit: amount/date/notes propagate to sibling, no recursion", asyn
   const primaryLeg = legs.find((l) => l.id === primary.id)!;
   const siblingId = legs.find((l) => l.id !== primary.id)!.id;
 
-  const changeLogBefore = db.select().from(schema.changeLog).all().length;
+  const eventsBefore = db.select().from(schema.syncChanges).all().length;
 
   // Edit amount + date + notes, and try to sneak a category back on.
   const res = await patchTxn(app, primaryLeg.id, {
@@ -611,18 +620,17 @@ test("transfer edit: amount/date/notes propagate to sibling, no recursion", asyn
   expect(siblingAfter.notes).toBe("updated");
   expect(primaryAfter.amountCents + siblingAfter.amountCents).toBe(0);
 
-  // Exactly one propagation: one PATCH → one primary upsert + one sibling
-  // upsert = two new change_log rows, no runaway recursion.
-  const changeLogAfter = db.select().from(schema.changeLog).all().length;
-  expect(changeLogAfter - changeLogBefore).toBe(2);
+  // One PATCH authors one compound event containing both legs.
+  const eventsAfter = db.select().from(schema.syncChanges).all().length;
+  expect(eventsAfter - eventsBefore).toBe(1);
 
   // Editing the OTHER leg propagates back symmetrically (still one hop).
   const res2 = await patchTxn(app, siblingId, { amountCents: 200_00 });
   expect(res2.status).toBe(200);
   expect(rowById(db, siblingId)!.amountCents).toBe(200_00);
   expect(rowById(db, primaryLeg.id)!.amountCents).toBe(-200_00);
-  const changeLogFinal = db.select().from(schema.changeLog).all().length;
-  expect(changeLogFinal - changeLogAfter).toBe(2);
+  const eventsFinal = db.select().from(schema.syncChanges).all().length;
+  expect(eventsFinal - eventsAfter).toBe(1);
 });
 
 test("transfer delete: removing either leg removes both + logs two deletes", async () => {
@@ -649,13 +657,11 @@ test("transfer delete: removing either leg removes both + logs two deletes", asy
   expect(rowById(db, primary.id)).toBeUndefined();
   expect(rowById(db, siblingId)).toBeUndefined();
 
-  const deletes = db
-    .select()
-    .from(schema.changeLog)
-    .all()
-    .filter((r) => r.op === "delete" && r.resource === "transactions");
-  expect(deletes.filter((r) => r.resourceId === primary.id)).toHaveLength(1);
-  expect(deletes.filter((r) => r.resourceId === siblingId)).toHaveLength(1);
+  const deletes = syncOps(db).filter(
+    (op) => op.field === "$exists" && op.value === false,
+  );
+  expect(deletes.some((op) => op.entityId === primary.id)).toBe(true);
+  expect(deletes.some((op) => op.entityId === siblingId)).toBe(true);
 });
 
 test("no double-count: a transfer leaves computeNetWorth unchanged", async () => {
@@ -680,8 +686,17 @@ test("no double-count: a transfer leaves computeNetWorth unchanged", async () =>
 test("non-transfer create/patch/delete still behave as before (regression)", async () => {
   const { app, db } = makeApp();
   addAccount(db, "a1");
+  db.insert(schema.categoryGroups)
+    .values({ id: "g1", name: "Everyday", sortOrder: 0 })
+    .run();
+  db.insert(schema.categories)
+    .values({ id: "cat1", name: "One", groupId: "g1" })
+    .run();
+  db.insert(schema.categories)
+    .values({ id: "cat2", name: "Two", groupId: "g1" })
+    .run();
 
-  // Create: single row, single change_log upsert, no sibling.
+  // Create: single row, one event target, no sibling.
   const created = (
     (await (
       await postTxn(app, {
@@ -711,17 +726,17 @@ test("non-transfer create/patch/delete still behave as before (regression)", asy
   expect(patched.categoryId).toBe("cat2");
   expect(db.select().from(schema.transactions).all()).toHaveLength(1);
 
-  // Delete: exactly one row removed, one change_log delete.
+  // Delete: exactly one row removed and one lifecycle tombstone authored.
   const del = await deleteTxn(app, created.id);
   expect(del.status).toBe(200);
   expect(rowById(db, created.id)).toBeUndefined();
-  expect(
-    db
-      .select()
-      .from(schema.changeLog)
-      .all()
-      .filter((r) => r.op === "delete" && r.resourceId === created.id),
-  ).toHaveLength(1);
+  expect(syncOps(db)).toContainEqual(
+    expect.objectContaining({
+      entityId: created.id,
+      field: "$exists",
+      value: false,
+    }),
+  );
 });
 
 // ── FIX 6/7: /v1/summary excludes splits and transfers ─────────────────────
@@ -839,7 +854,7 @@ test("FIX 2: a reconciled transfer sibling blocks PATCH/DELETE of the unlocked l
 
   // Reconcile (lock) only the B leg.
   db.update(schema.transactions)
-    .set({ reconciled: true })
+    .set({ reconciled: true, cleared: true })
     .where(eq(schema.transactions.id, bLeg.id))
     .run();
 
@@ -960,13 +975,17 @@ test("FIX 8: parentId/splitTotalCents are stripped on a transfer create", async 
   }
 });
 
-test("#47: deleting a split parent cascades its children + emits a change_log delete for each", async () => {
+test("#47: deleting a split parent cascades its children + emits a tombstone for each", async () => {
   const { app, db } = makeApp();
   addAccount(db, "a1");
   // Split parent -100 carries the money; two children hold the category split.
   addTxn(db, "p", "a1", -10000, "2026-07-10");
   addTxn(db, "c1", "a1", -6000, "2026-07-10", "p");
   addTxn(db, "c2", "a1", -4000, "2026-07-10", "p");
+  db.update(schema.transactions)
+    .set({ splitTotalCents: -10000 })
+    .where(eq(schema.transactions.id, "p"))
+    .run();
 
   const res = await deleteTxn(app, "p");
   expect(res.status).toBe(200);
@@ -976,14 +995,9 @@ test("#47: deleting a split parent cascades its children + emits a change_log de
   expect(rowById(db, "c1")).toBeUndefined();
   expect(rowById(db, "c2")).toBeUndefined();
 
-  // A change_log delete was emitted for the parent AND each child so the phone
-  // drops them too.
-  const deletes = db
-    .select()
-    .from(schema.changeLog)
-    .all()
-    .filter((r) => r.resource === "transactions" && r.op === "delete")
-    .map((r) => r.resourceId);
+  const deletes = syncOps(db)
+    .filter((op) => op.resource === "transactions" && op.field === "$exists" && op.value === false)
+    .map((op) => op.entityId);
   expect(new Set(deletes)).toEqual(new Set(["p", "c1", "c2"]));
 });
 

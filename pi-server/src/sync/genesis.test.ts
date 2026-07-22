@@ -218,7 +218,7 @@ describe("genesis preparation", () => {
     const { db } = makeDb();
     seedCompleteProjection(db);
     expect(
-      syncedProjectionDigest(db, { allowLegacyTransactionTagIds: true }).hash,
+      syncedProjectionDigest(db, { allowNonCanonicalTransactionTagIds: true }).hash,
     ).toBe("6de868ebb99baba2dcfefa188545b2d4fc1690753d7205dc08693529091f83f5");
 
     const result = prepare(db);
@@ -361,6 +361,7 @@ describe("genesis preparation", () => {
     const { db } = makeDb();
     seedCompleteProjection(db);
     const genesis = prepare(db);
+    activatePreparedEpoch(db, epochId);
     const genesisEnvelope = genesis.envelope;
     if (genesisEnvelope === null) {
       throw new Error("expected non-empty genesis envelope");
@@ -466,12 +467,13 @@ describe("prepared epoch activation", () => {
     });
   });
 
-  test("accepts a hidden concurrent candidate when it is justified by the immutable tail", () => {
+  test("an active epoch accepts a hidden concurrent candidate in its immutable tail", () => {
     const { db } = makeDb();
     seedCompleteProjection(db);
     const prepared = prepare(db);
     if (prepared.envelope === null)
       throw new Error("expected genesis envelope");
+    activatePreparedEpoch(db, epochId);
     const tail: ChangeEnvelope = {
       protocol: 2,
       epoch: epochId,
@@ -499,7 +501,6 @@ describe("prepared epoch activation", () => {
       }).status,
     ).toBe("accepted");
 
-    expect(activatePreparedEpoch(db, epochId)).toMatchObject({ epochId });
     expect(db.select().from(schema.syncEpochs).get()).toMatchObject({
       status: "active",
     });

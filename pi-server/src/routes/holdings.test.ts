@@ -297,10 +297,10 @@ test("PATCH /v1/holdings/:id rejects a non-existent goalId", async () => {
   );
 });
 
-test("import never writes a change_log row (holdings are server-only)", async () => {
+test("import never writes a sync event (holdings are server-only)", async () => {
   const { app, db } = makeApp();
   await importFile(app, SAMPLE);
-  expect(db.select().from(schema.changeLog).all()).toHaveLength(0);
+  expect(db.select().from(schema.syncChanges).all()).toHaveLength(0);
 });
 
 test("GET /v1/net-worth blends cash and non-stale holdings", async () => {

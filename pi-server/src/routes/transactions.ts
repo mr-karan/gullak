@@ -292,7 +292,7 @@ transactionsRouter.post("/", async (c) => {
   // Transfer create (#41): when the body names a target account, this is a
   // transfer, not a plain txn. The helper mirrors it into the target account
   // (negated amount, shared transferGroupId, categories cleared) and writes
-  // BOTH legs + change_log rows in one transaction. We return the primary leg.
+  // Both legs + their atomic event in one transaction. Return the primary leg.
   if (row.transferAccountId) {
     if (row.transferAccountId === row.accountId) {
       return c.json(

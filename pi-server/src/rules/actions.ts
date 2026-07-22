@@ -50,6 +50,9 @@ export function applyActions(actionPayload: ActionPayload, txn: TxnLike): TxnLik
   for (const action of actions) {
     if (!action || typeof action.type !== "string") continue;
     switch (action.type) {
+      case "set_account":
+        if (typeof action.value === "string") next = { ...next, accountId: action.value };
+        break;
       case "set_payee":
         if (typeof action.value === "string") next = { ...next, payeeName: action.value };
         break;

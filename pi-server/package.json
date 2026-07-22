@@ -9,6 +9,7 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx src/db/migrate.ts",
     "sync:v2": "tsx scripts/sync-v2.ts",
+    "rules:cleanup": "tsx scripts/rules-cleanup.ts",
     "typecheck": "tsc --noEmit",
     "webapp:install": "cd webapp && npm ci",
     "webapp:build": "cd webapp && npm run build"

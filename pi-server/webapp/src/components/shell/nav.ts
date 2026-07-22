@@ -20,7 +20,7 @@ export interface NavItem {
 // Primary destinations. Icons are bare marks used only for wayfinding in the
 // dark shell — never as content decoration, never in tiles.
 export const PRIMARY_NAV: NavItem[] = [
-  { to: "/", label: "Overview", icon: LayoutDashboard },
+  { to: "/overview", label: "Overview", icon: LayoutDashboard },
   { to: "/transactions", label: "Transactions", icon: Coins },
   { to: "/budget", label: "Budget", icon: Wallet },
   { to: "/calendar", label: "Calendar", icon: CalendarDays },

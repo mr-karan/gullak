@@ -78,6 +78,15 @@ describe("amount conditions (integer minor units)", () => {
   });
 });
 
+describe("SMS body conditions", () => {
+  const txn: TxnLike = { smsBody: "INR 500 spent on Kotak UPI ref 123" };
+  test("matches case-insensitively", () => {
+    expect(ev("smsBody", "contains", "kotak upi", txn)).toBe(true);
+    expect(ev("smsBody", "is", "other", txn)).toBe(false);
+    expect(ev("smsBody", "matches", "UPI\\s+ref", txn)).toBe(true);
+  });
+});
+
 describe("date conditions", () => {
   const txn: TxnLike = { date: "2026-07-19" };
   test("is / month / year", () => {

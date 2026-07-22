@@ -20,8 +20,7 @@ sheetsRouter.get("/status", (c) => {
 
 // POST /v1/sheets/sync — push categorised expenses to the Apps Script web app.
 // Manual trigger / one-time migration. `?replace=true` clears the sheet's data
-// rows first for a clean, dup-free ingest. Also fires after each /v1/sync/push
-// and on the optional interval.
+// rows first for a clean, dup-free ingest. It also runs on the optional interval.
 sheetsRouter.post("/sync", async (c) => {
   const db = c.get("db");
   const config = c.get("config");

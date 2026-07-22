@@ -234,7 +234,7 @@ export const agentTurns = sqliteTable("agent_turns", {
 // message into N expense candidates and writes them here. The Flutter app
 // pulls + acks during sync and inserts each row into its local
 // `sms_messages` so the existing Inbox review flow applies. This is a
-// one-way delivery queue, intentionally outside `change_log` because the
+// one-way delivery queue, intentionally outside causal financial sync because the
 // review lifecycle (accepted/dismissed/duplicate) lives on the phone, not
 // on the server.
 // Delivery queue for inbound message candidates the phone can't capture
@@ -275,7 +275,7 @@ export const feedbackEvents = sqliteTable("feedback_events", {
 });
 
 // Single-row durable state for the Apps Script sheet push. Server-only — NOT
-// part of financial sync (no change_log rows). `cursor` is the high-water
+// part of financial sync (no causal events). `cursor` is the high-water
 // transactions.updatedAt that has been confirmed pushed to the sheet, so each
 // run only re-sends rows changed since then (incremental). It only advances on
 // a successful POST, so a failed push is retried on the next push/interval —
@@ -311,7 +311,7 @@ export const exportState = sqliteTable("export_state", {
 
 // Per-category budget TARGETS (YNAB "targets"): a funding goal for a category —
 // fund `amountCents` every month ('monthly'), or reach `amountCents` by `byDate`
-// ('by_date'). Server-only config (like goals/holdings): no change_log row, not
+// ('by_date'). Server-only config (like goals/holdings): no causal event, not
 // in the Drift mirror; the web Budget view is the only client. One target per
 // category, so categoryId is the primary key.
 export const categoryTargets = sqliteTable("category_targets", {
@@ -427,45 +427,7 @@ export const desireComments = sqliteTable(
   }),
 );
 
-// Append-only mutation log for sync clients. Each row is a single
-// row-level upsert/delete from any client. Clients pull rows after a
-// cursor (id) and apply LWW per-row by updatedAt.
-//
-// `clientChangeId` is a UUID assigned by the originating client at the
-// moment the mutation was logged locally; combined with `clientId` it
-// gives us a per-row idempotency key so retried push batches don't
-// duplicate. Server-side mutations leave it null.
-//
-// NB: cursor-via-id assumes a single Bun writer. Multi-process workers
-// would need a "safely-committed cursor" abstraction.
-export const changeLog = sqliteTable(
-  "change_log",
-  {
-    id: integer("id").primaryKey({ autoIncrement: true }),
-    at: integer("at").notNull().default(now),
-    clientId: text("client_id"),
-    clientChangeId: text("client_change_id"),
-    resource: text("resource").notNull(), // 'accounts' | 'categories' | …
-    resourceId: text("resource_id").notNull(),
-    op: text("op").notNull(), // 'upsert' | 'delete'
-    payload: text("payload"), // JSON snapshot at the time of change
-  },
-  (t) => ({
-    // Partial unique index: dedupes retried client pushes without
-    // affecting server-originated rows where both columns are null.
-    uniqClientChange: uniqueIndex("uniq_client_change")
-      .on(t.clientId, t.clientChangeId)
-      .where(
-        sql`${t.clientId} IS NOT NULL AND ${t.clientChangeId} IS NOT NULL`,
-      ),
-  }),
-);
-
-// ── Sync protocol v2: immutable causal CRDT persistence ──────────────────
-//
-// These tables are deliberately separate from the protocol-v1 change_log.
-// During the mixed-version rollout v1 remains intact while v2 is populated and
-// verified in shadow mode. No route reads or writes these tables yet.
+// ── Immutable causal CRDT persistence ─────────────────────────────────────
 
 /** A sync epoch bounds one compatible CRDT history and its checkpoints. */
 export const syncEpochs = sqliteTable(
@@ -478,7 +440,6 @@ export const syncEpochs = sqliteTable(
     createdAt: integer("created_at").notNull().default(now),
     activatedAt: integer("activated_at"),
     retiredAt: integer("retired_at"),
-    legacyInventorySealedAt: integer("legacy_inventory_sealed_at"),
   },
   (t) => ({
     byStatus: index("idx_sync_epochs_status").on(t.status),
@@ -690,54 +651,6 @@ export const syncClients = sqliteTable(
   }),
 );
 
-/**
- * Protocol-v1 device inventory used only for the one-time v2 cutover. A v2
- * actor may attest that its stable legacy client id has an empty outbox and
- * has pulled the exact v1 head. Unknown devices cannot appear after inventory
- * sealing, and activation requires every inventoried id to be drained or
- * explicitly retired.
- */
-export const syncLegacyClients = sqliteTable(
-  "sync_legacy_clients",
-  {
-    clientId: text("client_id").primaryKey(),
-    status: text("status").notNull().default("pending"),
-    migratedActorId: text("migrated_actor_id"),
-    firstSeenAt: integer("first_seen_at").notNull().default(now),
-    lastSeenAt: integer("last_seen_at").notNull().default(now),
-    lastPushAt: integer("last_push_at"),
-    lastPullCursor: integer("last_pull_cursor").notNull().default(0),
-    drainedV1Head: integer("drained_v1_head"),
-    drainedAt: integer("drained_at"),
-    retiredAt: integer("retired_at"),
-  },
-  (t) => ({
-    byStatus: index("idx_sync_legacy_clients_status").on(t.status),
-    uniqueMigratedActor: uniqueIndex(
-      "uniq_sync_legacy_clients_migrated_actor",
-    ).on(t.migratedActorId),
-    nonNegativePullCursor: check(
-      "sync_legacy_clients_nonnegative_pull_cursor",
-      sql`${t.lastPullCursor} >= 0`,
-    ),
-  }),
-);
-
-/** Maps a legacy random transaction-tag row id to the canonical pair id. */
-export const syncLegacyRelationIds = sqliteTable(
-  "sync_legacy_relation_ids",
-  {
-    legacyId: text("legacy_id").primaryKey(),
-    canonicalId: text("canonical_id").notNull(),
-    transactionId: text("transaction_id").notNull(),
-    tagId: text("tag_id").notNull(),
-    firstSeenAt: integer("first_seen_at").notNull().default(now),
-  },
-  (t) => ({
-    byCanonical: index("idx_sync_legacy_relation_canonical").on(t.canonicalId),
-  }),
-);
-
 /** Invalid or unsupported changes retained for diagnosis and explicit rescue. */
 export const syncQuarantine = sqliteTable(
   "sync_quarantine",
@@ -824,12 +737,12 @@ export const syncCheckpoints = sqliteTable(
 // Server-side mirror of SMS bodies for the transactions the user has
 // confirmed. Lets the pi-server re-run the LLM parser against the raw
 // body whenever the prompt or model improves, and propagate fixes back
-// to the phone via change_log on `transactions`.
+// to replicas through the transaction's causal operations.
 //
 // Stored separately from `transactions` because the SMS body is bulky,
 // privacy-sensitive, and not part of the financial dataset; it's
 // operational data for the parser, similar in spirit to
-// `whatsapp_inbox_candidates`. Goes outside change_log for the same
+// `whatsapp_inbox_candidates`. Goes outside financial sync for the same
 // reason — bodies are never edited on the phone.
 //
 // Bodies are only written for transactional SMS the user actually
@@ -886,14 +799,12 @@ export type Rule = typeof rules.$inferSelect;
 export type RuleMatch = typeof ruleMatches.$inferSelect;
 export type Budget = typeof budgets.$inferSelect;
 export type Recurrence = typeof recurrences.$inferSelect;
-export type ChangeLogEntry = typeof changeLog.$inferSelect;
 export type SyncEpoch = typeof syncEpochs.$inferSelect;
 export type SyncChange = typeof syncChanges.$inferSelect;
 export type SyncRegister = typeof syncRegisters.$inferSelect;
 export type SyncFrontier = typeof syncFrontiers.$inferSelect;
 export type SyncLocalClock = typeof syncLocalClocks.$inferSelect;
 export type SyncClient = typeof syncClients.$inferSelect;
-export type SyncLegacyClient = typeof syncLegacyClients.$inferSelect;
 export type SyncQuarantineEntry = typeof syncQuarantine.$inferSelect;
 export type SyncCheckpoint = typeof syncCheckpoints.$inferSelect;
 export type FeedbackEvent = typeof feedbackEvents.$inferSelect;

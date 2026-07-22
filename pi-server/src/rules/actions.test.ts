@@ -4,6 +4,10 @@ import { applyActions, type ActionPayload } from "./actions.ts";
 import type { TxnLike } from "./conditions.ts";
 
 describe("applyActions", () => {
+  test("set_account sets accountId", () => {
+    const out = applyActions({ actions: [{ type: "set_account", value: "acc-kotak" }] }, {});
+    expect(out.accountId).toBe("acc-kotak");
+  });
   test("set_payee sets payeeName", () => {
     const out = applyActions({ actions: [{ type: "set_payee", value: "Blinkit" }] }, {
       payeeName: "old",

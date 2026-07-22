@@ -197,6 +197,6 @@ test("transaction-tag relation identity is deterministic and enforced", () => {
   expect(transactionTagEntityId("t1", "tag1")).toBe('tt:["t1","tag1"]');
   expect(() => validateProjectedState(db)).toThrow(/logical id/);
   expect(() =>
-    validateProjectedState(db, { allowLegacyTransactionTagIds: true }),
+    validateProjectedState(db, { allowNonCanonicalTransactionTagIds: true }),
   ).not.toThrow();
 });

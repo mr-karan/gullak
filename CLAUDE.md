@@ -54,8 +54,12 @@ GET    /v1/transactions             POST/PATCH/DELETE /v1/transactions(/:id)
 GET    /v1/budgets                  POST/PATCH/DELETE /v1/budgets(/:id)
 GET    /v1/recurrences              POST/PATCH/DELETE /v1/recurrences(/:id)
 GET    /v1/summary?startDate=&endDate=&accountId=
-GET    /v1/sync/changes?since=<id>&limit=<n>&clientId=<uuid>
-POST   /v1/sync/push
+GET    /v1/sync/v2/capabilities
+POST   /v1/sync/v2/register
+GET    /v1/sync/v2/bootstrap
+POST   /v1/sync/v2/push
+GET    /v1/sync/v2/changes?cursor=<id>&actorId=<uuid>
+POST   /v1/sync/v2/ack
 POST   /v1/messages
 POST   /v1/whatsapp/webhook
 GET    /v1/whatsapp/inbox-candidates   POST .../ack   (phone poll + ack of queued drafts)
@@ -90,7 +94,7 @@ provider keys.
 | Activity rows | `app/lib/features/transactions/transactions_screen.dart` |
 | Timed snackbar helper | `app/lib/core/snackbars.dart` |
 | Sync client | `app/lib/sync/sync_service.dart` |
-| Remote applier | `app/lib/sync/remote_applier.dart` |
+| CRDT store/checkpoint | `app/lib/sync/crdt_store.dart`, `crdt_checkpoint.dart` |
 | Drizzle schema | `pi-server/src/db/schema.ts` |
 | New server route | `pi-server/src/routes/<resource>.ts`, then mount in `app.ts` |
 | Change log helper | `pi-server/src/repos/changelog.ts` |
@@ -170,10 +174,10 @@ tea release create --repo mr-karan/gullak --tag v0.1.0 --title "Gullak 0.1.0" --
 
 ## Sync model
 
-- Every Flutter financial command runs through `ChangeLogWriter.command` and
+- Every Flutter financial command runs through `SyncWriter.command` and
   authors one immutable field-level event in the same Drift transaction as its
   projection. Compound commands include all affected entities.
-- `SyncService` negotiates protocol capabilities. V2 registers an authenticated
+- `SyncService` registers an authenticated
   actor, installs a content/projection-hash-verified checkpoint, pushes exact
   event IDs, pulls the immutable union, and acknowledges its exact frontier.
 - Each `(resource, entity, field)` is a causal multi-value register. Delivery
@@ -183,9 +187,7 @@ tea release create --repo mr-karan/gullak --tag v0.1.0 --title "Gullak 0.1.0" --
 - Server/web/agent/SMS writes author through the same CRDT engine. Rules and
   rule matches are non-replicated configuration. Linked payee names and other
   caches are derived projections, not independently writable facts.
-- Protocol v1 `change_log`/`RemoteApplier` exists only for the guarded v0.4
-  preparing/drain window and is rejected after activation. Do not extend it.
-- V2 history is not pruned. Compaction is forbidden until durable causal
+- CRDT history is not pruned. Compaction is forbidden until durable causal
   summaries and checkpoint-equivalence proofs are implemented.
 
 ## AI / SMS architecture

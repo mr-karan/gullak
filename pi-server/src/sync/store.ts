@@ -95,6 +95,8 @@ export type ApplyChangeResult =
 export type ApplyChangeOptions = {
   source: string;
   acceptedAt?: number;
+  /** Only the genesis builder may integrate into its not-yet-active epoch. */
+  allowPreparing?: boolean;
 };
 
 type AcceptedChange = {
@@ -278,6 +280,7 @@ function applyPreparedChange(
   prepared: AcceptedChange,
   source: string,
   acceptedAt: number,
+  allowPreparing: boolean,
 ): ApplyChangeResult {
   const { envelope, envelopeJson, contentHash } = prepared;
 
@@ -331,10 +334,14 @@ function applyPreparedChange(
     .where(eq(syncEpochs.id, envelope.epoch))
     .limit(1)
     .all()[0];
-  if (epoch === undefined || !["active", "preparing"].includes(epoch.status)) {
+  const writableEpoch =
+    epoch !== undefined &&
+    (epoch.status === "active" ||
+      (allowPreparing && source === "genesis" && epoch.status === "preparing"));
+  if (!writableEpoch) {
     return rejected(
       "wrong_epoch",
-      `epoch ${envelope.epoch} is not active or preparing`,
+      `epoch ${envelope.epoch} is not active`,
     );
   }
   if (envelope.schemaVersion !== epoch.schemaVersion) {
@@ -572,6 +579,12 @@ export function applySyncChange(
   if ("status" in prepared) return prepared;
 
   return db.transaction((tx) =>
-    applyPreparedChange(tx, prepared, options.source, acceptedAt),
+    applyPreparedChange(
+      tx,
+      prepared,
+      options.source,
+      acceptedAt,
+      options.allowPreparing === true,
+    ),
   );
 }

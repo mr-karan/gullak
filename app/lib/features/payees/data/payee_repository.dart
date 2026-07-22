@@ -4,14 +4,14 @@ import 'package:uuid/uuid.dart';
 
 import '../../../data/db/database.dart';
 import '../../../state/providers.dart';
-import '../../../sync/changelog_writer.dart';
+import '../../../sync/sync_writer.dart';
 
 export '../../../data/db/database.dart' show PayeeRow;
 
 class PayeeRepository {
-  PayeeRepository(this._db, {ChangeLogWriter? changes}) : _changes = changes;
+  PayeeRepository(this._db, {SyncWriter? changes}) : _changes = changes;
   final AppDatabase _db;
-  final ChangeLogWriter? _changes;
+  final SyncWriter? _changes;
   static const _uuid = Uuid();
 
   Future<T> _command<T>(Future<T> Function() callback) =>
@@ -171,7 +171,7 @@ class PayeeRepository {
 final Provider<PayeeRepository> payeeRepoProvider = Provider<PayeeRepository>(
   (ref) => PayeeRepository(
     ref.watch(dbProvider),
-    changes: ref.watch(changeLogWriterProvider),
+    changes: ref.watch(syncWriterProvider),
   ),
 );
 

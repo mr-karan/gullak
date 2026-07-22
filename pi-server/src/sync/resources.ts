@@ -62,10 +62,9 @@ export type ProjectionOptions = {
     field: string;
     value: JsonValue;
   }[];
-  /** During the sealed mixed-version drain, legacy v1 relation rows may still
-   * have random physical ids. Their CRDT identity is already the canonical
-   * transaction/tag pair; activation normalizes the physical keys atomically. */
-  allowLegacyTransactionTagIds?: boolean;
+  /** Genesis may import old random physical ids before normalizing them to the
+   * transaction/tag pair's canonical CRDT identity. Runtime writes may not. */
+  allowNonCanonicalTransactionTagIds?: boolean;
 };
 
 const definitions: Record<SyncedResource, ResourceDefinition> = {
@@ -300,21 +299,19 @@ export function lifecycleField(
   return definitions[resource].lifecycle;
 }
 
-export type LegacySnapshot =
+export type EntitySnapshot =
   | { op: "upsert"; payload: Record<string, unknown> }
   | { op: "delete"; payload: null };
 
 /**
- * Projects one CRDT entity into the protocol-v1 row snapshot used only during
- * the mixed-version drain. This deliberately reads the relational projection
- * after materialization; copying the incoming v2 ops would produce partial
- * rows that a v1 client cannot apply.
+ * Reads a complete relational entity. The server writer uses this only when
+ * authoring the first immutable create so SQLite-defaulted fields are present.
  */
-export function legacySnapshotForEntity(
+export function snapshotForEntity(
   tx: DbOrTx,
   resource: SyncedResource,
   entityId: string,
-): LegacySnapshot {
+): EntitySnapshot {
   const definition = definitions[resource];
   const row = tx
     .select()
@@ -501,7 +498,7 @@ export function materializeEntity(
     current !== undefined &&
     current.id !== entityId
   ) {
-    // Genesis/cutover may encounter a legacy random physical id for this pair.
+    // Genesis may encounter an old random physical id for this pair.
     // Replace it in the same transaction before inserting the canonical row.
     tx.delete(transactionTags)
       .where(eq(transactionTags.id, String(current.id)))
@@ -560,7 +557,8 @@ export function materializeChangeTargets(
   }
   recomputeDerivedProjection(tx);
   validateProjectedState(tx, {
-    allowLegacyTransactionTagIds: options.allowLegacyTransactionTagIds,
+    allowNonCanonicalTransactionTagIds:
+      options.allowNonCanonicalTransactionTagIds,
   });
   if (reconciledBefore !== null) {
     assertReconciledRowsUnchanged(tx, reconciledBefore);
@@ -572,7 +570,7 @@ export function materializeChangeTargets(
  * a referenced entity is just as dangerous as creating a dangling child. */
 export function validateProjectedState(
   tx: DbOrTx,
-  options: { allowLegacyTransactionTagIds?: boolean } = {},
+  options: { allowNonCanonicalTransactionTagIds?: boolean } = {},
 ): void {
   const accountRows = tx.select().from(accounts).all();
   const groupRows = tx.select().from(categoryGroups).all();
@@ -726,7 +724,7 @@ export function validateProjectedState(
     );
     requireReference(tagIds, link.tagId, `transaction_tags/${link.id}.tagId`);
     const canonicalId = transactionTagEntityId(link.transactionId, link.tagId);
-    if (!options.allowLegacyTransactionTagIds && link.id !== canonicalId) {
+    if (!options.allowNonCanonicalTransactionTagIds && link.id !== canonicalId) {
       invalid(`transaction_tags/${link.id} must use logical id ${canonicalId}`);
     }
   }

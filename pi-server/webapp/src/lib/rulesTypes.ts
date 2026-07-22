@@ -19,6 +19,7 @@ export interface RuleTriggerPayload {
 
 export type RuleAction =
   | { type: "set_payee"; value: string }
+  | { type: "set_account"; value: string }
   | { type: "set_category"; value: string }
   | { type: "set_notes"; value: { mode: NotesMode; text: string } };
 
@@ -37,6 +38,8 @@ export interface Rule {
   actionPayload: RuleActionPayload;
   createdAt: number;
   updatedAt: number;
+  valid: boolean;
+  validationErrors: string[];
 }
 
 export interface RuleInput {

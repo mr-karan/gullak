@@ -209,14 +209,6 @@ final class CrdtCheckpointInstaller {
   }) async {
     _verifyBundleShape(bundle);
     return _db.transaction(() async {
-      final legacyPending = await (_db.select(
-        _db.changeLog,
-      )..where((row) => row.synced.equals(false))).get();
-      if (legacyPending.isNotEmpty) {
-        throw const CrdtStoreException(
-          'cannot bootstrap while legacy changes are pending',
-        );
-      }
       final v2Unresolved =
           await (_db.select(_db.syncChanges)..where(
                 (row) =>

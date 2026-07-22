@@ -16,6 +16,7 @@ export interface TxnLike {
   amountCents?: number | null;
   date?: string | null;
   notes?: string | null;
+  smsBody?: string | null;
 }
 
 export type MatchMode = "all" | "any";
@@ -86,6 +87,30 @@ function evalPayee(op: string, value: unknown, txn: TxnLike): boolean {
         return false;
       }
     }
+    default:
+      return false;
+  }
+}
+
+function evalText(op: string, value: unknown, actual: string | null | undefined): boolean {
+  const text = actual ?? "";
+  const lower = text.toLowerCase();
+  switch (op) {
+    case "is":
+      return typeof value === "string" && lower === value.toLowerCase();
+    case "isNot":
+      return typeof value === "string" && lower !== value.toLowerCase();
+    case "contains":
+      return typeof value === "string" && lower.includes(value.toLowerCase());
+    case "oneOf":
+      return Array.isArray(value) && value.some((item) => typeof item === "string" && lower === item.toLowerCase());
+    case "matches":
+      if (typeof value !== "string") return false;
+      try {
+        return new RegExp(value, "i").test(text);
+      } catch {
+        return false;
+      }
     default:
       return false;
   }
@@ -184,6 +209,8 @@ export function evalCondition(cond: Condition, txn: TxnLike): boolean {
   switch (cond.field) {
     case "payee":
       return evalPayee(cond.op, cond.value, txn);
+    case "smsBody":
+      return evalText(cond.op, cond.value, txn.smsBody);
     case "amount":
       return evalAmount(cond.op, cond.value, txn);
     case "date":

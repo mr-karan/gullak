@@ -170,8 +170,8 @@ test("comments: add (person validated) and delete; counted in detail view", asyn
   expect(del.status).toBe(204);
 });
 
-test("desires never write a change_log row (server-only)", async () => {
+test("desires never write a sync event (server-only)", async () => {
   const { app, db } = makeApp();
   await createDesire(app, { person: "karan", title: "X", estCostCents: 1 });
-  expect(db.select().from(schema.changeLog).all()).toHaveLength(0);
+  expect(db.select().from(schema.syncChanges).all()).toHaveLength(0);
 });

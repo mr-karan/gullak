@@ -65,6 +65,14 @@ describe("runRules", () => {
     expect(out.categoryId).toBe("cat-groceries");
   });
 
+  test("maps an SMS body to an account", () => {
+    addRule(db, {
+      conditions: [{ field: "smsBody", op: "contains", value: "Kotak UPI" }],
+      actions: [{ type: "set_account", value: "acc-kotak" }],
+    });
+    expect(runRules(db, { smsBody: "Paid with KOTAK UPI" }).accountId).toBe("acc-kotak");
+  });
+
   test("skips a rule whose conditions don't match", () => {
     addRule(db, {
       conditions: [{ field: "payee", op: "is", value: "zomato" }],

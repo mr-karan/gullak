@@ -46,6 +46,7 @@ const FIELD_OPTIONS = [
   { value: "account", label: "Account" },
   { value: "category", label: "Category" },
   { value: "payeeId", label: "Payee ID" },
+  { value: "smsBody", label: "SMS body" },
 ] as const;
 
 const OPS_BY_FIELD: Record<string, { value: string; label: string }[]> = {
@@ -82,10 +83,18 @@ const OPS_BY_FIELD: Record<string, { value: string; label: string }[]> = {
     { value: "is", label: "is" },
     { value: "oneOf", label: "is one of" },
   ],
+  smsBody: [
+    { value: "is", label: "is" },
+    { value: "isNot", label: "is not" },
+    { value: "contains", label: "contains" },
+    { value: "oneOf", label: "is one of" },
+    { value: "matches", label: "matches (regex)" },
+  ],
 };
 
 const ACTION_OPTIONS = [
   { value: "set_payee", label: "Set payee" },
+  { value: "set_account", label: "Set account (id)" },
   { value: "set_category", label: "Set category (id)" },
   { value: "set_notes", label: "Set notes" },
 ] as const;
@@ -113,7 +122,7 @@ interface CondRow {
 }
 
 interface ActionRow {
-  type: "set_payee" | "set_category" | "set_notes";
+  type: "set_payee" | "set_account" | "set_category" | "set_notes";
   value: string;
   mode: NotesMode;
 }
@@ -302,6 +311,21 @@ function RuleRow({
   const update = useUpdateRule();
   const nCond = rule.triggerPayload.conditions.length;
   const nAct = rule.actionPayload.actions.length;
+
+  if (!rule.valid) {
+    return (
+      <li className="flex items-center gap-3 bg-pill-neg-bg px-4 py-3 text-pill-neg-ink">
+        <span className="rounded-md border border-current px-2 py-0.5 text-xs font-semibold">Invalid</span>
+        <div className="min-w-0 flex-1">
+          <p className="truncate font-medium">{rule.name}</p>
+          <p className="mt-0.5 truncate text-xs">{rule.validationErrors.join(" · ")}</p>
+        </div>
+        <Button type="button" variant="ghost" size="sm" onClick={onDelete} aria-label={`Delete ${rule.name}`}>
+          <Trash2 className="size-4" />
+        </Button>
+      </li>
+    );
+  }
 
   return (
     <li className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-paper-2/60">
@@ -599,7 +623,7 @@ function RuleDialog({
                 <Input
                   value={a.value}
                   onChange={(e) => setAction(i, { value: e.target.value })}
-                  placeholder={a.type === "set_category" ? "category id" : a.type === "set_payee" ? "payee name" : "notes text"}
+                  placeholder={a.type === "set_category" ? "category id" : a.type === "set_account" ? "account id" : a.type === "set_payee" ? "payee name" : "notes text"}
                   className="min-w-0 flex-1"
                 />
                 <Button
@@ -636,7 +660,7 @@ function RuleDialog({
             <Button type="button" variant="ghost" onClick={() => onOpenChange(false)} disabled={pending}>
               Cancel
             </Button>
-            <Button type="submit" disabled={pending || !form.name.trim()}>
+            <Button type="submit" disabled={pending || !form.name.trim() || form.actions.length === 0}>
               {pending ? "Saving…" : "Save rule"}
             </Button>
           </DialogFooter>

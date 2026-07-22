@@ -1,13 +1,12 @@
-import { and, eq, inArray } from "drizzle-orm";
 import { AsyncLocalStorage } from "node:async_hooks";
 
 import type { Db } from "../db/index.ts";
-import { changeLog, syncEpochs } from "../db/schema.ts";
 import {
   type ServerMutation,
   authorServerCommand,
 } from "../sync/server_writer.ts";
 import { isSyncedResource } from "../sync/resources.ts";
+import { ensureActiveEpoch } from "../sync/active_epoch.ts";
 
 export type ChangeOp = "upsert" | "delete";
 
@@ -26,8 +25,6 @@ interface RecordChangeArgs {
   resourceId: string;
   op: ChangeOp;
   payload?: unknown;
-  clientId?: string | null;
-  clientChangeId?: string | null;
 }
 
 type CommandCollector = {
@@ -36,17 +33,6 @@ type CommandCollector = {
 };
 
 const commandContext = new AsyncLocalStorage<CommandCollector>();
-
-function writableV2Epoch(db: DbOrTx): boolean {
-  return (
-    db
-      .select({ id: syncEpochs.id })
-      .from(syncEpochs)
-      .where(inArray(syncEpochs.status, ["preparing", "active"]))
-      .limit(1)
-      .get() !== undefined
-  );
-}
 
 function addMutation(
   collector: CommandCollector,
@@ -73,6 +59,7 @@ function addMutation(
 export function recordCommand<T>(db: DbOrTx, callback: (tx: DbOrTx) => T): T {
   const parent = commandContext.getStore();
   if (parent !== undefined) return db.transaction(callback);
+  ensureActiveEpoch(db);
   return db.transaction((tx) => {
     const collector: CommandCollector = { tx, mutations: new Map() };
     return commandContext.run(collector, () => {
@@ -85,12 +72,10 @@ export function recordCommand<T>(db: DbOrTx, callback: (tx: DbOrTx) => T): T {
   });
 }
 
-/// Append-only mutation log so sync clients can pull deltas after a
-/// cursor. Every successful write goes through here. Returns true on
-/// insert; false if dedupe (matching client_id + client_change_id)
-/// suppressed it. Uses RETURNING + .all() to detect suppression driver-
-/// independently rather than relying on a run()-affected-rows count.
+/// Records one semantic mutation in the current command's immutable CRDT
+/// envelope. The relational write and event authoring share one transaction.
 export function recordChange(db: DbOrTx, args: RecordChangeArgs): boolean {
+  if (commandContext.getStore() === undefined) ensureActiveEpoch(db);
   return db.transaction((tx) => recordChangeInTransaction(tx, args));
 }
 
@@ -98,25 +83,7 @@ function recordChangeInTransaction(
   tx: DbOrTx,
   args: RecordChangeArgs,
 ): boolean {
-  const inserted = tx
-    .insert(changeLog)
-    .values({
-      resource: args.resource,
-      resourceId: args.resourceId,
-      op: args.op,
-      payload: args.payload === undefined ? null : JSON.stringify(args.payload),
-      clientId: args.clientId ?? null,
-      clientChangeId: args.clientChangeId ?? null,
-    })
-    .onConflictDoNothing()
-    .returning({ id: changeLog.id })
-    .all();
-  const changed = inserted.length > 0;
-  // A preparing epoch is a real shadow history. Server and legacy-client
-  // writes must enter it so activation cannot open a history gap.
-  if (!changed || !writableV2Epoch(tx) || !isSyncedResource(args.resource)) {
-    return changed;
-  }
+  if (!isSyncedResource(args.resource)) return false;
 
   const mutation: ServerMutation = {
     resource: args.resource,
@@ -133,29 +100,6 @@ function recordChangeInTransaction(
   if (collector !== undefined) addMutation(collector, mutation);
   else authorServerCommand(tx, [mutation]);
   return true;
-}
-
-/// Idempotency probe: has this (clientId, clientChangeId) tuple already been
-/// applied? Lets the push handler dedup retries BEFORE touching data tables,
-/// so it can separate "already processed" from "new but stale/no-op" and only
-/// record a change_log row when the data mutation actually wins.
-export function isChangeRecorded(
-  db: DbOrTx,
-  clientId: string,
-  clientChangeId: string,
-): boolean {
-  const found = db
-    .select({ id: changeLog.id })
-    .from(changeLog)
-    .where(
-      and(
-        eq(changeLog.clientId, clientId),
-        eq(changeLog.clientChangeId, clientChangeId),
-      ),
-    )
-    .limit(1)
-    .all();
-  return found.length > 0;
 }
 
 export function nowMs(): number {

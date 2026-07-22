@@ -7,7 +7,7 @@ import '../../../core/clock.dart';
 import '../../../data/db/database.dart';
 import '../../../state/providers.dart';
 import '../../../core/dates.dart';
-import '../../../sync/changelog_writer.dart';
+import '../../../sync/sync_writer.dart';
 import '../../../sync/crdt_resources.dart';
 
 export '../../../data/db/database.dart' show TransactionRow;
@@ -62,10 +62,9 @@ class TransactionListItem {
 }
 
 class TransactionRepository {
-  TransactionRepository(this._db, {ChangeLogWriter? changes})
-    : _changes = changes;
+  TransactionRepository(this._db, {SyncWriter? changes}) : _changes = changes;
   final AppDatabase _db;
-  final ChangeLogWriter? _changes;
+  final SyncWriter? _changes;
   static const _uuid = Uuid();
 
   Future<T> _command<T>(Future<T> Function() callback) =>
@@ -925,7 +924,7 @@ final Provider<TransactionRepository> transactionRepoProvider =
     Provider<TransactionRepository>(
       (ref) => TransactionRepository(
         ref.watch(dbProvider),
-        changes: ref.watch(changeLogWriterProvider),
+        changes: ref.watch(syncWriterProvider),
       ),
     );
 

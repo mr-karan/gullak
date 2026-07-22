@@ -55,7 +55,7 @@ test("deleteTarget removes the row", () => {
   expect(deleteTarget(db, "food")).toBe(false);
 });
 
-test("targets CRUD via routes; no change_log written", async () => {
+test("targets CRUD via routes; no sync event written", async () => {
   const { app, db } = makeApp();
 
   // PUT monthly.
@@ -99,5 +99,5 @@ test("targets CRUD via routes; no change_log written", async () => {
   expect(empty.targets).toHaveLength(0);
 
   // Server-only config: never touches the sync changelog.
-  expect(db.select().from(schema.changeLog).all()).toHaveLength(0);
+  expect(db.select().from(schema.syncChanges).all()).toHaveLength(0);
 });

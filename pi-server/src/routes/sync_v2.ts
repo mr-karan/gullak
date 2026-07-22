@@ -10,9 +10,7 @@ import {
   syncChanges,
   syncCheckpoints,
   syncClients,
-  changeLog,
   syncFrontiers,
-  syncLegacyClients,
   syncLocalClocks,
   syncQuarantine,
 } from "../db/schema.ts";
@@ -20,15 +18,13 @@ import type { ApplyChangeResult } from "../sync/store.ts";
 import { applySyncChange } from "../sync/store.ts";
 import {
   ProjectionValidationError,
-  isSyncedResource,
-  legacySnapshotForEntity,
   materializeChangeTargets,
 } from "../sync/resources.ts";
 import {
   SyncEpochConfigurationError,
   configuredWritableEpoch,
 } from "../sync/epoch.ts";
-import { observeLegacyClient } from "../sync/legacy.ts";
+import { ensureActiveEpoch } from "../sync/active_epoch.ts";
 
 export const syncV2Router = new Hono<AppEnv>();
 
@@ -39,9 +35,7 @@ const clientSchema = z.object({
   platform: z.string().trim().min(1).max(64).optional(),
 });
 
-const registerSchema = clientSchema.extend({
-  legacyClientId: z.string().trim().min(1).max(128).optional(),
-});
+const registerSchema = clientSchema;
 
 const pushSchema = clientSchema.extend({
   epoch: z.string().min(1),
@@ -55,13 +49,6 @@ const ackSchema = clientSchema.extend({
   checkpointId: z.string().min(1).optional(),
 });
 
-const legacyDrainSchema = clientSchema.extend({
-  epoch: z.string().min(1),
-  legacyClientId: z.string().trim().min(1).max(128),
-  v1Cursor: z.number().int().nonnegative(),
-  pendingOutboxCount: z.literal(0),
-});
-
 type WireResult =
   | ApplyChangeResult
   | {
@@ -73,30 +60,29 @@ type WireResult =
     };
 
 syncV2Router.use("*", async (c, next) => {
-  const mode = c.get("config").syncV2Mode;
-  if (mode === "disabled") {
-    return c.json(
-      {
-        error: "sync_v2_not_active",
-        mode,
-      },
-      409,
-    );
-  }
   try {
-    configuredWritableEpoch(c.get("db"), mode);
+    ensureActiveEpoch(c.get("db"));
+    configuredWritableEpoch(c.get("db"));
   } catch (error) {
     if (!(error instanceof SyncEpochConfigurationError)) throw error;
     return c.json(
       {
         error: "sync_v2_rollout_misconfigured",
-        mode,
         reason: error.message,
       },
       503,
     );
   }
   return next();
+});
+
+syncV2Router.get("/capabilities", (c) => {
+  const epoch = routeEpochId(c);
+  return c.json({
+    preferredProtocol: 2,
+    supportedProtocols: [2],
+    v2: { epoch, epochStatus: "active", bootstrapRequired: true },
+  });
 });
 
 /**
@@ -139,25 +125,6 @@ syncV2Router.post("/register", async (c) => {
   if (reserved) {
     return c.json({ error: "actor_id_reserved" }, 409);
   }
-  if (body.legacyClientId !== undefined) {
-    const observed = observeLegacyClient(db, body.legacyClientId);
-    if (!observed.accepted) {
-      return c.json({ error: "legacy_inventory_sealed" }, 409);
-    }
-    const legacy = db
-      .select()
-      .from(syncLegacyClients)
-      .where(eq(syncLegacyClients.clientId, body.legacyClientId))
-      .get();
-    if (
-      legacy?.migratedActorId !== null &&
-      legacy?.migratedActorId !== undefined &&
-      legacy.migratedActorId !== body.actorId
-    ) {
-      return c.json({ error: "legacy_client_already_migrated" }, 409);
-    }
-  }
-
   const actorToken = randomBytes(32).toString("base64url");
   const now = Date.now();
   db.insert(syncClients)
@@ -193,76 +160,6 @@ syncV2Router.post("/register", async (c) => {
     },
     201,
   );
-});
-
-syncV2Router.post("/legacy-drain", async (c) => {
-  const db = c.get("db");
-  const body = legacyDrainSchema.parse(await c.req.json());
-  const auth = authenticateClient(
-    db,
-    body.actorId,
-    c.req.header("x-sync-actor-token"),
-  );
-  if (!auth.ok) return c.json({ error: auth.error }, auth.status);
-  const activeEpoch = routeEpochId(c);
-  if (body.epoch !== activeEpoch) {
-    return c.json(
-      { error: "reset_required", activeEpoch, receivedEpoch: body.epoch },
-      409,
-    );
-  }
-  const legacy = db
-    .select()
-    .from(syncLegacyClients)
-    .where(eq(syncLegacyClients.clientId, body.legacyClientId))
-    .get();
-  if (
-    legacy === undefined ||
-    (legacy.migratedActorId !== null &&
-      legacy.migratedActorId !== body.actorId)
-  ) {
-    return c.json({ error: "legacy_client_actor_mismatch" }, 409);
-  }
-  if (legacy.status === "retired") {
-    return c.json({ error: "legacy_client_retired" }, 410);
-  }
-  const head =
-    db
-      .select({ cursor: sql<number>`coalesce(max(${changeLog.id}), 0)` })
-      .from(changeLog)
-      .get()?.cursor ?? 0;
-  if (body.v1Cursor !== head || legacy.lastPullCursor !== head) {
-    return c.json(
-      {
-        error: "legacy_head_mismatch",
-        expected: head,
-        received: body.v1Cursor,
-        observedPullCursor: legacy.lastPullCursor,
-      },
-      409,
-    );
-  }
-  const now = Date.now();
-  db.update(syncLegacyClients)
-    .set({
-      status: "drained",
-      migratedActorId: body.actorId,
-      drainedV1Head: head,
-      drainedAt: now,
-      lastSeenAt: now,
-    })
-    .where(eq(syncLegacyClients.clientId, body.legacyClientId))
-    .run();
-  console.info(
-    JSON.stringify({
-      event: "sync_v1_client_drained",
-      epoch: activeEpoch,
-      legacyClientId: body.legacyClientId,
-      actorId: body.actorId,
-      v1Head: head,
-    }),
-  );
-  return c.json({ drained: true, legacyClientId: body.legacyClientId, head });
 });
 
 syncV2Router.post("/push", async (c) => {
@@ -312,12 +209,7 @@ syncV2Router.post("/push", async (c) => {
             materializeChangeTargets(tx, envelope.epoch, envelope.ops, {
               protectReconciled: true,
               ops: envelope.ops,
-              allowLegacyTransactionTagIds:
-                c.get("config").syncV2Mode === "preparing",
             });
-            if (c.get("config").syncV2Mode === "preparing") {
-              bridgeAcceptedChangeToV1(tx, envelope);
-            }
           }
           return applied;
         });
@@ -715,52 +607,8 @@ syncV2Router.post("/ack", async (c) => {
 });
 
 function routeEpochId(c: Context<AppEnv>): string {
-  // The middleware already verified this exact config/database pair.
-  const epoch = configuredWritableEpoch(
-    c.get("db"),
-    c.get("config").syncV2Mode,
-  );
-  if (epoch === null) throw new Error("sync v2 route reached while disabled");
+  const epoch = configuredWritableEpoch(c.get("db"));
   return epoch.id;
-}
-
-/**
- * During preparation, protocol-v1 clients still consume row snapshots. Emit
- * them from the already-materialized projection in the same transaction as
- * event admission. This inserts change_log directly so the compatibility
- * projection can never recursively author a second semantic v2 event.
- */
-function bridgeAcceptedChangeToV1(
-  tx: Parameters<Parameters<AppEnv["Variables"]["db"]["transaction"]>[0]>[0],
-  envelope: ChangeEnvelope,
-): void {
-  const targets = new Map<string, { resource: string; entityId: string }>();
-  for (const op of envelope.ops) {
-    targets.set(`${op.resource}\u0000${op.entityId}`, {
-      resource: op.resource,
-      entityId: op.entityId,
-    });
-  }
-  for (const target of targets.values()) {
-    if (!isSyncedResource(target.resource)) continue;
-    const snapshot = legacySnapshotForEntity(
-      tx,
-      target.resource,
-      target.entityId,
-    );
-    tx.insert(changeLog)
-      .values({
-        at: Date.now(),
-        clientId: null,
-        clientChangeId: null,
-        resource: target.resource,
-        resourceId: target.entityId,
-        op: snapshot.op,
-        payload:
-          snapshot.payload === null ? null : JSON.stringify(snapshot.payload),
-      })
-      .run();
-  }
 }
 
 function touchClient(

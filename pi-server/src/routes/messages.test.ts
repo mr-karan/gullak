@@ -52,6 +52,9 @@ async function postAction(app: ReturnType<typeof makeApp>["app"], body: unknown)
 
 test("POST /v1/messages/action restore_categories re-applies prior categories", async () => {
   const { app, db } = makeApp();
+  db.insert(schema.categoryGroups)
+    .values({ id: "g1", name: "Everyday", sortOrder: 0 })
+    .run();
   db.insert(schema.accounts)
     .values({ id: "a1", name: "HDFC", openingBalanceCents: 0, createdAt: at, updatedAt: at })
     .run();
@@ -74,14 +77,14 @@ test("POST /v1/messages/action restore_categories re-applies prior categories", 
   expect(body.result.data.kind).toBe("restore_categories");
   expect(body.result.data.restored).toEqual(["t1"]);
 
-  // The category is back on the row, and a change_log row was emitted.
+  // The category is back on the row, and one field event was emitted.
   expect(rowById(db, "t1")?.categoryId).toBe("c-food");
-  const upserts = db
-    .select()
-    .from(schema.changeLog)
-    .all()
-    .filter((r) => r.resourceId === "t1" && r.op === "upsert");
-  expect(upserts).toHaveLength(1);
+  const ops = db.select().from(schema.syncChanges).all().flatMap((event) =>
+    JSON.parse(event.opsJson) as Array<{ entityId: string; field: string }>,
+  );
+  expect(ops).toContainEqual(
+    expect.objectContaining({ entityId: "t1", field: "categoryId" }),
+  );
 });
 
 test("POST /v1/messages/action rejects a non-whitelisted tool with 400", async () => {

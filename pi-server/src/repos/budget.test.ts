@@ -231,7 +231,7 @@ test("overspend: spending more than assigned yields negative available", () => {
   expect(food.availableCents).toBe(-30_00);
 });
 
-test("assignBudget upserts (no duplicate row) and emits a change_log row", () => {
+test("assignBudget upserts without duplicates and emits a causal event", () => {
   const db = makeDb();
   addGroup(db, "g1");
   addCategory(db, "food", "g1");
@@ -247,14 +247,12 @@ test("assignBudget upserts (no duplicate row) and emits a change_log row", () =>
   expect(rows).toHaveLength(1);
   expect(rows[0]!.targetCents).toBe(250_00);
 
-  const changes = db
-    .select()
-    .from(schema.changeLog)
-    .where(eq(schema.changeLog.resource, "budgets"))
-    .all();
-  expect(changes.length).toBeGreaterThanOrEqual(1);
-  expect(changes.at(-1)!.op).toBe("upsert");
-  expect(changes.at(-1)!.resourceId).toBe(rows[0]!.id);
+  const ops = db.select().from(schema.syncChanges).all().flatMap((event) =>
+    JSON.parse(event.opsJson) as Array<{ resource: string; entityId: string }>,
+  );
+  expect(
+    ops.some((op) => op.resource === "budgets" && op.entityId === rows[0]!.id),
+  ).toBe(true);
 });
 
 test("monthly target: underfunded when assigned < target, funded when >=", () => {

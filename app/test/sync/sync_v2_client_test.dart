@@ -103,6 +103,50 @@ void main() {
     },
   );
 
+  test('replays pre-bootstrap field commands over the checkpoint', () async {
+    await db
+        .into(db.syncPendingCommands)
+        .insert(
+          SyncPendingCommandsCompanion.insert(
+            commandId: 'offline-1',
+            opsJson: jsonEncode([
+              {
+                'kind': 'assign',
+                'resource': 'accounts',
+                'entityId': 'offline-account',
+                'field': r'$exists',
+                'value': true,
+              },
+              for (final entry in <String, Object?>{
+                'name': 'Offline account',
+                'kind': 'checking',
+                'openingBalanceCents': 0,
+                'onBudget': true,
+                'archived': false,
+                'sortOrder': 0,
+                'createdAt': 1,
+                'updatedAt': 1,
+              }.entries)
+                {
+                  'kind': 'assign',
+                  'resource': 'accounts',
+                  'entityId': 'offline-account',
+                  'field': entry.key,
+                  'value': entry.value,
+                },
+            ]),
+            createdAt: 1,
+          ),
+        );
+
+    final result = await client.sync(baseUrl: 'http://server', epoch: 'epoch');
+
+    expect(result.pushed, 1);
+    expect(await db.select(db.syncPendingCommands).get(), isEmpty);
+    expect((await db.select(db.accounts).getSingle()).name, 'Offline account');
+    expect((await db.select(db.syncChanges).getSingle()).actorId, 'phone');
+  });
+
   test(
     'permanent push rejection is durable and blocks the actor chain',
     () async {
@@ -185,30 +229,6 @@ void main() {
       expect(dio.registerCalls, 2);
     },
   );
-
-  test(
-    'legacy drain is actor-bound and persisted only after attestation',
-    () async {
-      await client.sync(
-        baseUrl: 'http://server',
-        epoch: 'epoch',
-        legacyClientId: 'legacy-phone',
-        legacyV1Cursor: 42,
-      );
-
-      expect(dio.registrations.single['legacyClientId'], 'legacy-phone');
-      expect(dio.legacyDrains.single, {
-        'actorId': 'phone',
-        'appVersion': isA<String>(),
-        'platform': isA<String>(),
-        'epoch': 'epoch',
-        'legacyClientId': 'legacy-phone',
-        'v1Cursor': 42,
-        'pendingOutboxCount': 0,
-      });
-      expect(await db.kvGet(SyncV2Client.legacyDrainEpochKvKey), 'epoch');
-    },
-  );
 }
 
 final class _V2Dio implements Dio {
@@ -220,7 +240,6 @@ final class _V2Dio implements Dio {
   ChangeEnvelope? echo;
   final List<Map<String, Object?>> acks = [];
   final List<Map<String, Object?>> registrations = [];
-  final List<Map<String, Object?>> legacyDrains = [];
 
   @override
   Future<Response<T>> post<T>(
@@ -279,10 +298,6 @@ final class _V2Dio implements Dio {
     if (path.endsWith('/ack')) {
       acks.add(Map<String, Object?>.from(data! as Map));
       return _response<T>(path, {'acknowledged': (data as Map)['cursor']});
-    }
-    if (path.endsWith('/legacy-drain')) {
-      legacyDrains.add(Map<String, Object?>.from(data! as Map));
-      return _response<T>(path, {'drained': true});
     }
     throw UnimplementedError(path);
   }

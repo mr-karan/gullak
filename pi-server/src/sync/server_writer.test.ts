@@ -120,7 +120,7 @@ function storedEnvelope(db: ReturnType<typeof makeDb>["db"], sequence: number) {
 }
 
 describe("trusted server command authoring", () => {
-  test("preparing commands tolerate legacy relation keys until activation", () => {
+  test("preparing epochs are never writable by runtime commands", () => {
     const { db } = makeDb("preparing");
     db.insert(schema.transactions)
       .values({ id: "txn-legacy", ...transactionPayload() } as typeof schema.transactions.$inferInsert)
@@ -137,22 +137,22 @@ describe("trusted server command authoring", () => {
       })
       .run();
 
-    const result = author(db, [
-      {
-        resource: "accounts",
-        entityId: "account-a",
-        op: "upsert",
-        payload: { name: "Renamed during drain" },
-      },
-    ]);
-
-    expect(result.status).toBe("accepted");
+    expect(() =>
+      author(db, [
+        {
+          resource: "accounts",
+          entityId: "account-a",
+          op: "upsert",
+          payload: { name: "Must not write" },
+        },
+      ]),
+    ).toThrow(/exactly one writable sync epoch/);
     expect(db.select().from(schema.transactionTags).get()?.id).toBe(
       "random-v1-id",
     );
   });
 
-  test("active commands reject legacy relation keys", () => {
+  test("active commands reject non-canonical relation keys", () => {
     const { db } = makeDb("active");
     db.insert(schema.transactions)
       .values({ id: "txn-legacy", ...transactionPayload() } as typeof schema.transactions.$inferInsert)

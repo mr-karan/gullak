@@ -28,7 +28,6 @@ beforeEach(async () => {
   app = createApp({
     db,
     config: {
-      syncV2Mode: "active",
       sheets: { syncIntervalMinutes: 0 },
       ai: { enabled: false },
       rateLimit: { aiPerMinute: 0, webhookPerMinute: 0 },
@@ -204,7 +203,6 @@ test("push atomically accepts, materializes, and reports exact duplicates", asyn
   expect(
     db.select().from(schema.accounts).where(eq(schema.accounts.id, "a1")).get(),
   ).toMatchObject({ name: "Current", openingBalanceCents: 0 });
-  expect(db.select().from(schema.changeLog).all()).toHaveLength(0);
 
   const retry = await push([envelope]);
   expect(await retry.json()).toMatchObject({ accepted: 0, duplicates: 1 });
@@ -786,7 +784,6 @@ test("SQLite aborts at every admission/materialization boundary roll back exactl
     const isolatedApp = createApp({
       db: isolatedDb,
       config: {
-        syncV2Mode: "active",
         sheets: { syncIntervalMinutes: 0 },
         ai: { enabled: false },
         rateLimit: { aiPerMinute: 0, webhookPerMinute: 0 },

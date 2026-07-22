@@ -43,6 +43,9 @@ function seed() {
   const sqlite = new Database(":memory:");
   const db = drizzle(sqlite, { schema });
   migrate(db, { migrationsFolder: "./drizzle" });
+  db.insert(schema.categoryGroups)
+    .values({ id: "g1", name: "Everyday", sortOrder: 0 })
+    .run();
   db.insert(schema.accounts)
     .values({ id: "a1", name: "HDFC", openingBalanceCents: 0, createdAt: at, updatedAt: at })
     .run();
@@ -146,14 +149,11 @@ test("write flow: categorize_transactions actually recategorizes + change-logs +
   expect(db.select().from(schema.transactions).where(eq(schema.transactions.id, "t1")).get()!.categoryId).toBe("c-food");
   expect(db.select().from(schema.transactions).where(eq(schema.transactions.id, "t2")).get()!.categoryId).toBe("c-food");
 
-  // Change-log rows written so other clients pull the updates.
-  const upserts = db
-    .select()
-    .from(schema.changeLog)
-    .where(eq(schema.changeLog.op, "upsert"))
-    .all();
-  expect(upserts.some((c) => c.resourceId === "t1")).toBe(true);
-  expect(upserts.some((c) => c.resourceId === "t2")).toBe(true);
+  const ops = db.select().from(schema.syncChanges).all().flatMap((event) =>
+    JSON.parse(event.opsJson) as Array<{ entityId: string }>,
+  );
+  expect(ops.some((op) => op.entityId === "t1")).toBe(true);
+  expect(ops.some((op) => op.entityId === "t2")).toBe(true);
 
   // Structured action sidecar for the UI (with Undo).
   expect(res.tool).toBe("categorize_transactions");
@@ -182,12 +182,7 @@ test("guardrail: delete_transactions with 51 ids is blocked, rows untouched", as
   // Nothing was deleted and no write action was produced.
   expect(db.select().from(schema.transactions).all()).toHaveLength(2);
   expect(res.actions).toBeUndefined();
-  const deletes = db
-    .select()
-    .from(schema.changeLog)
-    .where(eq(schema.changeLog.op, "delete"))
-    .all();
-  expect(deletes).toHaveLength(0);
+  expect(db.select().from(schema.syncChanges).all()).toHaveLength(0);
 });
 
 test("cheap path: 'spent 480 groceries' books via handleLog, bypassing pi (engine=pi)", async () => {

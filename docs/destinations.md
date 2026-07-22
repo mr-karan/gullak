@@ -60,7 +60,7 @@ Posts rows to a bound Apps Script web app (no service account). Opt-in:
 | --- | --- |
 | `GULLAK_SHEETS_WEBAPP_URL` | Apps Script `/exec` URL |
 | `GULLAK_SHEETS_SECRET` | Shared secret; must equal the `GULLAK_SECRET` script property |
-| `GULLAK_SHEETS_SYNC_INTERVAL_MIN` | Periodic cadence; 0 = only after each `/v1/sync/push` |
+| `GULLAK_SHEETS_SYNC_INTERVAL_MIN` | Periodic cadence; 0 = manual export only |
 
 Endpoint: `POST /v1/sheets/sync[?replace=true]`. The Apps Script upserts by the
 hidden `gullak_id` column; `replace=true` clears + rewrites (preserving manual,

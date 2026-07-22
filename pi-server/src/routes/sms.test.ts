@@ -25,6 +25,9 @@ function makeApp() {
   const db = drizzle(sqlite, { schema });
   migrate(db, { migrationsFolder: "./drizzle" });
   const now = Date.now();
+  db.insert(schema.categoryGroups)
+    .values({ id: "g1", name: "Everyday", sortOrder: 0 })
+    .run();
   db.insert(schema.categories)
     .values({ id: "c1", name: "Groceries", groupId: "g1", updatedAt: now })
     .run();
@@ -53,6 +56,10 @@ function candidate() {
 }
 
 function seedTxn(db: ReturnType<typeof makeApp>["db"], updatedAt: number) {
+  db.insert(schema.accounts)
+    .values({ id: "a1", name: "HDFC", createdAt: 500, updatedAt: 500 })
+    .onConflictDoNothing()
+    .run();
   db.insert(schema.transactions)
     .values({
       id: "t1",
@@ -113,13 +120,10 @@ test("reprocess applies payee + category to the linked transaction", async () =>
     .get();
   expect(txn?.payeeName).toBe("Blinkit");
   expect(txn?.categoryId).toBe("c1");
-  // A change_log row is recorded so the phone pulls the enrichment.
-  const changed = db
-    .select()
-    .from(schema.changeLog)
-    .where(eq(schema.changeLog.resourceId, "t1"))
-    .all();
-  expect(changed.some((c) => c.op === "upsert")).toBe(true);
+  const ops = db.select().from(schema.syncChanges).all().flatMap((event) =>
+    JSON.parse(event.opsJson) as Array<{ entityId: string }>,
+  );
+  expect(ops.some((op) => op.entityId === "t1")).toBe(true);
 });
 
 test("reprocess refuses to clobber a transaction edited after confirm", async () => {
@@ -178,8 +182,8 @@ test("ingest queues a reviewable candidate for a bank SMS (no txn written)", asy
 
   // Draft-safe: no financial row is written.
   expect(db.select().from(schema.transactions).all()).toHaveLength(0);
-  // Not a financial mutation → no change_log entry.
-  expect(db.select().from(schema.changeLog).all()).toHaveLength(0);
+  // Not a financial mutation → no sync event.
+  expect(db.select().from(schema.syncChanges).all()).toHaveLength(0);
 });
 
 test("ingest enriches a matching transaction instead of queuing a duplicate (#38)", async () => {
@@ -234,13 +238,10 @@ test("ingest enriches a matching transaction instead of queuing a duplicate (#38
     .get();
   expect(txn?.payeeName).toBe("Blinkit");
   expect(txn?.importedId).toBe("sms:ref:REF123");
-  // A change_log row is recorded so the phone converges.
-  const changed = db
-    .select()
-    .from(schema.changeLog)
-    .where(eq(schema.changeLog.resourceId, "t-existing"))
-    .all();
-  expect(changed.some((c) => c.op === "upsert")).toBe(true);
+  const ops = db.select().from(schema.syncChanges).all().flatMap((event) =>
+    JSON.parse(event.opsJson) as Array<{ entityId: string }>,
+  );
+  expect(ops.some((op) => op.entityId === "t-existing")).toBe(true);
 });
 
 test("ingest does not overwrite a user-set payee on match (#38)", async () => {
