@@ -1,12 +1,39 @@
+import 'package:dio/dio.dart';
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gullak/core/prefs.dart';
+import 'package:gullak/core/secure_store.dart';
 import 'package:gullak/data/db/database.dart';
 import 'package:gullak/features/onboarding/onboarding_flow.dart';
 import 'package:gullak/state/providers.dart';
+import 'package:gullak/sync/remote_applier.dart';
+import 'package:gullak/sync/sync_service.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+class _UnauthorizedDio implements Dio {
+  @override
+  Future<Response<T>> get<T>(
+    String path, {
+    Object? data,
+    Options? options,
+    Map<String, dynamic>? queryParameters,
+    CancelToken? cancelToken,
+    ProgressCallback? onReceiveProgress,
+  }) async {
+    final request = RequestOptions(path: path);
+    throw DioException(
+      requestOptions: request,
+      response: Response<Object?>(requestOptions: request, statusCode: 401),
+      type: DioExceptionType.badResponse,
+    );
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => throw UnimplementedError();
+}
 
 /// Smoke harness for the onboarding flow.
 ///
@@ -27,10 +54,20 @@ void main() {
     WidgetTester tester, {
     Size surfaceSize = const Size(390, 800),
     double textScale = 1.0,
+    Dio? syncDio,
   }) async {
     SharedPreferences.setMockInitialValues(const <String, Object>{});
+    FlutterSecureStorage.setMockInitialValues({});
     final prefs = await Prefs.load();
     final db = AppDatabase.forTesting(NativeDatabase.memory());
+    final secure = SecureStore();
+    final sync = SyncService(
+      db,
+      secure,
+      prefs,
+      RemoteApplier(db),
+      dio: syncDio,
+    );
     addTearDown(db.close);
 
     await tester.binding.setSurfaceSize(surfaceSize);
@@ -41,6 +78,8 @@ void main() {
         overrides: [
           dbProvider.overrideWithValue(db),
           prefsProvider.overrideWithValue(prefs),
+          secureStoreProvider.overrideWithValue(secure),
+          syncServiceProvider.overrideWithValue(sync),
         ],
         child: MaterialApp(
           home: MediaQuery(
@@ -144,5 +183,25 @@ void main() {
     expect(find.widgetWithText(TextField, 'Server URL'), findsOneWidget);
     expect(find.widgetWithText(TextField, 'API key'), findsOneWidget);
     expect(find.text('Connect & restore'), findsOneWidget);
+  });
+
+  testWidgets('restore refuses unauthenticated credentials before onboarding', (
+    tester,
+  ) async {
+    final harness = await bootstrap(tester, syncDio: _UnauthorizedDio());
+    await tester.tap(find.text('Already have a sync server? Restore'));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Server URL'),
+      'https://server.test',
+    );
+    await tester.enterText(find.widgetWithText(TextField, 'API key'), 'wrong');
+    await tester.tap(find.text('Connect & restore'));
+    await tester.pumpAndSettle();
+
+    expect(await harness.db.kvGet('onboarded'), isNull);
+    expect(find.textContaining('Restore failed:'), findsOneWidget);
+    expect(find.text('Gullak'), findsOneWidget);
   });
 }

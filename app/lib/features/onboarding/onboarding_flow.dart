@@ -6,8 +6,10 @@ import 'package:intl/intl.dart';
 import 'package:permission_handler/permission_handler.dart' as ph;
 
 import '../../core/money.dart';
+import '../../core/snackbars.dart';
 import '../../data/ai/pi_ai_client.dart';
 import '../../state/providers.dart';
+import '../../sync/sync_service.dart';
 import '../accounts/data/account_repository.dart';
 import '../categories/data/category_repository.dart';
 import '../categories/category_visuals.dart';
@@ -78,7 +80,33 @@ class _OnboardingFlowState extends ConsumerState<OnboardingFlow> {
       builder: (_) => const _RestoreDialog(),
     );
     if (creds == null) return;
-    await _finish(syncBaseUrl: creds.url, syncApiKey: creds.key, restore: true);
+    final preflight = await ref
+        .read(syncServiceProvider)
+        .testConnection(baseUrl: creds.url, apiKey: creds.key);
+    if (!preflight.ok) {
+      if (!mounted) return;
+      showTimedSnackBar(
+        ScaffoldMessenger.of(context),
+        errorSnackBar(context, 'Restore failed: ${preflight.message}'),
+      );
+      return;
+    }
+    try {
+      await _finish(
+        syncBaseUrl: creds.url,
+        syncApiKey: creds.key,
+        restore: true,
+      );
+    } catch (error) {
+      if (!mounted) return;
+      showTimedSnackBar(
+        ScaffoldMessenger.of(context),
+        errorSnackBar(
+          context,
+          error.toString().replaceFirst('Bad state: ', ''),
+        ),
+      );
+    }
   }
 
   /// [restore] connects to an existing sync server and pulls its data instead
@@ -117,6 +145,18 @@ class _OnboardingFlowState extends ConsumerState<OnboardingFlow> {
               apiKey: key == null || key.isEmpty ? null : key,
             );
         ref.invalidate(piAiClientProvider);
+
+        // Restore is not complete merely because credentials were saved. A
+        // successful, atomic reconciliation must materialize the server
+        // checkpoint before onboarding can be marked complete. Partial v2
+        // bootstrap is retry-safe; keeping the actor credential lets the next
+        // attempt resume the same identity.
+        if (restore) {
+          final result = await ref.read(syncServiceProvider).syncOnce();
+          if (result.error != null) {
+            throw StateError('Restore failed: ${result.error}');
+          }
+        }
 
         // Ask for SMS access now, as part of onboarding, rather than leaving it
         // buried in Settings for the user to discover. Only meaningful with a

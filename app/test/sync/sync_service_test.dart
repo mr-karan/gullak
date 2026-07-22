@@ -16,6 +16,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// SyncService's batching, quarantine, and cursor behaviour without a network.
 class _FakeDio implements Dio {
   final List<Map<String, dynamic>> pushedBodies = [];
+  final List<({String path, Map<String, dynamic>? headers})> gets = [];
   List<Map<String, dynamic>> pullPages = [];
   int _pull = 0;
 
@@ -46,6 +47,7 @@ class _FakeDio implements Dio {
     CancelToken? cancelToken,
     ProgressCallback? onReceiveProgress,
   }) async {
+    gets.add((path: path, headers: options?.headers));
     if (path.endsWith('/v1/sync/capabilities')) {
       return Response<T>(
         requestOptions: RequestOptions(path: path),
@@ -116,6 +118,17 @@ void main() {
           synced: Value(synced),
         ),
       );
+
+  test('testConnection probes authenticated sync capabilities', () async {
+    final result = await sync.testConnection(
+      baseUrl: 'http://server.test',
+      apiKey: 'secret',
+    );
+
+    expect(result, (ok: true, message: 'OK · sync protocol v1'));
+    expect(dio.gets.single.path, endsWith('/v1/sync/capabilities'));
+    expect(dio.gets.single.headers?['x-api-key'], 'secret');
+  });
 
   test('pushPending sends unsynced rows and marks them synced', () async {
     await insertChange(

@@ -74,32 +74,19 @@ class SyncService {
     return fresh;
   }
 
-  /// Probes the server's /v1/health to confirm the URL + (optional)
-  /// API key are reachable before the user commits to syncing.
+  /// Negotiates the authenticated sync endpoint before the user commits to
+  /// syncing. `/v1/health` is intentionally public, so using it here would
+  /// accept a bad API key and let restore finish with an empty database.
   Future<({bool ok, String message})> testConnection({
     required String baseUrl,
     String? apiKey,
   }) async {
-    final url = _join(baseUrl, '/v1/health');
     try {
-      final r = await _dio.get<dynamic>(
-        url,
-        options: Options(
-          headers: {
-            if (apiKey != null && apiKey.isNotEmpty) 'x-api-key': apiKey,
-            'accept': 'application/json',
-            'connection': 'close',
-          },
-          connectTimeout: const Duration(seconds: 5),
-          receiveTimeout: const Duration(seconds: 8),
-        ),
+      final capabilities = await _capabilities(baseUrl, apiKey);
+      return (
+        ok: true,
+        message: 'OK · sync protocol v${capabilities.protocol}',
       );
-      final data = r.data;
-      if (data is Map && data['status'] == 'ok') {
-        final version = data['version'] ?? 'unknown';
-        return (ok: true, message: 'OK · server v$version');
-      }
-      return (ok: false, message: 'Unexpected response: $data');
     } on DioException catch (e) {
       return (ok: false, message: networkErrorMessage(e));
     } catch (e) {
