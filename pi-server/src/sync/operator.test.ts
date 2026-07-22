@@ -14,6 +14,7 @@ import {
   activateWithGuardrails,
   collectSyncV2Status,
   prepareWithGuardrails,
+  repairOrphanTransactionTagsWithGuardrails,
   retireClientWithGuardrails,
   sealLegacyInventoryWithGuardrails,
   SyncV2OperatorError,
@@ -154,7 +155,9 @@ describe("sync v2 operator guardrails", () => {
     const proof = {
       path: backupPath,
       databasePath: livePath,
-      sha256: createHash("sha256").update(readFileSync(backupPath)).digest("hex"),
+      sha256: createHash("sha256")
+        .update(readFileSync(backupPath))
+        .digest("hex"),
     };
     await expect(verifyBackupProof(proof, db)).resolves.toMatchObject({
       verified: true,
@@ -204,6 +207,58 @@ describe("sync v2 operator guardrails", () => {
       status: "preparing",
     });
     expect(db.select().from(schema.syncCheckpoints).all()).toHaveLength(1);
+  });
+
+  test("orphan relation repair is guarded, dry-runnable, and change-logged", async () => {
+    const db = makeDb();
+    db.insert(schema.transactions)
+      .values({
+        id: "t1",
+        accountId: "a1",
+        amountCents: -100,
+        date: "2026-07-22",
+        origin: "manual",
+      })
+      .run();
+    db.insert(schema.transactionTags)
+      .values({ id: "orphan", transactionId: "t1", tagId: "missing" })
+      .run();
+    const options = {
+      confirmation: "REPAIR-ORPHAN-TAGS",
+      backup: backupProof(),
+    };
+
+    await expect(
+      repairOrphanTransactionTagsWithGuardrails(db, {
+        ...options,
+        confirmation: "yes",
+      }),
+    ).rejects.toThrow(/REPAIR-ORPHAN-TAGS/);
+    await expect(
+      repairOrphanTransactionTagsWithGuardrails(db, {
+        ...options,
+        configuredMode: "preparing",
+      }),
+    ).rejects.toThrow(/only allowed.*disabled/);
+
+    const dryRun = await repairOrphanTransactionTagsWithGuardrails(db, {
+      ...options,
+      dryRun: true,
+    });
+    expect(dryRun).toMatchObject({ repaired: 0, orphans: [{ id: "orphan" }] });
+    expect(db.select().from(schema.transactionTags).all()).toHaveLength(1);
+
+    const repaired = await repairOrphanTransactionTagsWithGuardrails(
+      db,
+      options,
+    );
+    expect(repaired).toMatchObject({ repaired: 1 });
+    expect(db.select().from(schema.transactionTags).all()).toEqual([]);
+    expect(db.select().from(schema.changeLog).get()).toMatchObject({
+      resource: "transaction_tags",
+      resourceId: "orphan",
+      op: "delete",
+    });
   });
 
   test("prepare refuses an existing writable epoch and an invalid projection", async () => {

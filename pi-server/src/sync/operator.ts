@@ -17,8 +17,15 @@ import {
   syncLegacyClients,
   syncQuarantine,
   syncRegisters,
+  tags,
+  transactionTags,
+  transactions,
 } from "../db/schema.ts";
-import type { DbOrTx } from "../repos/changelog.ts";
+import {
+  type DbOrTx,
+  recordChange,
+  recordCommand,
+} from "../repos/changelog.ts";
 import {
   activatePreparedEpoch,
   auditEpochIntegrity,
@@ -415,7 +422,9 @@ function recoverableStateManifest(db: DbOrTx) {
       .get()?.value ?? 0;
   const v2Head =
     db
-      .select({ value: sql<number>`coalesce(max(${syncChanges.transportCursor}), 0)` })
+      .select({
+        value: sql<number>`coalesce(max(${syncChanges.transportCursor}), 0)`,
+      })
       .from(syncChanges)
       .get()?.value ?? 0;
   const state = {
@@ -455,10 +464,7 @@ function recoverableStateManifest(db: DbOrTx) {
   };
 }
 
-export async function verifyBackupProof(
-  proof: BackupProof,
-  liveDb?: DbOrTx,
-) {
+export async function verifyBackupProof(proof: BackupProof, liveDb?: DbOrTx) {
   if (!/^[a-f0-9]{64}$/i.test(proof.sha256)) {
     throw new SyncV2OperatorError(
       "backup SHA-256 must be exactly 64 hex characters",
@@ -581,6 +587,83 @@ export type PrepareOperatorOptions = {
   createdAt?: number;
   configuredMode?: string;
 };
+
+export type RepairOrphanTransactionTagsOptions = {
+  confirmation: string;
+  backup: BackupProof;
+  dryRun?: boolean;
+  configuredMode?: string;
+};
+
+/**
+ * Removes only relation rows whose transaction or tag provably does not
+ * exist. The repair is authored through the normal financial command path so
+ * v1 replicas receive an explicit tombstone and a later genesis cannot hide
+ * unlogged projection surgery.
+ */
+export async function repairOrphanTransactionTagsWithGuardrails(
+  db: DbOrTx,
+  options: RepairOrphanTransactionTagsOptions,
+) {
+  if (options.confirmation !== "REPAIR-ORPHAN-TAGS") {
+    throw new SyncV2OperatorError(
+      "orphan repair requires --confirm REPAIR-ORPHAN-TAGS",
+    );
+  }
+  const backup = await verifyBackupProof(options.backup, db);
+  if ((options.configuredMode ?? "disabled") !== "disabled") {
+    throw new SyncV2OperatorError(
+      "orphan repair is only allowed while GULLAK_SYNC_V2_MODE=disabled",
+    );
+  }
+  const transactionIds = new Set(
+    db
+      .select({ id: transactions.id })
+      .from(transactions)
+      .all()
+      .map((row) => row.id),
+  );
+  const tagIds = new Set(
+    db
+      .select({ id: tags.id })
+      .from(tags)
+      .all()
+      .map((row) => row.id),
+  );
+  const orphans = db
+    .select()
+    .from(transactionTags)
+    .all()
+    .filter(
+      (row) => !transactionIds.has(row.transactionId) || !tagIds.has(row.tagId),
+    );
+  if (options.dryRun === true || orphans.length === 0) {
+    return {
+      action: "repair-orphan-tags",
+      dryRun: options.dryRun === true,
+      backup,
+      repaired: 0,
+      orphans,
+    };
+  }
+  recordCommand(db, (tx) => {
+    for (const row of orphans) {
+      tx.delete(transactionTags).where(eq(transactionTags.id, row.id)).run();
+      recordChange(tx, {
+        resource: "transaction_tags",
+        resourceId: row.id,
+        op: "delete",
+      });
+    }
+  });
+  return {
+    action: "repair-orphan-tags",
+    dryRun: false,
+    backup,
+    repaired: orphans.length,
+    orphans,
+  };
+}
 
 export async function prepareWithGuardrails(
   db: DbOrTx,

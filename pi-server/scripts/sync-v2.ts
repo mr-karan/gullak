@@ -11,6 +11,7 @@ import {
   activateWithGuardrails,
   collectSyncV2Status,
   prepareWithGuardrails,
+  repairOrphanTransactionTagsWithGuardrails,
   retireLegacyClientWithGuardrails,
   retireClientWithGuardrails,
   sealLegacyInventoryWithGuardrails,
@@ -21,6 +22,7 @@ function usage(): never {
   throw new SyncV2OperatorError(`usage:
   npm run sync:v2 -- status
   npm run sync:v2 -- audit
+  npm run sync:v2 -- repair-orphan-tags --confirm REPAIR-ORPHAN-TAGS --backup PATH --backup-sha256 HEX [--dry-run]
   npm run sync:v2 -- prepare --backup PATH --backup-sha256 HEX [--epoch ID] [--genesis-actor ID] [--server-actor ID] [--dry-run]
   npm run sync:v2 -- seal-legacy --epoch ID --clients ID[,ID...] --confirm SEAL-LEGACY:ID --backup PATH --backup-sha256 HEX [--dry-run]
   npm run sync:v2 -- activate --epoch ID --confirm ACTIVATE:ID --backup PATH --backup-sha256 HEX [--dry-run]
@@ -101,6 +103,16 @@ async function main(): Promise<void> {
     sha256: backupSha256,
     databasePath: resolve(config.dbPath),
   };
+  if (command === "repair-orphan-tags") {
+    const result = await repairOrphanTransactionTagsWithGuardrails(db, {
+      confirmation: stringFlag(flags, "--confirm", true)!,
+      backup,
+      dryRun: flags.get("--dry-run") === true,
+      configuredMode: config.syncV2Mode,
+    });
+    console.log(JSON.stringify(result, null, 2));
+    return;
+  }
   if (command === "prepare") {
     const result = await prepareWithGuardrails(db, {
       epochId: stringFlag(flags, "--epoch"),
