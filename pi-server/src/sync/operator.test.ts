@@ -163,6 +163,26 @@ describe("sync v2 operator guardrails", () => {
     db.insert(schema.transactionTags)
       .values({ id: "orphan", transactionId: "t1", tagId: "missing" })
       .run();
+    db.insert(schema.syncClients)
+      .values({
+        actorId: "redacted-actor",
+        actorTokenHash: "c".repeat(64),
+        protocolVersion: 2,
+      })
+      .run();
+    db.insert(schema.syncCheckpoints)
+      .values({
+        id: "redacted-checkpoint",
+        epoch: "redacted-epoch",
+        schemaVersion: 1,
+        frontierJson: "{}",
+        registersJson: JSON.stringify({ secretFinancialField: "never-print" }),
+        projectionHash: "d".repeat(64),
+        contentHash: "e".repeat(64),
+        creationCursor: 0,
+        eventCount: 1,
+      })
+      .run();
     sqlite.exec(`VACUUM INTO '${backupPath}'`);
     const proof = {
       path: backupPath,
@@ -171,10 +191,15 @@ describe("sync v2 operator guardrails", () => {
         .update(readFileSync(backupPath))
         .digest("hex"),
     };
-    await expect(verifyBackupProof(proof, db)).resolves.toMatchObject({
+    const verified = await verifyBackupProof(proof, db);
+    expect(verified).toMatchObject({
       verified: true,
       manifest: { projectionHash: expect.any(String), v1Head: 0, v2Head: 0 },
     });
+    expect(JSON.stringify(verified)).not.toContain("actorTokenHash");
+    expect(JSON.stringify(verified)).not.toContain("registersJson");
+    expect(JSON.stringify(verified)).not.toContain("never-print");
+    expect(JSON.stringify(verified)).not.toContain("c".repeat(64));
 
     db.update(schema.accounts)
       .set({ name: "After" })
@@ -518,6 +543,8 @@ describe("sync v2 operator guardrails", () => {
       retiredAt: 123,
     });
     expect(dryRun).toMatchObject({ action: "retire", dryRun: true });
+    expect(JSON.stringify(dryRun)).not.toContain("actorTokenHash");
+    expect(JSON.stringify(dryRun)).not.toContain("b".repeat(64));
     expect(
       db
         .select()

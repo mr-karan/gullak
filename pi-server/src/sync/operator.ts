@@ -458,6 +458,63 @@ function recoverableStateManifest(db: DbOrTx) {
   };
 }
 
+function publicRecoverableStateSummary(
+  manifest: ReturnType<typeof recoverableStateManifest>,
+) {
+  return {
+    stateHash: manifest.stateHash,
+    projectionHash: manifest.projectionHash,
+    v1Head: manifest.v1Head,
+    v2Head: manifest.v2Head,
+    epochs: manifest.epochs,
+    frontiers: manifest.frontiers,
+    clients: manifest.clients.map((client) => ({
+      actorId: client.actorId,
+      protocolVersion: client.protocolVersion,
+      epoch: client.epoch,
+      status: client.status,
+      appVersion: client.appVersion,
+      platform: client.platform,
+      acknowledgedCursor: client.acknowledgedCursor,
+      acknowledgedFrontier: parseJson(client.acknowledgedFrontierJson),
+      bootstrapCheckpointId: client.bootstrapCheckpointId,
+      lastSeenAt: client.lastSeenAt,
+      activatedAt: client.activatedAt,
+      retiredAt: client.retiredAt,
+    })),
+    legacyClients: manifest.legacyClients,
+    checkpoints: manifest.checkpoints.map((checkpoint) => ({
+      id: checkpoint.id,
+      epoch: checkpoint.epoch,
+      schemaVersion: checkpoint.schemaVersion,
+      projectionHash: checkpoint.projectionHash,
+      contentHash: checkpoint.contentHash,
+      creationCursor: checkpoint.creationCursor,
+      eventCount: checkpoint.eventCount,
+      isGenesis: checkpoint.isGenesis,
+      createdAt: checkpoint.createdAt,
+      verifiedAt: checkpoint.verifiedAt,
+    })),
+  };
+}
+
+function publicSyncClient(client: typeof syncClients.$inferSelect) {
+  return {
+    actorId: client.actorId,
+    protocolVersion: client.protocolVersion,
+    epoch: client.epoch,
+    status: client.status,
+    appVersion: client.appVersion,
+    platform: client.platform,
+    acknowledgedCursor: client.acknowledgedCursor,
+    acknowledgedFrontier: parseJson(client.acknowledgedFrontierJson),
+    bootstrapCheckpointId: client.bootstrapCheckpointId,
+    lastSeenAt: client.lastSeenAt,
+    activatedAt: client.activatedAt,
+    retiredAt: client.retiredAt,
+  };
+}
+
 export async function verifyBackupProof(proof: BackupProof, liveDb?: DbOrTx) {
   if (!/^[a-f0-9]{64}$/i.test(proof.sha256)) {
     throw new SyncV2OperatorError(
@@ -565,7 +622,8 @@ export async function verifyBackupProof(proof: BackupProof, liveDb?: DbOrTx) {
       sha256: actual,
       bytes: stat.size,
       verified: true,
-      manifest,
+      manifest:
+        manifest === null ? null : publicRecoverableStateSummary(manifest),
     };
   } finally {
     backupSqlite.close();
@@ -1007,7 +1065,13 @@ export async function retireClientWithGuardrails(
     );
   }
   if (options.dryRun === true) {
-    return { action: "retire", dryRun: true, backup, client, retiredAt };
+    return {
+      action: "retire",
+      dryRun: true,
+      backup,
+      client: publicSyncClient(client),
+      retiredAt,
+    };
   }
   return db.transaction((tx) => {
     const current = tx
