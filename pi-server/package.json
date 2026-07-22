@@ -8,6 +8,7 @@
     "test": "vitest run",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx src/db/migrate.ts",
+    "sync:v2": "tsx scripts/sync-v2.ts",
     "typecheck": "tsc --noEmit",
     "webapp:install": "cd webapp && npm ci",
     "webapp:build": "cd webapp && npm run build"

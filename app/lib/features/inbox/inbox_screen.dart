@@ -85,7 +85,9 @@ class _InboxScreenState extends ConsumerState<InboxScreen> {
                 'pending_parse',
                 'parsing',
               };
-              final failed = rows.where((r) => retryable.contains(r.status)).length;
+              final failed = rows
+                  .where((r) => retryable.contains(r.status))
+                  .length;
               return PopupMenuButton<_InboxAction>(
                 tooltip: 'Inbox actions',
                 onSelected: (action) {
@@ -146,8 +148,9 @@ class _InboxScreenState extends ConsumerState<InboxScreen> {
           ),
           ValueListenableBuilder<String?>(
             valueListenable: pipeline.parseHealth,
-            builder: (context, reason, _) =>
-                reason == null ? const SizedBox.shrink() : _ParseHealthBanner(reason),
+            builder: (context, reason, _) => reason == null
+                ? const SizedBox.shrink()
+                : _ParseHealthBanner(reason),
           ),
           _InboxBucketChips(
             selected: _bucket,
@@ -390,14 +393,18 @@ class _ParseHealthBanner extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
         child: Row(
           children: [
-            Icon(Icons.cloud_off_outlined, size: 18, color: cs.onErrorContainer),
+            Icon(
+              Icons.cloud_off_outlined,
+              size: 18,
+              color: cs.onErrorContainer,
+            ),
             const SizedBox(width: 12),
             Expanded(
               child: Text(
                 reason,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: cs.onErrorContainer,
-                ),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyMedium?.copyWith(color: cs.onErrorContainer),
               ),
             ),
           ],
@@ -1090,7 +1097,8 @@ class _ParseDebugDialogState extends ConsumerState<_ParseDebugDialog> {
           .read(smsPipelineProvider)
           .retryOne(widget.item.id);
       if (!mounted) return;
-      final resolved = status != 'parse_failed' &&
+      final resolved =
+          status != 'parse_failed' &&
           status != 'pending_parse' &&
           status != 'parsing' &&
           status != 'error';

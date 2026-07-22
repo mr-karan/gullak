@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:dio/dio.dart';
 import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
@@ -44,6 +46,18 @@ class _FakeDio implements Dio {
     CancelToken? cancelToken,
     ProgressCallback? onReceiveProgress,
   }) async {
+    if (path.endsWith('/v1/sync/capabilities')) {
+      return Response<T>(
+        requestOptions: RequestOptions(path: path),
+        data:
+            {
+                  'preferredProtocol': 1,
+                  'supportedProtocols': [1, 2],
+                }
+                as T,
+        statusCode: 200,
+      );
+    }
     final page = _pull < pullPages.length
         ? pullPages[_pull]
         : {'changes': <dynamic>[], 'cursor': queryParameters?['since'] ?? 0};
@@ -201,6 +215,51 @@ void main() {
     )..where((t) => t.id.equals('a1'))).getSingleOrNull();
     expect(row?.name, 'Pulled');
   });
+
+  test('concurrent syncOnce callers share one reconciliation round', () async {
+    final blockingDio = _BlockingCapabilitiesDio();
+    sync = SyncService(db, secure, prefs, RemoteApplier(db), dio: blockingDio);
+
+    final first = sync.syncOnce();
+    await Future<void>.delayed(Duration.zero);
+    final second = sync.syncOnce();
+
+    expect(identical(first, second), isTrue);
+    expect(blockingDio.capabilityCalls, 1);
+
+    blockingDio.release.complete();
+    final results = await Future.wait([first, second]);
+    expect(results[0], results[1]);
+    expect(blockingDio.capabilityCalls, 1);
+  });
+}
+
+class _BlockingCapabilitiesDio extends _FakeDio {
+  final Completer<void> release = Completer<void>();
+  int capabilityCalls = 0;
+
+  @override
+  Future<Response<T>> get<T>(
+    String path, {
+    Object? data,
+    Options? options,
+    Map<String, dynamic>? queryParameters,
+    CancelToken? cancelToken,
+    ProgressCallback? onReceiveProgress,
+  }) async {
+    if (path.endsWith('/v1/sync/capabilities')) {
+      capabilityCalls++;
+      await release.future;
+    }
+    return super.get<T>(
+      path,
+      data: data,
+      options: options,
+      queryParameters: queryParameters,
+      cancelToken: cancelToken,
+      onReceiveProgress: onReceiveProgress,
+    );
+  }
 }
 
 class _ThrowingDio extends _FakeDio {

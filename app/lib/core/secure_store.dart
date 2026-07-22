@@ -17,6 +17,8 @@ class SecureStore {
 
   static const _kSyncBaseUrl = 'gullak.sync.baseUrl';
   static const _kSyncApiKey = 'gullak.sync.apiKey';
+  static const _kSyncActorId = 'gullak.sync.v2.actorId';
+  static const _kSyncActorToken = 'gullak.sync.v2.actorToken';
 
   Future<String?> _read(String key) async {
     try {
@@ -48,6 +50,23 @@ class SecureStore {
 
   Future<String?> readSyncBaseUrl() => _read(_kSyncBaseUrl);
   Future<String?> readSyncApiKey() => _read(_kSyncApiKey);
+
+  /// Stores the one-time v2 device credential with the actor it authenticates.
+  /// The pair is written together from the caller's perspective; a mismatch is
+  /// treated as absent so a token can never be sent for another actor.
+  Future<void> writeSyncActorCredential({
+    required String actorId,
+    required String actorToken,
+  }) async {
+    await _write(_kSyncActorId, actorId);
+    await _write(_kSyncActorToken, actorToken);
+  }
+
+  Future<String?> readSyncActorToken(String actorId) async {
+    final storedActor = await _read(_kSyncActorId);
+    if (storedActor != actorId) return null;
+    return _read(_kSyncActorToken);
+  }
 
   Future<void> wipe() async {
     try {

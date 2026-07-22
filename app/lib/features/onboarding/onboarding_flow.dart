@@ -78,11 +78,7 @@ class _OnboardingFlowState extends ConsumerState<OnboardingFlow> {
       builder: (_) => const _RestoreDialog(),
     );
     if (creds == null) return;
-    await _finish(
-      syncBaseUrl: creds.url,
-      syncApiKey: creds.key,
-      restore: true,
-    );
+    await _finish(syncBaseUrl: creds.url, syncApiKey: creds.key, restore: true);
   }
 
   /// [restore] connects to an existing sync server and pulls its data instead
@@ -323,9 +319,7 @@ class _RestoreDialogState extends State<_RestoreDialog> {
           onPressed: () {
             final url = _url.text.trim();
             if (url.isEmpty) return;
-            Navigator.of(
-              context,
-            ).pop((url: url, key: _key.text.trim()));
+            Navigator.of(context).pop((url: url, key: _key.text.trim()));
           },
           child: const Text('Connect & restore'),
         ),

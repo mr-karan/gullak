@@ -1,0 +1,532 @@
+{
+  "format": "gullak-crdt-v1",
+  "epoch": "epoch-v2-test",
+  "registerCases": [
+    {
+      "name": "causal assignment supersedes its predecessor",
+      "target": {
+        "resource": "transactions",
+        "entityId": "txn-1",
+        "field": "payeeName"
+      },
+      "changes": [
+        {
+          "protocol": 2,
+          "epoch": "epoch-v2-test",
+          "changeId": "phone:1",
+          "actorId": "phone",
+          "sequence": 1,
+          "context": {},
+          "lamport": 1,
+          "wallTimeMs": 9999999999999,
+          "schemaVersion": 1,
+          "ops": [
+            {
+              "kind": "assign",
+              "resource": "transactions",
+              "entityId": "txn-1",
+              "field": "payeeName",
+              "value": "Payu Retail"
+            }
+          ]
+        },
+        {
+          "protocol": 2,
+          "epoch": "epoch-v2-test",
+          "changeId": "server:1",
+          "actorId": "server",
+          "sequence": 1,
+          "context": { "phone": 1 },
+          "lamport": 2,
+          "wallTimeMs": 1,
+          "schemaVersion": 1,
+          "ops": [
+            {
+              "kind": "assign",
+              "resource": "transactions",
+              "entityId": "txn-1",
+              "field": "payeeName",
+              "value": "Dyson V15"
+            }
+          ]
+        }
+      ],
+      "expectedStateJson": "{\"candidates\":[{\"context\":{\"phone\":1},\"dot\":{\"actorId\":\"server\",\"sequence\":1},\"lamport\":2,\"value\":\"Dyson V15\"}]}",
+      "expectedValue": "Dyson V15",
+      "expectedConflictCount": 0
+    },
+    {
+      "name": "concurrent values are retained and projected deterministically",
+      "target": {
+        "resource": "transactions",
+        "entityId": "txn-1",
+        "field": "notes"
+      },
+      "changes": [
+        {
+          "protocol": 2,
+          "epoch": "epoch-v2-test",
+          "changeId": "phone:1",
+          "actorId": "phone",
+          "sequence": 1,
+          "context": {},
+          "lamport": 1,
+          "wallTimeMs": 9999999999999,
+          "schemaVersion": 1,
+          "ops": [
+            {
+              "kind": "assign",
+              "resource": "transactions",
+              "entityId": "txn-1",
+              "field": "notes",
+              "value": "phone note"
+            }
+          ]
+        },
+        {
+          "protocol": 2,
+          "epoch": "epoch-v2-test",
+          "changeId": "web:1",
+          "actorId": "web",
+          "sequence": 1,
+          "context": {},
+          "lamport": 1,
+          "wallTimeMs": 1,
+          "schemaVersion": 1,
+          "ops": [
+            {
+              "kind": "assign",
+              "resource": "transactions",
+              "entityId": "txn-1",
+              "field": "notes",
+              "value": "web note"
+            }
+          ]
+        }
+      ],
+      "expectedStateJson": "{\"candidates\":[{\"context\":{},\"dot\":{\"actorId\":\"phone\",\"sequence\":1},\"lamport\":1,\"value\":\"phone note\"},{\"context\":{},\"dot\":{\"actorId\":\"web\",\"sequence\":1},\"lamport\":1,\"value\":\"web note\"}]}",
+      "expectedValue": "web note",
+      "expectedConflictCount": 1
+    },
+    {
+      "name": "unknown field and structured null survive canonically",
+      "target": {
+        "resource": "transactions",
+        "entityId": "txn-1",
+        "field": "future.metadata.v9"
+      },
+      "changes": [
+        {
+          "protocol": 2,
+          "epoch": "epoch-v2-test",
+          "changeId": "future-client:1",
+          "actorId": "future-client",
+          "sequence": 1,
+          "context": {},
+          "lamport": 1,
+          "wallTimeMs": 42,
+          "schemaVersion": 9,
+          "ops": [
+            {
+              "kind": "assign",
+              "resource": "transactions",
+              "entityId": "txn-1",
+              "field": "future.metadata.v9",
+              "value": {
+                "z": null,
+                "a": [1, { "new": true }]
+              }
+            }
+          ]
+        }
+      ],
+      "expectedStateJson": "{\"candidates\":[{\"context\":{},\"dot\":{\"actorId\":\"future-client\",\"sequence\":1},\"lamport\":1,\"value\":{\"a\":[1,{\"new\":true}],\"z\":null}}]}",
+      "expectedValue": {
+        "a": [1, { "new": true }],
+        "z": null
+      },
+      "expectedConflictCount": 0
+    },
+    {
+      "name": "null is an assigned value rather than absence",
+      "target": {
+        "resource": "transactions",
+        "entityId": "txn-1",
+        "field": "categoryId"
+      },
+      "changes": [
+        {
+          "protocol": 2,
+          "epoch": "epoch-v2-test",
+          "changeId": "phone:1",
+          "actorId": "phone",
+          "sequence": 1,
+          "context": {},
+          "lamport": 1,
+          "wallTimeMs": 42,
+          "schemaVersion": 1,
+          "ops": [
+            {
+              "kind": "assign",
+              "resource": "transactions",
+              "entityId": "txn-1",
+              "field": "categoryId",
+              "value": null
+            }
+          ]
+        }
+      ],
+      "expectedStateJson": "{\"candidates\":[{\"context\":{},\"dot\":{\"actorId\":\"phone\",\"sequence\":1},\"lamport\":1,\"value\":null}]}",
+      "expectedValue": null,
+      "expectedConflictCount": 0
+    }
+  ],
+  "lifecycleCases": [
+    { "name": "empty row is absent", "changes": [], "expected": false },
+    {
+      "name": "create makes row visible",
+      "changes": [
+        {
+          "protocol": 2,
+          "epoch": "epoch-v2-test",
+          "changeId": "phone:1",
+          "actorId": "phone",
+          "sequence": 1,
+          "context": {},
+          "lamport": 1,
+          "wallTimeMs": 1,
+          "schemaVersion": 1,
+          "ops": [
+            {
+              "kind": "assign",
+              "resource": "transactions",
+              "entityId": "txn-1",
+              "field": "$exists",
+              "value": true
+            }
+          ]
+        }
+      ],
+      "expected": true
+    },
+    {
+      "name": "concurrent delete wins",
+      "changes": [
+        {
+          "protocol": 2,
+          "epoch": "epoch-v2-test",
+          "changeId": "phone:1",
+          "actorId": "phone",
+          "sequence": 1,
+          "context": {},
+          "lamport": 1,
+          "wallTimeMs": 1,
+          "schemaVersion": 1,
+          "ops": [
+            {
+              "kind": "assign",
+              "resource": "transactions",
+              "entityId": "txn-1",
+              "field": "$exists",
+              "value": true
+            }
+          ]
+        },
+        {
+          "protocol": 2,
+          "epoch": "epoch-v2-test",
+          "changeId": "web:1",
+          "actorId": "web",
+          "sequence": 1,
+          "context": {},
+          "lamport": 1,
+          "wallTimeMs": 1,
+          "schemaVersion": 1,
+          "ops": [
+            {
+              "kind": "assign",
+              "resource": "transactions",
+              "entityId": "txn-1",
+              "field": "$exists",
+              "value": false
+            }
+          ]
+        }
+      ],
+      "expected": false
+    },
+    {
+      "name": "delete after observing create hides row",
+      "changes": [
+        {
+          "protocol": 2,
+          "epoch": "epoch-v2-test",
+          "changeId": "phone:1",
+          "actorId": "phone",
+          "sequence": 1,
+          "context": {},
+          "lamport": 1,
+          "wallTimeMs": 1,
+          "schemaVersion": 1,
+          "ops": [
+            {
+              "kind": "assign",
+              "resource": "transactions",
+              "entityId": "txn-1",
+              "field": "$exists",
+              "value": true
+            }
+          ]
+        },
+        {
+          "protocol": 2,
+          "epoch": "epoch-v2-test",
+          "changeId": "server:1",
+          "actorId": "server",
+          "sequence": 1,
+          "context": { "phone": 1 },
+          "lamport": 2,
+          "wallTimeMs": 1,
+          "schemaVersion": 1,
+          "ops": [
+            {
+              "kind": "assign",
+              "resource": "transactions",
+              "entityId": "txn-1",
+              "field": "$exists",
+              "value": false
+            }
+          ]
+        }
+      ],
+      "expected": false
+    },
+    {
+      "name": "restore only wins after observing delete",
+      "changes": [
+        {
+          "protocol": 2,
+          "epoch": "epoch-v2-test",
+          "changeId": "phone:1",
+          "actorId": "phone",
+          "sequence": 1,
+          "context": {},
+          "lamport": 1,
+          "wallTimeMs": 1,
+          "schemaVersion": 1,
+          "ops": [
+            {
+              "kind": "assign",
+              "resource": "transactions",
+              "entityId": "txn-1",
+              "field": "$exists",
+              "value": true
+            }
+          ]
+        },
+        {
+          "protocol": 2,
+          "epoch": "epoch-v2-test",
+          "changeId": "server:1",
+          "actorId": "server",
+          "sequence": 1,
+          "context": { "phone": 1 },
+          "lamport": 2,
+          "wallTimeMs": 1,
+          "schemaVersion": 1,
+          "ops": [
+            {
+              "kind": "assign",
+              "resource": "transactions",
+              "entityId": "txn-1",
+              "field": "$exists",
+              "value": false
+            }
+          ]
+        },
+        {
+          "protocol": 2,
+          "epoch": "epoch-v2-test",
+          "changeId": "phone:2",
+          "actorId": "phone",
+          "sequence": 2,
+          "context": { "phone": 1, "server": 1 },
+          "lamport": 3,
+          "wallTimeMs": 1,
+          "schemaVersion": 1,
+          "ops": [
+            {
+              "kind": "assign",
+              "resource": "transactions",
+              "entityId": "txn-1",
+              "field": "$exists",
+              "value": true
+            }
+          ]
+        }
+      ],
+      "expected": true
+    }
+  ],
+  "membershipCases": [
+    { "name": "empty membership is absent", "changes": [], "expected": false },
+    {
+      "name": "concurrent add wins",
+      "changes": [
+        {
+          "protocol": 2,
+          "epoch": "epoch-v2-test",
+          "changeId": "phone:1",
+          "actorId": "phone",
+          "sequence": 1,
+          "context": {},
+          "lamport": 1,
+          "wallTimeMs": 1,
+          "schemaVersion": 1,
+          "ops": [
+            {
+              "kind": "assign",
+              "resource": "transaction_tags",
+              "entityId": "txn-1:tag-1",
+              "field": "$member",
+              "value": true
+            }
+          ]
+        },
+        {
+          "protocol": 2,
+          "epoch": "epoch-v2-test",
+          "changeId": "web:1",
+          "actorId": "web",
+          "sequence": 1,
+          "context": {},
+          "lamport": 1,
+          "wallTimeMs": 1,
+          "schemaVersion": 1,
+          "ops": [
+            {
+              "kind": "assign",
+              "resource": "transaction_tags",
+              "entityId": "txn-1:tag-1",
+              "field": "$member",
+              "value": false
+            }
+          ]
+        }
+      ],
+      "expected": true
+    },
+    {
+      "name": "observed remove wins over add",
+      "changes": [
+        {
+          "protocol": 2,
+          "epoch": "epoch-v2-test",
+          "changeId": "phone:1",
+          "actorId": "phone",
+          "sequence": 1,
+          "context": {},
+          "lamport": 1,
+          "wallTimeMs": 1,
+          "schemaVersion": 1,
+          "ops": [
+            {
+              "kind": "assign",
+              "resource": "transaction_tags",
+              "entityId": "txn-1:tag-1",
+              "field": "$member",
+              "value": true
+            }
+          ]
+        },
+        {
+          "protocol": 2,
+          "epoch": "epoch-v2-test",
+          "changeId": "web:1",
+          "actorId": "web",
+          "sequence": 1,
+          "context": { "phone": 1 },
+          "lamport": 2,
+          "wallTimeMs": 1,
+          "schemaVersion": 1,
+          "ops": [
+            {
+              "kind": "assign",
+              "resource": "transaction_tags",
+              "entityId": "txn-1:tag-1",
+              "field": "$member",
+              "value": false
+            }
+          ]
+        }
+      ],
+      "expected": false
+    },
+    {
+      "name": "causal re-add restores membership",
+      "changes": [
+        {
+          "protocol": 2,
+          "epoch": "epoch-v2-test",
+          "changeId": "phone:1",
+          "actorId": "phone",
+          "sequence": 1,
+          "context": {},
+          "lamport": 1,
+          "wallTimeMs": 1,
+          "schemaVersion": 1,
+          "ops": [
+            {
+              "kind": "assign",
+              "resource": "transaction_tags",
+              "entityId": "txn-1:tag-1",
+              "field": "$member",
+              "value": true
+            }
+          ]
+        },
+        {
+          "protocol": 2,
+          "epoch": "epoch-v2-test",
+          "changeId": "web:1",
+          "actorId": "web",
+          "sequence": 1,
+          "context": { "phone": 1 },
+          "lamport": 2,
+          "wallTimeMs": 1,
+          "schemaVersion": 1,
+          "ops": [
+            {
+              "kind": "assign",
+              "resource": "transaction_tags",
+              "entityId": "txn-1:tag-1",
+              "field": "$member",
+              "value": false
+            }
+          ]
+        },
+        {
+          "protocol": 2,
+          "epoch": "epoch-v2-test",
+          "changeId": "phone:2",
+          "actorId": "phone",
+          "sequence": 2,
+          "context": { "phone": 1, "web": 1 },
+          "lamport": 3,
+          "wallTimeMs": 1,
+          "schemaVersion": 1,
+          "ops": [
+            {
+              "kind": "assign",
+              "resource": "transaction_tags",
+              "entityId": "txn-1:tag-1",
+              "field": "$member",
+              "value": true
+            }
+          ]
+        }
+      ],
+      "expected": true
+    }
+  ]
+}

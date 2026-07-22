@@ -201,17 +201,16 @@ class _GullakAppState extends ConsumerState<GullakApp> {
   /// tell the user how many landed (the transactions themselves stream into
   /// Activity automatically via Drift).
   ///
-  /// Pulls remote changes FIRST. Without this, a device that was offline across
-  /// a due date would post occurrences from its stale `nextDate` — re-creating
-  /// (deterministic id) transactions another device already posted, edited, or
-  /// deleted, and clobbering those via last-write-wins. Pulling first gives us
-  /// the advanced `nextDate` and the already-posted rows, so postDue no-ops.
+  /// Reconciles remote changes FIRST. Without this, a device that was offline
+  /// across a due date could post from a stale `nextDate`. The negotiated sync
+  /// path folds the merged CRDT log before recurrence evaluation, so an
+  /// already-posted deterministic occurrence remains a no-op.
   Future<void> _postDueRecurrences() async {
     try {
       final sync = ref.read(syncServiceProvider);
       if (await sync.isConfigured()) {
         try {
-          await sync.pullChanges();
+          await sync.syncOnce();
         } catch (_) {
           // Offline/unreachable: fall through and post from local state. A
           // truly-offline device can't push the re-post until it next syncs,

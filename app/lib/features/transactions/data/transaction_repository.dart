@@ -8,6 +8,7 @@ import '../../../data/db/database.dart';
 import '../../../state/providers.dart';
 import '../../../core/dates.dart';
 import '../../../sync/changelog_writer.dart';
+import '../../../sync/crdt_resources.dart';
 
 export '../../../data/db/database.dart' show TransactionRow;
 
@@ -67,10 +68,20 @@ class TransactionRepository {
   final ChangeLogWriter? _changes;
   static const _uuid = Uuid();
 
-  Future<void> _logRow(String id) async {
+  Future<T> _command<T>(Future<T> Function() callback) =>
+      _changes?.command(callback) ?? _db.transaction(callback);
+
+  Future<void> _logRow(String id, {Set<String>? changedFields}) async {
     if (_changes == null) return;
     final row = await byRow(id);
-    if (row != null) await _changes.upsert('transactions', id, row.toJson());
+    if (row != null) {
+      await _changes.upsert(
+        'transactions',
+        id,
+        row.toJson(),
+        changedFields: changedFields,
+      );
+    }
   }
 
   // ── inserts ──────────────────────────────────────────────────────────
@@ -93,34 +104,40 @@ class TransactionRepository {
     int? originalAmountCents,
     String? originalCurrency,
   }) async {
-    final id = _uuid.v4();
-    final now = DateTime.now().millisecondsSinceEpoch;
-    await _db
-        .into(_db.transactions)
-        .insert(
-          TransactionsCompanion.insert(
-            id: id,
-            accountId: accountId,
-            amountCents: amountCents,
-            date: ymd(date),
-            createdAt: now,
-            updatedAt: now,
-            categoryId: Value(categoryId),
-            payeeId: Value(payeeId),
-            payeeName: Value(payeeName),
-            notes: Value(notes),
-            latitude: Value(latitude),
-            longitude: Value(longitude),
-            locationName: Value(locationName),
-            cleared: Value(cleared),
-            origin: Value(origin),
-            originRef: Value(originRef),
-            originalAmountCents: Value(originalAmountCents),
-            originalCurrency: Value(originalCurrency),
-          ),
-        );
-    await _logRow(id);
-    return id;
+    return _command(() async {
+      final id = _uuid.v4();
+      final now = DateTime.now().millisecondsSinceEpoch;
+      await _db
+          .into(_db.transactions)
+          .insert(
+            TransactionsCompanion.insert(
+              id: id,
+              accountId: accountId,
+              amountCents: amountCents,
+              date: ymd(date),
+              createdAt: now,
+              updatedAt: now,
+              categoryId: Value(categoryId),
+              payeeId: Value(payeeId),
+              payeeName: Value(payeeName),
+              notes: Value(notes),
+              latitude: Value(
+                latitude == null ? null : quantizeSyncCoordinate(latitude),
+              ),
+              longitude: Value(
+                longitude == null ? null : quantizeSyncCoordinate(longitude),
+              ),
+              locationName: Value(locationName),
+              cleared: Value(cleared),
+              origin: Value(origin),
+              originRef: Value(originRef),
+              originalAmountCents: Value(originalAmountCents),
+              originalCurrency: Value(originalCurrency),
+            ),
+          );
+      await _logRow(id);
+      return id;
+    });
   }
 
   /// Create a transfer. We always store the *outgoing* leg as negative
@@ -134,54 +151,56 @@ class TransactionRepository {
     String? notes,
     bool cleared = false,
   }) async {
-    if (amountCents <= 0) {
-      throw ArgumentError('transfer amount must be positive');
-    }
-    if (fromAccountId == toAccountId) {
-      throw ArgumentError('transfer source and destination differ');
-    }
-    final group = _uuid.v4();
-    final outId = _uuid.v4();
-    final inId = _uuid.v4();
-    final now = DateTime.now().millisecondsSinceEpoch;
-    final dateStr = ymd(date);
-    await _db.batch((batch) {
-      batch.insert(
-        _db.transactions,
-        TransactionsCompanion.insert(
-          id: outId,
-          accountId: fromAccountId,
-          amountCents: -amountCents,
-          date: dateStr,
-          createdAt: now,
-          updatedAt: now,
-          notes: Value(notes),
-          cleared: Value(cleared),
-          origin: const Value('transfer'),
-          transferAccountId: Value(toAccountId),
-          transferGroupId: Value(group),
-        ),
-      );
-      batch.insert(
-        _db.transactions,
-        TransactionsCompanion.insert(
-          id: inId,
-          accountId: toAccountId,
-          amountCents: amountCents,
-          date: dateStr,
-          createdAt: now,
-          updatedAt: now,
-          notes: Value(notes),
-          cleared: Value(cleared),
-          origin: const Value('transfer'),
-          transferAccountId: Value(fromAccountId),
-          transferGroupId: Value(group),
-        ),
-      );
+    return _command(() async {
+      if (amountCents <= 0) {
+        throw ArgumentError('transfer amount must be positive');
+      }
+      if (fromAccountId == toAccountId) {
+        throw ArgumentError('transfer source and destination differ');
+      }
+      final group = _uuid.v4();
+      final outId = _uuid.v4();
+      final inId = _uuid.v4();
+      final now = DateTime.now().millisecondsSinceEpoch;
+      final dateStr = ymd(date);
+      await _db.batch((batch) {
+        batch.insert(
+          _db.transactions,
+          TransactionsCompanion.insert(
+            id: outId,
+            accountId: fromAccountId,
+            amountCents: -amountCents,
+            date: dateStr,
+            createdAt: now,
+            updatedAt: now,
+            notes: Value(notes),
+            cleared: Value(cleared),
+            origin: const Value('transfer'),
+            transferAccountId: Value(toAccountId),
+            transferGroupId: Value(group),
+          ),
+        );
+        batch.insert(
+          _db.transactions,
+          TransactionsCompanion.insert(
+            id: inId,
+            accountId: toAccountId,
+            amountCents: amountCents,
+            date: dateStr,
+            createdAt: now,
+            updatedAt: now,
+            notes: Value(notes),
+            cleared: Value(cleared),
+            origin: const Value('transfer'),
+            transferAccountId: Value(fromAccountId),
+            transferGroupId: Value(group),
+          ),
+        );
+      });
+      await _logRow(outId);
+      await _logRow(inId);
+      return group;
     });
-    await _logRow(outId);
-    await _logRow(inId);
-    return group;
   }
 
   /// Create a split transaction. The parent has [splits.fold].sum amount;
@@ -196,60 +215,62 @@ class TransactionRepository {
     required List<({int amountCents, String? categoryId, String? notes})>
     splits,
   }) async {
-    if (splits.isEmpty) {
-      throw ArgumentError('splits cannot be empty');
-    }
-    final total = splits.fold<int>(0, (s, x) => s + x.amountCents);
-    final parentId = _uuid.v4();
-    final childIds = <String>[];
-    final now = DateTime.now().millisecondsSinceEpoch;
-    final dateStr = ymd(date);
-    await _db.batch((batch) {
-      batch.insert(
-        _db.transactions,
-        TransactionsCompanion.insert(
-          id: parentId,
-          accountId: accountId,
-          amountCents: total,
-          date: dateStr,
-          createdAt: now,
-          updatedAt: now,
-          payeeId: Value(payeeId),
-          payeeName: Value(payeeName),
-          notes: Value(notes),
-          cleared: Value(cleared),
-          origin: const Value('split'),
-          splitTotalCents: Value(total),
-        ),
-      );
-      for (final s in splits) {
-        final childId = _uuid.v4();
-        childIds.add(childId);
+    return _command(() async {
+      if (splits.isEmpty) {
+        throw ArgumentError('splits cannot be empty');
+      }
+      final total = splits.fold<int>(0, (s, x) => s + x.amountCents);
+      final parentId = _uuid.v4();
+      final childIds = <String>[];
+      final now = DateTime.now().millisecondsSinceEpoch;
+      final dateStr = ymd(date);
+      await _db.batch((batch) {
         batch.insert(
           _db.transactions,
           TransactionsCompanion.insert(
-            id: childId,
+            id: parentId,
             accountId: accountId,
-            amountCents: s.amountCents,
+            amountCents: total,
             date: dateStr,
             createdAt: now,
             updatedAt: now,
-            categoryId: Value(s.categoryId),
             payeeId: Value(payeeId),
             payeeName: Value(payeeName),
-            notes: Value(s.notes),
+            notes: Value(notes),
             cleared: Value(cleared),
-            origin: const Value('split_child'),
-            parentId: Value(parentId),
+            origin: const Value('split'),
+            splitTotalCents: Value(total),
           ),
         );
+        for (final s in splits) {
+          final childId = _uuid.v4();
+          childIds.add(childId);
+          batch.insert(
+            _db.transactions,
+            TransactionsCompanion.insert(
+              id: childId,
+              accountId: accountId,
+              amountCents: s.amountCents,
+              date: dateStr,
+              createdAt: now,
+              updatedAt: now,
+              categoryId: Value(s.categoryId),
+              payeeId: Value(payeeId),
+              payeeName: Value(payeeName),
+              notes: Value(s.notes),
+              cleared: Value(cleared),
+              origin: const Value('split_child'),
+              parentId: Value(parentId),
+            ),
+          );
+        }
+      });
+      await _logRow(parentId);
+      for (final cid in childIds) {
+        await _logRow(cid);
       }
+      return parentId;
     });
-    await _logRow(parentId);
-    for (final cid in childIds) {
-      await _logRow(cid);
-    }
-    return parentId;
   }
 
   // ── updates / deletes ────────────────────────────────────────────────
@@ -270,122 +291,158 @@ class TransactionRepository {
     Object? originalAmountCents = _Sentinel.value,
     Object? originalCurrency = _Sentinel.value,
   }) async {
-    final now = DateTime.now().millisecondsSinceEpoch;
-    await (_db.update(_db.transactions)..where((t) => t.id.equals(id))).write(
-      TransactionsCompanion(
-        accountId: accountId == null ? const Value.absent() : Value(accountId),
-        categoryId: _v<String?>(categoryId),
-        payeeId: _v<String?>(payeeId),
-        payeeName: _v<String?>(payeeName),
-        amountCents: amountCents == null
-            ? const Value.absent()
-            : Value(amountCents),
-        date: date == null ? const Value.absent() : Value(ymd(date)),
-        notes: _v<String?>(notes),
-        latitude: _v<double?>(latitude),
-        longitude: _v<double?>(longitude),
-        locationName: _v<String?>(locationName),
-        cleared: cleared == null ? const Value.absent() : Value(cleared),
-        originalAmountCents: _v<int?>(originalAmountCents),
-        originalCurrency: _v<String?>(originalCurrency),
-        updatedAt: Value(now),
-      ),
-    );
-    await _logRow(id);
+    return _command(() async {
+      final now = DateTime.now().millisecondsSinceEpoch;
+      await (_db.update(_db.transactions)..where((t) => t.id.equals(id))).write(
+        TransactionsCompanion(
+          accountId: accountId == null
+              ? const Value.absent()
+              : Value(accountId),
+          categoryId: _v<String?>(categoryId),
+          payeeId: _v<String?>(payeeId),
+          payeeName: _v<String?>(payeeName),
+          amountCents: amountCents == null
+              ? const Value.absent()
+              : Value(amountCents),
+          date: date == null ? const Value.absent() : Value(ymd(date)),
+          notes: _v<String?>(notes),
+          latitude: _coordinateValue(latitude),
+          longitude: _coordinateValue(longitude),
+          locationName: _v<String?>(locationName),
+          cleared: cleared == null ? const Value.absent() : Value(cleared),
+          originalAmountCents: _v<int?>(originalAmountCents),
+          originalCurrency: _v<String?>(originalCurrency),
+          updatedAt: Value(now),
+        ),
+      );
+      await _logRow(
+        id,
+        changedFields: {
+          if (accountId != null) 'accountId',
+          if (!identical(categoryId, _Sentinel.value)) 'categoryId',
+          if (!identical(payeeId, _Sentinel.value)) 'payeeId',
+          if (!identical(payeeName, _Sentinel.value)) 'payeeName',
+          if (amountCents != null) 'amountCents',
+          if (date != null) 'date',
+          if (!identical(notes, _Sentinel.value)) 'notes',
+          if (!identical(latitude, _Sentinel.value)) 'latitude',
+          if (!identical(longitude, _Sentinel.value)) 'longitude',
+          if (!identical(locationName, _Sentinel.value)) 'locationName',
+          if (cleared != null) 'cleared',
+          if (!identical(originalAmountCents, _Sentinel.value))
+            'originalAmountCents',
+          if (!identical(originalCurrency, _Sentinel.value)) 'originalCurrency',
+          'updatedAt',
+        },
+      );
+    });
   }
 
   /// Hard-delete a transaction (and its split children / transfer pair).
   /// Returns a snapshot suitable for [restore] to put it back.
   Future<DeletedTransactionSnapshot> delete(String id) async {
-    final row = await byRow(id);
-    if (row == null) return DeletedTransactionSnapshot._empty();
-    final children = row.splitTotalCents != null
-        ? await (_db.select(
-            _db.transactions,
-          )..where((t) => t.parentId.equals(id))).get()
-        : <TransactionRow>[];
-    final tagLinks = await (_db.select(
-      _db.transactionTags,
-    )..where((t) => t.transactionId.equals(id))).get();
-    final transferPair = row.transferGroupId != null
-        ? await (_db.select(_db.transactions)..where(
-                (t) =>
-                    t.transferGroupId.equals(row.transferGroupId!) &
-                    t.id.isNotValue(id),
-              ))
-              .getSingleOrNull()
-        : null;
-    await _db.transaction(() async {
-      if (row.splitTotalCents != null) {
-        await (_db.delete(
-          _db.transactionTags,
-        )..where((t) => t.transactionId.isIn(children.map((c) => c.id)))).go();
-        await (_db.delete(
-          _db.transactions,
-        )..where((t) => t.parentId.equals(id))).go();
-      }
-      if (row.transferGroupId != null) {
-        await (_db.delete(
-          _db.transactionTags,
-        )..where((t) => t.transactionId.equals(id))).go();
-        await (_db.delete(
-          _db.transactions,
-        )..where((t) => t.transferGroupId.equals(row.transferGroupId!))).go();
-        return;
-      }
-      await (_db.delete(
+    return _command(() async {
+      final row = await byRow(id);
+      if (row == null) return DeletedTransactionSnapshot._empty();
+      final children = row.splitTotalCents != null
+          ? await (_db.select(
+              _db.transactions,
+            )..where((t) => t.parentId.equals(id))).get()
+          : <TransactionRow>[];
+      final tagLinks = await (_db.select(
         _db.transactionTags,
-      )..where((t) => t.transactionId.equals(id))).go();
-      await (_db.delete(_db.transactions)..where((t) => t.id.equals(id))).go();
+      )..where((t) => t.transactionId.equals(id))).get();
+      final transferPair = row.transferGroupId != null
+          ? await (_db.select(_db.transactions)..where(
+                  (t) =>
+                      t.transferGroupId.equals(row.transferGroupId!) &
+                      t.id.isNotValue(id),
+                ))
+                .getSingleOrNull()
+          : null;
+      final deletedIds = {
+        id,
+        ...children.map((child) => child.id),
+        if (transferPair != null) transferPair.id,
+      };
+      final allDeletedLinks = await (_db.select(
+        _db.transactionTags,
+      )..where((link) => link.transactionId.isIn(deletedIds))).get();
+      await _db.transaction(() async {
+        await (_db.delete(
+          _db.transactionTags,
+        )..where((link) => link.transactionId.isIn(deletedIds))).go();
+        await (_db.delete(
+          _db.transactions,
+        )..where((transaction) => transaction.id.isIn(deletedIds))).go();
+      });
+      if (_changes != null) {
+        for (final child in children) {
+          await _changes.delete('transactions', child.id);
+        }
+        if (transferPair != null) {
+          await _changes.delete('transactions', transferPair.id);
+        }
+        await _changes.delete('transactions', id);
+        for (final link in allDeletedLinks) {
+          await _changes.delete('transaction_tags', link.id);
+        }
+      }
+      return DeletedTransactionSnapshot._(
+        parent: row,
+        splitChildren: children,
+        transferPair: transferPair,
+        tagLinks: tagLinks,
+      );
     });
-    if (_changes != null) {
-      for (final child in children) {
-        await _changes.delete('transactions', child.id);
-      }
-      if (transferPair != null) {
-        await _changes.delete('transactions', transferPair.id);
-      }
-      await _changes.delete('transactions', id);
-      for (final link in tagLinks) {
-        await _changes.delete('transaction_tags', link.id);
-      }
-    }
-    return DeletedTransactionSnapshot._(
-      parent: row,
-      splitChildren: children,
-      transferPair: transferPair,
-      tagLinks: tagLinks,
-    );
   }
 
   /// Re-insert a row that came out of [delete]. Used for the Undo
   /// snackbar after a swipe-delete. Uses upsert so a stale Undo tap
   /// after the row has already come back doesn't throw on the PK.
   Future<void> restore(DeletedTransactionSnapshot snap) async {
-    final p = snap.parent;
-    if (p == null) return;
-    await _db.transaction(() async {
-      await _db.into(_db.transactions).insertOnConflictUpdate(p);
+    return _command(() async {
+      final p = snap.parent;
+      if (p == null) return;
+      await _db.transaction(() async {
+        await _db.into(_db.transactions).insertOnConflictUpdate(p);
+        for (final c in snap.splitChildren) {
+          await _db.into(_db.transactions).insertOnConflictUpdate(c);
+        }
+        final pair = snap.transferPair;
+        if (pair != null) {
+          await _db.into(_db.transactions).insertOnConflictUpdate(pair);
+        }
+        for (final link in snap.tagLinks) {
+          await _db
+              .into(_db.transactionTags)
+              .insertOnConflictUpdate(
+                link.copyWith(
+                  id: transactionTagEntityId(link.transactionId, link.tagId),
+                ),
+              );
+        }
+      });
+      await _logRow(p.id, changedFields: const {});
       for (final c in snap.splitChildren) {
-        await _db.into(_db.transactions).insertOnConflictUpdate(c);
+        await _logRow(c.id, changedFields: const {});
       }
       final pair = snap.transferPair;
       if (pair != null) {
-        await _db.into(_db.transactions).insertOnConflictUpdate(pair);
+        await _logRow(pair.id, changedFields: const {});
       }
       for (final link in snap.tagLinks) {
-        await _db.into(_db.transactionTags).insertOnConflictUpdate(link);
+        final canonical = link.copyWith(
+          id: transactionTagEntityId(link.transactionId, link.tagId),
+        );
+        await _changes?.upsert(
+          'transaction_tags',
+          canonical.id,
+          canonical.toJson(),
+          changedFields: const {},
+        );
       }
     });
-    await _logRow(p.id);
-    for (final c in snap.splitChildren) {
-      await _logRow(c.id);
-    }
-    final pair = snap.transferPair;
-    if (pair != null) await _logRow(pair.id);
-    for (final link in snap.tagLinks) {
-      await _changes?.upsert('transaction_tags', link.id, link.toJson());
-    }
   }
 
   // ── reads ────────────────────────────────────────────────────────────
@@ -822,6 +879,14 @@ class TransactionRepository {
 
   static Value<T?> _v<T>(Object? v) =>
       identical(v, _Sentinel.value) ? const Value.absent() : Value(v as T?);
+
+  static Value<double?> _coordinateValue(Object? value) {
+    if (identical(value, _Sentinel.value)) return const Value.absent();
+    final coordinate = value as double?;
+    return Value(
+      coordinate == null ? null : quantizeSyncCoordinate(coordinate),
+    );
+  }
 
   /// Sentinel for partial-update arguments: pass this to leave a field
   /// unchanged; pass `null` to set it to null; pass a value to set it.

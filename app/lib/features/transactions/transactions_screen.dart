@@ -240,8 +240,10 @@ class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
             .toList();
         // Displayed amount: a group parent shows the sum of its children.
         int shownCents(TransactionListItem r) => r.isGroupParent
-            ? (childrenByParent[r.id] ?? const [])
-                  .fold<int>(0, (s, c) => s + c.amountCents)
+            ? (childrenByParent[r.id] ?? const []).fold<int>(
+                0,
+                (s, c) => s + c.amountCents,
+              )
             : r.amountCents;
 
         // Group by date string (YYYY-MM-DD).

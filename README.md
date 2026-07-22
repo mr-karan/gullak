@@ -26,8 +26,9 @@ telemetry, and no third-party trackers.
   review and confirm in one tap. Parsing runs on *your* server, not ours.
 - **Insights & budgets** — trends, spending by category, and a spend heatmap
   via an in-app chart kit; monthly budget envelopes with per-category rings.
-- **Sync** — bidirectional, offline-first, last-write-wins by `updatedAt`, and
-  idempotent under retry.
+- **Sync** — bidirectional causal CRDT events with field-level conflict
+  preservation, deterministic projection, authenticated replicas, and
+  idempotent offline retry—without trusting device clocks.
 - **Conversational agent** — log, edit, and query expenses by chat, in-app or
   over WhatsApp.
 - **Exports** — opt-in mirroring to Google Sheets and Actual Budget.

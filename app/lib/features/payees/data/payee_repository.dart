@@ -14,10 +14,20 @@ class PayeeRepository {
   final ChangeLogWriter? _changes;
   static const _uuid = Uuid();
 
-  Future<void> _logRow(String id) async {
+  Future<T> _command<T>(Future<T> Function() callback) =>
+      _changes?.command(callback) ?? _db.transaction(callback);
+
+  Future<void> _logRow(String id, {Set<String>? changedFields}) async {
     if (_changes == null) return;
     final row = await byId(id);
-    if (row != null) await _changes.upsert('payees', id, row.toJson());
+    if (row != null) {
+      await _changes.upsert(
+        'payees',
+        id,
+        row.toJson(),
+        changedFields: changedFields,
+      );
+    }
   }
 
   Stream<List<PayeeRow>> watch() {
@@ -62,53 +72,99 @@ class PayeeRepository {
   }
 
   Future<String> create(String name) async {
-    final id = _uuid.v4();
-    final now = DateTime.now().millisecondsSinceEpoch;
-    await _db
-        .into(_db.payees)
-        .insert(
-          PayeesCompanion.insert(id: id, name: name.trim(), updatedAt: now),
-        );
-    await _logRow(id);
-    return id;
+    return _command(() async {
+      final id = _uuid.v4();
+      final now = DateTime.now().millisecondsSinceEpoch;
+      await _db
+          .into(_db.payees)
+          .insert(
+            PayeesCompanion.insert(id: id, name: name.trim(), updatedAt: now),
+          );
+      await _logRow(id);
+      return id;
+    });
   }
 
   Future<void> rename(String id, String name) async {
-    final now = DateTime.now().millisecondsSinceEpoch;
-    await (_db.update(_db.payees)..where((t) => t.id.equals(id))).write(
-      PayeesCompanion(name: Value(name.trim()), updatedAt: Value(now)),
-    );
-    await _logRow(id);
+    return _command(() async {
+      final now = DateTime.now().millisecondsSinceEpoch;
+      await (_db.update(_db.payees)..where((t) => t.id.equals(id))).write(
+        PayeesCompanion(name: Value(name.trim()), updatedAt: Value(now)),
+      );
+      await _logRow(id, changedFields: {'name', 'updatedAt'});
+    });
   }
 
   Future<void> delete(String id) async {
-    final affected = (await (_db.select(
-      _db.transactions,
-    )..where((t) => t.payeeId.equals(id))).get()).map((t) => t.id).toList();
-    await _db.transaction(() async {
-      await (_db.update(_db.transactions)..where((t) => t.payeeId.equals(id)))
-          .write(const TransactionsCompanion(payeeId: Value(null)));
-      await (_db.delete(_db.payees)..where((t) => t.id.equals(id))).go();
-    });
-    if (_changes != null) {
-      for (final tid in affected) {
-        final row = await (_db.select(
+    return _command(() async {
+      final now = DateTime.now().millisecondsSinceEpoch;
+      final affected = (await (_db.select(
+        _db.transactions,
+      )..where((t) => t.payeeId.equals(id))).get()).map((t) => t.id).toList();
+      final affectedRecurrences =
+          (await (_db.select(
+                _db.recurrences,
+              )..where((row) => row.payeeId.equals(id))).get())
+              .map((row) => row.id)
+              .toList();
+      await _db.transaction(() async {
+        await (_db.update(
           _db.transactions,
-        )..where((t) => t.id.equals(tid))).getSingleOrNull();
-        if (row != null) {
-          await _changes.upsert('transactions', tid, row.toJson());
+        )..where((t) => t.payeeId.equals(id))).write(
+          TransactionsCompanion(
+            payeeId: const Value(null),
+            updatedAt: Value(now),
+          ),
+        );
+        await (_db.update(
+          _db.recurrences,
+        )..where((row) => row.payeeId.equals(id))).write(
+          RecurrencesCompanion(
+            payeeId: const Value(null),
+            updatedAt: Value(now),
+          ),
+        );
+        await (_db.delete(_db.payees)..where((t) => t.id.equals(id))).go();
+      });
+      if (_changes != null) {
+        for (final tid in affected) {
+          final row = await (_db.select(
+            _db.transactions,
+          )..where((t) => t.id.equals(tid))).getSingleOrNull();
+          if (row != null) {
+            await _changes.upsert(
+              'transactions',
+              tid,
+              row.toJson(),
+              changedFields: {'payeeId', 'payeeName', 'updatedAt'},
+            );
+          }
         }
+        for (final recurrenceId in affectedRecurrences) {
+          final row =
+              await (_db.select(_db.recurrences)
+                    ..where((recurrence) => recurrence.id.equals(recurrenceId)))
+                  .getSingleOrNull();
+          if (row != null) {
+            await _changes.upsert(
+              'recurrences',
+              recurrenceId,
+              row.toJson(),
+              changedFields: {'payeeId', 'payeeName', 'updatedAt'},
+            );
+          }
+        }
+        await _changes.delete('payees', id);
       }
-      await _changes.delete('payees', id);
-    }
+    });
   }
 
   Future<void> bumpUseCount(String id) async {
+    // Derived local projection: never replicate a counter cache.
     await _db.customStatement(
       'UPDATE payees SET use_count = use_count + 1 WHERE id = ?',
       [id],
     );
-    await _logRow(id);
   }
 }
 

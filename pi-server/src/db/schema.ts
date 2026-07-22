@@ -1,5 +1,15 @@
 import { sql } from "drizzle-orm";
-import { index, integer, real, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+import {
+  blob,
+  check,
+  index,
+  integer,
+  primaryKey,
+  real,
+  sqliteTable,
+  text,
+  uniqueIndex,
+} from "drizzle-orm/sqlite-core";
 
 // Mirrors the Flutter app's Drift tables. Money is stored as integer
 // minor units throughout, dates as YYYY-MM-DD text, timestamps as ms
@@ -445,7 +455,369 @@ export const changeLog = sqliteTable(
     // affecting server-originated rows where both columns are null.
     uniqClientChange: uniqueIndex("uniq_client_change")
       .on(t.clientId, t.clientChangeId)
-      .where(sql`${t.clientId} IS NOT NULL AND ${t.clientChangeId} IS NOT NULL`),
+      .where(
+        sql`${t.clientId} IS NOT NULL AND ${t.clientChangeId} IS NOT NULL`,
+      ),
+  }),
+);
+
+// ── Sync protocol v2: immutable causal CRDT persistence ──────────────────
+//
+// These tables are deliberately separate from the protocol-v1 change_log.
+// During the mixed-version rollout v1 remains intact while v2 is populated and
+// verified in shadow mode. No route reads or writes these tables yet.
+
+/** A sync epoch bounds one compatible CRDT history and its checkpoints. */
+export const syncEpochs = sqliteTable(
+  "sync_epochs",
+  {
+    id: text("id").primaryKey(),
+    protocol: integer("protocol").notNull().default(2),
+    schemaVersion: integer("schema_version").notNull(),
+    status: text("status").notNull().default("preparing"),
+    createdAt: integer("created_at").notNull().default(now),
+    activatedAt: integer("activated_at"),
+    retiredAt: integer("retired_at"),
+    legacyInventorySealedAt: integer("legacy_inventory_sealed_at"),
+  },
+  (t) => ({
+    byStatus: index("idx_sync_epochs_status").on(t.status),
+    protocolV2: check("sync_epochs_protocol_v2", sql`${t.protocol} = 2`),
+    positiveSchema: check(
+      "sync_epochs_positive_schema",
+      sql`${t.schemaVersion} > 0`,
+    ),
+  }),
+);
+
+/**
+ * Immutable accepted change envelopes. `transport_cursor` is only a paging
+ * order; conflict semantics come exclusively from dot/context/Lamport data in
+ * the canonical envelope. `content_hash` distinguishes an exact idempotent
+ * retry from illegal reuse of a change id or actor sequence with other bytes.
+ */
+export const syncChanges = sqliteTable(
+  "sync_changes",
+  {
+    transportCursor: integer("transport_cursor").primaryKey({
+      autoIncrement: true,
+    }),
+    changeId: text("change_id").notNull(),
+    epoch: text("epoch").notNull(),
+    actorId: text("actor_id").notNull(),
+    sequence: integer("sequence").notNull(),
+    lamport: integer("lamport").notNull(),
+    wallTimeMs: integer("wall_time_ms").notNull(),
+    schemaVersion: integer("schema_version").notNull(),
+    contextJson: text("context_json").notNull(),
+    opsJson: text("ops_json").notNull(),
+    envelopeJson: text("envelope_json").notNull(),
+    contentHash: text("content_hash").notNull(),
+    source: text("source").notNull(),
+    acceptedAt: integer("accepted_at").notNull().default(now),
+  },
+  (t) => ({
+    uniqChangeId: uniqueIndex("uniq_sync_change_id").on(t.changeId),
+    uniqActorSequence: uniqueIndex("uniq_sync_actor_sequence").on(
+      t.actorId,
+      t.sequence,
+    ),
+    byEpochCursor: index("idx_sync_changes_epoch_cursor").on(
+      t.epoch,
+      t.transportCursor,
+    ),
+    byAcceptedAt: index("idx_sync_changes_accepted_at").on(t.acceptedAt),
+    positiveSequence: check(
+      "sync_changes_positive_sequence",
+      sql`${t.sequence} > 0`,
+    ),
+    positiveLamport: check(
+      "sync_changes_positive_lamport",
+      sql`${t.lamport} > 0`,
+    ),
+    positiveSchema: check(
+      "sync_changes_positive_schema",
+      sql`${t.schemaVersion} > 0`,
+    ),
+    validContext: check(
+      "sync_changes_valid_context_json",
+      sql`json_valid(${t.contextJson})`,
+    ),
+    validOps: check(
+      "sync_changes_valid_ops_json",
+      sql`json_valid(${t.opsJson})`,
+    ),
+    validEnvelope: check(
+      "sync_changes_valid_envelope_json",
+      sql`json_valid(${t.envelopeJson})`,
+    ),
+  }),
+);
+
+/**
+ * Causally maximal candidate antichain for one entity field. Candidate JSON is
+ * canonical and losslessly retains unknown fields. `policy` selects the
+ * projection rule (for example mvr, remove_wins, add_wins, or pn_counter).
+ */
+export const syncRegisters = sqliteTable(
+  "sync_registers",
+  {
+    epoch: text("epoch").notNull(),
+    resource: text("resource").notNull(),
+    entityId: text("entity_id").notNull(),
+    field: text("field").notNull(),
+    policy: text("policy").notNull(),
+    candidatesJson: text("candidates_json").notNull(),
+    visibleValueJson: text("visible_value_json"),
+    updatedCursor: integer("updated_cursor").notNull(),
+    updatedAt: integer("updated_at").notNull().default(now),
+  },
+  (t) => ({
+    pk: primaryKey({
+      name: "pk_sync_registers",
+      columns: [t.epoch, t.resource, t.entityId, t.field],
+    }),
+    byEntity: index("idx_sync_registers_entity").on(
+      t.epoch,
+      t.resource,
+      t.entityId,
+    ),
+    byCursor: index("idx_sync_registers_cursor").on(t.epoch, t.updatedCursor),
+    validCandidates: check(
+      "sync_registers_valid_candidates_json",
+      sql`json_valid(${t.candidatesJson})`,
+    ),
+    validVisibleValue: check(
+      "sync_registers_valid_visible_value_json",
+      sql`${t.visibleValueJson} IS NULL OR json_valid(${t.visibleValueJson})`,
+    ),
+  }),
+);
+
+/** Contiguous accepted sequence integrated for each actor in an epoch. */
+export const syncFrontiers = sqliteTable(
+  "sync_frontiers",
+  {
+    epoch: text("epoch").notNull(),
+    actorId: text("actor_id").notNull(),
+    contiguousSequence: integer("contiguous_sequence").notNull().default(0),
+    integratedCursor: integer("integrated_cursor").notNull().default(0),
+    updatedAt: integer("updated_at").notNull().default(now),
+  },
+  (t) => ({
+    pk: primaryKey({
+      name: "pk_sync_frontiers",
+      columns: [t.epoch, t.actorId],
+    }),
+    nonNegativeSequence: check(
+      "sync_frontiers_nonnegative_sequence",
+      sql`${t.contiguousSequence} >= 0`,
+    ),
+    nonNegativeCursor: check(
+      "sync_frontiers_nonnegative_cursor",
+      sql`${t.integratedCursor} >= 0`,
+    ),
+  }),
+);
+
+/** Durable allocator and Lamport clock for the server's own CRDT actor. */
+export const syncLocalClocks = sqliteTable(
+  "sync_local_clocks",
+  {
+    epoch: text("epoch").primaryKey(),
+    actorId: text("actor_id").notNull(),
+    nextSequence: integer("next_sequence").notNull().default(1),
+    lamport: integer("lamport").notNull().default(0),
+    integratedCursor: integer("integrated_cursor").notNull().default(0),
+    updatedAt: integer("updated_at").notNull().default(now),
+  },
+  (t) => ({
+    positiveNextSequence: check(
+      "sync_local_clocks_positive_next_sequence",
+      sql`${t.nextSequence} > 0`,
+    ),
+    nonNegativeLamport: check(
+      "sync_local_clocks_nonnegative_lamport",
+      sql`${t.lamport} >= 0`,
+    ),
+    nonNegativeCursor: check(
+      "sync_local_clocks_nonnegative_cursor",
+      sql`${t.integratedCursor} >= 0`,
+    ),
+  }),
+);
+
+/** Protocol negotiation, bootstrap state, and durable client acknowledgements. */
+export const syncClients = sqliteTable(
+  "sync_clients",
+  {
+    actorId: text("actor_id").primaryKey(),
+    /** SHA-256 of the 256-bit bearer credential returned once at registration. */
+    actorTokenHash: text("actor_token_hash").notNull(),
+    protocolVersion: integer("protocol_version").notNull(),
+    epoch: text("epoch"),
+    status: text("status").notNull().default("active"),
+    appVersion: text("app_version"),
+    platform: text("platform"),
+    acknowledgedCursor: integer("acknowledged_cursor").notNull().default(0),
+    acknowledgedFrontierJson: text("acknowledged_frontier_json")
+      .notNull()
+      .default("{}"),
+    bootstrapCheckpointId: text("bootstrap_checkpoint_id"),
+    lastSeenAt: integer("last_seen_at").notNull().default(now),
+    activatedAt: integer("activated_at"),
+    retiredAt: integer("retired_at"),
+  },
+  (t) => ({
+    byEpochStatus: index("idx_sync_clients_epoch_status").on(t.epoch, t.status),
+    byLastSeen: index("idx_sync_clients_last_seen").on(t.lastSeenAt),
+    positiveProtocol: check(
+      "sync_clients_positive_protocol",
+      sql`${t.protocolVersion} > 0`,
+    ),
+    validActorTokenHash: check(
+      "sync_clients_valid_actor_token_hash",
+      sql`length(${t.actorTokenHash}) = 64`,
+    ),
+    nonNegativeCursor: check(
+      "sync_clients_nonnegative_cursor",
+      sql`${t.acknowledgedCursor} >= 0`,
+    ),
+    validFrontier: check(
+      "sync_clients_valid_frontier_json",
+      sql`json_valid(${t.acknowledgedFrontierJson})`,
+    ),
+  }),
+);
+
+/**
+ * Protocol-v1 device inventory used only for the one-time v2 cutover. A v2
+ * actor may attest that its stable legacy client id has an empty outbox and
+ * has pulled the exact v1 head. Unknown devices cannot appear after inventory
+ * sealing, and activation requires every inventoried id to be drained or
+ * explicitly retired.
+ */
+export const syncLegacyClients = sqliteTable(
+  "sync_legacy_clients",
+  {
+    clientId: text("client_id").primaryKey(),
+    status: text("status").notNull().default("pending"),
+    migratedActorId: text("migrated_actor_id"),
+    firstSeenAt: integer("first_seen_at").notNull().default(now),
+    lastSeenAt: integer("last_seen_at").notNull().default(now),
+    lastPushAt: integer("last_push_at"),
+    lastPullCursor: integer("last_pull_cursor").notNull().default(0),
+    drainedV1Head: integer("drained_v1_head"),
+    drainedAt: integer("drained_at"),
+    retiredAt: integer("retired_at"),
+  },
+  (t) => ({
+    byStatus: index("idx_sync_legacy_clients_status").on(t.status),
+    uniqueMigratedActor: uniqueIndex(
+      "uniq_sync_legacy_clients_migrated_actor",
+    ).on(t.migratedActorId),
+    nonNegativePullCursor: check(
+      "sync_legacy_clients_nonnegative_pull_cursor",
+      sql`${t.lastPullCursor} >= 0`,
+    ),
+  }),
+);
+
+/** Maps a legacy random transaction-tag row id to the canonical pair id. */
+export const syncLegacyRelationIds = sqliteTable(
+  "sync_legacy_relation_ids",
+  {
+    legacyId: text("legacy_id").primaryKey(),
+    canonicalId: text("canonical_id").notNull(),
+    transactionId: text("transaction_id").notNull(),
+    tagId: text("tag_id").notNull(),
+    firstSeenAt: integer("first_seen_at").notNull().default(now),
+  },
+  (t) => ({
+    byCanonical: index("idx_sync_legacy_relation_canonical").on(t.canonicalId),
+  }),
+);
+
+/** Invalid or unsupported changes retained for diagnosis and explicit rescue. */
+export const syncQuarantine = sqliteTable(
+  "sync_quarantine",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    epoch: text("epoch"),
+    changeId: text("change_id"),
+    actorId: text("actor_id"),
+    sequence: integer("sequence"),
+    source: text("source").notNull(),
+    reasonCode: text("reason_code").notNull(),
+    reason: text("reason").notNull(),
+    contentHash: text("content_hash"),
+    envelopeJson: text("envelope_json"),
+    originalBytes: blob("original_bytes", { mode: "buffer" }),
+    receivedAt: integer("received_at").notNull().default(now),
+    resolvedAt: integer("resolved_at"),
+    resolution: text("resolution"),
+  },
+  (t) => ({
+    byUnresolved: index("idx_sync_quarantine_unresolved").on(
+      t.resolvedAt,
+      t.receivedAt,
+    ),
+    byChange: index("idx_sync_quarantine_change").on(t.changeId),
+    byActorSequence: index("idx_sync_quarantine_actor_sequence").on(
+      t.actorId,
+      t.sequence,
+    ),
+  }),
+);
+
+/** Verified bootstrap/compaction state: registers plus causal frontier. */
+export const syncCheckpoints = sqliteTable(
+  "sync_checkpoints",
+  {
+    id: text("id").primaryKey(),
+    epoch: text("epoch").notNull(),
+    schemaVersion: integer("schema_version").notNull(),
+    frontierJson: text("frontier_json").notNull(),
+    registersJson: text("registers_json").notNull(),
+    projectionHash: text("projection_hash").notNull(),
+    contentHash: text("content_hash").notNull(),
+    creationCursor: integer("creation_cursor").notNull(),
+    eventCount: integer("event_count").notNull(),
+    isGenesis: integer("is_genesis", { mode: "boolean" })
+      .notNull()
+      .default(false),
+    createdAt: integer("created_at").notNull().default(now),
+    verifiedAt: integer("verified_at"),
+  },
+  (t) => ({
+    uniqEpochCursor: uniqueIndex("uniq_sync_checkpoint_epoch_cursor").on(
+      t.epoch,
+      t.creationCursor,
+    ),
+    byEpochCreated: index("idx_sync_checkpoints_epoch_created").on(
+      t.epoch,
+      t.createdAt,
+    ),
+    positiveSchema: check(
+      "sync_checkpoints_positive_schema",
+      sql`${t.schemaVersion} > 0`,
+    ),
+    nonNegativeCursor: check(
+      "sync_checkpoints_nonnegative_cursor",
+      sql`${t.creationCursor} >= 0`,
+    ),
+    nonNegativeEventCount: check(
+      "sync_checkpoints_nonnegative_event_count",
+      sql`${t.eventCount} >= 0`,
+    ),
+    validFrontier: check(
+      "sync_checkpoints_valid_frontier_json",
+      sql`json_valid(${t.frontierJson})`,
+    ),
+    validRegisters: check(
+      "sync_checkpoints_valid_registers_json",
+      sql`json_valid(${t.registersJson})`,
+    ),
   }),
 );
 
@@ -515,6 +887,15 @@ export type RuleMatch = typeof ruleMatches.$inferSelect;
 export type Budget = typeof budgets.$inferSelect;
 export type Recurrence = typeof recurrences.$inferSelect;
 export type ChangeLogEntry = typeof changeLog.$inferSelect;
+export type SyncEpoch = typeof syncEpochs.$inferSelect;
+export type SyncChange = typeof syncChanges.$inferSelect;
+export type SyncRegister = typeof syncRegisters.$inferSelect;
+export type SyncFrontier = typeof syncFrontiers.$inferSelect;
+export type SyncLocalClock = typeof syncLocalClocks.$inferSelect;
+export type SyncClient = typeof syncClients.$inferSelect;
+export type SyncLegacyClient = typeof syncLegacyClients.$inferSelect;
+export type SyncQuarantineEntry = typeof syncQuarantine.$inferSelect;
+export type SyncCheckpoint = typeof syncCheckpoints.$inferSelect;
 export type FeedbackEvent = typeof feedbackEvents.$inferSelect;
 export type SheetsSyncState = typeof sheetsSyncState.$inferSelect;
 export type WhatsappInboxCandidate =

@@ -20,6 +20,7 @@ function makeApp(apiKey?: string) {
   const db = drizzle(sqlite, { schema });
   migrate(db, { migrationsFolder: "./drizzle" });
   const config = {
+    syncV2Mode: "disabled",
     httpApiKey: apiKey,
     sheets: { syncIntervalMinutes: 0 },
     ai: { enabled: false },
@@ -28,7 +29,11 @@ function makeApp(apiKey?: string) {
   return { app: createApp({ db, config }), db };
 }
 
-function push(app: ReturnType<typeof makeApp>["app"], clientId: string, changes: unknown[]) {
+function push(
+  app: ReturnType<typeof makeApp>["app"],
+  clientId: string,
+  changes: unknown[],
+) {
   return app.request("/v1/sync/push", {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -36,7 +41,9 @@ function push(app: ReturnType<typeof makeApp>["app"], clientId: string, changes:
   });
 }
 
-const txn = (o: { ccid?: string; updatedAt?: number; amountCents?: number } = {}) => ({
+const txn = (
+  o: { ccid?: string; updatedAt?: number; amountCents?: number } = {},
+) => ({
   clientChangeId: o.ccid ?? "c1",
   resource: "transactions",
   resourceId: "t1",
@@ -63,6 +70,45 @@ test("push applies an upsert and persists it", async () => {
   expect(row?.amountCents).toBe(-5000);
 });
 
+test("capabilities default to v1 while advertising dormant v2 support", async () => {
+  const { app } = makeApp();
+  const res = await app.request("/v1/sync/capabilities");
+  expect(res.status).toBe(200);
+  expect(await res.json()).toMatchObject({
+    preferredProtocol: 1,
+    supportedProtocols: [1, 2],
+    v1: { writes: "accepted" },
+    v2: { mode: "disabled", epoch: null, bootstrapRequired: false },
+  });
+});
+
+test("active mode explicitly rejects ambiguous v1 snapshot pushes", async () => {
+  // Tests construct a narrow AppConfig fixture; mutate the captured object by
+  // creating an active-mode app through the helper's config default override.
+  const sqlite = new Database(":memory:");
+  const db = drizzle(sqlite, { schema });
+  migrate(db, { migrationsFolder: "./drizzle" });
+  const config = {
+    syncV2Mode: "active",
+    sheets: { syncIntervalMinutes: 0 },
+    ai: { enabled: false },
+    rateLimit: { aiPerMinute: 0, webhookPerMinute: 0 },
+  } as unknown as AppConfig;
+  const activeApp = createApp({ db, config });
+  const res = await push(activeApp, "phone", [txn()]);
+  expect(res.status).toBe(426);
+  expect(await res.json()).toMatchObject({
+    error: "upgrade_required",
+    requiredProtocol: 2,
+  });
+  const pull = await activeApp.request("/v1/sync/changes?since=0");
+  expect(pull.status).toBe(426);
+  expect(await pull.json()).toMatchObject({
+    error: "upgrade_required",
+    requiredProtocol: 2,
+  });
+});
+
 test("a retried clientChangeId is deduped (idempotent), not re-applied", async () => {
   const { app } = makeApp();
   await push(app, "phone", [txn()]);
@@ -74,7 +120,9 @@ test("a retried clientChangeId is deduped (idempotent), not re-applied", async (
 
 test("a stale update (older updatedAt) loses to the newer row (LWW)", async () => {
   const { app, db } = makeApp();
-  await push(app, "phone", [txn({ ccid: "new", updatedAt: 2000, amountCents: -5000 })]);
+  await push(app, "phone", [
+    txn({ ccid: "new", updatedAt: 2000, amountCents: -5000 }),
+  ]);
   const res = await push(app, "phone", [
     txn({ ccid: "stale", updatedAt: 1000, amountCents: -9999 }),
   ]);
@@ -107,10 +155,18 @@ test("auth gate: required key rejects missing/wrong, exempts health", async () =
   const { app } = makeApp("secret");
   expect((await app.request("/v1/transactions")).status).toBe(401);
   expect(
-    (await app.request("/v1/transactions", { headers: { "x-api-key": "nope" } })).status,
+    (
+      await app.request("/v1/transactions", {
+        headers: { "x-api-key": "nope" },
+      })
+    ).status,
   ).toBe(401);
   expect(
-    (await app.request("/v1/transactions", { headers: { "x-api-key": "secret" } })).status,
+    (
+      await app.request("/v1/transactions", {
+        headers: { "x-api-key": "secret" },
+      })
+    ).status,
   ).toBe(200);
   expect((await app.request("/v1/health")).status).toBe(200); // exempt
 });
@@ -124,13 +180,21 @@ test("gte cursor: a row at the boundary is returned, and new rows after cursor a
   const { app } = makeApp();
   // Push two changes — one from phoneA (self-originated), one from phoneB.
   await push(app, "phoneA", [txn({ ccid: "first" })]);
-  await push(app, "phoneB", [{
-    clientChangeId: "second",
-    resource: "transactions",
-    resourceId: "t2",
-    op: "upsert",
-    payload: { id: "t2", accountId: "a1", amountCents: -3000, date: "2026-06-30", updatedAt: 2000 },
-  }]);
+  await push(app, "phoneB", [
+    {
+      clientChangeId: "second",
+      resource: "transactions",
+      resourceId: "t2",
+      op: "upsert",
+      payload: {
+        id: "t2",
+        accountId: "a1",
+        amountCents: -3000,
+        date: "2026-06-30",
+        updatedAt: 2000,
+      },
+    },
+  ]);
   // First pull: phoneA sees t2 (from phoneB, not self), cursor points at last scanned row.
   type ChangesBody = { changes: { resourceId: string }[]; cursor: number };
   const firstPull = (await (
@@ -147,13 +211,21 @@ test("gte cursor: a row at the boundary is returned, and new rows after cursor a
   // gte means the last row is visible again — this is intentional.
   expect(secondPull.changes.some((c) => c.resourceId === "t2")).toBe(true);
   // Now push a NEW change — this must appear even though cursor hasn't changed.
-  await push(app, "phoneB", [{
-    clientChangeId: "third",
-    resource: "transactions",
-    resourceId: "t3",
-    op: "upsert",
-    payload: { id: "t3", accountId: "a1", amountCents: -1000, date: "2026-06-30", updatedAt: 3000 },
-  }]);
+  await push(app, "phoneB", [
+    {
+      clientChangeId: "third",
+      resource: "transactions",
+      resourceId: "t3",
+      op: "upsert",
+      payload: {
+        id: "t3",
+        accountId: "a1",
+        amountCents: -1000,
+        date: "2026-06-30",
+        updatedAt: 3000,
+      },
+    },
+  ]);
   const thirdPull = (await (
     await app.request(`/v1/sync/changes?since=${cursor}&clientId=phoneA`)
   ).json()) as ChangesBody;
@@ -177,12 +249,37 @@ test("a corrupt change_log payload is skipped, not a 500 for the whole pull", as
     .run();
   const res = await app.request("/v1/sync/changes?since=0&clientId=reader");
   expect(res.status).toBe(200); // did not 500
-  type Row = { resourceId: string; payload: unknown; payloadError?: boolean };
+  type Row = { resourceId: string; payload: unknown };
   const body = (await res.json()) as { changes: Row[]; cursor: number };
-  const bad = body.changes.find((r) => r.resourceId === "bad");
-  expect(bad?.payload).toBeNull();
-  expect(bad?.payloadError).toBe(true);
+  expect(body.changes.some((r) => r.resourceId === "bad")).toBe(false);
   // The good row still comes through and the cursor advances past both.
   expect(body.changes.some((r) => r.resourceId === "t1")).toBe(true);
   expect(body.cursor).toBeGreaterThan(0);
+});
+
+test("legacy rule payloads are omitted while the scan cursor advances", async () => {
+  const { app, db } = makeApp();
+  db.insert(schema.changeLog)
+    .values({
+      resource: "rules",
+      resourceId: "legacy-rule",
+      op: "upsert",
+      payload: JSON.stringify({ legacyShape: true }),
+      clientId: null,
+      clientChangeId: null,
+      at: 1000,
+    })
+    .run();
+  const head = db.select().from(schema.changeLog).get()!.id;
+
+  const response = await app.request(
+    "/v1/sync/changes?since=0&clientId=reader",
+  );
+  expect(response.status).toBe(200);
+  const body = (await response.json()) as {
+    changes: { resource: string }[];
+    cursor: number;
+  };
+  expect(body.changes).toEqual([]);
+  expect(body.cursor).toBe(head);
 });

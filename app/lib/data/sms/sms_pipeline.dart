@@ -362,9 +362,9 @@ class SmsPipeline {
       [smsRowId],
     );
     await drainPendingParses(limit: 50);
-    final row =
-        await (db.select(db.smsMessages)..where((t) => t.id.equals(smsRowId)))
-            .getSingleOrNull();
+    final row = await (db.select(
+      db.smsMessages,
+    )..where((t) => t.id.equals(smsRowId))).getSingleOrNull();
     return row?.candidateStatus;
   }
 

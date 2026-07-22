@@ -56,12 +56,22 @@ class BudgetRepository {
   final ChangeLogWriter? _changes;
   static const _uuid = Uuid();
 
-  Future<void> _logRow(String id) async {
+  Future<T> _command<T>(Future<T> Function() callback) =>
+      _changes?.command(callback) ?? _db.transaction(callback);
+
+  Future<void> _logRow(String id, {Set<String>? changedFields}) async {
     if (_changes == null) return;
     final row = await (_db.select(
       _db.budgets,
     )..where((b) => b.id.equals(id))).getSingleOrNull();
-    if (row != null) await _changes.upsert('budgets', id, row.toJson());
+    if (row != null) {
+      await _changes.upsert(
+        'budgets',
+        id,
+        row.toJson(),
+        changedFields: changedFields,
+      );
+    }
   }
 
   static String monthOf(DateTime d) =>
@@ -79,80 +89,89 @@ class BudgetRepository {
     required String month,
     required int targetCents,
   }) async {
-    final now = DateTime.now().millisecondsSinceEpoch;
-    final existing =
-        await (_db.select(_db.budgets)..where(
-              (b) => b.categoryId.equals(categoryId) & b.month.equals(month),
-            ))
-            .getSingleOrNull();
-    final String id;
-    if (existing == null) {
-      id = _uuid.v4();
-      await _db
-          .into(_db.budgets)
-          .insert(
-            BudgetsCompanion.insert(
-              id: id,
-              categoryId: categoryId,
-              month: month,
-              targetCents: targetCents,
-              updatedAt: now,
-            ),
-          );
-    } else {
-      id = existing.id;
-      await (_db.update(
-        _db.budgets,
-      )..where((b) => b.id.equals(existing.id))).write(
-        BudgetsCompanion(
-          targetCents: Value(targetCents),
-          updatedAt: Value(now),
-        ),
+    return _command(() async {
+      final now = DateTime.now().millisecondsSinceEpoch;
+      final existing =
+          await (_db.select(_db.budgets)..where(
+                (b) => b.categoryId.equals(categoryId) & b.month.equals(month),
+              ))
+              .getSingleOrNull();
+      final String id;
+      if (existing == null) {
+        id = _uuid.v4();
+        await _db
+            .into(_db.budgets)
+            .insert(
+              BudgetsCompanion.insert(
+                id: id,
+                categoryId: categoryId,
+                month: month,
+                targetCents: targetCents,
+                updatedAt: now,
+              ),
+            );
+      } else {
+        id = existing.id;
+        await (_db.update(
+          _db.budgets,
+        )..where((b) => b.id.equals(existing.id))).write(
+          BudgetsCompanion(
+            targetCents: Value(targetCents),
+            updatedAt: Value(now),
+          ),
+        );
+      }
+      await _logRow(
+        id,
+        changedFields: existing == null ? null : {'targetCents', 'updatedAt'},
       );
-    }
-    await _logRow(id);
+    });
   }
 
   Future<void> clearTarget({
     required String categoryId,
     required String month,
   }) async {
-    final affected =
-        (await (_db.select(_db.budgets)..where(
-                  (b) =>
-                      b.categoryId.equals(categoryId) & b.month.equals(month),
-                ))
-                .get())
-            .map((b) => b.id)
-            .toList();
-    await (_db.delete(_db.budgets)..where(
-          (b) => b.categoryId.equals(categoryId) & b.month.equals(month),
-        ))
-        .go();
-    if (_changes != null) {
-      for (final id in affected) {
-        await _changes.delete('budgets', id);
+    return _command(() async {
+      final affected =
+          (await (_db.select(_db.budgets)..where(
+                    (b) =>
+                        b.categoryId.equals(categoryId) & b.month.equals(month),
+                  ))
+                  .get())
+              .map((b) => b.id)
+              .toList();
+      await (_db.delete(_db.budgets)..where(
+            (b) => b.categoryId.equals(categoryId) & b.month.equals(month),
+          ))
+          .go();
+      if (_changes != null) {
+        for (final id in affected) {
+          await _changes.delete('budgets', id);
+        }
       }
-    }
+    });
   }
 
   Future<int> copyTargetsFromPreviousMonth(String month) async {
-    final previousMonth = shiftMonth(month, -1);
-    final previousTargets = await (_db.select(
-      _db.budgets,
-    )..where((b) => b.month.equals(previousMonth))).get();
-    if (previousTargets.isEmpty) return 0;
+    return _command(() async {
+      final previousMonth = shiftMonth(month, -1);
+      final previousTargets = await (_db.select(
+        _db.budgets,
+      )..where((b) => b.month.equals(previousMonth))).get();
+      if (previousTargets.isEmpty) return 0;
 
-    var copied = 0;
-    for (final target in previousTargets) {
-      await setTarget(
-        categoryId: target.categoryId,
-        month: month,
-        targetCents: target.targetCents,
-      );
-      copied++;
-    }
-    return copied;
+      var copied = 0;
+      for (final target in previousTargets) {
+        await setTarget(
+          categoryId: target.categoryId,
+          month: month,
+          targetCents: target.targetCents,
+        );
+        copied++;
+      }
+      return copied;
+    });
   }
 
   /// Drift stream over the entire budgets table. Used by providers that

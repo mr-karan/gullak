@@ -4,7 +4,12 @@ import { z } from "zod";
 
 import type { AppEnv } from "../app.ts";
 import { budgets } from "../db/schema.ts";
-import { newId, nowMs, recordChange } from "../repos/changelog.ts";
+import {
+  newId,
+  nowMs,
+  recordChange,
+  recordCommand,
+} from "../repos/changelog.ts";
 
 const upsertSchema = z.object({
   id: z.string().min(1).optional(),
@@ -33,11 +38,14 @@ budgetsRouter.post("/", async (c) => {
     rolloverCents: parsed.rolloverCents,
     updatedAt: nowMs(),
   };
-  db.transaction((tx) => {
-    tx.insert(budgets).values(row).onConflictDoUpdate({
-      target: budgets.id,
-      set: row,
-    }).run();
+  recordCommand(db, (tx) => {
+    tx.insert(budgets)
+      .values(row)
+      .onConflictDoUpdate({
+        target: budgets.id,
+        set: row,
+      })
+      .run();
     recordChange(tx, {
       resource: "budgets",
       resourceId: id,
@@ -55,7 +63,7 @@ budgetsRouter.patch("/:id", async (c) => {
   const existing = db.select().from(budgets).where(eq(budgets.id, id)).get();
   if (!existing) return c.json({ error: "Not found" }, 404);
   const next = { ...existing, ...partial, updatedAt: nowMs() };
-  db.transaction((tx) => {
+  recordCommand(db, (tx) => {
     tx.update(budgets).set(next).where(eq(budgets.id, id)).run();
     recordChange(tx, {
       resource: "budgets",
@@ -71,7 +79,7 @@ budgetsRouter.delete("/:id", (c) => {
   const db = c.get("db");
   const id = c.req.param("id");
   let removed = 0;
-  db.transaction((tx) => {
+  recordCommand(db, (tx) => {
     const rows = tx.delete(budgets).where(eq(budgets.id, id)).returning().all();
     removed = rows.length;
     if (removed > 0) {

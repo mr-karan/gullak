@@ -4,7 +4,11 @@ import { and, eq, gte, inArray, isNull, lte, sql } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
 
-import { parseSms, validateCandidate, type SmsCandidate } from "../ai/sms_parser.ts";
+import {
+  parseSms,
+  validateCandidate,
+  type SmsCandidate,
+} from "../ai/sms_parser.ts";
 import type { AppEnv } from "../app.ts";
 import {
   accounts,
@@ -16,7 +20,12 @@ import {
   type NewSmsMessage,
   type SmsMessage,
 } from "../db/schema.ts";
-import { newId, nowMs, recordChange } from "../repos/changelog.ts";
+import {
+  newId,
+  nowMs,
+  recordChange,
+  recordCommand,
+} from "../repos/changelog.ts";
 import { recordParseFailure } from "../repos/feedback.ts";
 import { runRules } from "../rules/engine.ts";
 import {
@@ -33,7 +42,11 @@ import {
  * always yields the same id. Stamped onto queued candidates so the eventually
  * confirmed txn carries it, and used as the exact-match key here.
  */
-function stableSmsId(sender: string, body: string, candidate: SmsCandidate): string {
+function stableSmsId(
+  sender: string,
+  body: string,
+  candidate: SmsCandidate,
+): string {
   const ref = candidate.bankRef?.trim();
   if (ref) return `sms:ref:${ref}`;
   const hash = createHash("sha1").update(`${sender}\n${body}`).digest("hex");
@@ -75,7 +88,12 @@ const ingestItem = z.object({
   body: z.string().min(1).max(4000),
   receivedAt: z.number().int().nonnegative(),
   linkedTransactionId: z.string().min(1).nullable().optional(),
-  baseTransactionUpdatedAt: z.number().int().nonnegative().nullable().optional(),
+  baseTransactionUpdatedAt: z
+    .number()
+    .int()
+    .nonnegative()
+    .nullable()
+    .optional(),
   candidateJson: z.string().max(8000).nullable().optional(),
 });
 
@@ -251,7 +269,7 @@ smsRouter.post("/ingest", async (c) => {
         next.importedId !== target.importedId ||
         next.notes !== target.notes;
       if (changed) {
-        db.transaction((tx) => {
+        recordCommand(db, (tx) => {
           tx.update(transactions)
             .set(next)
             .where(eq(transactions.id, target.id))
@@ -304,7 +322,7 @@ smsRouter.post("/bulk-ingest", async (c) => {
   let inserted = 0;
   let updated = 0;
 
-  db.transaction((tx) => {
+  recordCommand(db, (tx) => {
     for (const item of items) {
       const existing = tx
         .select()
@@ -380,7 +398,9 @@ const reprocessBody = z.object({
 smsRouter.post("/reprocess", async (c) => {
   const db = c.get("db");
   const config = c.get("config");
-  const opts = reprocessBody.parse((await c.req.json().catch(() => ({}))) ?? {});
+  const opts = reprocessBody.parse(
+    (await c.req.json().catch(() => ({}))) ?? {},
+  );
   const limit = opts.limit ?? 100;
   const force = opts.force ?? false;
   const batchSize = opts.batchSize ?? 5;
@@ -394,9 +414,7 @@ smsRouter.post("/reprocess", async (c) => {
       .where(inArray(smsMessages.id, opts.smsIds))
       .all();
   } else {
-    const where = force
-      ? sql`1 = 1`
-      : eq(smsMessages.status, "pending");
+    const where = force ? sql`1 = 1` : eq(smsMessages.status, "pending");
     candidates = db.select().from(smsMessages).where(where).limit(limit).all();
   }
 
@@ -407,7 +425,10 @@ smsRouter.post("/reprocess", async (c) => {
   // The model needs the user's category list so the category_hint maps to a
   // real category. (We could narrow this per-user later; today there's only
   // one user.)
-  const allCategories = db.select({ id: categories.id, name: categories.name }).from(categories).all();
+  const allCategories = db
+    .select({ id: categories.id, name: categories.name })
+    .from(categories)
+    .all();
   const knownPayees = db
     .select({
       id: payees.id,
@@ -422,7 +443,12 @@ smsRouter.post("/reprocess", async (c) => {
 
   for (let i = 0; i < candidates.length; i += batchSize) {
     const batch = candidates.slice(i, i + batchSize);
-    const results = await reparseBatch(config, batch, allCategories, knownPayees);
+    const results = await reparseBatch(
+      config,
+      batch,
+      allCategories,
+      knownPayees,
+    );
 
     for (let j = 0; j < batch.length; j++) {
       const row = batch[j]!;
@@ -513,7 +539,7 @@ smsRouter.post("/reprocess", async (c) => {
           nextPayeeName = existingPayee.name;
         } else {
           const newPayeeId = newId();
-          db.transaction((tx) => {
+          recordCommand(db, (tx) => {
             tx.insert(payees)
               .values({
                 id: newPayeeId,
@@ -526,7 +552,12 @@ smsRouter.post("/reprocess", async (c) => {
               resource: "payees",
               resourceId: newPayeeId,
               op: "upsert",
-              payload: { id: newPayeeId, name: cand.payee, useCount: 1, updatedAt: at },
+              payload: {
+                id: newPayeeId,
+                name: cand.payee,
+                useCount: 1,
+                updatedAt: at,
+              },
             });
           });
           knownPayees.push({ id: newPayeeId, name: cand.payee! });
@@ -547,8 +578,11 @@ smsRouter.post("/reprocess", async (c) => {
         updatedAt: at,
       };
 
-      db.transaction((tx) => {
-        tx.update(transactions).set(next).where(eq(transactions.id, txn.id)).run();
+      recordCommand(db, (tx) => {
+        tx.update(transactions)
+          .set(next)
+          .where(eq(transactions.id, txn.id))
+          .run();
         recordChange(tx, {
           resource: "transactions",
           resourceId: txn.id,

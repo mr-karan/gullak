@@ -12,29 +12,46 @@ import '../core/secure_store.dart';
 import '../data/db/database.dart';
 import '../state/providers.dart';
 import 'remote_applier.dart';
+import 'crdt_store.dart';
+import 'sync_v2_client.dart';
 
-/// Talks to the homelab pi-server's /v1/sync endpoints. Local mutations
-/// land in the [ChangeLog] Drift table via repositories; this service
-/// batches the unsynced rows and POSTs them up to /v1/sync/push.
+typedef SyncRunResult = ({
+  int pushed,
+  int pulled,
+  int quarantined,
+  int duplicates,
+  int conflicts,
+  int protocol,
+  String? error,
+});
+
+/// Negotiates sync protocol support with the configured server.
 ///
-/// Pull is intentionally a thin shell — when wired we'll GET
-/// `/v1/sync/changes?since=<cursor>&clientId=<self>` and apply LWW
-/// per row by `updatedAt`. Server already filters out our own
-/// changes so we don't echo-loop.
-///
-/// LWW per row by `updatedAt` is the conflict policy. Fine for
-/// personal use; revisit if anything important ever clobbers.
+/// Protocol v2 exchanges immutable causal field operations and folds them
+/// through [CrdtStore]. Protocol v1 remains here only as a mixed-version
+/// migration adapter: it drains an installed pre-v2 outbox before verified
+/// checkpoint bootstrap and is disabled by the server after activation.
 class SyncService {
-  SyncService(this._db, this._secure, this._prefs, this._applier, {Dio? dio})
-    : _dio = dio ?? Dio();
+  SyncService(
+    this._db,
+    this._secure,
+    this._prefs,
+    this._applier, {
+    Dio? dio,
+    SyncV2Client? v2Client,
+  }) : _dio = dio ?? Dio() {
+    _v2 = v2Client ?? SyncV2Client(_db, _secure, CrdtStore(_db), dio: _dio);
+  }
 
   final AppDatabase _db;
   final SecureStore _secure;
   final Prefs _prefs;
   final RemoteApplier _applier;
   final Dio _dio;
+  late final SyncV2Client _v2;
   final Uuid _uuid = const Uuid();
   String? _clientId;
+  Future<SyncRunResult>? _inFlight;
 
   static const _kClientIdKey = 'sync.clientId';
   static const _pruneRetainDays = 14;
@@ -104,19 +121,105 @@ class SyncService {
     return testConnection(baseUrl: baseUrl, apiKey: apiKey);
   }
 
-  Future<({int pushed, int pulled, int quarantined, String? error})>
-  syncOnce() async {
+  /// Coalesce every caller onto one reconciliation round. Lifecycle hooks,
+  /// mutation debounces, and manual sync can race; protocol idempotency makes
+  /// duplicate requests safe, but serial execution is the stronger contract.
+  Future<SyncRunResult> syncOnce() {
+    final running = _inFlight;
+    if (running != null) return running;
+
+    late final Future<SyncRunResult> run;
+    run = _syncOnce().whenComplete(() {
+      if (identical(_inFlight, run)) _inFlight = null;
+    });
+    _inFlight = run;
+    return run;
+  }
+
+  Future<SyncRunResult> _syncOnce() async {
     if (!await isConfigured()) {
       return (
         pushed: 0,
         pulled: 0,
         quarantined: 0,
+        duplicates: 0,
+        conflicts: 0,
+        protocol: 0,
         error: 'Sync server not configured.',
       );
     }
     try {
-      final push = await pushPending();
-      final pulled = await pullChanges();
+      final baseUrl = (await _secure.readSyncBaseUrl())!.trim();
+      final apiKey = (await _secure.readSyncApiKey())?.trim();
+      final capabilities = await _capabilities(baseUrl, apiKey);
+      var pushed = 0;
+      var pulled = 0;
+      var quarantined = 0;
+      var duplicates = 0;
+      var conflicts = 0;
+      var protocol = capabilities.protocol;
+
+      if (capabilities.protocol == 2) {
+        final epoch = capabilities.epoch;
+        if (epoch == null || epoch.isEmpty) {
+          throw const SyncV2Exception(
+            'Server selected sync v2 without a verified epoch.',
+            code: 'missing_epoch',
+          );
+        }
+        String? legacyClientId;
+        int? legacyV1Cursor;
+        final pendingLegacy = await (_db.select(
+          _db.changeLog,
+        )..where((row) => row.synced.equals(false))).get();
+        if (pendingLegacy.isNotEmpty && capabilities.mode != 'preparing') {
+          throw SyncV2Exception(
+            '${pendingLegacy.length} legacy local change(s) were not drained '
+            'before v2 activation.',
+            code: 'legacy_cutover_blocked',
+          );
+        }
+        final drainEpoch = await _db.kvGet(SyncV2Client.legacyDrainEpochKvKey);
+        if (capabilities.mode == 'preparing' && drainEpoch != epoch) {
+          // A durable v2 actor attests the legacy outbox only after every v1
+          // push has succeeded and an inclusive pull reached the exact server
+          // head. If the attestation request fails, the epoch marker remains
+          // absent and the entire drain is retried on the next sync.
+          final legacyPush = await pushPending();
+          pushed += legacyPush.pushed;
+          quarantined += legacyPush.quarantined;
+          pulled += await pullChanges();
+          final stillPending = await (_db.select(
+            _db.changeLog,
+          )..where((row) => row.synced.equals(false))).get();
+          if (stillPending.isNotEmpty) {
+            throw SyncV2Exception(
+              '${stillPending.length} legacy local change(s) remain after drain.',
+              code: 'legacy_drain_incomplete',
+            );
+          }
+          legacyClientId = await _getClientId();
+          legacyV1Cursor = _prefs.syncCursor;
+        }
+        final result = await _v2.sync(
+          baseUrl: baseUrl,
+          epoch: epoch,
+          apiKey: apiKey,
+          legacyClientId: legacyClientId,
+          legacyV1Cursor: legacyV1Cursor,
+        );
+        pushed += result.pushed;
+        pulled += result.pulled;
+        quarantined += result.quarantined;
+        duplicates += result.duplicates;
+        conflicts += result.conflicts;
+      } else {
+        protocol = 1;
+        final push = await pushPending();
+        pushed = push.pushed;
+        quarantined = push.quarantined;
+        pulled = await pullChanges();
+      }
       // WhatsApp-derived inbox candidates land on the server queue;
       // import them into the local SMS Inbox so the existing review
       // surface handles them. Failures here don't block the sync —
@@ -131,17 +234,18 @@ class SyncService {
       // signal survives pruneSynced and can be shown in Settings. Corruption is
       // near-impossible in practice, but if it happens the user must know a
       // change never left the device rather than silently diverging.
-      if (push.quarantined > 0) {
-        log.e('sync: quarantined ${push.quarantined} unsyncable change(s)');
-        await _prefs.setSyncQuarantined(
-          _prefs.syncQuarantined + push.quarantined,
-        );
+      if (quarantined > 0) {
+        log.e('sync: quarantined $quarantined unsyncable change(s)');
+        await _prefs.setSyncQuarantined(_prefs.syncQuarantined + quarantined);
       }
       await pruneSynced();
       return (
-        pushed: push.pushed,
+        pushed: pushed,
         pulled: pulled,
-        quarantined: push.quarantined,
+        quarantined: quarantined,
+        duplicates: duplicates,
+        conflicts: conflicts,
+        protocol: protocol,
         error: null,
       );
     } catch (e) {
@@ -150,8 +254,57 @@ class SyncService {
         pushed: 0,
         pulled: 0,
         quarantined: 0,
+        duplicates: 0,
+        conflicts: 0,
+        protocol: 0,
         error: networkErrorMessage(e),
       );
+    }
+  }
+
+  Future<({int protocol, String? mode, String? epoch})> _capabilities(
+    String baseUrl,
+    String? apiKey,
+  ) async {
+    try {
+      final response = await _dio.get<Object?>(
+        _join(baseUrl, '/v1/sync/capabilities'),
+        options: Options(
+          headers: {
+            if (apiKey != null && apiKey.isNotEmpty) 'x-api-key': apiKey,
+            'accept': 'application/json',
+            'connection': 'close',
+          },
+          connectTimeout: const Duration(seconds: 5),
+          receiveTimeout: const Duration(seconds: 10),
+        ),
+      );
+      final data = response.data;
+      if (data is! Map) {
+        throw const SyncV2Exception('Invalid sync capabilities response.');
+      }
+      final preferred = data['preferredProtocol'];
+      if (preferred == 1) return (protocol: 1, mode: null, epoch: null);
+      if (preferred != 2) {
+        throw SyncV2Exception(
+          'Unsupported preferred sync protocol: $preferred.',
+        );
+      }
+      final v2 = data['v2'];
+      if (v2 is! Map) {
+        throw const SyncV2Exception('Capabilities omitted v2 metadata.');
+      }
+      return (
+        protocol: 2,
+        mode: v2['mode'] as String?,
+        epoch: v2['epoch'] as String?,
+      );
+    } on DioException catch (error) {
+      // Servers predating negotiation are protocol-v1 only.
+      if (error.response?.statusCode == 404) {
+        return (protocol: 1, mode: null, epoch: null);
+      }
+      rethrow;
     }
   }
 

@@ -1,5 +1,5 @@
 import { and, eq, gte, lte, sql } from "drizzle-orm";
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 import { z } from "zod";
 
 import type { AppEnv } from "../app.ts";
@@ -15,13 +15,96 @@ import {
   recurrences,
   ruleMatches,
   rules,
+  syncEpochs,
   tags,
   transactions,
   transactionTags,
 } from "../db/schema.ts";
 import { isChangeRecorded, recordChange } from "../repos/changelog.ts";
+import {
+  SyncEpochConfigurationError,
+  configuredWritableEpoch,
+} from "../sync/epoch.ts";
+import {
+  normalizeLegacyTransactionTagMutation,
+  observeLegacyClient,
+} from "../sync/legacy.ts";
 
 export const syncRouter = new Hono<AppEnv>();
+
+function legacyProtocolGate(c: Context<AppEnv>): Response | null {
+  const db = c.get("db");
+  const mode = c.get("config").syncV2Mode;
+  const active = db
+    .select({ id: syncEpochs.id })
+    .from(syncEpochs)
+    .where(eq(syncEpochs.status, "active"))
+    .get();
+  // Durable DB state is the immediate traffic fence. This closes the operator
+  // activation -> config deployment window: once the epoch commits active, no
+  // v1 snapshot can be read or written even by an old server process.
+  if (active !== undefined || mode === "active") {
+    return c.json(
+      {
+        error: "upgrade_required",
+        message: "Protocol-v1 snapshot sync is disabled for this sync epoch",
+        requiredProtocol: 2,
+      },
+      426,
+    );
+  }
+  try {
+    configuredWritableEpoch(db, mode);
+  } catch (error) {
+    if (!(error instanceof SyncEpochConfigurationError)) throw error;
+    return c.json(
+      {
+        error: "sync_v2_rollout_misconfigured",
+        mode,
+        reason: error.message,
+      },
+      503,
+    );
+  }
+  return null;
+}
+
+// Negotiation is available before v2 is activated so a new app can safely
+// decide whether to drain v1, wait, or bootstrap. The rollout mode is an
+// explicit server config gate; merely applying the v2 schema migration never
+// changes live sync behaviour.
+syncRouter.get("/capabilities", (c) => {
+  const db = c.get("db");
+  const config = c.get("config");
+  let epoch;
+  try {
+    epoch = configuredWritableEpoch(db, config.syncV2Mode);
+  } catch (error) {
+    if (!(error instanceof SyncEpochConfigurationError)) throw error;
+    return c.json(
+      {
+        error: "sync_v2_rollout_misconfigured",
+        mode: config.syncV2Mode,
+        reason: error.message,
+      },
+      503,
+    );
+  }
+  const v2Preferred = config.syncV2Mode !== "disabled";
+  return c.json({
+    preferredProtocol: v2Preferred ? 2 : 1,
+    supportedProtocols: [1, 2],
+    v1: {
+      writes: config.syncV2Mode === "active" ? "upgrade_required" : "accepted",
+    },
+    v2: {
+      mode: config.syncV2Mode,
+      epoch: epoch?.id ?? null,
+      epochStatus: epoch?.status ?? null,
+      bootstrapRequired: v2Preferred,
+    },
+  });
+});
 
 // GET /v1/sync/changes?since=<id>&limit=500&clientId=<self>
 //
@@ -30,10 +113,24 @@ export const syncRouter = new Hono<AppEnv>();
 // they don't echo their own pushes back at themselves.
 syncRouter.get("/changes", (c) => {
   const db = c.get("db");
+  const blocked = legacyProtocolGate(c);
+  if (blocked !== null) return blocked;
   const since = Number(c.req.query("since") ?? "0");
   const limit = Math.min(Number(c.req.query("limit") ?? "500"), 5000);
   const callerId = c.req.query("clientId");
   const cursor = Number.isFinite(since) ? since : 0;
+  if (callerId) {
+    const observed = observeLegacyClient(db, callerId);
+    if (!observed.accepted) {
+      return c.json(
+        {
+          error: "legacy_inventory_sealed",
+          message: "This legacy client is not in the sealed cutover inventory",
+        },
+        409,
+      );
+    }
+  }
 
   const baseFilter = gte(changeLog.id, cursor);
 
@@ -54,24 +151,40 @@ syncRouter.get("/changes", (c) => {
     .limit(limit)
     .all();
 
-  const visible = callerId
+  const callerVisible = callerId
     ? windowRows.filter(
         (row) => row.clientId === null || row.clientId !== callerId,
       )
     : windowRows;
 
-  // Parse payload server-side so clients don't have to JSON.parse a
-  // string nested in a JSON response. A single corrupt payload must NOT 500
-  // the whole pull — that would wedge sync for every client forever. Emit the
-  // row with a null payload and an error marker so the client can skip it and
-  // the cursor still advances past it.
-  const changes = visible.map((row) => {
-    if (row.payload === null) return { ...row, payload: null };
+  // Rules are intentionally non-replicated configuration in v2. Do not feed
+  // historical rule/rule_match snapshots to old phones during the cutover
+  // drain: production contains legacy payload shapes that current clients
+  // cannot materialize, and one such permanent failure would hold the v1
+  // cursor forever. The scan cursor still advances across these rows.
+  const visible = callerVisible.filter(
+    (row) => row.resource !== "rules" && row.resource !== "rule_matches",
+  );
+
+  // Parse payload server-side so clients don't have to JSON.parse a string
+  // nested in a JSON response. A corrupt permanent payload is quarantined by
+  // omission while the independently-scanned cursor advances past it. Sending
+  // a null upsert would make v1 phones hold their cursor forever.
+  const changes = visible.flatMap((row) => {
+    if (row.payload === null) return [{ ...row, payload: null }];
     try {
-      return { ...row, payload: JSON.parse(row.payload) };
+      return [{ ...row, payload: JSON.parse(row.payload) }];
     } catch {
-      console.warn(`sync: corrupt payload for change_log id=${row.id}; skipping`);
-      return { ...row, payload: null, payloadError: true };
+      console.warn(
+        JSON.stringify({
+          event: "sync_v1_pull_payload_quarantined",
+          changeLogId: row.id,
+          resource: row.resource,
+          resourceId: row.resourceId,
+          reason: "invalid_json",
+        }),
+      );
+      return [];
     }
   });
   // Cursor is the last scanned row id. With the inclusive gte filter,
@@ -79,6 +192,7 @@ syncRouter.get("/changes", (c) => {
   // The phone's allApplied guard decides whether to actually advance.
   const newCursor =
     windowRows.length > 0 ? windowRows[windowRows.length - 1]!.id : cursor;
+  if (callerId) observeLegacyClient(db, callerId, { pullCursor: newCursor });
   return c.json({ changes, cursor: newCursor });
 });
 
@@ -153,10 +267,13 @@ const APPLIERS: Record<Resource, Applier> = {
     // Category groups carry no updated_at, so they always apply unconditionally.
     upsert: (tx, payload) => {
       const row = payload as typeof categoryGroups.$inferInsert;
-      tx.insert(categoryGroups).values(row).onConflictDoUpdate({
-        target: categoryGroups.id,
-        set: row,
-      }).run();
+      tx.insert(categoryGroups)
+        .values(row)
+        .onConflictDoUpdate({
+          target: categoryGroups.id,
+          set: row,
+        })
+        .run();
       return true;
     },
     remove: (tx, id) => {
@@ -203,13 +320,32 @@ const pushBodySchema = z.object({
 syncRouter.post("/push", async (c) => {
   const db = c.get("db");
   const config = c.get("config");
+  const blocked = legacyProtocolGate(c);
+  if (blocked !== null) return blocked;
   const parsed = pushBodySchema.parse(await c.req.json());
+  const observed = observeLegacyClient(db, parsed.clientId, { pushed: true });
+  if (!observed.accepted) {
+    return c.json(
+      {
+        error: "legacy_inventory_sealed",
+        message: "This legacy client is not in the sealed cutover inventory",
+      },
+      409,
+    );
+  }
   let appliedCount = 0;
   let dedupedCount = 0;
   let staleCount = 0;
 
   db.transaction((tx) => {
     for (const change of parsed.changes) {
+      const normalized =
+        change.resource === "transaction_tags"
+          ? {
+              ...change,
+              ...normalizeLegacyTransactionTagMutation(tx, change),
+            }
+          : change;
       // 1. Idempotency gate: already-processed retry → skip entirely.
       if (isChangeRecorded(tx, parsed.clientId, change.clientChangeId)) {
         dedupedCount += 1;
@@ -217,17 +353,21 @@ syncRouter.post("/push", async (c) => {
       }
 
       // 2. Apply the data mutation. `changed` is false for a stale no-op.
-      const applier = APPLIERS[change.resource];
+      const applier = APPLIERS[normalized.resource];
       let changed: boolean;
-      if (change.op === "upsert") {
-        if (change.payload == null) {
+      if (normalized.op === "upsert") {
+        if (normalized.payload == null) {
           throw new Error(
-            `Missing payload for upsert ${change.resource}/${change.resourceId}`,
+            `Missing payload for upsert ${normalized.resource}/${normalized.resourceId}`,
           );
         }
-        changed = applier.upsert(tx, change.payload);
+        changed = applier.upsert(tx, normalized.payload);
       } else {
-        changed = applier.remove(tx, change.resourceId, change.payload);
+        changed = applier.remove(
+          tx,
+          normalized.resourceId,
+          normalized.payload,
+        );
       }
 
       // TODO(#39): on-device SMS/manual categorizations arrive here as
@@ -249,10 +389,10 @@ syncRouter.post("/push", async (c) => {
         continue;
       }
       recordChange(tx, {
-        resource: change.resource,
-        resourceId: change.resourceId,
-        op: change.op,
-        payload: change.payload ?? undefined,
+        resource: normalized.resource,
+        resourceId: normalized.resourceId,
+        op: normalized.op,
+        payload: normalized.payload ?? undefined,
         clientId: parsed.clientId,
         clientChangeId: change.clientChangeId,
       });

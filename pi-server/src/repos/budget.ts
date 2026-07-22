@@ -10,7 +10,7 @@ import {
   recurrences,
   transactions,
 } from "../db/schema.ts";
-import { newId, nowMs, recordChange } from "./changelog.ts";
+import { newId, nowMs, recordChange, recordCommand } from "./changelog.ts";
 
 // YNAB envelope-budgeting plan. We reuse the existing `budgets` table with no
 // schema change: `budgets.targetCents` is the ASSIGNED amount for a
@@ -102,9 +102,12 @@ function evalTarget(
     // past-due date collapses to "fund the rest now").
     const [my, mm] = ctx.month.split("-").map(Number);
     const [ty, tm] = target.byDate.slice(0, 7).split("-").map(Number);
-    const diff = (ty! * 12 + tm!) - (my! * 12 + mm!) + 1;
+    const diff = ty! * 12 + tm! - (my! * 12 + mm!) + 1;
     const monthsLeft = Math.max(1, diff);
-    const remainingToGoal = Math.max(0, target.amountCents - ctx.availableCents);
+    const remainingToGoal = Math.max(
+      0,
+      target.amountCents - ctx.availableCents,
+    );
     const pace = Math.ceil(remainingToGoal / monthsLeft);
     neededThisMonth = Math.max(0, pace - ctx.assignedCents);
   } else {
@@ -167,7 +170,9 @@ export function computeBudgetPlan(
     .from(budgets)
     .where(eq(budgets.month, month))
     .all();
-  const assignedByCat = new Map(assignedRows.map((r) => [r.categoryId, r.cents]));
+  const assignedByCat = new Map(
+    assignedRows.map((r) => [r.categoryId, r.cents]),
+  );
 
   // 4. Available THROUGH the month = cumulative Σ over months m ≤ month of
   //    (assigned + activity). This cumulative sum IS the rollover. Two grouped
@@ -275,7 +280,11 @@ export function computeBudgetPlan(
 
     let group = groupIndex.get(row.groupId);
     if (!group) {
-      group = { groupId: row.groupId, groupName: row.groupName, categories: [] };
+      group = {
+        groupId: row.groupId,
+        groupName: row.groupName,
+        categories: [],
+      };
       groupIndex.set(row.groupId, group);
       groups.push(group);
     }
@@ -307,7 +316,7 @@ export function assignBudget(
   db: Db,
   args: { categoryId: string; month: string; assignedCents: number },
 ): typeof budgets.$inferSelect {
-  return db.transaction((tx) => {
+  return recordCommand(db, (tx) => {
     const existing = tx
       .select()
       .from(budgets)

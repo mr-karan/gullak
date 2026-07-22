@@ -19,12 +19,22 @@ class RecurrenceRepository {
   final ChangeLogWriter? _changes;
   static const _uuid = Uuid();
 
-  Future<void> _logRow(String id) async {
+  Future<T> _command<T>(Future<T> Function() callback) =>
+      _changes?.command(callback) ?? _db.transaction(callback);
+
+  Future<void> _logRow(String id, {Set<String>? changedFields}) async {
     if (_changes == null) return;
     final row = await (_db.select(
       _db.recurrences,
     )..where((t) => t.id.equals(id))).getSingleOrNull();
-    if (row != null) await _changes.upsert('recurrences', id, row.toJson());
+    if (row != null) {
+      await _changes.upsert(
+        'recurrences',
+        id,
+        row.toJson(),
+        changedFields: changedFields,
+      );
+    }
   }
 
   Stream<List<RecurrenceRow>> watch() {
@@ -53,34 +63,38 @@ class RecurrenceRepository {
     required String cadence,
     required DateTime nextDate,
   }) async {
-    final id = _uuid.v4();
-    final now = DateTime.now().millisecondsSinceEpoch;
-    await _db
-        .into(_db.recurrences)
-        .insert(
-          RecurrencesCompanion.insert(
-            id: id,
-            accountId: accountId,
-            amountCents: amountCents,
-            cadence: cadence,
-            nextDate: ymd(nextDate),
-            createdAt: now,
-            updatedAt: now,
-            categoryId: Value(categoryId),
-            payeeId: Value(payeeId),
-            payeeName: Value(payeeName),
-            notes: Value(notes),
-            // Anchor to the chosen day so month-end schedules don't drift.
-            anchorDay: Value(nextDate.day),
-          ),
-        );
-    await _logRow(id);
-    return id;
+    return _command(() async {
+      final id = _uuid.v4();
+      final now = DateTime.now().millisecondsSinceEpoch;
+      await _db
+          .into(_db.recurrences)
+          .insert(
+            RecurrencesCompanion.insert(
+              id: id,
+              accountId: accountId,
+              amountCents: amountCents,
+              cadence: cadence,
+              nextDate: ymd(nextDate),
+              createdAt: now,
+              updatedAt: now,
+              categoryId: Value(categoryId),
+              payeeId: Value(payeeId),
+              payeeName: Value(payeeName),
+              notes: Value(notes),
+              // Anchor to the chosen day so month-end schedules don't drift.
+              anchorDay: Value(nextDate.day),
+            ),
+          );
+      await _logRow(id);
+      return id;
+    });
   }
 
   Future<void> delete(String id) async {
-    await (_db.delete(_db.recurrences)..where((t) => t.id.equals(id))).go();
-    await _changes?.delete('recurrences', id);
+    return _command(() async {
+      await (_db.delete(_db.recurrences)..where((t) => t.id.equals(id))).go();
+      await _changes?.delete('recurrences', id);
+    });
   }
 
   /// Post transactions for every recurrence whose `nextDate` is on or before
@@ -93,39 +107,44 @@ class RecurrenceRepository {
   /// same row rather than double-booking (LWW dedups by id on sync). Returns
   /// the number of transactions posted.
   Future<int> postDue({DateTime? asOf}) async {
-    final today = _dateOnly(asOf ?? clock.now());
-    final todayYmd = ymd(today);
-    final due = await (_db.select(
-      _db.recurrences,
-    )..where((t) => t.nextDate.isSmallerOrEqualValue(todayYmd))).get();
-    var posted = 0;
-    for (final r in due) {
-      var occ = _tryParseYmd(r.nextDate);
-      if (occ == null) {
-        log.w('recurrence ${r.id} has unparseable nextDate "${r.nextDate}"');
-        continue;
-      }
-      // Anchor day drives monthly/yearly clamping so a 31st schedule doesn't
-      // permanently drift to the 28th after February. Fall back to the current
-      // nextDate's day for legacy rows written before the column existed.
-      final anchor = r.anchorDay ?? occ.day;
-      // Cap the catch-up so a corrupt far-past date can't spin forever.
-      var guard = 0;
-      while (!occ!.isAfter(today) && guard < 400) {
-        if (await _postOccurrence(r, occ)) posted += 1;
-        occ = _advance(occ, r.cadence, anchor);
-        guard += 1;
-      }
-      final now = DateTime.now().millisecondsSinceEpoch;
-      await (_db.update(
+    return _command(() async {
+      final today = _dateOnly(asOf ?? clock.now());
+      final todayYmd = ymd(today);
+      final due = await (_db.select(
         _db.recurrences,
-      )..where((t) => t.id.equals(r.id))).write(
-        RecurrencesCompanion(nextDate: Value(ymd(occ)), updatedAt: Value(now)),
-      );
-      await _logRow(r.id);
-    }
-    if (posted > 0) log.i('recurrences: posted $posted due transaction(s)');
-    return posted;
+      )..where((t) => t.nextDate.isSmallerOrEqualValue(todayYmd))).get();
+      var posted = 0;
+      for (final r in due) {
+        var occ = _tryParseYmd(r.nextDate);
+        if (occ == null) {
+          log.w('recurrence ${r.id} has unparseable nextDate "${r.nextDate}"');
+          continue;
+        }
+        // Anchor day drives monthly/yearly clamping so a 31st schedule doesn't
+        // permanently drift to the 28th after February. Fall back to the current
+        // nextDate's day for legacy rows written before the column existed.
+        final anchor = r.anchorDay ?? occ.day;
+        // Cap the catch-up so a corrupt far-past date can't spin forever.
+        var guard = 0;
+        while (!occ!.isAfter(today) && guard < 400) {
+          if (await _postOccurrence(r, occ)) posted += 1;
+          occ = _advance(occ, r.cadence, anchor);
+          guard += 1;
+        }
+        final now = DateTime.now().millisecondsSinceEpoch;
+        await (_db.update(
+          _db.recurrences,
+        )..where((t) => t.id.equals(r.id))).write(
+          RecurrencesCompanion(
+            nextDate: Value(ymd(occ)),
+            updatedAt: Value(now),
+          ),
+        );
+        await _logRow(r.id, changedFields: {'nextDate', 'updatedAt'});
+      }
+      if (posted > 0) log.i('recurrences: posted $posted due transaction(s)');
+      return posted;
+    });
   }
 
   /// Insert one occurrence's transaction if it isn't already present. Returns

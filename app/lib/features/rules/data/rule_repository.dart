@@ -6,7 +6,6 @@ import 'package:uuid/uuid.dart';
 
 import '../../../data/db/database.dart';
 import '../../../state/providers.dart';
-import '../../../sync/changelog_writer.dart';
 
 export '../../../data/db/database.dart' show RuleRow, RuleMatchRow;
 
@@ -46,10 +45,9 @@ class RuleAction {
 }
 
 class RuleRepository {
-  RuleRepository(this._db, {ChangeLogWriter? changes}) : _changes = changes;
+  RuleRepository(this._db);
 
   final AppDatabase _db;
-  final ChangeLogWriter? _changes;
   static const _uuid = Uuid();
 
   Future<List<RuleRow>> list({bool includeDisabled = false}) {
@@ -98,13 +96,11 @@ class RuleRepository {
       priority: Value(priority),
     );
     await _db.into(_db.rules).insertOnConflictUpdate(row);
-    await _logRule(ruleId);
     return ruleId;
   }
 
   Future<void> delete(String id) async {
     await (_db.delete(_db.rules)..where((r) => r.id.equals(id))).go();
-    await _changes?.delete('rules', id);
   }
 
   Future<RuleAction> actionForSms({
@@ -191,10 +187,6 @@ class RuleRepository {
             updatedAt: now,
           ),
         );
-    final row = await (_db.select(
-      _db.ruleMatches,
-    )..where((r) => r.id.equals(id))).getSingle();
-    await _changes?.upsert('rule_matches', id, row.toJson());
   }
 
   bool _matches(
@@ -252,20 +244,10 @@ class RuleRepository {
       return const {};
     }
   }
-
-  Future<void> _logRule(String id) async {
-    final row = await (_db.select(
-      _db.rules,
-    )..where((r) => r.id.equals(id))).getSingleOrNull();
-    if (row != null) await _changes?.upsert('rules', id, row.toJson());
-  }
 }
 
 final ruleRepoProvider = Provider<RuleRepository>(
-  (ref) => RuleRepository(
-    ref.watch(dbProvider),
-    changes: ref.watch(changeLogWriterProvider),
-  ),
+  (ref) => RuleRepository(ref.watch(dbProvider)),
 );
 
 final rulesProvider = StreamProvider<List<RuleRow>>(

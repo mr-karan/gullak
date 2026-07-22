@@ -4,7 +4,12 @@ import { z } from "zod";
 
 import type { AppEnv } from "../app.ts";
 import { categories, categoryGroups } from "../db/schema.ts";
-import { newId, nowMs, recordChange } from "../repos/changelog.ts";
+import {
+  newId,
+  nowMs,
+  recordChange,
+  recordCommand,
+} from "../repos/changelog.ts";
 import { nameField } from "./_fields.ts";
 
 const groupUpsertSchema = z.object({
@@ -42,11 +47,14 @@ groups.post("/", async (c) => {
     isIncome: parsed.isIncome,
     sortOrder: parsed.sortOrder,
   };
-  db.transaction((tx) => {
-    tx.insert(categoryGroups).values(row).onConflictDoUpdate({
-      target: categoryGroups.id,
-      set: row,
-    }).run();
+  recordCommand(db, (tx) => {
+    tx.insert(categoryGroups)
+      .values(row)
+      .onConflictDoUpdate({
+        target: categoryGroups.id,
+        set: row,
+      })
+      .run();
     recordChange(tx, {
       resource: "category_groups",
       resourceId: id,
@@ -68,7 +76,7 @@ groups.patch("/:id", async (c) => {
     .get();
   if (!existing) return c.json({ error: "Not found" }, 404);
   const next = { ...existing, ...partial };
-  db.transaction((tx) => {
+  recordCommand(db, (tx) => {
     tx.update(categoryGroups).set(next).where(eq(categoryGroups.id, id)).run();
     recordChange(tx, {
       resource: "category_groups",
@@ -84,7 +92,7 @@ groups.delete("/:id", (c) => {
   const db = c.get("db");
   const id = c.req.param("id");
   let removed = 0;
-  db.transaction((tx) => {
+  recordCommand(db, (tx) => {
     const rows = tx
       .delete(categoryGroups)
       .where(eq(categoryGroups.id, id))
@@ -115,13 +123,20 @@ cats.post("/", async (c) => {
   const parsed = categoryUpsertSchema.parse(await c.req.json());
   const id = parsed.id ?? newId();
   const parent = parsed.parentId
-    ? db.select().from(categories).where(eq(categories.id, parsed.parentId)).get()
+    ? db
+        .select()
+        .from(categories)
+        .where(eq(categories.id, parsed.parentId))
+        .get()
     : null;
   if (parsed.parentId && !parent) {
     return c.json({ error: "Parent category not found" }, 400);
   }
   if (parent?.parentId) {
-    return c.json({ error: "Only one category nesting level is supported" }, 400);
+    return c.json(
+      { error: "Only one category nesting level is supported" },
+      400,
+    );
   }
   const row = {
     id,
@@ -134,11 +149,14 @@ cats.post("/", async (c) => {
     sortOrder: parsed.sortOrder,
     updatedAt: nowMs(),
   };
-  db.transaction((tx) => {
-    tx.insert(categories).values(row).onConflictDoUpdate({
-      target: categories.id,
-      set: row,
-    }).run();
+  recordCommand(db, (tx) => {
+    tx.insert(categories)
+      .values(row)
+      .onConflictDoUpdate({
+        target: categories.id,
+        set: row,
+      })
+      .run();
     recordChange(tx, {
       resource: "categories",
       resourceId: id,
@@ -153,9 +171,14 @@ cats.patch("/:id", async (c) => {
   const db = c.get("db");
   const id = c.req.param("id");
   const partial = categoryUpsertSchema.partial().parse(await c.req.json());
-  const existing = db.select().from(categories).where(eq(categories.id, id)).get();
+  const existing = db
+    .select()
+    .from(categories)
+    .where(eq(categories.id, id))
+    .get();
   if (!existing) return c.json({ error: "Not found" }, 404);
-  const parentId = partial.parentId === undefined ? existing.parentId : partial.parentId;
+  const parentId =
+    partial.parentId === undefined ? existing.parentId : partial.parentId;
   const parent = parentId
     ? db.select().from(categories).where(eq(categories.id, parentId)).get()
     : null;
@@ -163,14 +186,27 @@ cats.patch("/:id", async (c) => {
     return c.json({ error: "Parent category not found" }, 400);
   }
   if (parent?.parentId) {
-    return c.json({ error: "Only one category nesting level is supported" }, 400);
+    return c.json(
+      { error: "Only one category nesting level is supported" },
+      400,
+    );
   }
   if (parentId === id) {
     return c.json({ error: "Category cannot be its own parent" }, 400);
   }
-  const child = db.select().from(categories).where(eq(categories.parentId, id)).get();
+  const child = db
+    .select()
+    .from(categories)
+    .where(eq(categories.parentId, id))
+    .get();
   if (parentId && child) {
-    return c.json({ error: "A parent category with subcategories cannot become a subcategory" }, 400);
+    return c.json(
+      {
+        error:
+          "A parent category with subcategories cannot become a subcategory",
+      },
+      400,
+    );
   }
   const next = {
     ...existing,
@@ -179,7 +215,7 @@ cats.patch("/:id", async (c) => {
     groupId: parent?.groupId ?? partial.groupId ?? existing.groupId,
     updatedAt: nowMs(),
   };
-  db.transaction((tx) => {
+  recordCommand(db, (tx) => {
     tx.update(categories).set(next).where(eq(categories.id, id)).run();
     recordChange(tx, {
       resource: "categories",
@@ -195,8 +231,12 @@ cats.delete("/:id", (c) => {
   const db = c.get("db");
   const id = c.req.param("id");
   let removed = 0;
-  db.transaction((tx) => {
-    const rows = tx.delete(categories).where(eq(categories.id, id)).returning().all();
+  recordCommand(db, (tx) => {
+    const rows = tx
+      .delete(categories)
+      .where(eq(categories.id, id))
+      .returning()
+      .all();
     removed = rows.length;
     if (removed > 0) {
       recordChange(tx, {

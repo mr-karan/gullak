@@ -13,7 +13,7 @@ const String buildTimestamp = String.fromEnvironment(
 
 /// Mirrors the pubspec.yaml `version:` line. Bump manually for
 /// release notes; `buildSha` is what changes per commit.
-const String buildVersion = '0.1.0+1';
+const String buildVersion = '0.5.0+6';
 
 String get buildLabel =>
     buildSha == 'dev' ? 'dev build' : '$buildVersion · $buildSha';

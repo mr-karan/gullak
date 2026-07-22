@@ -2,10 +2,11 @@ import { eq } from "drizzle-orm";
 
 import type { Db } from "../db/index.ts";
 import type { NewTransaction, Transaction } from "../db/schema.ts";
-import { transactionTags, transactions } from "../db/schema.ts";
+import { payees, transactionTags, transactions } from "../db/schema.ts";
 import type { DbOrTx } from "../repos/changelog.ts";
-import { nowMs, recordChange } from "../repos/changelog.ts";
+import { nowMs, recordChange, recordCommand } from "../repos/changelog.ts";
 import { learnCategory } from "../rules/learn.ts";
+import { recomputeDerivedProjection } from "../sync/resources.ts";
 import { deletePair, findSibling, propagateEdit } from "./transfers.ts";
 
 // Shared write-invariant core for editing and deleting transactions. Both the
@@ -47,6 +48,54 @@ export function patchTransaction(
     .get();
   if (!existing) return { ok: false, status: 404, error: "Not found" };
 
+  // A linked payee is an entity, while transactions.payeeName is only its
+  // denormalized read cache. Treat "rename this" as a canonical payee rename;
+  // writing the cache would be a misleading no-op and was the root cause of
+  // the Dyson incident. Callers that intend to detach must say so explicitly
+  // with payeeId:null and supply the detached payeeName in the same command.
+  const normalizedPartial = { ...partial };
+  let renamedPayee:
+    | { before: typeof payees.$inferSelect; after: typeof payees.$inferSelect }
+    | undefined;
+  if (
+    existing.payeeId !== null &&
+    Object.hasOwn(normalizedPartial, "payeeName") &&
+    !Object.hasOwn(normalizedPartial, "payeeId")
+  ) {
+    if (
+      normalizedPartial.payeeName === null ||
+      normalizedPartial.payeeName === undefined
+    ) {
+      return {
+        ok: false,
+        status: 400,
+        error:
+          "A linked payee name cannot be cleared. Set payeeId=null and provide payeeName to detach it.",
+      };
+    }
+    const payee = db
+      .select()
+      .from(payees)
+      .where(eq(payees.id, existing.payeeId))
+      .get();
+    if (payee === undefined) {
+      return {
+        ok: false,
+        status: 400,
+        error: `Transaction references missing payee ${existing.payeeId}`,
+      };
+    }
+    const name = normalizedPartial.payeeName.trim();
+    if (name.length === 0) {
+      return { ok: false, status: 400, error: "Payee name cannot be empty" };
+    }
+    renamedPayee = {
+      before: payee,
+      after: { ...payee, name, updatedAt: nowMs() },
+    };
+    delete normalizedPartial.payeeName;
+  }
+
   // Lock check FIRST — before transfer propagation — so a locked leg can't be
   // edited without force.
   if (existing.reconciled && !forced) {
@@ -59,8 +108,8 @@ export function patchTransaction(
 
   if (
     existing.isGroupParent &&
-    partial.amountCents != null &&
-    partial.amountCents !== 0
+    normalizedPartial.amountCents != null &&
+    normalizedPartial.amountCents !== 0
   ) {
     return {
       ok: false,
@@ -69,7 +118,10 @@ export function patchTransaction(
     };
   }
 
-  const next: Transaction = { ...existing, ...partial, updatedAt: nowMs() };
+  const changesTransaction = Object.keys(normalizedPartial).length > 0;
+  const next: Transaction = changesTransaction
+    ? { ...existing, ...normalizedPartial, updatedAt: nowMs() }
+    : existing;
   if (existing.isGroupParent) next.amountCents = 0;
 
   if (existing.transferGroupId) {
@@ -89,7 +141,41 @@ export function patchTransaction(
     next.transferAccountId = existing.transferAccountId;
     next.accountId = existing.accountId;
     next.categoryId = null;
-    db.transaction((tx) => {
+    recordCommand(db, (tx) => {
+      if (changesTransaction) {
+        tx.update(transactions).set(next).where(eq(transactions.id, id)).run();
+        recordChange(tx, {
+          resource: "transactions",
+          resourceId: id,
+          op: "upsert",
+          payload: next,
+        });
+      }
+      if (sibling && changesTransaction) propagateEdit(tx, next, sibling);
+      if (renamedPayee !== undefined) {
+        tx.update(payees)
+          .set(renamedPayee.after)
+          .where(eq(payees.id, renamedPayee.after.id))
+          .run();
+        recordChange(tx, {
+          resource: "payees",
+          resourceId: renamedPayee.after.id,
+          op: "upsert",
+          payload: renamedPayee.after,
+        });
+        recomputeDerivedProjection(tx);
+      }
+    });
+    const projected = db
+      .select()
+      .from(transactions)
+      .where(eq(transactions.id, id))
+      .get();
+    return { ok: true, transaction: projected ?? next, before: existing };
+  }
+
+  recordCommand(db, (tx) => {
+    if (changesTransaction) {
       tx.update(transactions).set(next).where(eq(transactions.id, id)).run();
       recordChange(tx, {
         resource: "transactions",
@@ -97,32 +183,43 @@ export function patchTransaction(
         op: "upsert",
         payload: next,
       });
-      if (sibling) propagateEdit(tx, next, sibling);
-    });
-    return { ok: true, transaction: next, before: existing };
-  }
-
-  db.transaction((tx) => {
-    tx.update(transactions).set(next).where(eq(transactions.id, id)).run();
-    recordChange(tx, {
-      resource: "transactions",
-      resourceId: id,
-      op: "upsert",
-      payload: next,
-    });
+    }
+    if (renamedPayee !== undefined) {
+      tx.update(payees)
+        .set(renamedPayee.after)
+        .where(eq(payees.id, renamedPayee.after.id))
+        .run();
+      recordChange(tx, {
+        resource: "payees",
+        resourceId: renamedPayee.after.id,
+        op: "upsert",
+        payload: renamedPayee.after,
+      });
+      recomputeDerivedProjection(tx);
+    }
   });
+
+  const projected = db
+    .select()
+    .from(transactions)
+    .where(eq(transactions.id, id))
+    .get();
+  const finalTransaction = projected ?? next;
 
   // Auto-learn a payee→category rule when this edit set a category. Best-effort,
   // after commit, never throws into the caller.
-  if (partial.categoryId != null && next.categoryId != null) {
+  if (
+    normalizedPartial.categoryId != null &&
+    finalTransaction.categoryId != null
+  ) {
     learnCategory(db, {
-      payeeId: next.payeeId,
-      payeeName: next.payeeName,
-      categoryId: next.categoryId,
+      payeeId: finalTransaction.payeeId,
+      payeeName: finalTransaction.payeeName,
+      categoryId: finalTransaction.categoryId,
     });
   }
 
-  return { ok: true, transaction: next, before: existing };
+  return { ok: true, transaction: finalTransaction, before: existing };
 }
 
 export type DeleteCoreResult =

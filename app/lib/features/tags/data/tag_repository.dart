@@ -5,6 +5,7 @@ import 'package:uuid/uuid.dart';
 import '../../../data/db/database.dart';
 import '../../../state/providers.dart';
 import '../../../sync/changelog_writer.dart';
+import '../../../sync/crdt_resources.dart';
 
 export '../../../data/db/database.dart' show TagRow;
 
@@ -48,10 +49,20 @@ class TagRepository {
   final ChangeLogWriter? _changes;
   static const _uuid = Uuid();
 
-  Future<void> _logTag(String id) async {
+  Future<T> _command<T>(Future<T> Function() callback) =>
+      _changes?.command(callback) ?? _db.transaction(callback);
+
+  Future<void> _logTag(String id, {Set<String>? changedFields}) async {
     if (_changes == null) return;
     final row = await byId(id);
-    if (row != null) await _changes.upsert('tags', id, row.toJson());
+    if (row != null) {
+      await _changes.upsert(
+        'tags',
+        id,
+        row.toJson(),
+        changedFields: changedFields,
+      );
+    }
   }
 
   Future<void> _logLink(String id) async {
@@ -83,28 +94,30 @@ class TagRepository {
   }
 
   Future<String> create({required String name, int? color}) async {
-    final trimmed = name.trim();
-    if (trimmed.isEmpty) throw ArgumentError('tag name cannot be empty');
-    final existing =
-        await (_db.select(_db.tags)
-              ..where((t) => t.name.lower().equals(trimmed.toLowerCase())))
-            .getSingleOrNull();
-    if (existing != null) return existing.id;
-    final id = _uuid.v4();
-    final now = DateTime.now().millisecondsSinceEpoch;
-    await _db
-        .into(_db.tags)
-        .insert(
-          TagsCompanion.insert(
-            id: id,
-            name: trimmed,
-            createdAt: now,
-            updatedAt: now,
-            color: Value(color),
-          ),
-        );
-    await _logTag(id);
-    return id;
+    return _command(() async {
+      final trimmed = name.trim();
+      if (trimmed.isEmpty) throw ArgumentError('tag name cannot be empty');
+      final existing =
+          await (_db.select(_db.tags)
+                ..where((t) => t.name.lower().equals(trimmed.toLowerCase())))
+              .getSingleOrNull();
+      if (existing != null) return existing.id;
+      final id = _uuid.v4();
+      final now = DateTime.now().millisecondsSinceEpoch;
+      await _db
+          .into(_db.tags)
+          .insert(
+            TagsCompanion.insert(
+              id: id,
+              name: trimmed,
+              createdAt: now,
+              updatedAt: now,
+              color: Value(color),
+            ),
+          );
+      await _logTag(id);
+      return id;
+    });
   }
 
   Future<void> update(
@@ -113,17 +126,27 @@ class TagRepository {
     Object? color = _Sentinel.value,
     bool? archived,
   }) async {
-    await (_db.update(_db.tags)..where((t) => t.id.equals(id))).write(
-      TagsCompanion(
-        name: name == null ? const Value.absent() : Value(name.trim()),
-        color: identical(color, _Sentinel.value)
-            ? const Value.absent()
-            : Value(color as int?),
-        archived: archived == null ? const Value.absent() : Value(archived),
-        updatedAt: Value(DateTime.now().millisecondsSinceEpoch),
-      ),
-    );
-    await _logTag(id);
+    return _command(() async {
+      await (_db.update(_db.tags)..where((t) => t.id.equals(id))).write(
+        TagsCompanion(
+          name: name == null ? const Value.absent() : Value(name.trim()),
+          color: identical(color, _Sentinel.value)
+              ? const Value.absent()
+              : Value(color as int?),
+          archived: archived == null ? const Value.absent() : Value(archived),
+          updatedAt: Value(DateTime.now().millisecondsSinceEpoch),
+        ),
+      );
+      await _logTag(
+        id,
+        changedFields: {
+          if (name != null) 'name',
+          if (!identical(color, _Sentinel.value)) 'color',
+          if (archived != null) 'archived',
+          'updatedAt',
+        },
+      );
+    });
   }
 
   Future<List<TagRow>> tagsForTransaction(String transactionId) async {
@@ -159,35 +182,38 @@ class TagRepository {
     String transactionId,
     List<String> tagIds,
   ) async {
-    final wanted = tagIds.toSet();
-    final existing = await (_db.select(
-      _db.transactionTags,
-    )..where((t) => t.transactionId.equals(transactionId))).get();
-    final existingByTag = {for (final row in existing) row.tagId: row};
-    final now = DateTime.now().millisecondsSinceEpoch;
-
-    for (final row in existing) {
-      if (wanted.contains(row.tagId)) continue;
-      await (_db.delete(
+    return _command(() async {
+      final wanted = tagIds.toSet();
+      final existing = await (_db.select(
         _db.transactionTags,
-      )..where((t) => t.id.equals(row.id))).go();
-      await _changes?.delete('transaction_tags', row.id);
-    }
-    for (final tagId in wanted) {
-      if (existingByTag.containsKey(tagId)) continue;
-      final id = _uuid.v4();
-      await _db
-          .into(_db.transactionTags)
-          .insert(
-            TransactionTagsCompanion.insert(
-              id: id,
-              transactionId: transactionId,
-              tagId: tagId,
-              updatedAt: now,
-            ),
-          );
-      await _logLink(id);
-    }
+      )..where((t) => t.transactionId.equals(transactionId))).get();
+      final existingIds = existing.map((row) => row.id).toSet();
+      final now = DateTime.now().millisecondsSinceEpoch;
+
+      for (final row in existing) {
+        final canonicalId = transactionTagEntityId(transactionId, row.tagId);
+        if (wanted.contains(row.tagId) && row.id == canonicalId) continue;
+        await (_db.delete(
+          _db.transactionTags,
+        )..where((t) => t.id.equals(row.id))).go();
+        await _changes?.delete('transaction_tags', row.id);
+      }
+      for (final tagId in wanted) {
+        final id = transactionTagEntityId(transactionId, tagId);
+        if (existingIds.contains(id)) continue;
+        await _db
+            .into(_db.transactionTags)
+            .insert(
+              TransactionTagsCompanion.insert(
+                id: id,
+                transactionId: transactionId,
+                tagId: tagId,
+                updatedAt: now,
+              ),
+            );
+        await _logLink(id);
+      }
+    });
   }
 
   Stream<List<TagAnalytics>> watchAnalytics() {

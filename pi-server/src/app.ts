@@ -34,6 +34,7 @@ import { sheetsRouter } from "./routes/sheets.ts";
 import { smsRouter } from "./routes/sms.ts";
 import { summaryRouter } from "./routes/summary.ts";
 import { syncRouter } from "./routes/sync.ts";
+import { syncV2Router } from "./routes/sync_v2.ts";
 import { transactionsRouter } from "./routes/transactions.ts";
 import { webRouter } from "./routes/web.ts";
 
@@ -156,6 +157,7 @@ export function createApp(ctx: AppContext) {
   app.route("/v1/insights", insightsRouter);
   app.route("/v1/rules", rulesRouter);
   app.route("/v1/sync", syncRouter);
+  app.route("/v1/sync/v2", syncV2Router);
   app.route("/v1/sheets", sheetsRouter);
   app.route("/v1/export", exportRouter);
   app.route("/v1/messages", messagesRouter);

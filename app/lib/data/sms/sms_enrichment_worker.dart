@@ -227,21 +227,23 @@ class SmsEnrichmentWorker {
     if (!wantsCategory && !wantsPayee && !wantsNote) return;
 
     final changes = ChangeLogWriter(db);
-    String? resolvedPayeeId;
-    if (wantsPayee) {
-      resolvedPayeeId = await PayeeRepository(
-        db,
-        changes: changes,
-      ).ensure(payeeName);
-    }
+    await changes.command(() async {
+      String? resolvedPayeeId;
+      if (wantsPayee) {
+        resolvedPayeeId = await PayeeRepository(
+          db,
+          changes: changes,
+        ).ensure(payeeName);
+      }
 
-    await TransactionRepository(db, changes: changes).update(
-      transactionId,
-      categoryId: wantsCategory ? categoryId : TransactionRepository.unset,
-      payeeId: resolvedPayeeId ?? TransactionRepository.unset,
-      payeeName: wantsPayee ? payeeName : TransactionRepository.unset,
-      notes: wantsNote ? noteText : TransactionRepository.unset,
-    );
+      await TransactionRepository(db, changes: changes).update(
+        transactionId,
+        categoryId: wantsCategory ? categoryId : TransactionRepository.unset,
+        payeeId: resolvedPayeeId ?? TransactionRepository.unset,
+        payeeName: wantsPayee ? payeeName : TransactionRepository.unset,
+        notes: wantsNote ? noteText : TransactionRepository.unset,
+      );
+    });
   }
 
   static Future<void> _markStatus(

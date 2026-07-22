@@ -7,6 +7,19 @@ All notable changes to Gullak are documented here.
 
 ### Added
 
+- **Causal CRDT sync protocol v2.** Financial edits are immutable field-level
+  events with exact causal context, deterministic multi-value conflict
+  projection, authenticated actors, verified checkpoints, explicit quarantine,
+  and guarded rollout tooling. Wall clocks and full-row LWW snapshots no longer
+  decide authoritative state. The Flutter app, sync server, web routes, agent,
+  SMS pipeline, recurrences, transfers, splits, tags, budgets, and backup import
+  all author through the same atomic command path.
+- **Sync recovery and observability.** Clients report duplicates, conflicts,
+  quarantine, and protocol version; rebuild only from a content- and
+  projection-hash-verified checkpoint; and acknowledge the exact integrated
+  frontier. Operators can audit, prepare, and activate an epoch only with a
+  verified backup, invariant-clean fold, and exact live-client acknowledgements.
+
 - **iOS SMS auto-capture** via `POST /v1/sms/ingest`. iOS has no SMS-read API,
   so a Shortcuts personal automation forwards bank/UPI messages to the server,
   which parses them with the same engine as Android and queues a reviewable
@@ -31,6 +44,11 @@ All notable changes to Gullak are documented here.
 
 ### Changed
 
+- Linked payee names, payee usage counts, and split/group totals are now
+  deterministic derived projections. An unrelated stale transaction edit can
+  no longer rename a payee or overwrite any untouched field. Rules and rule
+  matches are non-replicated local/server configuration, so legacy rule payloads
+  cannot poison the financial stream.
 - **Full web app redesign** to a dense, operational "ledger-indigo" language
   (YNAB-inspired): register/grouped tables, instrument summary bars,
   traffic-light status pills, the Figtree typeface — replacing the earlier

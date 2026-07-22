@@ -9,12 +9,18 @@ import 'package:path_provider/path_provider.dart';
 import '../../core/logger.dart';
 import '../../data/db/database.dart';
 import '../../state/providers.dart';
+import '../../sync/changelog_writer.dart';
+import '../../sync/crdt_resources.dart';
 
 /// Round-trippable JSON dump of every interesting table. Schema version
 /// is recorded so a future import can refuse mismatched payloads.
 class BackupService {
-  BackupService(this._db);
+  BackupService(this._db, {ChangeLogWriter? changes}) : _changes = changes;
   final AppDatabase _db;
+  final ChangeLogWriter? _changes;
+
+  Future<T> _command<T>(Future<T> Function() callback) =>
+      _changes?.command(callback) ?? _db.transaction(callback);
 
   static const _schemaVersion = 2;
 
@@ -151,7 +157,16 @@ class BackupService {
         (dec[key] as List<dynamic>? ?? const [])
             .whereType<Map<String, dynamic>>();
 
-    await _db.transaction(() async {
+    await _command(() async {
+      final oldAccounts = await _db.select(_db.accounts).get();
+      final oldGroups = await _db.select(_db.categoryGroups).get();
+      final oldCategories = await _db.select(_db.categories).get();
+      final oldPayees = await _db.select(_db.payees).get();
+      final oldTransactions = await _db.select(_db.transactions).get();
+      final oldTags = await _db.select(_db.tags).get();
+      final oldLinks = await _db.select(_db.transactionTags).get();
+      final oldBudgets = await _db.select(_db.budgets).get();
+      final oldRecurrences = await _db.select(_db.recurrences).get();
       // Order matters for FK-style integrity. Wipe in reverse order.
       await _db.delete(_db.budgets).go();
       await _db.delete(_db.recurrences).go();
@@ -212,6 +227,38 @@ class BackupService {
       for (final r in rowsOf('kv')) {
         await _db.into(_db.appKv).insert(_kvFromJson(r));
         imported++;
+      }
+
+      if (_changes != null) {
+        for (final row in oldLinks) {
+          await _changes.delete('transaction_tags', row.id);
+        }
+        for (final row in oldTransactions) {
+          await _changes.delete('transactions', row.id);
+        }
+        for (final row in oldBudgets) {
+          await _changes.delete('budgets', row.id);
+        }
+        for (final row in oldRecurrences) {
+          await _changes.delete('recurrences', row.id);
+        }
+        for (final row in oldTags) {
+          await _changes.delete('tags', row.id);
+        }
+        for (final row in oldPayees) {
+          await _changes.delete('payees', row.id);
+        }
+        for (final row in oldCategories) {
+          await _changes.delete('categories', row.id);
+        }
+        for (final row in oldGroups) {
+          await _changes.delete('category_groups', row.id);
+        }
+        for (final row in oldAccounts) {
+          await _changes.delete('accounts', row.id);
+        }
+
+        await _logImportedProjection();
       }
     });
 
@@ -373,8 +420,8 @@ class BackupService {
         payeeId: drift.Value(j['payee_id'] as String?),
         payeeName: drift.Value(j['payee_name'] as String?),
         notes: drift.Value(j['notes'] as String?),
-        latitude: drift.Value((j['latitude'] as num?)?.toDouble()),
-        longitude: drift.Value((j['longitude'] as num?)?.toDouble()),
+        latitude: drift.Value(_coordinateFromJson(j['latitude'])),
+        longitude: drift.Value(_coordinateFromJson(j['longitude'])),
         locationName: drift.Value(j['location_name'] as String?),
         cleared: drift.Value(j['cleared'] as bool? ?? false),
         origin: drift.Value(j['origin'] as String? ?? 'manual'),
@@ -388,6 +435,9 @@ class BackupService {
         ),
         originalCurrency: drift.Value(j['original_currency'] as String?),
       );
+
+  double? _coordinateFromJson(Object? value) =>
+      value == null ? null : quantizeSyncCoordinate((value as num).toDouble());
 
   Map<String, dynamic> _tagToJson(TagRow t) => {
     'id': t.id,
@@ -416,11 +466,45 @@ class BackupService {
 
   TransactionTagsCompanion _transactionTagFromJson(Map<String, dynamic> j) =>
       TransactionTagsCompanion.insert(
-        id: j['id'] as String,
+        id: transactionTagEntityId(
+          j['transaction_id'] as String,
+          j['tag_id'] as String,
+        ),
         transactionId: j['transaction_id'] as String,
         tagId: j['tag_id'] as String,
         updatedAt: (j['updated_at'] as num).toInt(),
       );
+
+  Future<void> _logImportedProjection() async {
+    final changes = _changes!;
+    for (final row in await _db.select(_db.accounts).get()) {
+      await changes.upsert('accounts', row.id, row.toJson());
+    }
+    for (final row in await _db.select(_db.categoryGroups).get()) {
+      await changes.upsert('category_groups', row.id, row.toJson());
+    }
+    for (final row in await _db.select(_db.categories).get()) {
+      await changes.upsert('categories', row.id, row.toJson());
+    }
+    for (final row in await _db.select(_db.payees).get()) {
+      await changes.upsert('payees', row.id, row.toJson());
+    }
+    for (final row in await _db.select(_db.transactions).get()) {
+      await changes.upsert('transactions', row.id, row.toJson());
+    }
+    for (final row in await _db.select(_db.tags).get()) {
+      await changes.upsert('tags', row.id, row.toJson());
+    }
+    for (final row in await _db.select(_db.transactionTags).get()) {
+      await changes.upsert('transaction_tags', row.id, row.toJson());
+    }
+    for (final row in await _db.select(_db.budgets).get()) {
+      await changes.upsert('budgets', row.id, row.toJson());
+    }
+    for (final row in await _db.select(_db.recurrences).get()) {
+      await changes.upsert('recurrences', row.id, row.toJson());
+    }
+  }
 
   Map<String, dynamic> _ruleToJson(RuleRow r) => {
     'id': r.id,
@@ -530,7 +614,10 @@ class BackupService {
 }
 
 final Provider<BackupService> backupServiceProvider = Provider<BackupService>(
-  (ref) => BackupService(ref.watch(dbProvider)),
+  (ref) => BackupService(
+    ref.watch(dbProvider),
+    changes: ref.watch(changeLogWriterProvider),
+  ),
 );
 
 class BackupPreview {

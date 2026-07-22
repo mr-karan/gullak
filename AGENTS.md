@@ -104,11 +104,14 @@ provider keys.
 - **Money:** integer minor units everywhere. Never decimal-string math.
 - **IDs:** UUID text. Clients generate; server accepts/stores.
 - **Dates:** `YYYY-MM-DD` text. Timestamps are epoch ms integers.
-- **Server writes:** mutations to financial rows must call `recordChange(db,
-  resource, id, op, payload)` so sync clients can pull them.
+- **Server writes:** each financial command must run inside `recordCommand` and
+  call `recordChange` for every affected entity. The command authors one atomic
+  immutable v2 event; never mutate a synced table outside this path.
 - **SQLite:** `better-sqlite3` and Drizzle better-sqlite3 are synchronous. Do not
   add `await` to `db.select().get()` style calls.
-- **Sync conflicts:** last-write-wins by `updatedAt`.
+- **Sync conflicts:** causal per-field multi-value registers. Concurrent values
+  are retained; `(lamport, actorId, sequence)` only chooses the deterministic
+  visible projection. Wall time/`updatedAt` never resolves v2 conflicts.
 - **Snackbars:** all app snackbars must use `showTimedSnackBar`; do not call
   `ScaffoldMessenger.showSnackBar` directly outside that helper.
 - **AI routes:** `/v1/ai/*` are draft-only and must not mutate financial rows.
@@ -165,15 +168,23 @@ tea release create --repo mr-karan/gullak --tag v0.1.0 --title "Gullak 0.1.0" --
 
 ## Sync model
 
-- Every Drift mutation writes a local `change_log` row with `clientChangeId`.
-- `SyncService.pushPending` POSTs batches to `/v1/sync/push`.
-- Server applies data table changes and appends server `change_log` entries in
-  one transaction. Unique `(client_id, client_change_id)` makes retries
-  idempotent.
-- `SyncService.pullChanges` pages `/v1/sync/changes` and applies via
-  `RemoteApplier`, bypassing repos so it does not recurse into local changelog.
-- `syncOnce`: push → pull → prune synced log rows older than 14 days.
-- Server filters rows originated by the requesting `clientId`.
+- Every Flutter financial command runs through `ChangeLogWriter.command` and
+  authors one immutable field-level event in the same Drift transaction as its
+  projection. Compound commands include all affected entities.
+- `SyncService` negotiates protocol capabilities. V2 registers an authenticated
+  actor, installs a content/projection-hash-verified checkpoint, pushes exact
+  event IDs, pulls the immutable union, and acknowledges its exact frontier.
+- Each `(resource, entity, field)` is a causal multi-value register. Delivery
+  order, duplicates, retries, batching, and physical clock skew do not change
+  the deterministic fold. Deletes use remove-wins lifecycle registers;
+  transaction-tag membership is add-wins.
+- Server/web/agent/SMS writes author through the same CRDT engine. Rules and
+  rule matches are non-replicated configuration. Linked payee names and other
+  caches are derived projections, not independently writable facts.
+- Protocol v1 `change_log`/`RemoteApplier` exists only for the guarded v0.4
+  preparing/drain window and is rejected after activation. Do not extend it.
+- V2 history is not pruned. Compaction is forbidden until durable causal
+  summaries and checkpoint-equivalence proofs are implemented.
 
 ## AI / SMS architecture
 

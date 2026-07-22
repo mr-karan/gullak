@@ -4,7 +4,12 @@ import { z } from "zod";
 
 import type { AppEnv } from "../app.ts";
 import { accounts, transactions } from "../db/schema.ts";
-import { newId, nowMs, recordChange } from "../repos/changelog.ts";
+import {
+  newId,
+  nowMs,
+  recordChange,
+  recordCommand,
+} from "../repos/changelog.ts";
 import {
   deleteTransactionCore,
   patchTransaction,
@@ -27,6 +32,33 @@ const upsertSchema = z.object({
   locationName: textField.nullable().optional(),
   cleared: z.boolean().default(false),
   origin: z.string().max(64).default("manual"),
+  originRef: z.string().max(256).nullable().optional(),
+  transferAccountId: z.string().nullable().optional(),
+  transferGroupId: z.string().nullable().optional(),
+  parentId: z.string().nullable().optional(),
+  splitTotalCents: z.number().int().nullable().optional(),
+  originalAmountCents: z.number().int().nullable().optional(),
+  originalCurrency: z.string().max(8).nullable().optional(),
+});
+
+// PATCH must never inherit POST defaults: doing so turns an unrelated note or
+// payee edit into an implicit cleared=false/origin=manual rewrite.
+const patchSchema = z.object({
+  accountId: z.string().min(1).optional(),
+  categoryId: z.string().nullable().optional(),
+  payeeId: z.string().nullable().optional(),
+  payeeName: nameField.nullable().optional(),
+  amountCents: z.number().int().optional(),
+  date: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional(),
+  notes: textField.nullable().optional(),
+  latitude: z.number().nullable().optional(),
+  longitude: z.number().nullable().optional(),
+  locationName: textField.nullable().optional(),
+  cleared: z.boolean().optional(),
+  origin: z.string().max(64).optional(),
   originRef: z.string().max(256).nullable().optional(),
   transferAccountId: z.string().nullable().optional(),
   transferGroupId: z.string().nullable().optional(),
@@ -149,7 +181,7 @@ transactionsRouter.post("/group", async (c) => {
     updatedAt: at,
   };
 
-  db.transaction((tx) => {
+  recordCommand(db, (tx) => {
     tx.insert(transactions).values(parent).run();
     recordChange(tx, {
       resource: "transactions",
@@ -169,7 +201,10 @@ transactionsRouter.post("/group", async (c) => {
     }
   });
 
-  return c.json({ parent, childIds: rows.map((r) => r.id), groupTotalCents }, 201);
+  return c.json(
+    { parent, childIds: rows.map((r) => r.id), groupTotalCents },
+    201,
+  );
 });
 
 transactionsRouter.post("/ungroup/:parentId", (c) => {
@@ -191,7 +226,7 @@ transactionsRouter.post("/ungroup/:parentId", (c) => {
     .all();
   const at = nowMs();
 
-  db.transaction((tx) => {
+  recordCommand(db, (tx) => {
     for (const ch of children) {
       const next = { ...ch, groupParentId: null, updatedAt: at };
       tx.update(transactions).set(next).where(eq(transactions.id, ch.id)).run();
@@ -276,7 +311,13 @@ transactionsRouter.post("/", async (c) => {
       .all();
     const foundIds = new Set(found.map((a) => a.id));
     if (!foundIds.has(row.accountId) || !foundIds.has(row.transferAccountId)) {
-      return c.json({ error: "accountId and transferAccountId must reference existing accounts" }, 400);
+      return c.json(
+        {
+          error:
+            "accountId and transferAccountId must reference existing accounts",
+        },
+        400,
+      );
     }
     // FIX 8(b): a transfer leg is never a split. Force parentId/splitTotalCents
     // null on the primary; createTransferPair copies these onto the mirror, so
@@ -284,7 +325,7 @@ transactionsRouter.post("/", async (c) => {
     row.parentId = null;
     row.splitTotalCents = null;
     let primary = row;
-    db.transaction((tx) => {
+    recordCommand(db, (tx) => {
       primary = createTransferPair(tx, row).primary as typeof row;
     });
     return c.json({ transaction: primary }, 201);
@@ -306,11 +347,14 @@ transactionsRouter.post("/", async (c) => {
     row.amountCents = 0;
   }
 
-  db.transaction((tx) => {
-    tx.insert(transactions).values(row).onConflictDoUpdate({
-      target: transactions.id,
-      set: row,
-    }).run();
+  recordCommand(db, (tx) => {
+    tx.insert(transactions)
+      .values(row)
+      .onConflictDoUpdate({
+        target: transactions.id,
+        set: row,
+      })
+      .run();
     recordChange(tx, {
       resource: "transactions",
       resourceId: id,
@@ -329,8 +373,10 @@ transactionsRouter.patch("/:id", async (c) => {
   // the body. Zod strips the extra `force` key when parsing the partial.
   const forced =
     c.req.query("force") === "true" ||
-    (raw != null && typeof raw === "object" && (raw as { force?: unknown }).force === true);
-  const partial = upsertSchema.partial().parse(raw);
+    (raw != null &&
+      typeof raw === "object" &&
+      (raw as { force?: unknown }).force === true);
+  const partial = patchSchema.parse(raw);
   // The write invariants (reconcile lock, group-parent freeze, transfer
   // propagation, learnCategory) live in patchTransaction so the route and the
   // agent write tools share one implementation.
@@ -346,7 +392,7 @@ transactionsRouter.delete("/:id", (c) => {
   // The cascade/lock semantics (reconcile lock on both transfer legs, transfer
   // pair delete, split cascade, group ungroup) live in deleteTransactionCore so
   // the route and the agent delete tool share one implementation.
-  const result: DeleteCoreResult = db.transaction((tx) =>
+  const result: DeleteCoreResult = recordCommand(db, (tx) =>
     deleteTransactionCore(tx, id, { force: forced }),
   );
   if (result.status === "not_found") return c.json({ error: "Not found" }, 404);

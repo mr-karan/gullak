@@ -9283,6 +9283,4108 @@ class ChangeLogCompanion extends UpdateCompanion<ChangeLogRow> {
   }
 }
 
+class $SyncChangesTable extends SyncChanges
+    with TableInfo<$SyncChangesTable, SyncChangeRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $SyncChangesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _changeIdMeta = const VerificationMeta(
+    'changeId',
+  );
+  @override
+  late final GeneratedColumn<String> changeId = GeneratedColumn<String>(
+    'change_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _epochMeta = const VerificationMeta('epoch');
+  @override
+  late final GeneratedColumn<String> epoch = GeneratedColumn<String>(
+    'epoch',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _actorIdMeta = const VerificationMeta(
+    'actorId',
+  );
+  @override
+  late final GeneratedColumn<String> actorId = GeneratedColumn<String>(
+    'actor_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _sequenceMeta = const VerificationMeta(
+    'sequence',
+  );
+  @override
+  late final GeneratedColumn<int> sequence = GeneratedColumn<int>(
+    'sequence',
+    aliasedName,
+    false,
+    check: () => const CustomExpression<bool>('sequence > 0'),
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _lamportMeta = const VerificationMeta(
+    'lamport',
+  );
+  @override
+  late final GeneratedColumn<int> lamport = GeneratedColumn<int>(
+    'lamport',
+    aliasedName,
+    false,
+    check: () => const CustomExpression<bool>('lamport > 0'),
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _wallTimeMsMeta = const VerificationMeta(
+    'wallTimeMs',
+  );
+  @override
+  late final GeneratedColumn<int> wallTimeMs = GeneratedColumn<int>(
+    'wall_time_ms',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _schemaVersionMeta = const VerificationMeta(
+    'schemaVersion',
+  );
+  @override
+  late final GeneratedColumn<int> schemaVersion = GeneratedColumn<int>(
+    'schema_version',
+    aliasedName,
+    false,
+    check: () => const CustomExpression<bool>('schema_version > 0'),
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _contextJsonMeta = const VerificationMeta(
+    'contextJson',
+  );
+  @override
+  late final GeneratedColumn<String> contextJson = GeneratedColumn<String>(
+    'context_json',
+    aliasedName,
+    false,
+    check: () => const CustomExpression<bool>('json_valid(context_json)'),
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _opsJsonMeta = const VerificationMeta(
+    'opsJson',
+  );
+  @override
+  late final GeneratedColumn<String> opsJson = GeneratedColumn<String>(
+    'ops_json',
+    aliasedName,
+    false,
+    check: () => const CustomExpression<bool>('json_valid(ops_json)'),
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _envelopeJsonMeta = const VerificationMeta(
+    'envelopeJson',
+  );
+  @override
+  late final GeneratedColumn<String> envelopeJson = GeneratedColumn<String>(
+    'envelope_json',
+    aliasedName,
+    false,
+    check: () => const CustomExpression<bool>('json_valid(envelope_json)'),
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _contentHashMeta = const VerificationMeta(
+    'contentHash',
+  );
+  @override
+  late final GeneratedColumn<String> contentHash = GeneratedColumn<String>(
+    'content_hash',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _outboxStateMeta = const VerificationMeta(
+    'outboxState',
+  );
+  @override
+  late final GeneratedColumn<String> outboxState = GeneratedColumn<String>(
+    'outbox_state',
+    aliasedName,
+    false,
+    check: () => const CustomExpression<bool>(
+      "outbox_state IN ('pending', 'accepted', 'remote', 'rejected')",
+    ),
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('pending'),
+  );
+  static const VerificationMeta _serverCursorMeta = const VerificationMeta(
+    'serverCursor',
+  );
+  @override
+  late final GeneratedColumn<int> serverCursor = GeneratedColumn<int>(
+    'server_cursor',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<int> createdAt = GeneratedColumn<int>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _acceptedAtMeta = const VerificationMeta(
+    'acceptedAt',
+  );
+  @override
+  late final GeneratedColumn<int> acceptedAt = GeneratedColumn<int>(
+    'accepted_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _rejectedAtMeta = const VerificationMeta(
+    'rejectedAt',
+  );
+  @override
+  late final GeneratedColumn<int> rejectedAt = GeneratedColumn<int>(
+    'rejected_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _rejectionCodeMeta = const VerificationMeta(
+    'rejectionCode',
+  );
+  @override
+  late final GeneratedColumn<String> rejectionCode = GeneratedColumn<String>(
+    'rejection_code',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _rejectionReasonMeta = const VerificationMeta(
+    'rejectionReason',
+  );
+  @override
+  late final GeneratedColumn<String> rejectionReason = GeneratedColumn<String>(
+    'rejection_reason',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    changeId,
+    epoch,
+    actorId,
+    sequence,
+    lamport,
+    wallTimeMs,
+    schemaVersion,
+    contextJson,
+    opsJson,
+    envelopeJson,
+    contentHash,
+    outboxState,
+    serverCursor,
+    createdAt,
+    acceptedAt,
+    rejectedAt,
+    rejectionCode,
+    rejectionReason,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'sync_changes';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<SyncChangeRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('change_id')) {
+      context.handle(
+        _changeIdMeta,
+        changeId.isAcceptableOrUnknown(data['change_id']!, _changeIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_changeIdMeta);
+    }
+    if (data.containsKey('epoch')) {
+      context.handle(
+        _epochMeta,
+        epoch.isAcceptableOrUnknown(data['epoch']!, _epochMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_epochMeta);
+    }
+    if (data.containsKey('actor_id')) {
+      context.handle(
+        _actorIdMeta,
+        actorId.isAcceptableOrUnknown(data['actor_id']!, _actorIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_actorIdMeta);
+    }
+    if (data.containsKey('sequence')) {
+      context.handle(
+        _sequenceMeta,
+        sequence.isAcceptableOrUnknown(data['sequence']!, _sequenceMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_sequenceMeta);
+    }
+    if (data.containsKey('lamport')) {
+      context.handle(
+        _lamportMeta,
+        lamport.isAcceptableOrUnknown(data['lamport']!, _lamportMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_lamportMeta);
+    }
+    if (data.containsKey('wall_time_ms')) {
+      context.handle(
+        _wallTimeMsMeta,
+        wallTimeMs.isAcceptableOrUnknown(
+          data['wall_time_ms']!,
+          _wallTimeMsMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_wallTimeMsMeta);
+    }
+    if (data.containsKey('schema_version')) {
+      context.handle(
+        _schemaVersionMeta,
+        schemaVersion.isAcceptableOrUnknown(
+          data['schema_version']!,
+          _schemaVersionMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_schemaVersionMeta);
+    }
+    if (data.containsKey('context_json')) {
+      context.handle(
+        _contextJsonMeta,
+        contextJson.isAcceptableOrUnknown(
+          data['context_json']!,
+          _contextJsonMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_contextJsonMeta);
+    }
+    if (data.containsKey('ops_json')) {
+      context.handle(
+        _opsJsonMeta,
+        opsJson.isAcceptableOrUnknown(data['ops_json']!, _opsJsonMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_opsJsonMeta);
+    }
+    if (data.containsKey('envelope_json')) {
+      context.handle(
+        _envelopeJsonMeta,
+        envelopeJson.isAcceptableOrUnknown(
+          data['envelope_json']!,
+          _envelopeJsonMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_envelopeJsonMeta);
+    }
+    if (data.containsKey('content_hash')) {
+      context.handle(
+        _contentHashMeta,
+        contentHash.isAcceptableOrUnknown(
+          data['content_hash']!,
+          _contentHashMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_contentHashMeta);
+    }
+    if (data.containsKey('outbox_state')) {
+      context.handle(
+        _outboxStateMeta,
+        outboxState.isAcceptableOrUnknown(
+          data['outbox_state']!,
+          _outboxStateMeta,
+        ),
+      );
+    }
+    if (data.containsKey('server_cursor')) {
+      context.handle(
+        _serverCursorMeta,
+        serverCursor.isAcceptableOrUnknown(
+          data['server_cursor']!,
+          _serverCursorMeta,
+        ),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    if (data.containsKey('accepted_at')) {
+      context.handle(
+        _acceptedAtMeta,
+        acceptedAt.isAcceptableOrUnknown(data['accepted_at']!, _acceptedAtMeta),
+      );
+    }
+    if (data.containsKey('rejected_at')) {
+      context.handle(
+        _rejectedAtMeta,
+        rejectedAt.isAcceptableOrUnknown(data['rejected_at']!, _rejectedAtMeta),
+      );
+    }
+    if (data.containsKey('rejection_code')) {
+      context.handle(
+        _rejectionCodeMeta,
+        rejectionCode.isAcceptableOrUnknown(
+          data['rejection_code']!,
+          _rejectionCodeMeta,
+        ),
+      );
+    }
+    if (data.containsKey('rejection_reason')) {
+      context.handle(
+        _rejectionReasonMeta,
+        rejectionReason.isAcceptableOrUnknown(
+          data['rejection_reason']!,
+          _rejectionReasonMeta,
+        ),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {changeId};
+  @override
+  List<Set<GeneratedColumn>> get uniqueKeys => [
+    {actorId, sequence},
+  ];
+  @override
+  SyncChangeRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return SyncChangeRow(
+      changeId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}change_id'],
+      )!,
+      epoch: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}epoch'],
+      )!,
+      actorId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}actor_id'],
+      )!,
+      sequence: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}sequence'],
+      )!,
+      lamport: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}lamport'],
+      )!,
+      wallTimeMs: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}wall_time_ms'],
+      )!,
+      schemaVersion: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}schema_version'],
+      )!,
+      contextJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}context_json'],
+      )!,
+      opsJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}ops_json'],
+      )!,
+      envelopeJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}envelope_json'],
+      )!,
+      contentHash: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}content_hash'],
+      )!,
+      outboxState: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}outbox_state'],
+      )!,
+      serverCursor: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}server_cursor'],
+      ),
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}created_at'],
+      )!,
+      acceptedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}accepted_at'],
+      ),
+      rejectedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}rejected_at'],
+      ),
+      rejectionCode: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}rejection_code'],
+      ),
+      rejectionReason: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}rejection_reason'],
+      ),
+    );
+  }
+
+  @override
+  $SyncChangesTable createAlias(String alias) {
+    return $SyncChangesTable(attachedDatabase, alias);
+  }
+}
+
+class SyncChangeRow extends DataClass implements Insertable<SyncChangeRow> {
+  final String changeId;
+  final String epoch;
+  final String actorId;
+  final int sequence;
+  final int lamport;
+  final int wallTimeMs;
+  final int schemaVersion;
+  final String contextJson;
+  final String opsJson;
+  final String envelopeJson;
+  final String contentHash;
+  final String outboxState;
+  final int? serverCursor;
+  final int createdAt;
+  final int? acceptedAt;
+  final int? rejectedAt;
+  final String? rejectionCode;
+  final String? rejectionReason;
+  const SyncChangeRow({
+    required this.changeId,
+    required this.epoch,
+    required this.actorId,
+    required this.sequence,
+    required this.lamport,
+    required this.wallTimeMs,
+    required this.schemaVersion,
+    required this.contextJson,
+    required this.opsJson,
+    required this.envelopeJson,
+    required this.contentHash,
+    required this.outboxState,
+    this.serverCursor,
+    required this.createdAt,
+    this.acceptedAt,
+    this.rejectedAt,
+    this.rejectionCode,
+    this.rejectionReason,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['change_id'] = Variable<String>(changeId);
+    map['epoch'] = Variable<String>(epoch);
+    map['actor_id'] = Variable<String>(actorId);
+    map['sequence'] = Variable<int>(sequence);
+    map['lamport'] = Variable<int>(lamport);
+    map['wall_time_ms'] = Variable<int>(wallTimeMs);
+    map['schema_version'] = Variable<int>(schemaVersion);
+    map['context_json'] = Variable<String>(contextJson);
+    map['ops_json'] = Variable<String>(opsJson);
+    map['envelope_json'] = Variable<String>(envelopeJson);
+    map['content_hash'] = Variable<String>(contentHash);
+    map['outbox_state'] = Variable<String>(outboxState);
+    if (!nullToAbsent || serverCursor != null) {
+      map['server_cursor'] = Variable<int>(serverCursor);
+    }
+    map['created_at'] = Variable<int>(createdAt);
+    if (!nullToAbsent || acceptedAt != null) {
+      map['accepted_at'] = Variable<int>(acceptedAt);
+    }
+    if (!nullToAbsent || rejectedAt != null) {
+      map['rejected_at'] = Variable<int>(rejectedAt);
+    }
+    if (!nullToAbsent || rejectionCode != null) {
+      map['rejection_code'] = Variable<String>(rejectionCode);
+    }
+    if (!nullToAbsent || rejectionReason != null) {
+      map['rejection_reason'] = Variable<String>(rejectionReason);
+    }
+    return map;
+  }
+
+  SyncChangesCompanion toCompanion(bool nullToAbsent) {
+    return SyncChangesCompanion(
+      changeId: Value(changeId),
+      epoch: Value(epoch),
+      actorId: Value(actorId),
+      sequence: Value(sequence),
+      lamport: Value(lamport),
+      wallTimeMs: Value(wallTimeMs),
+      schemaVersion: Value(schemaVersion),
+      contextJson: Value(contextJson),
+      opsJson: Value(opsJson),
+      envelopeJson: Value(envelopeJson),
+      contentHash: Value(contentHash),
+      outboxState: Value(outboxState),
+      serverCursor: serverCursor == null && nullToAbsent
+          ? const Value.absent()
+          : Value(serverCursor),
+      createdAt: Value(createdAt),
+      acceptedAt: acceptedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(acceptedAt),
+      rejectedAt: rejectedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(rejectedAt),
+      rejectionCode: rejectionCode == null && nullToAbsent
+          ? const Value.absent()
+          : Value(rejectionCode),
+      rejectionReason: rejectionReason == null && nullToAbsent
+          ? const Value.absent()
+          : Value(rejectionReason),
+    );
+  }
+
+  factory SyncChangeRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return SyncChangeRow(
+      changeId: serializer.fromJson<String>(json['changeId']),
+      epoch: serializer.fromJson<String>(json['epoch']),
+      actorId: serializer.fromJson<String>(json['actorId']),
+      sequence: serializer.fromJson<int>(json['sequence']),
+      lamport: serializer.fromJson<int>(json['lamport']),
+      wallTimeMs: serializer.fromJson<int>(json['wallTimeMs']),
+      schemaVersion: serializer.fromJson<int>(json['schemaVersion']),
+      contextJson: serializer.fromJson<String>(json['contextJson']),
+      opsJson: serializer.fromJson<String>(json['opsJson']),
+      envelopeJson: serializer.fromJson<String>(json['envelopeJson']),
+      contentHash: serializer.fromJson<String>(json['contentHash']),
+      outboxState: serializer.fromJson<String>(json['outboxState']),
+      serverCursor: serializer.fromJson<int?>(json['serverCursor']),
+      createdAt: serializer.fromJson<int>(json['createdAt']),
+      acceptedAt: serializer.fromJson<int?>(json['acceptedAt']),
+      rejectedAt: serializer.fromJson<int?>(json['rejectedAt']),
+      rejectionCode: serializer.fromJson<String?>(json['rejectionCode']),
+      rejectionReason: serializer.fromJson<String?>(json['rejectionReason']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'changeId': serializer.toJson<String>(changeId),
+      'epoch': serializer.toJson<String>(epoch),
+      'actorId': serializer.toJson<String>(actorId),
+      'sequence': serializer.toJson<int>(sequence),
+      'lamport': serializer.toJson<int>(lamport),
+      'wallTimeMs': serializer.toJson<int>(wallTimeMs),
+      'schemaVersion': serializer.toJson<int>(schemaVersion),
+      'contextJson': serializer.toJson<String>(contextJson),
+      'opsJson': serializer.toJson<String>(opsJson),
+      'envelopeJson': serializer.toJson<String>(envelopeJson),
+      'contentHash': serializer.toJson<String>(contentHash),
+      'outboxState': serializer.toJson<String>(outboxState),
+      'serverCursor': serializer.toJson<int?>(serverCursor),
+      'createdAt': serializer.toJson<int>(createdAt),
+      'acceptedAt': serializer.toJson<int?>(acceptedAt),
+      'rejectedAt': serializer.toJson<int?>(rejectedAt),
+      'rejectionCode': serializer.toJson<String?>(rejectionCode),
+      'rejectionReason': serializer.toJson<String?>(rejectionReason),
+    };
+  }
+
+  SyncChangeRow copyWith({
+    String? changeId,
+    String? epoch,
+    String? actorId,
+    int? sequence,
+    int? lamport,
+    int? wallTimeMs,
+    int? schemaVersion,
+    String? contextJson,
+    String? opsJson,
+    String? envelopeJson,
+    String? contentHash,
+    String? outboxState,
+    Value<int?> serverCursor = const Value.absent(),
+    int? createdAt,
+    Value<int?> acceptedAt = const Value.absent(),
+    Value<int?> rejectedAt = const Value.absent(),
+    Value<String?> rejectionCode = const Value.absent(),
+    Value<String?> rejectionReason = const Value.absent(),
+  }) => SyncChangeRow(
+    changeId: changeId ?? this.changeId,
+    epoch: epoch ?? this.epoch,
+    actorId: actorId ?? this.actorId,
+    sequence: sequence ?? this.sequence,
+    lamport: lamport ?? this.lamport,
+    wallTimeMs: wallTimeMs ?? this.wallTimeMs,
+    schemaVersion: schemaVersion ?? this.schemaVersion,
+    contextJson: contextJson ?? this.contextJson,
+    opsJson: opsJson ?? this.opsJson,
+    envelopeJson: envelopeJson ?? this.envelopeJson,
+    contentHash: contentHash ?? this.contentHash,
+    outboxState: outboxState ?? this.outboxState,
+    serverCursor: serverCursor.present ? serverCursor.value : this.serverCursor,
+    createdAt: createdAt ?? this.createdAt,
+    acceptedAt: acceptedAt.present ? acceptedAt.value : this.acceptedAt,
+    rejectedAt: rejectedAt.present ? rejectedAt.value : this.rejectedAt,
+    rejectionCode: rejectionCode.present
+        ? rejectionCode.value
+        : this.rejectionCode,
+    rejectionReason: rejectionReason.present
+        ? rejectionReason.value
+        : this.rejectionReason,
+  );
+  SyncChangeRow copyWithCompanion(SyncChangesCompanion data) {
+    return SyncChangeRow(
+      changeId: data.changeId.present ? data.changeId.value : this.changeId,
+      epoch: data.epoch.present ? data.epoch.value : this.epoch,
+      actorId: data.actorId.present ? data.actorId.value : this.actorId,
+      sequence: data.sequence.present ? data.sequence.value : this.sequence,
+      lamport: data.lamport.present ? data.lamport.value : this.lamport,
+      wallTimeMs: data.wallTimeMs.present
+          ? data.wallTimeMs.value
+          : this.wallTimeMs,
+      schemaVersion: data.schemaVersion.present
+          ? data.schemaVersion.value
+          : this.schemaVersion,
+      contextJson: data.contextJson.present
+          ? data.contextJson.value
+          : this.contextJson,
+      opsJson: data.opsJson.present ? data.opsJson.value : this.opsJson,
+      envelopeJson: data.envelopeJson.present
+          ? data.envelopeJson.value
+          : this.envelopeJson,
+      contentHash: data.contentHash.present
+          ? data.contentHash.value
+          : this.contentHash,
+      outboxState: data.outboxState.present
+          ? data.outboxState.value
+          : this.outboxState,
+      serverCursor: data.serverCursor.present
+          ? data.serverCursor.value
+          : this.serverCursor,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      acceptedAt: data.acceptedAt.present
+          ? data.acceptedAt.value
+          : this.acceptedAt,
+      rejectedAt: data.rejectedAt.present
+          ? data.rejectedAt.value
+          : this.rejectedAt,
+      rejectionCode: data.rejectionCode.present
+          ? data.rejectionCode.value
+          : this.rejectionCode,
+      rejectionReason: data.rejectionReason.present
+          ? data.rejectionReason.value
+          : this.rejectionReason,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('SyncChangeRow(')
+          ..write('changeId: $changeId, ')
+          ..write('epoch: $epoch, ')
+          ..write('actorId: $actorId, ')
+          ..write('sequence: $sequence, ')
+          ..write('lamport: $lamport, ')
+          ..write('wallTimeMs: $wallTimeMs, ')
+          ..write('schemaVersion: $schemaVersion, ')
+          ..write('contextJson: $contextJson, ')
+          ..write('opsJson: $opsJson, ')
+          ..write('envelopeJson: $envelopeJson, ')
+          ..write('contentHash: $contentHash, ')
+          ..write('outboxState: $outboxState, ')
+          ..write('serverCursor: $serverCursor, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('acceptedAt: $acceptedAt, ')
+          ..write('rejectedAt: $rejectedAt, ')
+          ..write('rejectionCode: $rejectionCode, ')
+          ..write('rejectionReason: $rejectionReason')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    changeId,
+    epoch,
+    actorId,
+    sequence,
+    lamport,
+    wallTimeMs,
+    schemaVersion,
+    contextJson,
+    opsJson,
+    envelopeJson,
+    contentHash,
+    outboxState,
+    serverCursor,
+    createdAt,
+    acceptedAt,
+    rejectedAt,
+    rejectionCode,
+    rejectionReason,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is SyncChangeRow &&
+          other.changeId == this.changeId &&
+          other.epoch == this.epoch &&
+          other.actorId == this.actorId &&
+          other.sequence == this.sequence &&
+          other.lamport == this.lamport &&
+          other.wallTimeMs == this.wallTimeMs &&
+          other.schemaVersion == this.schemaVersion &&
+          other.contextJson == this.contextJson &&
+          other.opsJson == this.opsJson &&
+          other.envelopeJson == this.envelopeJson &&
+          other.contentHash == this.contentHash &&
+          other.outboxState == this.outboxState &&
+          other.serverCursor == this.serverCursor &&
+          other.createdAt == this.createdAt &&
+          other.acceptedAt == this.acceptedAt &&
+          other.rejectedAt == this.rejectedAt &&
+          other.rejectionCode == this.rejectionCode &&
+          other.rejectionReason == this.rejectionReason);
+}
+
+class SyncChangesCompanion extends UpdateCompanion<SyncChangeRow> {
+  final Value<String> changeId;
+  final Value<String> epoch;
+  final Value<String> actorId;
+  final Value<int> sequence;
+  final Value<int> lamport;
+  final Value<int> wallTimeMs;
+  final Value<int> schemaVersion;
+  final Value<String> contextJson;
+  final Value<String> opsJson;
+  final Value<String> envelopeJson;
+  final Value<String> contentHash;
+  final Value<String> outboxState;
+  final Value<int?> serverCursor;
+  final Value<int> createdAt;
+  final Value<int?> acceptedAt;
+  final Value<int?> rejectedAt;
+  final Value<String?> rejectionCode;
+  final Value<String?> rejectionReason;
+  final Value<int> rowid;
+  const SyncChangesCompanion({
+    this.changeId = const Value.absent(),
+    this.epoch = const Value.absent(),
+    this.actorId = const Value.absent(),
+    this.sequence = const Value.absent(),
+    this.lamport = const Value.absent(),
+    this.wallTimeMs = const Value.absent(),
+    this.schemaVersion = const Value.absent(),
+    this.contextJson = const Value.absent(),
+    this.opsJson = const Value.absent(),
+    this.envelopeJson = const Value.absent(),
+    this.contentHash = const Value.absent(),
+    this.outboxState = const Value.absent(),
+    this.serverCursor = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.acceptedAt = const Value.absent(),
+    this.rejectedAt = const Value.absent(),
+    this.rejectionCode = const Value.absent(),
+    this.rejectionReason = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  SyncChangesCompanion.insert({
+    required String changeId,
+    required String epoch,
+    required String actorId,
+    required int sequence,
+    required int lamport,
+    required int wallTimeMs,
+    required int schemaVersion,
+    required String contextJson,
+    required String opsJson,
+    required String envelopeJson,
+    required String contentHash,
+    this.outboxState = const Value.absent(),
+    this.serverCursor = const Value.absent(),
+    required int createdAt,
+    this.acceptedAt = const Value.absent(),
+    this.rejectedAt = const Value.absent(),
+    this.rejectionCode = const Value.absent(),
+    this.rejectionReason = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : changeId = Value(changeId),
+       epoch = Value(epoch),
+       actorId = Value(actorId),
+       sequence = Value(sequence),
+       lamport = Value(lamport),
+       wallTimeMs = Value(wallTimeMs),
+       schemaVersion = Value(schemaVersion),
+       contextJson = Value(contextJson),
+       opsJson = Value(opsJson),
+       envelopeJson = Value(envelopeJson),
+       contentHash = Value(contentHash),
+       createdAt = Value(createdAt);
+  static Insertable<SyncChangeRow> custom({
+    Expression<String>? changeId,
+    Expression<String>? epoch,
+    Expression<String>? actorId,
+    Expression<int>? sequence,
+    Expression<int>? lamport,
+    Expression<int>? wallTimeMs,
+    Expression<int>? schemaVersion,
+    Expression<String>? contextJson,
+    Expression<String>? opsJson,
+    Expression<String>? envelopeJson,
+    Expression<String>? contentHash,
+    Expression<String>? outboxState,
+    Expression<int>? serverCursor,
+    Expression<int>? createdAt,
+    Expression<int>? acceptedAt,
+    Expression<int>? rejectedAt,
+    Expression<String>? rejectionCode,
+    Expression<String>? rejectionReason,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (changeId != null) 'change_id': changeId,
+      if (epoch != null) 'epoch': epoch,
+      if (actorId != null) 'actor_id': actorId,
+      if (sequence != null) 'sequence': sequence,
+      if (lamport != null) 'lamport': lamport,
+      if (wallTimeMs != null) 'wall_time_ms': wallTimeMs,
+      if (schemaVersion != null) 'schema_version': schemaVersion,
+      if (contextJson != null) 'context_json': contextJson,
+      if (opsJson != null) 'ops_json': opsJson,
+      if (envelopeJson != null) 'envelope_json': envelopeJson,
+      if (contentHash != null) 'content_hash': contentHash,
+      if (outboxState != null) 'outbox_state': outboxState,
+      if (serverCursor != null) 'server_cursor': serverCursor,
+      if (createdAt != null) 'created_at': createdAt,
+      if (acceptedAt != null) 'accepted_at': acceptedAt,
+      if (rejectedAt != null) 'rejected_at': rejectedAt,
+      if (rejectionCode != null) 'rejection_code': rejectionCode,
+      if (rejectionReason != null) 'rejection_reason': rejectionReason,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  SyncChangesCompanion copyWith({
+    Value<String>? changeId,
+    Value<String>? epoch,
+    Value<String>? actorId,
+    Value<int>? sequence,
+    Value<int>? lamport,
+    Value<int>? wallTimeMs,
+    Value<int>? schemaVersion,
+    Value<String>? contextJson,
+    Value<String>? opsJson,
+    Value<String>? envelopeJson,
+    Value<String>? contentHash,
+    Value<String>? outboxState,
+    Value<int?>? serverCursor,
+    Value<int>? createdAt,
+    Value<int?>? acceptedAt,
+    Value<int?>? rejectedAt,
+    Value<String?>? rejectionCode,
+    Value<String?>? rejectionReason,
+    Value<int>? rowid,
+  }) {
+    return SyncChangesCompanion(
+      changeId: changeId ?? this.changeId,
+      epoch: epoch ?? this.epoch,
+      actorId: actorId ?? this.actorId,
+      sequence: sequence ?? this.sequence,
+      lamport: lamport ?? this.lamport,
+      wallTimeMs: wallTimeMs ?? this.wallTimeMs,
+      schemaVersion: schemaVersion ?? this.schemaVersion,
+      contextJson: contextJson ?? this.contextJson,
+      opsJson: opsJson ?? this.opsJson,
+      envelopeJson: envelopeJson ?? this.envelopeJson,
+      contentHash: contentHash ?? this.contentHash,
+      outboxState: outboxState ?? this.outboxState,
+      serverCursor: serverCursor ?? this.serverCursor,
+      createdAt: createdAt ?? this.createdAt,
+      acceptedAt: acceptedAt ?? this.acceptedAt,
+      rejectedAt: rejectedAt ?? this.rejectedAt,
+      rejectionCode: rejectionCode ?? this.rejectionCode,
+      rejectionReason: rejectionReason ?? this.rejectionReason,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (changeId.present) {
+      map['change_id'] = Variable<String>(changeId.value);
+    }
+    if (epoch.present) {
+      map['epoch'] = Variable<String>(epoch.value);
+    }
+    if (actorId.present) {
+      map['actor_id'] = Variable<String>(actorId.value);
+    }
+    if (sequence.present) {
+      map['sequence'] = Variable<int>(sequence.value);
+    }
+    if (lamport.present) {
+      map['lamport'] = Variable<int>(lamport.value);
+    }
+    if (wallTimeMs.present) {
+      map['wall_time_ms'] = Variable<int>(wallTimeMs.value);
+    }
+    if (schemaVersion.present) {
+      map['schema_version'] = Variable<int>(schemaVersion.value);
+    }
+    if (contextJson.present) {
+      map['context_json'] = Variable<String>(contextJson.value);
+    }
+    if (opsJson.present) {
+      map['ops_json'] = Variable<String>(opsJson.value);
+    }
+    if (envelopeJson.present) {
+      map['envelope_json'] = Variable<String>(envelopeJson.value);
+    }
+    if (contentHash.present) {
+      map['content_hash'] = Variable<String>(contentHash.value);
+    }
+    if (outboxState.present) {
+      map['outbox_state'] = Variable<String>(outboxState.value);
+    }
+    if (serverCursor.present) {
+      map['server_cursor'] = Variable<int>(serverCursor.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<int>(createdAt.value);
+    }
+    if (acceptedAt.present) {
+      map['accepted_at'] = Variable<int>(acceptedAt.value);
+    }
+    if (rejectedAt.present) {
+      map['rejected_at'] = Variable<int>(rejectedAt.value);
+    }
+    if (rejectionCode.present) {
+      map['rejection_code'] = Variable<String>(rejectionCode.value);
+    }
+    if (rejectionReason.present) {
+      map['rejection_reason'] = Variable<String>(rejectionReason.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('SyncChangesCompanion(')
+          ..write('changeId: $changeId, ')
+          ..write('epoch: $epoch, ')
+          ..write('actorId: $actorId, ')
+          ..write('sequence: $sequence, ')
+          ..write('lamport: $lamport, ')
+          ..write('wallTimeMs: $wallTimeMs, ')
+          ..write('schemaVersion: $schemaVersion, ')
+          ..write('contextJson: $contextJson, ')
+          ..write('opsJson: $opsJson, ')
+          ..write('envelopeJson: $envelopeJson, ')
+          ..write('contentHash: $contentHash, ')
+          ..write('outboxState: $outboxState, ')
+          ..write('serverCursor: $serverCursor, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('acceptedAt: $acceptedAt, ')
+          ..write('rejectedAt: $rejectedAt, ')
+          ..write('rejectionCode: $rejectionCode, ')
+          ..write('rejectionReason: $rejectionReason, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $SyncRegistersTable extends SyncRegisters
+    with TableInfo<$SyncRegistersTable, SyncRegisterRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $SyncRegistersTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _epochMeta = const VerificationMeta('epoch');
+  @override
+  late final GeneratedColumn<String> epoch = GeneratedColumn<String>(
+    'epoch',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _resourceMeta = const VerificationMeta(
+    'resource',
+  );
+  @override
+  late final GeneratedColumn<String> resource = GeneratedColumn<String>(
+    'resource',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _entityIdMeta = const VerificationMeta(
+    'entityId',
+  );
+  @override
+  late final GeneratedColumn<String> entityId = GeneratedColumn<String>(
+    'entity_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _fieldMeta = const VerificationMeta('field');
+  @override
+  late final GeneratedColumn<String> field = GeneratedColumn<String>(
+    'field',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _policyMeta = const VerificationMeta('policy');
+  @override
+  late final GeneratedColumn<String> policy = GeneratedColumn<String>(
+    'policy',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _candidatesJsonMeta = const VerificationMeta(
+    'candidatesJson',
+  );
+  @override
+  late final GeneratedColumn<String> candidatesJson = GeneratedColumn<String>(
+    'candidates_json',
+    aliasedName,
+    false,
+    check: () => const CustomExpression<bool>('json_valid(candidates_json)'),
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _visibleValueJsonMeta = const VerificationMeta(
+    'visibleValueJson',
+  );
+  @override
+  late final GeneratedColumn<String> visibleValueJson = GeneratedColumn<String>(
+    'visible_value_json',
+    aliasedName,
+    true,
+    check: () => const CustomExpression<bool>(
+      'visible_value_json IS NULL OR json_valid(visible_value_json)',
+    ),
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _updatedCursorMeta = const VerificationMeta(
+    'updatedCursor',
+  );
+  @override
+  late final GeneratedColumn<int> updatedCursor = GeneratedColumn<int>(
+    'updated_cursor',
+    aliasedName,
+    false,
+    check: () => const CustomExpression<bool>('updated_cursor >= 0'),
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<int> updatedAt = GeneratedColumn<int>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    epoch,
+    resource,
+    entityId,
+    field,
+    policy,
+    candidatesJson,
+    visibleValueJson,
+    updatedCursor,
+    updatedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'sync_registers';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<SyncRegisterRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('epoch')) {
+      context.handle(
+        _epochMeta,
+        epoch.isAcceptableOrUnknown(data['epoch']!, _epochMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_epochMeta);
+    }
+    if (data.containsKey('resource')) {
+      context.handle(
+        _resourceMeta,
+        resource.isAcceptableOrUnknown(data['resource']!, _resourceMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_resourceMeta);
+    }
+    if (data.containsKey('entity_id')) {
+      context.handle(
+        _entityIdMeta,
+        entityId.isAcceptableOrUnknown(data['entity_id']!, _entityIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_entityIdMeta);
+    }
+    if (data.containsKey('field')) {
+      context.handle(
+        _fieldMeta,
+        field.isAcceptableOrUnknown(data['field']!, _fieldMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_fieldMeta);
+    }
+    if (data.containsKey('policy')) {
+      context.handle(
+        _policyMeta,
+        policy.isAcceptableOrUnknown(data['policy']!, _policyMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_policyMeta);
+    }
+    if (data.containsKey('candidates_json')) {
+      context.handle(
+        _candidatesJsonMeta,
+        candidatesJson.isAcceptableOrUnknown(
+          data['candidates_json']!,
+          _candidatesJsonMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_candidatesJsonMeta);
+    }
+    if (data.containsKey('visible_value_json')) {
+      context.handle(
+        _visibleValueJsonMeta,
+        visibleValueJson.isAcceptableOrUnknown(
+          data['visible_value_json']!,
+          _visibleValueJsonMeta,
+        ),
+      );
+    }
+    if (data.containsKey('updated_cursor')) {
+      context.handle(
+        _updatedCursorMeta,
+        updatedCursor.isAcceptableOrUnknown(
+          data['updated_cursor']!,
+          _updatedCursorMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedCursorMeta);
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {epoch, resource, entityId, field};
+  @override
+  SyncRegisterRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return SyncRegisterRow(
+      epoch: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}epoch'],
+      )!,
+      resource: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}resource'],
+      )!,
+      entityId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}entity_id'],
+      )!,
+      field: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}field'],
+      )!,
+      policy: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}policy'],
+      )!,
+      candidatesJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}candidates_json'],
+      )!,
+      visibleValueJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}visible_value_json'],
+      ),
+      updatedCursor: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}updated_cursor'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}updated_at'],
+      )!,
+    );
+  }
+
+  @override
+  $SyncRegistersTable createAlias(String alias) {
+    return $SyncRegistersTable(attachedDatabase, alias);
+  }
+}
+
+class SyncRegisterRow extends DataClass implements Insertable<SyncRegisterRow> {
+  final String epoch;
+  final String resource;
+  final String entityId;
+  final String field;
+  final String policy;
+  final String candidatesJson;
+  final String? visibleValueJson;
+  final int updatedCursor;
+  final int updatedAt;
+  const SyncRegisterRow({
+    required this.epoch,
+    required this.resource,
+    required this.entityId,
+    required this.field,
+    required this.policy,
+    required this.candidatesJson,
+    this.visibleValueJson,
+    required this.updatedCursor,
+    required this.updatedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['epoch'] = Variable<String>(epoch);
+    map['resource'] = Variable<String>(resource);
+    map['entity_id'] = Variable<String>(entityId);
+    map['field'] = Variable<String>(field);
+    map['policy'] = Variable<String>(policy);
+    map['candidates_json'] = Variable<String>(candidatesJson);
+    if (!nullToAbsent || visibleValueJson != null) {
+      map['visible_value_json'] = Variable<String>(visibleValueJson);
+    }
+    map['updated_cursor'] = Variable<int>(updatedCursor);
+    map['updated_at'] = Variable<int>(updatedAt);
+    return map;
+  }
+
+  SyncRegistersCompanion toCompanion(bool nullToAbsent) {
+    return SyncRegistersCompanion(
+      epoch: Value(epoch),
+      resource: Value(resource),
+      entityId: Value(entityId),
+      field: Value(field),
+      policy: Value(policy),
+      candidatesJson: Value(candidatesJson),
+      visibleValueJson: visibleValueJson == null && nullToAbsent
+          ? const Value.absent()
+          : Value(visibleValueJson),
+      updatedCursor: Value(updatedCursor),
+      updatedAt: Value(updatedAt),
+    );
+  }
+
+  factory SyncRegisterRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return SyncRegisterRow(
+      epoch: serializer.fromJson<String>(json['epoch']),
+      resource: serializer.fromJson<String>(json['resource']),
+      entityId: serializer.fromJson<String>(json['entityId']),
+      field: serializer.fromJson<String>(json['field']),
+      policy: serializer.fromJson<String>(json['policy']),
+      candidatesJson: serializer.fromJson<String>(json['candidatesJson']),
+      visibleValueJson: serializer.fromJson<String?>(json['visibleValueJson']),
+      updatedCursor: serializer.fromJson<int>(json['updatedCursor']),
+      updatedAt: serializer.fromJson<int>(json['updatedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'epoch': serializer.toJson<String>(epoch),
+      'resource': serializer.toJson<String>(resource),
+      'entityId': serializer.toJson<String>(entityId),
+      'field': serializer.toJson<String>(field),
+      'policy': serializer.toJson<String>(policy),
+      'candidatesJson': serializer.toJson<String>(candidatesJson),
+      'visibleValueJson': serializer.toJson<String?>(visibleValueJson),
+      'updatedCursor': serializer.toJson<int>(updatedCursor),
+      'updatedAt': serializer.toJson<int>(updatedAt),
+    };
+  }
+
+  SyncRegisterRow copyWith({
+    String? epoch,
+    String? resource,
+    String? entityId,
+    String? field,
+    String? policy,
+    String? candidatesJson,
+    Value<String?> visibleValueJson = const Value.absent(),
+    int? updatedCursor,
+    int? updatedAt,
+  }) => SyncRegisterRow(
+    epoch: epoch ?? this.epoch,
+    resource: resource ?? this.resource,
+    entityId: entityId ?? this.entityId,
+    field: field ?? this.field,
+    policy: policy ?? this.policy,
+    candidatesJson: candidatesJson ?? this.candidatesJson,
+    visibleValueJson: visibleValueJson.present
+        ? visibleValueJson.value
+        : this.visibleValueJson,
+    updatedCursor: updatedCursor ?? this.updatedCursor,
+    updatedAt: updatedAt ?? this.updatedAt,
+  );
+  SyncRegisterRow copyWithCompanion(SyncRegistersCompanion data) {
+    return SyncRegisterRow(
+      epoch: data.epoch.present ? data.epoch.value : this.epoch,
+      resource: data.resource.present ? data.resource.value : this.resource,
+      entityId: data.entityId.present ? data.entityId.value : this.entityId,
+      field: data.field.present ? data.field.value : this.field,
+      policy: data.policy.present ? data.policy.value : this.policy,
+      candidatesJson: data.candidatesJson.present
+          ? data.candidatesJson.value
+          : this.candidatesJson,
+      visibleValueJson: data.visibleValueJson.present
+          ? data.visibleValueJson.value
+          : this.visibleValueJson,
+      updatedCursor: data.updatedCursor.present
+          ? data.updatedCursor.value
+          : this.updatedCursor,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('SyncRegisterRow(')
+          ..write('epoch: $epoch, ')
+          ..write('resource: $resource, ')
+          ..write('entityId: $entityId, ')
+          ..write('field: $field, ')
+          ..write('policy: $policy, ')
+          ..write('candidatesJson: $candidatesJson, ')
+          ..write('visibleValueJson: $visibleValueJson, ')
+          ..write('updatedCursor: $updatedCursor, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    epoch,
+    resource,
+    entityId,
+    field,
+    policy,
+    candidatesJson,
+    visibleValueJson,
+    updatedCursor,
+    updatedAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is SyncRegisterRow &&
+          other.epoch == this.epoch &&
+          other.resource == this.resource &&
+          other.entityId == this.entityId &&
+          other.field == this.field &&
+          other.policy == this.policy &&
+          other.candidatesJson == this.candidatesJson &&
+          other.visibleValueJson == this.visibleValueJson &&
+          other.updatedCursor == this.updatedCursor &&
+          other.updatedAt == this.updatedAt);
+}
+
+class SyncRegistersCompanion extends UpdateCompanion<SyncRegisterRow> {
+  final Value<String> epoch;
+  final Value<String> resource;
+  final Value<String> entityId;
+  final Value<String> field;
+  final Value<String> policy;
+  final Value<String> candidatesJson;
+  final Value<String?> visibleValueJson;
+  final Value<int> updatedCursor;
+  final Value<int> updatedAt;
+  final Value<int> rowid;
+  const SyncRegistersCompanion({
+    this.epoch = const Value.absent(),
+    this.resource = const Value.absent(),
+    this.entityId = const Value.absent(),
+    this.field = const Value.absent(),
+    this.policy = const Value.absent(),
+    this.candidatesJson = const Value.absent(),
+    this.visibleValueJson = const Value.absent(),
+    this.updatedCursor = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  SyncRegistersCompanion.insert({
+    required String epoch,
+    required String resource,
+    required String entityId,
+    required String field,
+    required String policy,
+    required String candidatesJson,
+    this.visibleValueJson = const Value.absent(),
+    required int updatedCursor,
+    required int updatedAt,
+    this.rowid = const Value.absent(),
+  }) : epoch = Value(epoch),
+       resource = Value(resource),
+       entityId = Value(entityId),
+       field = Value(field),
+       policy = Value(policy),
+       candidatesJson = Value(candidatesJson),
+       updatedCursor = Value(updatedCursor),
+       updatedAt = Value(updatedAt);
+  static Insertable<SyncRegisterRow> custom({
+    Expression<String>? epoch,
+    Expression<String>? resource,
+    Expression<String>? entityId,
+    Expression<String>? field,
+    Expression<String>? policy,
+    Expression<String>? candidatesJson,
+    Expression<String>? visibleValueJson,
+    Expression<int>? updatedCursor,
+    Expression<int>? updatedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (epoch != null) 'epoch': epoch,
+      if (resource != null) 'resource': resource,
+      if (entityId != null) 'entity_id': entityId,
+      if (field != null) 'field': field,
+      if (policy != null) 'policy': policy,
+      if (candidatesJson != null) 'candidates_json': candidatesJson,
+      if (visibleValueJson != null) 'visible_value_json': visibleValueJson,
+      if (updatedCursor != null) 'updated_cursor': updatedCursor,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  SyncRegistersCompanion copyWith({
+    Value<String>? epoch,
+    Value<String>? resource,
+    Value<String>? entityId,
+    Value<String>? field,
+    Value<String>? policy,
+    Value<String>? candidatesJson,
+    Value<String?>? visibleValueJson,
+    Value<int>? updatedCursor,
+    Value<int>? updatedAt,
+    Value<int>? rowid,
+  }) {
+    return SyncRegistersCompanion(
+      epoch: epoch ?? this.epoch,
+      resource: resource ?? this.resource,
+      entityId: entityId ?? this.entityId,
+      field: field ?? this.field,
+      policy: policy ?? this.policy,
+      candidatesJson: candidatesJson ?? this.candidatesJson,
+      visibleValueJson: visibleValueJson ?? this.visibleValueJson,
+      updatedCursor: updatedCursor ?? this.updatedCursor,
+      updatedAt: updatedAt ?? this.updatedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (epoch.present) {
+      map['epoch'] = Variable<String>(epoch.value);
+    }
+    if (resource.present) {
+      map['resource'] = Variable<String>(resource.value);
+    }
+    if (entityId.present) {
+      map['entity_id'] = Variable<String>(entityId.value);
+    }
+    if (field.present) {
+      map['field'] = Variable<String>(field.value);
+    }
+    if (policy.present) {
+      map['policy'] = Variable<String>(policy.value);
+    }
+    if (candidatesJson.present) {
+      map['candidates_json'] = Variable<String>(candidatesJson.value);
+    }
+    if (visibleValueJson.present) {
+      map['visible_value_json'] = Variable<String>(visibleValueJson.value);
+    }
+    if (updatedCursor.present) {
+      map['updated_cursor'] = Variable<int>(updatedCursor.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<int>(updatedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('SyncRegistersCompanion(')
+          ..write('epoch: $epoch, ')
+          ..write('resource: $resource, ')
+          ..write('entityId: $entityId, ')
+          ..write('field: $field, ')
+          ..write('policy: $policy, ')
+          ..write('candidatesJson: $candidatesJson, ')
+          ..write('visibleValueJson: $visibleValueJson, ')
+          ..write('updatedCursor: $updatedCursor, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $SyncFrontiersTable extends SyncFrontiers
+    with TableInfo<$SyncFrontiersTable, SyncFrontierRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $SyncFrontiersTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _epochMeta = const VerificationMeta('epoch');
+  @override
+  late final GeneratedColumn<String> epoch = GeneratedColumn<String>(
+    'epoch',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _actorIdMeta = const VerificationMeta(
+    'actorId',
+  );
+  @override
+  late final GeneratedColumn<String> actorId = GeneratedColumn<String>(
+    'actor_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _contiguousSequenceMeta =
+      const VerificationMeta('contiguousSequence');
+  @override
+  late final GeneratedColumn<int> contiguousSequence = GeneratedColumn<int>(
+    'contiguous_sequence',
+    aliasedName,
+    false,
+    check: () => const CustomExpression<bool>('contiguous_sequence >= 0'),
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _integratedCursorMeta = const VerificationMeta(
+    'integratedCursor',
+  );
+  @override
+  late final GeneratedColumn<int> integratedCursor = GeneratedColumn<int>(
+    'integrated_cursor',
+    aliasedName,
+    false,
+    check: () => const CustomExpression<bool>('integrated_cursor >= 0'),
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<int> updatedAt = GeneratedColumn<int>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    epoch,
+    actorId,
+    contiguousSequence,
+    integratedCursor,
+    updatedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'sync_frontiers';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<SyncFrontierRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('epoch')) {
+      context.handle(
+        _epochMeta,
+        epoch.isAcceptableOrUnknown(data['epoch']!, _epochMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_epochMeta);
+    }
+    if (data.containsKey('actor_id')) {
+      context.handle(
+        _actorIdMeta,
+        actorId.isAcceptableOrUnknown(data['actor_id']!, _actorIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_actorIdMeta);
+    }
+    if (data.containsKey('contiguous_sequence')) {
+      context.handle(
+        _contiguousSequenceMeta,
+        contiguousSequence.isAcceptableOrUnknown(
+          data['contiguous_sequence']!,
+          _contiguousSequenceMeta,
+        ),
+      );
+    }
+    if (data.containsKey('integrated_cursor')) {
+      context.handle(
+        _integratedCursorMeta,
+        integratedCursor.isAcceptableOrUnknown(
+          data['integrated_cursor']!,
+          _integratedCursorMeta,
+        ),
+      );
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {epoch, actorId};
+  @override
+  SyncFrontierRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return SyncFrontierRow(
+      epoch: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}epoch'],
+      )!,
+      actorId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}actor_id'],
+      )!,
+      contiguousSequence: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}contiguous_sequence'],
+      )!,
+      integratedCursor: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}integrated_cursor'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}updated_at'],
+      )!,
+    );
+  }
+
+  @override
+  $SyncFrontiersTable createAlias(String alias) {
+    return $SyncFrontiersTable(attachedDatabase, alias);
+  }
+}
+
+class SyncFrontierRow extends DataClass implements Insertable<SyncFrontierRow> {
+  final String epoch;
+  final String actorId;
+  final int contiguousSequence;
+  final int integratedCursor;
+  final int updatedAt;
+  const SyncFrontierRow({
+    required this.epoch,
+    required this.actorId,
+    required this.contiguousSequence,
+    required this.integratedCursor,
+    required this.updatedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['epoch'] = Variable<String>(epoch);
+    map['actor_id'] = Variable<String>(actorId);
+    map['contiguous_sequence'] = Variable<int>(contiguousSequence);
+    map['integrated_cursor'] = Variable<int>(integratedCursor);
+    map['updated_at'] = Variable<int>(updatedAt);
+    return map;
+  }
+
+  SyncFrontiersCompanion toCompanion(bool nullToAbsent) {
+    return SyncFrontiersCompanion(
+      epoch: Value(epoch),
+      actorId: Value(actorId),
+      contiguousSequence: Value(contiguousSequence),
+      integratedCursor: Value(integratedCursor),
+      updatedAt: Value(updatedAt),
+    );
+  }
+
+  factory SyncFrontierRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return SyncFrontierRow(
+      epoch: serializer.fromJson<String>(json['epoch']),
+      actorId: serializer.fromJson<String>(json['actorId']),
+      contiguousSequence: serializer.fromJson<int>(json['contiguousSequence']),
+      integratedCursor: serializer.fromJson<int>(json['integratedCursor']),
+      updatedAt: serializer.fromJson<int>(json['updatedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'epoch': serializer.toJson<String>(epoch),
+      'actorId': serializer.toJson<String>(actorId),
+      'contiguousSequence': serializer.toJson<int>(contiguousSequence),
+      'integratedCursor': serializer.toJson<int>(integratedCursor),
+      'updatedAt': serializer.toJson<int>(updatedAt),
+    };
+  }
+
+  SyncFrontierRow copyWith({
+    String? epoch,
+    String? actorId,
+    int? contiguousSequence,
+    int? integratedCursor,
+    int? updatedAt,
+  }) => SyncFrontierRow(
+    epoch: epoch ?? this.epoch,
+    actorId: actorId ?? this.actorId,
+    contiguousSequence: contiguousSequence ?? this.contiguousSequence,
+    integratedCursor: integratedCursor ?? this.integratedCursor,
+    updatedAt: updatedAt ?? this.updatedAt,
+  );
+  SyncFrontierRow copyWithCompanion(SyncFrontiersCompanion data) {
+    return SyncFrontierRow(
+      epoch: data.epoch.present ? data.epoch.value : this.epoch,
+      actorId: data.actorId.present ? data.actorId.value : this.actorId,
+      contiguousSequence: data.contiguousSequence.present
+          ? data.contiguousSequence.value
+          : this.contiguousSequence,
+      integratedCursor: data.integratedCursor.present
+          ? data.integratedCursor.value
+          : this.integratedCursor,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('SyncFrontierRow(')
+          ..write('epoch: $epoch, ')
+          ..write('actorId: $actorId, ')
+          ..write('contiguousSequence: $contiguousSequence, ')
+          ..write('integratedCursor: $integratedCursor, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    epoch,
+    actorId,
+    contiguousSequence,
+    integratedCursor,
+    updatedAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is SyncFrontierRow &&
+          other.epoch == this.epoch &&
+          other.actorId == this.actorId &&
+          other.contiguousSequence == this.contiguousSequence &&
+          other.integratedCursor == this.integratedCursor &&
+          other.updatedAt == this.updatedAt);
+}
+
+class SyncFrontiersCompanion extends UpdateCompanion<SyncFrontierRow> {
+  final Value<String> epoch;
+  final Value<String> actorId;
+  final Value<int> contiguousSequence;
+  final Value<int> integratedCursor;
+  final Value<int> updatedAt;
+  final Value<int> rowid;
+  const SyncFrontiersCompanion({
+    this.epoch = const Value.absent(),
+    this.actorId = const Value.absent(),
+    this.contiguousSequence = const Value.absent(),
+    this.integratedCursor = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  SyncFrontiersCompanion.insert({
+    required String epoch,
+    required String actorId,
+    this.contiguousSequence = const Value.absent(),
+    this.integratedCursor = const Value.absent(),
+    required int updatedAt,
+    this.rowid = const Value.absent(),
+  }) : epoch = Value(epoch),
+       actorId = Value(actorId),
+       updatedAt = Value(updatedAt);
+  static Insertable<SyncFrontierRow> custom({
+    Expression<String>? epoch,
+    Expression<String>? actorId,
+    Expression<int>? contiguousSequence,
+    Expression<int>? integratedCursor,
+    Expression<int>? updatedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (epoch != null) 'epoch': epoch,
+      if (actorId != null) 'actor_id': actorId,
+      if (contiguousSequence != null) 'contiguous_sequence': contiguousSequence,
+      if (integratedCursor != null) 'integrated_cursor': integratedCursor,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  SyncFrontiersCompanion copyWith({
+    Value<String>? epoch,
+    Value<String>? actorId,
+    Value<int>? contiguousSequence,
+    Value<int>? integratedCursor,
+    Value<int>? updatedAt,
+    Value<int>? rowid,
+  }) {
+    return SyncFrontiersCompanion(
+      epoch: epoch ?? this.epoch,
+      actorId: actorId ?? this.actorId,
+      contiguousSequence: contiguousSequence ?? this.contiguousSequence,
+      integratedCursor: integratedCursor ?? this.integratedCursor,
+      updatedAt: updatedAt ?? this.updatedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (epoch.present) {
+      map['epoch'] = Variable<String>(epoch.value);
+    }
+    if (actorId.present) {
+      map['actor_id'] = Variable<String>(actorId.value);
+    }
+    if (contiguousSequence.present) {
+      map['contiguous_sequence'] = Variable<int>(contiguousSequence.value);
+    }
+    if (integratedCursor.present) {
+      map['integrated_cursor'] = Variable<int>(integratedCursor.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<int>(updatedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('SyncFrontiersCompanion(')
+          ..write('epoch: $epoch, ')
+          ..write('actorId: $actorId, ')
+          ..write('contiguousSequence: $contiguousSequence, ')
+          ..write('integratedCursor: $integratedCursor, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $SyncReplicaStateTable extends SyncReplicaState
+    with TableInfo<$SyncReplicaStateTable, SyncReplicaStateRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $SyncReplicaStateTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    check: () => const CustomExpression<bool>('id = 1'),
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(1),
+  );
+  static const VerificationMeta _epochMeta = const VerificationMeta('epoch');
+  @override
+  late final GeneratedColumn<String> epoch = GeneratedColumn<String>(
+    'epoch',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _actorIdMeta = const VerificationMeta(
+    'actorId',
+  );
+  @override
+  late final GeneratedColumn<String> actorId = GeneratedColumn<String>(
+    'actor_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _nextSequenceMeta = const VerificationMeta(
+    'nextSequence',
+  );
+  @override
+  late final GeneratedColumn<int> nextSequence = GeneratedColumn<int>(
+    'next_sequence',
+    aliasedName,
+    false,
+    check: () => const CustomExpression<bool>('next_sequence > 0'),
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(1),
+  );
+  static const VerificationMeta _lamportMeta = const VerificationMeta(
+    'lamport',
+  );
+  @override
+  late final GeneratedColumn<int> lamport = GeneratedColumn<int>(
+    'lamport',
+    aliasedName,
+    false,
+    check: () => const CustomExpression<bool>('lamport >= 0'),
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _pullCursorMeta = const VerificationMeta(
+    'pullCursor',
+  );
+  @override
+  late final GeneratedColumn<int> pullCursor = GeneratedColumn<int>(
+    'pull_cursor',
+    aliasedName,
+    false,
+    check: () => const CustomExpression<bool>('pull_cursor >= 0'),
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _checkpointIdMeta = const VerificationMeta(
+    'checkpointId',
+  );
+  @override
+  late final GeneratedColumn<String> checkpointId = GeneratedColumn<String>(
+    'checkpoint_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<int> updatedAt = GeneratedColumn<int>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    epoch,
+    actorId,
+    nextSequence,
+    lamport,
+    pullCursor,
+    checkpointId,
+    updatedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'sync_replica_state';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<SyncReplicaStateRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('epoch')) {
+      context.handle(
+        _epochMeta,
+        epoch.isAcceptableOrUnknown(data['epoch']!, _epochMeta),
+      );
+    }
+    if (data.containsKey('actor_id')) {
+      context.handle(
+        _actorIdMeta,
+        actorId.isAcceptableOrUnknown(data['actor_id']!, _actorIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_actorIdMeta);
+    }
+    if (data.containsKey('next_sequence')) {
+      context.handle(
+        _nextSequenceMeta,
+        nextSequence.isAcceptableOrUnknown(
+          data['next_sequence']!,
+          _nextSequenceMeta,
+        ),
+      );
+    }
+    if (data.containsKey('lamport')) {
+      context.handle(
+        _lamportMeta,
+        lamport.isAcceptableOrUnknown(data['lamport']!, _lamportMeta),
+      );
+    }
+    if (data.containsKey('pull_cursor')) {
+      context.handle(
+        _pullCursorMeta,
+        pullCursor.isAcceptableOrUnknown(data['pull_cursor']!, _pullCursorMeta),
+      );
+    }
+    if (data.containsKey('checkpoint_id')) {
+      context.handle(
+        _checkpointIdMeta,
+        checkpointId.isAcceptableOrUnknown(
+          data['checkpoint_id']!,
+          _checkpointIdMeta,
+        ),
+      );
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  SyncReplicaStateRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return SyncReplicaStateRow(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}id'],
+      )!,
+      epoch: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}epoch'],
+      ),
+      actorId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}actor_id'],
+      )!,
+      nextSequence: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}next_sequence'],
+      )!,
+      lamport: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}lamport'],
+      )!,
+      pullCursor: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}pull_cursor'],
+      )!,
+      checkpointId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}checkpoint_id'],
+      ),
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}updated_at'],
+      )!,
+    );
+  }
+
+  @override
+  $SyncReplicaStateTable createAlias(String alias) {
+    return $SyncReplicaStateTable(attachedDatabase, alias);
+  }
+}
+
+class SyncReplicaStateRow extends DataClass
+    implements Insertable<SyncReplicaStateRow> {
+  final int id;
+  final String? epoch;
+  final String actorId;
+  final int nextSequence;
+  final int lamport;
+  final int pullCursor;
+  final String? checkpointId;
+  final int updatedAt;
+  const SyncReplicaStateRow({
+    required this.id,
+    this.epoch,
+    required this.actorId,
+    required this.nextSequence,
+    required this.lamport,
+    required this.pullCursor,
+    this.checkpointId,
+    required this.updatedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    if (!nullToAbsent || epoch != null) {
+      map['epoch'] = Variable<String>(epoch);
+    }
+    map['actor_id'] = Variable<String>(actorId);
+    map['next_sequence'] = Variable<int>(nextSequence);
+    map['lamport'] = Variable<int>(lamport);
+    map['pull_cursor'] = Variable<int>(pullCursor);
+    if (!nullToAbsent || checkpointId != null) {
+      map['checkpoint_id'] = Variable<String>(checkpointId);
+    }
+    map['updated_at'] = Variable<int>(updatedAt);
+    return map;
+  }
+
+  SyncReplicaStateCompanion toCompanion(bool nullToAbsent) {
+    return SyncReplicaStateCompanion(
+      id: Value(id),
+      epoch: epoch == null && nullToAbsent
+          ? const Value.absent()
+          : Value(epoch),
+      actorId: Value(actorId),
+      nextSequence: Value(nextSequence),
+      lamport: Value(lamport),
+      pullCursor: Value(pullCursor),
+      checkpointId: checkpointId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(checkpointId),
+      updatedAt: Value(updatedAt),
+    );
+  }
+
+  factory SyncReplicaStateRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return SyncReplicaStateRow(
+      id: serializer.fromJson<int>(json['id']),
+      epoch: serializer.fromJson<String?>(json['epoch']),
+      actorId: serializer.fromJson<String>(json['actorId']),
+      nextSequence: serializer.fromJson<int>(json['nextSequence']),
+      lamport: serializer.fromJson<int>(json['lamport']),
+      pullCursor: serializer.fromJson<int>(json['pullCursor']),
+      checkpointId: serializer.fromJson<String?>(json['checkpointId']),
+      updatedAt: serializer.fromJson<int>(json['updatedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'epoch': serializer.toJson<String?>(epoch),
+      'actorId': serializer.toJson<String>(actorId),
+      'nextSequence': serializer.toJson<int>(nextSequence),
+      'lamport': serializer.toJson<int>(lamport),
+      'pullCursor': serializer.toJson<int>(pullCursor),
+      'checkpointId': serializer.toJson<String?>(checkpointId),
+      'updatedAt': serializer.toJson<int>(updatedAt),
+    };
+  }
+
+  SyncReplicaStateRow copyWith({
+    int? id,
+    Value<String?> epoch = const Value.absent(),
+    String? actorId,
+    int? nextSequence,
+    int? lamport,
+    int? pullCursor,
+    Value<String?> checkpointId = const Value.absent(),
+    int? updatedAt,
+  }) => SyncReplicaStateRow(
+    id: id ?? this.id,
+    epoch: epoch.present ? epoch.value : this.epoch,
+    actorId: actorId ?? this.actorId,
+    nextSequence: nextSequence ?? this.nextSequence,
+    lamport: lamport ?? this.lamport,
+    pullCursor: pullCursor ?? this.pullCursor,
+    checkpointId: checkpointId.present ? checkpointId.value : this.checkpointId,
+    updatedAt: updatedAt ?? this.updatedAt,
+  );
+  SyncReplicaStateRow copyWithCompanion(SyncReplicaStateCompanion data) {
+    return SyncReplicaStateRow(
+      id: data.id.present ? data.id.value : this.id,
+      epoch: data.epoch.present ? data.epoch.value : this.epoch,
+      actorId: data.actorId.present ? data.actorId.value : this.actorId,
+      nextSequence: data.nextSequence.present
+          ? data.nextSequence.value
+          : this.nextSequence,
+      lamport: data.lamport.present ? data.lamport.value : this.lamport,
+      pullCursor: data.pullCursor.present
+          ? data.pullCursor.value
+          : this.pullCursor,
+      checkpointId: data.checkpointId.present
+          ? data.checkpointId.value
+          : this.checkpointId,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('SyncReplicaStateRow(')
+          ..write('id: $id, ')
+          ..write('epoch: $epoch, ')
+          ..write('actorId: $actorId, ')
+          ..write('nextSequence: $nextSequence, ')
+          ..write('lamport: $lamport, ')
+          ..write('pullCursor: $pullCursor, ')
+          ..write('checkpointId: $checkpointId, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    epoch,
+    actorId,
+    nextSequence,
+    lamport,
+    pullCursor,
+    checkpointId,
+    updatedAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is SyncReplicaStateRow &&
+          other.id == this.id &&
+          other.epoch == this.epoch &&
+          other.actorId == this.actorId &&
+          other.nextSequence == this.nextSequence &&
+          other.lamport == this.lamport &&
+          other.pullCursor == this.pullCursor &&
+          other.checkpointId == this.checkpointId &&
+          other.updatedAt == this.updatedAt);
+}
+
+class SyncReplicaStateCompanion extends UpdateCompanion<SyncReplicaStateRow> {
+  final Value<int> id;
+  final Value<String?> epoch;
+  final Value<String> actorId;
+  final Value<int> nextSequence;
+  final Value<int> lamport;
+  final Value<int> pullCursor;
+  final Value<String?> checkpointId;
+  final Value<int> updatedAt;
+  const SyncReplicaStateCompanion({
+    this.id = const Value.absent(),
+    this.epoch = const Value.absent(),
+    this.actorId = const Value.absent(),
+    this.nextSequence = const Value.absent(),
+    this.lamport = const Value.absent(),
+    this.pullCursor = const Value.absent(),
+    this.checkpointId = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+  });
+  SyncReplicaStateCompanion.insert({
+    this.id = const Value.absent(),
+    this.epoch = const Value.absent(),
+    required String actorId,
+    this.nextSequence = const Value.absent(),
+    this.lamport = const Value.absent(),
+    this.pullCursor = const Value.absent(),
+    this.checkpointId = const Value.absent(),
+    required int updatedAt,
+  }) : actorId = Value(actorId),
+       updatedAt = Value(updatedAt);
+  static Insertable<SyncReplicaStateRow> custom({
+    Expression<int>? id,
+    Expression<String>? epoch,
+    Expression<String>? actorId,
+    Expression<int>? nextSequence,
+    Expression<int>? lamport,
+    Expression<int>? pullCursor,
+    Expression<String>? checkpointId,
+    Expression<int>? updatedAt,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (epoch != null) 'epoch': epoch,
+      if (actorId != null) 'actor_id': actorId,
+      if (nextSequence != null) 'next_sequence': nextSequence,
+      if (lamport != null) 'lamport': lamport,
+      if (pullCursor != null) 'pull_cursor': pullCursor,
+      if (checkpointId != null) 'checkpoint_id': checkpointId,
+      if (updatedAt != null) 'updated_at': updatedAt,
+    });
+  }
+
+  SyncReplicaStateCompanion copyWith({
+    Value<int>? id,
+    Value<String?>? epoch,
+    Value<String>? actorId,
+    Value<int>? nextSequence,
+    Value<int>? lamport,
+    Value<int>? pullCursor,
+    Value<String?>? checkpointId,
+    Value<int>? updatedAt,
+  }) {
+    return SyncReplicaStateCompanion(
+      id: id ?? this.id,
+      epoch: epoch ?? this.epoch,
+      actorId: actorId ?? this.actorId,
+      nextSequence: nextSequence ?? this.nextSequence,
+      lamport: lamport ?? this.lamport,
+      pullCursor: pullCursor ?? this.pullCursor,
+      checkpointId: checkpointId ?? this.checkpointId,
+      updatedAt: updatedAt ?? this.updatedAt,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (epoch.present) {
+      map['epoch'] = Variable<String>(epoch.value);
+    }
+    if (actorId.present) {
+      map['actor_id'] = Variable<String>(actorId.value);
+    }
+    if (nextSequence.present) {
+      map['next_sequence'] = Variable<int>(nextSequence.value);
+    }
+    if (lamport.present) {
+      map['lamport'] = Variable<int>(lamport.value);
+    }
+    if (pullCursor.present) {
+      map['pull_cursor'] = Variable<int>(pullCursor.value);
+    }
+    if (checkpointId.present) {
+      map['checkpoint_id'] = Variable<String>(checkpointId.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<int>(updatedAt.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('SyncReplicaStateCompanion(')
+          ..write('id: $id, ')
+          ..write('epoch: $epoch, ')
+          ..write('actorId: $actorId, ')
+          ..write('nextSequence: $nextSequence, ')
+          ..write('lamport: $lamport, ')
+          ..write('pullCursor: $pullCursor, ')
+          ..write('checkpointId: $checkpointId, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $SyncQuarantineTable extends SyncQuarantine
+    with TableInfo<$SyncQuarantineTable, SyncQuarantineRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $SyncQuarantineTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    hasAutoIncrement: true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'PRIMARY KEY AUTOINCREMENT',
+    ),
+  );
+  static const VerificationMeta _epochMeta = const VerificationMeta('epoch');
+  @override
+  late final GeneratedColumn<String> epoch = GeneratedColumn<String>(
+    'epoch',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _changeIdMeta = const VerificationMeta(
+    'changeId',
+  );
+  @override
+  late final GeneratedColumn<String> changeId = GeneratedColumn<String>(
+    'change_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _actorIdMeta = const VerificationMeta(
+    'actorId',
+  );
+  @override
+  late final GeneratedColumn<String> actorId = GeneratedColumn<String>(
+    'actor_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _sequenceMeta = const VerificationMeta(
+    'sequence',
+  );
+  @override
+  late final GeneratedColumn<int> sequence = GeneratedColumn<int>(
+    'sequence',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _sourceMeta = const VerificationMeta('source');
+  @override
+  late final GeneratedColumn<String> source = GeneratedColumn<String>(
+    'source',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _reasonCodeMeta = const VerificationMeta(
+    'reasonCode',
+  );
+  @override
+  late final GeneratedColumn<String> reasonCode = GeneratedColumn<String>(
+    'reason_code',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _reasonMeta = const VerificationMeta('reason');
+  @override
+  late final GeneratedColumn<String> reason = GeneratedColumn<String>(
+    'reason',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _contentHashMeta = const VerificationMeta(
+    'contentHash',
+  );
+  @override
+  late final GeneratedColumn<String> contentHash = GeneratedColumn<String>(
+    'content_hash',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _envelopeJsonMeta = const VerificationMeta(
+    'envelopeJson',
+  );
+  @override
+  late final GeneratedColumn<String> envelopeJson = GeneratedColumn<String>(
+    'envelope_json',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _originalBytesMeta = const VerificationMeta(
+    'originalBytes',
+  );
+  @override
+  late final GeneratedColumn<Uint8List> originalBytes =
+      GeneratedColumn<Uint8List>(
+        'original_bytes',
+        aliasedName,
+        true,
+        type: DriftSqlType.blob,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _receivedAtMeta = const VerificationMeta(
+    'receivedAt',
+  );
+  @override
+  late final GeneratedColumn<int> receivedAt = GeneratedColumn<int>(
+    'received_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _resolvedAtMeta = const VerificationMeta(
+    'resolvedAt',
+  );
+  @override
+  late final GeneratedColumn<int> resolvedAt = GeneratedColumn<int>(
+    'resolved_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _resolutionMeta = const VerificationMeta(
+    'resolution',
+  );
+  @override
+  late final GeneratedColumn<String> resolution = GeneratedColumn<String>(
+    'resolution',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    epoch,
+    changeId,
+    actorId,
+    sequence,
+    source,
+    reasonCode,
+    reason,
+    contentHash,
+    envelopeJson,
+    originalBytes,
+    receivedAt,
+    resolvedAt,
+    resolution,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'sync_quarantine';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<SyncQuarantineRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('epoch')) {
+      context.handle(
+        _epochMeta,
+        epoch.isAcceptableOrUnknown(data['epoch']!, _epochMeta),
+      );
+    }
+    if (data.containsKey('change_id')) {
+      context.handle(
+        _changeIdMeta,
+        changeId.isAcceptableOrUnknown(data['change_id']!, _changeIdMeta),
+      );
+    }
+    if (data.containsKey('actor_id')) {
+      context.handle(
+        _actorIdMeta,
+        actorId.isAcceptableOrUnknown(data['actor_id']!, _actorIdMeta),
+      );
+    }
+    if (data.containsKey('sequence')) {
+      context.handle(
+        _sequenceMeta,
+        sequence.isAcceptableOrUnknown(data['sequence']!, _sequenceMeta),
+      );
+    }
+    if (data.containsKey('source')) {
+      context.handle(
+        _sourceMeta,
+        source.isAcceptableOrUnknown(data['source']!, _sourceMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_sourceMeta);
+    }
+    if (data.containsKey('reason_code')) {
+      context.handle(
+        _reasonCodeMeta,
+        reasonCode.isAcceptableOrUnknown(data['reason_code']!, _reasonCodeMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_reasonCodeMeta);
+    }
+    if (data.containsKey('reason')) {
+      context.handle(
+        _reasonMeta,
+        reason.isAcceptableOrUnknown(data['reason']!, _reasonMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_reasonMeta);
+    }
+    if (data.containsKey('content_hash')) {
+      context.handle(
+        _contentHashMeta,
+        contentHash.isAcceptableOrUnknown(
+          data['content_hash']!,
+          _contentHashMeta,
+        ),
+      );
+    }
+    if (data.containsKey('envelope_json')) {
+      context.handle(
+        _envelopeJsonMeta,
+        envelopeJson.isAcceptableOrUnknown(
+          data['envelope_json']!,
+          _envelopeJsonMeta,
+        ),
+      );
+    }
+    if (data.containsKey('original_bytes')) {
+      context.handle(
+        _originalBytesMeta,
+        originalBytes.isAcceptableOrUnknown(
+          data['original_bytes']!,
+          _originalBytesMeta,
+        ),
+      );
+    }
+    if (data.containsKey('received_at')) {
+      context.handle(
+        _receivedAtMeta,
+        receivedAt.isAcceptableOrUnknown(data['received_at']!, _receivedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_receivedAtMeta);
+    }
+    if (data.containsKey('resolved_at')) {
+      context.handle(
+        _resolvedAtMeta,
+        resolvedAt.isAcceptableOrUnknown(data['resolved_at']!, _resolvedAtMeta),
+      );
+    }
+    if (data.containsKey('resolution')) {
+      context.handle(
+        _resolutionMeta,
+        resolution.isAcceptableOrUnknown(data['resolution']!, _resolutionMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  SyncQuarantineRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return SyncQuarantineRow(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}id'],
+      )!,
+      epoch: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}epoch'],
+      ),
+      changeId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}change_id'],
+      ),
+      actorId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}actor_id'],
+      ),
+      sequence: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}sequence'],
+      ),
+      source: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}source'],
+      )!,
+      reasonCode: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}reason_code'],
+      )!,
+      reason: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}reason'],
+      )!,
+      contentHash: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}content_hash'],
+      ),
+      envelopeJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}envelope_json'],
+      ),
+      originalBytes: attachedDatabase.typeMapping.read(
+        DriftSqlType.blob,
+        data['${effectivePrefix}original_bytes'],
+      ),
+      receivedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}received_at'],
+      )!,
+      resolvedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}resolved_at'],
+      ),
+      resolution: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}resolution'],
+      ),
+    );
+  }
+
+  @override
+  $SyncQuarantineTable createAlias(String alias) {
+    return $SyncQuarantineTable(attachedDatabase, alias);
+  }
+}
+
+class SyncQuarantineRow extends DataClass
+    implements Insertable<SyncQuarantineRow> {
+  final int id;
+  final String? epoch;
+  final String? changeId;
+  final String? actorId;
+  final int? sequence;
+  final String source;
+  final String reasonCode;
+  final String reason;
+  final String? contentHash;
+  final String? envelopeJson;
+  final Uint8List? originalBytes;
+  final int receivedAt;
+  final int? resolvedAt;
+  final String? resolution;
+  const SyncQuarantineRow({
+    required this.id,
+    this.epoch,
+    this.changeId,
+    this.actorId,
+    this.sequence,
+    required this.source,
+    required this.reasonCode,
+    required this.reason,
+    this.contentHash,
+    this.envelopeJson,
+    this.originalBytes,
+    required this.receivedAt,
+    this.resolvedAt,
+    this.resolution,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    if (!nullToAbsent || epoch != null) {
+      map['epoch'] = Variable<String>(epoch);
+    }
+    if (!nullToAbsent || changeId != null) {
+      map['change_id'] = Variable<String>(changeId);
+    }
+    if (!nullToAbsent || actorId != null) {
+      map['actor_id'] = Variable<String>(actorId);
+    }
+    if (!nullToAbsent || sequence != null) {
+      map['sequence'] = Variable<int>(sequence);
+    }
+    map['source'] = Variable<String>(source);
+    map['reason_code'] = Variable<String>(reasonCode);
+    map['reason'] = Variable<String>(reason);
+    if (!nullToAbsent || contentHash != null) {
+      map['content_hash'] = Variable<String>(contentHash);
+    }
+    if (!nullToAbsent || envelopeJson != null) {
+      map['envelope_json'] = Variable<String>(envelopeJson);
+    }
+    if (!nullToAbsent || originalBytes != null) {
+      map['original_bytes'] = Variable<Uint8List>(originalBytes);
+    }
+    map['received_at'] = Variable<int>(receivedAt);
+    if (!nullToAbsent || resolvedAt != null) {
+      map['resolved_at'] = Variable<int>(resolvedAt);
+    }
+    if (!nullToAbsent || resolution != null) {
+      map['resolution'] = Variable<String>(resolution);
+    }
+    return map;
+  }
+
+  SyncQuarantineCompanion toCompanion(bool nullToAbsent) {
+    return SyncQuarantineCompanion(
+      id: Value(id),
+      epoch: epoch == null && nullToAbsent
+          ? const Value.absent()
+          : Value(epoch),
+      changeId: changeId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(changeId),
+      actorId: actorId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(actorId),
+      sequence: sequence == null && nullToAbsent
+          ? const Value.absent()
+          : Value(sequence),
+      source: Value(source),
+      reasonCode: Value(reasonCode),
+      reason: Value(reason),
+      contentHash: contentHash == null && nullToAbsent
+          ? const Value.absent()
+          : Value(contentHash),
+      envelopeJson: envelopeJson == null && nullToAbsent
+          ? const Value.absent()
+          : Value(envelopeJson),
+      originalBytes: originalBytes == null && nullToAbsent
+          ? const Value.absent()
+          : Value(originalBytes),
+      receivedAt: Value(receivedAt),
+      resolvedAt: resolvedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(resolvedAt),
+      resolution: resolution == null && nullToAbsent
+          ? const Value.absent()
+          : Value(resolution),
+    );
+  }
+
+  factory SyncQuarantineRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return SyncQuarantineRow(
+      id: serializer.fromJson<int>(json['id']),
+      epoch: serializer.fromJson<String?>(json['epoch']),
+      changeId: serializer.fromJson<String?>(json['changeId']),
+      actorId: serializer.fromJson<String?>(json['actorId']),
+      sequence: serializer.fromJson<int?>(json['sequence']),
+      source: serializer.fromJson<String>(json['source']),
+      reasonCode: serializer.fromJson<String>(json['reasonCode']),
+      reason: serializer.fromJson<String>(json['reason']),
+      contentHash: serializer.fromJson<String?>(json['contentHash']),
+      envelopeJson: serializer.fromJson<String?>(json['envelopeJson']),
+      originalBytes: serializer.fromJson<Uint8List?>(json['originalBytes']),
+      receivedAt: serializer.fromJson<int>(json['receivedAt']),
+      resolvedAt: serializer.fromJson<int?>(json['resolvedAt']),
+      resolution: serializer.fromJson<String?>(json['resolution']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'epoch': serializer.toJson<String?>(epoch),
+      'changeId': serializer.toJson<String?>(changeId),
+      'actorId': serializer.toJson<String?>(actorId),
+      'sequence': serializer.toJson<int?>(sequence),
+      'source': serializer.toJson<String>(source),
+      'reasonCode': serializer.toJson<String>(reasonCode),
+      'reason': serializer.toJson<String>(reason),
+      'contentHash': serializer.toJson<String?>(contentHash),
+      'envelopeJson': serializer.toJson<String?>(envelopeJson),
+      'originalBytes': serializer.toJson<Uint8List?>(originalBytes),
+      'receivedAt': serializer.toJson<int>(receivedAt),
+      'resolvedAt': serializer.toJson<int?>(resolvedAt),
+      'resolution': serializer.toJson<String?>(resolution),
+    };
+  }
+
+  SyncQuarantineRow copyWith({
+    int? id,
+    Value<String?> epoch = const Value.absent(),
+    Value<String?> changeId = const Value.absent(),
+    Value<String?> actorId = const Value.absent(),
+    Value<int?> sequence = const Value.absent(),
+    String? source,
+    String? reasonCode,
+    String? reason,
+    Value<String?> contentHash = const Value.absent(),
+    Value<String?> envelopeJson = const Value.absent(),
+    Value<Uint8List?> originalBytes = const Value.absent(),
+    int? receivedAt,
+    Value<int?> resolvedAt = const Value.absent(),
+    Value<String?> resolution = const Value.absent(),
+  }) => SyncQuarantineRow(
+    id: id ?? this.id,
+    epoch: epoch.present ? epoch.value : this.epoch,
+    changeId: changeId.present ? changeId.value : this.changeId,
+    actorId: actorId.present ? actorId.value : this.actorId,
+    sequence: sequence.present ? sequence.value : this.sequence,
+    source: source ?? this.source,
+    reasonCode: reasonCode ?? this.reasonCode,
+    reason: reason ?? this.reason,
+    contentHash: contentHash.present ? contentHash.value : this.contentHash,
+    envelopeJson: envelopeJson.present ? envelopeJson.value : this.envelopeJson,
+    originalBytes: originalBytes.present
+        ? originalBytes.value
+        : this.originalBytes,
+    receivedAt: receivedAt ?? this.receivedAt,
+    resolvedAt: resolvedAt.present ? resolvedAt.value : this.resolvedAt,
+    resolution: resolution.present ? resolution.value : this.resolution,
+  );
+  SyncQuarantineRow copyWithCompanion(SyncQuarantineCompanion data) {
+    return SyncQuarantineRow(
+      id: data.id.present ? data.id.value : this.id,
+      epoch: data.epoch.present ? data.epoch.value : this.epoch,
+      changeId: data.changeId.present ? data.changeId.value : this.changeId,
+      actorId: data.actorId.present ? data.actorId.value : this.actorId,
+      sequence: data.sequence.present ? data.sequence.value : this.sequence,
+      source: data.source.present ? data.source.value : this.source,
+      reasonCode: data.reasonCode.present
+          ? data.reasonCode.value
+          : this.reasonCode,
+      reason: data.reason.present ? data.reason.value : this.reason,
+      contentHash: data.contentHash.present
+          ? data.contentHash.value
+          : this.contentHash,
+      envelopeJson: data.envelopeJson.present
+          ? data.envelopeJson.value
+          : this.envelopeJson,
+      originalBytes: data.originalBytes.present
+          ? data.originalBytes.value
+          : this.originalBytes,
+      receivedAt: data.receivedAt.present
+          ? data.receivedAt.value
+          : this.receivedAt,
+      resolvedAt: data.resolvedAt.present
+          ? data.resolvedAt.value
+          : this.resolvedAt,
+      resolution: data.resolution.present
+          ? data.resolution.value
+          : this.resolution,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('SyncQuarantineRow(')
+          ..write('id: $id, ')
+          ..write('epoch: $epoch, ')
+          ..write('changeId: $changeId, ')
+          ..write('actorId: $actorId, ')
+          ..write('sequence: $sequence, ')
+          ..write('source: $source, ')
+          ..write('reasonCode: $reasonCode, ')
+          ..write('reason: $reason, ')
+          ..write('contentHash: $contentHash, ')
+          ..write('envelopeJson: $envelopeJson, ')
+          ..write('originalBytes: $originalBytes, ')
+          ..write('receivedAt: $receivedAt, ')
+          ..write('resolvedAt: $resolvedAt, ')
+          ..write('resolution: $resolution')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    epoch,
+    changeId,
+    actorId,
+    sequence,
+    source,
+    reasonCode,
+    reason,
+    contentHash,
+    envelopeJson,
+    $driftBlobEquality.hash(originalBytes),
+    receivedAt,
+    resolvedAt,
+    resolution,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is SyncQuarantineRow &&
+          other.id == this.id &&
+          other.epoch == this.epoch &&
+          other.changeId == this.changeId &&
+          other.actorId == this.actorId &&
+          other.sequence == this.sequence &&
+          other.source == this.source &&
+          other.reasonCode == this.reasonCode &&
+          other.reason == this.reason &&
+          other.contentHash == this.contentHash &&
+          other.envelopeJson == this.envelopeJson &&
+          $driftBlobEquality.equals(other.originalBytes, this.originalBytes) &&
+          other.receivedAt == this.receivedAt &&
+          other.resolvedAt == this.resolvedAt &&
+          other.resolution == this.resolution);
+}
+
+class SyncQuarantineCompanion extends UpdateCompanion<SyncQuarantineRow> {
+  final Value<int> id;
+  final Value<String?> epoch;
+  final Value<String?> changeId;
+  final Value<String?> actorId;
+  final Value<int?> sequence;
+  final Value<String> source;
+  final Value<String> reasonCode;
+  final Value<String> reason;
+  final Value<String?> contentHash;
+  final Value<String?> envelopeJson;
+  final Value<Uint8List?> originalBytes;
+  final Value<int> receivedAt;
+  final Value<int?> resolvedAt;
+  final Value<String?> resolution;
+  const SyncQuarantineCompanion({
+    this.id = const Value.absent(),
+    this.epoch = const Value.absent(),
+    this.changeId = const Value.absent(),
+    this.actorId = const Value.absent(),
+    this.sequence = const Value.absent(),
+    this.source = const Value.absent(),
+    this.reasonCode = const Value.absent(),
+    this.reason = const Value.absent(),
+    this.contentHash = const Value.absent(),
+    this.envelopeJson = const Value.absent(),
+    this.originalBytes = const Value.absent(),
+    this.receivedAt = const Value.absent(),
+    this.resolvedAt = const Value.absent(),
+    this.resolution = const Value.absent(),
+  });
+  SyncQuarantineCompanion.insert({
+    this.id = const Value.absent(),
+    this.epoch = const Value.absent(),
+    this.changeId = const Value.absent(),
+    this.actorId = const Value.absent(),
+    this.sequence = const Value.absent(),
+    required String source,
+    required String reasonCode,
+    required String reason,
+    this.contentHash = const Value.absent(),
+    this.envelopeJson = const Value.absent(),
+    this.originalBytes = const Value.absent(),
+    required int receivedAt,
+    this.resolvedAt = const Value.absent(),
+    this.resolution = const Value.absent(),
+  }) : source = Value(source),
+       reasonCode = Value(reasonCode),
+       reason = Value(reason),
+       receivedAt = Value(receivedAt);
+  static Insertable<SyncQuarantineRow> custom({
+    Expression<int>? id,
+    Expression<String>? epoch,
+    Expression<String>? changeId,
+    Expression<String>? actorId,
+    Expression<int>? sequence,
+    Expression<String>? source,
+    Expression<String>? reasonCode,
+    Expression<String>? reason,
+    Expression<String>? contentHash,
+    Expression<String>? envelopeJson,
+    Expression<Uint8List>? originalBytes,
+    Expression<int>? receivedAt,
+    Expression<int>? resolvedAt,
+    Expression<String>? resolution,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (epoch != null) 'epoch': epoch,
+      if (changeId != null) 'change_id': changeId,
+      if (actorId != null) 'actor_id': actorId,
+      if (sequence != null) 'sequence': sequence,
+      if (source != null) 'source': source,
+      if (reasonCode != null) 'reason_code': reasonCode,
+      if (reason != null) 'reason': reason,
+      if (contentHash != null) 'content_hash': contentHash,
+      if (envelopeJson != null) 'envelope_json': envelopeJson,
+      if (originalBytes != null) 'original_bytes': originalBytes,
+      if (receivedAt != null) 'received_at': receivedAt,
+      if (resolvedAt != null) 'resolved_at': resolvedAt,
+      if (resolution != null) 'resolution': resolution,
+    });
+  }
+
+  SyncQuarantineCompanion copyWith({
+    Value<int>? id,
+    Value<String?>? epoch,
+    Value<String?>? changeId,
+    Value<String?>? actorId,
+    Value<int?>? sequence,
+    Value<String>? source,
+    Value<String>? reasonCode,
+    Value<String>? reason,
+    Value<String?>? contentHash,
+    Value<String?>? envelopeJson,
+    Value<Uint8List?>? originalBytes,
+    Value<int>? receivedAt,
+    Value<int?>? resolvedAt,
+    Value<String?>? resolution,
+  }) {
+    return SyncQuarantineCompanion(
+      id: id ?? this.id,
+      epoch: epoch ?? this.epoch,
+      changeId: changeId ?? this.changeId,
+      actorId: actorId ?? this.actorId,
+      sequence: sequence ?? this.sequence,
+      source: source ?? this.source,
+      reasonCode: reasonCode ?? this.reasonCode,
+      reason: reason ?? this.reason,
+      contentHash: contentHash ?? this.contentHash,
+      envelopeJson: envelopeJson ?? this.envelopeJson,
+      originalBytes: originalBytes ?? this.originalBytes,
+      receivedAt: receivedAt ?? this.receivedAt,
+      resolvedAt: resolvedAt ?? this.resolvedAt,
+      resolution: resolution ?? this.resolution,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (epoch.present) {
+      map['epoch'] = Variable<String>(epoch.value);
+    }
+    if (changeId.present) {
+      map['change_id'] = Variable<String>(changeId.value);
+    }
+    if (actorId.present) {
+      map['actor_id'] = Variable<String>(actorId.value);
+    }
+    if (sequence.present) {
+      map['sequence'] = Variable<int>(sequence.value);
+    }
+    if (source.present) {
+      map['source'] = Variable<String>(source.value);
+    }
+    if (reasonCode.present) {
+      map['reason_code'] = Variable<String>(reasonCode.value);
+    }
+    if (reason.present) {
+      map['reason'] = Variable<String>(reason.value);
+    }
+    if (contentHash.present) {
+      map['content_hash'] = Variable<String>(contentHash.value);
+    }
+    if (envelopeJson.present) {
+      map['envelope_json'] = Variable<String>(envelopeJson.value);
+    }
+    if (originalBytes.present) {
+      map['original_bytes'] = Variable<Uint8List>(originalBytes.value);
+    }
+    if (receivedAt.present) {
+      map['received_at'] = Variable<int>(receivedAt.value);
+    }
+    if (resolvedAt.present) {
+      map['resolved_at'] = Variable<int>(resolvedAt.value);
+    }
+    if (resolution.present) {
+      map['resolution'] = Variable<String>(resolution.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('SyncQuarantineCompanion(')
+          ..write('id: $id, ')
+          ..write('epoch: $epoch, ')
+          ..write('changeId: $changeId, ')
+          ..write('actorId: $actorId, ')
+          ..write('sequence: $sequence, ')
+          ..write('source: $source, ')
+          ..write('reasonCode: $reasonCode, ')
+          ..write('reason: $reason, ')
+          ..write('contentHash: $contentHash, ')
+          ..write('envelopeJson: $envelopeJson, ')
+          ..write('originalBytes: $originalBytes, ')
+          ..write('receivedAt: $receivedAt, ')
+          ..write('resolvedAt: $resolvedAt, ')
+          ..write('resolution: $resolution')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $SyncCheckpointsTable extends SyncCheckpoints
+    with TableInfo<$SyncCheckpointsTable, SyncCheckpointRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $SyncCheckpointsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _epochMeta = const VerificationMeta('epoch');
+  @override
+  late final GeneratedColumn<String> epoch = GeneratedColumn<String>(
+    'epoch',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _schemaVersionMeta = const VerificationMeta(
+    'schemaVersion',
+  );
+  @override
+  late final GeneratedColumn<int> schemaVersion = GeneratedColumn<int>(
+    'schema_version',
+    aliasedName,
+    false,
+    check: () => const CustomExpression<bool>('schema_version > 0'),
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _frontierJsonMeta = const VerificationMeta(
+    'frontierJson',
+  );
+  @override
+  late final GeneratedColumn<String> frontierJson = GeneratedColumn<String>(
+    'frontier_json',
+    aliasedName,
+    false,
+    check: () => const CustomExpression<bool>('json_valid(frontier_json)'),
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _registersJsonMeta = const VerificationMeta(
+    'registersJson',
+  );
+  @override
+  late final GeneratedColumn<String> registersJson = GeneratedColumn<String>(
+    'registers_json',
+    aliasedName,
+    false,
+    check: () => const CustomExpression<bool>('json_valid(registers_json)'),
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _projectionHashMeta = const VerificationMeta(
+    'projectionHash',
+  );
+  @override
+  late final GeneratedColumn<String> projectionHash = GeneratedColumn<String>(
+    'projection_hash',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _contentHashMeta = const VerificationMeta(
+    'contentHash',
+  );
+  @override
+  late final GeneratedColumn<String> contentHash = GeneratedColumn<String>(
+    'content_hash',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _creationCursorMeta = const VerificationMeta(
+    'creationCursor',
+  );
+  @override
+  late final GeneratedColumn<int> creationCursor = GeneratedColumn<int>(
+    'creation_cursor',
+    aliasedName,
+    false,
+    check: () => const CustomExpression<bool>('creation_cursor >= 0'),
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _eventCountMeta = const VerificationMeta(
+    'eventCount',
+  );
+  @override
+  late final GeneratedColumn<int> eventCount = GeneratedColumn<int>(
+    'event_count',
+    aliasedName,
+    false,
+    check: () => const CustomExpression<bool>('event_count >= 0'),
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _isGenesisMeta = const VerificationMeta(
+    'isGenesis',
+  );
+  @override
+  late final GeneratedColumn<bool> isGenesis = GeneratedColumn<bool>(
+    'is_genesis',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("is_genesis" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<int> createdAt = GeneratedColumn<int>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _verifiedAtMeta = const VerificationMeta(
+    'verifiedAt',
+  );
+  @override
+  late final GeneratedColumn<int> verifiedAt = GeneratedColumn<int>(
+    'verified_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    epoch,
+    schemaVersion,
+    frontierJson,
+    registersJson,
+    projectionHash,
+    contentHash,
+    creationCursor,
+    eventCount,
+    isGenesis,
+    createdAt,
+    verifiedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'sync_checkpoints';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<SyncCheckpointRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('epoch')) {
+      context.handle(
+        _epochMeta,
+        epoch.isAcceptableOrUnknown(data['epoch']!, _epochMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_epochMeta);
+    }
+    if (data.containsKey('schema_version')) {
+      context.handle(
+        _schemaVersionMeta,
+        schemaVersion.isAcceptableOrUnknown(
+          data['schema_version']!,
+          _schemaVersionMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_schemaVersionMeta);
+    }
+    if (data.containsKey('frontier_json')) {
+      context.handle(
+        _frontierJsonMeta,
+        frontierJson.isAcceptableOrUnknown(
+          data['frontier_json']!,
+          _frontierJsonMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_frontierJsonMeta);
+    }
+    if (data.containsKey('registers_json')) {
+      context.handle(
+        _registersJsonMeta,
+        registersJson.isAcceptableOrUnknown(
+          data['registers_json']!,
+          _registersJsonMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_registersJsonMeta);
+    }
+    if (data.containsKey('projection_hash')) {
+      context.handle(
+        _projectionHashMeta,
+        projectionHash.isAcceptableOrUnknown(
+          data['projection_hash']!,
+          _projectionHashMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_projectionHashMeta);
+    }
+    if (data.containsKey('content_hash')) {
+      context.handle(
+        _contentHashMeta,
+        contentHash.isAcceptableOrUnknown(
+          data['content_hash']!,
+          _contentHashMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_contentHashMeta);
+    }
+    if (data.containsKey('creation_cursor')) {
+      context.handle(
+        _creationCursorMeta,
+        creationCursor.isAcceptableOrUnknown(
+          data['creation_cursor']!,
+          _creationCursorMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_creationCursorMeta);
+    }
+    if (data.containsKey('event_count')) {
+      context.handle(
+        _eventCountMeta,
+        eventCount.isAcceptableOrUnknown(data['event_count']!, _eventCountMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_eventCountMeta);
+    }
+    if (data.containsKey('is_genesis')) {
+      context.handle(
+        _isGenesisMeta,
+        isGenesis.isAcceptableOrUnknown(data['is_genesis']!, _isGenesisMeta),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    if (data.containsKey('verified_at')) {
+      context.handle(
+        _verifiedAtMeta,
+        verifiedAt.isAcceptableOrUnknown(data['verified_at']!, _verifiedAtMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  List<Set<GeneratedColumn>> get uniqueKeys => [
+    {epoch, creationCursor},
+  ];
+  @override
+  SyncCheckpointRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return SyncCheckpointRow(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      epoch: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}epoch'],
+      )!,
+      schemaVersion: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}schema_version'],
+      )!,
+      frontierJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}frontier_json'],
+      )!,
+      registersJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}registers_json'],
+      )!,
+      projectionHash: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}projection_hash'],
+      )!,
+      contentHash: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}content_hash'],
+      )!,
+      creationCursor: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}creation_cursor'],
+      )!,
+      eventCount: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}event_count'],
+      )!,
+      isGenesis: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}is_genesis'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}created_at'],
+      )!,
+      verifiedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}verified_at'],
+      ),
+    );
+  }
+
+  @override
+  $SyncCheckpointsTable createAlias(String alias) {
+    return $SyncCheckpointsTable(attachedDatabase, alias);
+  }
+}
+
+class SyncCheckpointRow extends DataClass
+    implements Insertable<SyncCheckpointRow> {
+  final String id;
+  final String epoch;
+  final int schemaVersion;
+  final String frontierJson;
+  final String registersJson;
+  final String projectionHash;
+  final String contentHash;
+  final int creationCursor;
+  final int eventCount;
+  final bool isGenesis;
+  final int createdAt;
+  final int? verifiedAt;
+  const SyncCheckpointRow({
+    required this.id,
+    required this.epoch,
+    required this.schemaVersion,
+    required this.frontierJson,
+    required this.registersJson,
+    required this.projectionHash,
+    required this.contentHash,
+    required this.creationCursor,
+    required this.eventCount,
+    required this.isGenesis,
+    required this.createdAt,
+    this.verifiedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['epoch'] = Variable<String>(epoch);
+    map['schema_version'] = Variable<int>(schemaVersion);
+    map['frontier_json'] = Variable<String>(frontierJson);
+    map['registers_json'] = Variable<String>(registersJson);
+    map['projection_hash'] = Variable<String>(projectionHash);
+    map['content_hash'] = Variable<String>(contentHash);
+    map['creation_cursor'] = Variable<int>(creationCursor);
+    map['event_count'] = Variable<int>(eventCount);
+    map['is_genesis'] = Variable<bool>(isGenesis);
+    map['created_at'] = Variable<int>(createdAt);
+    if (!nullToAbsent || verifiedAt != null) {
+      map['verified_at'] = Variable<int>(verifiedAt);
+    }
+    return map;
+  }
+
+  SyncCheckpointsCompanion toCompanion(bool nullToAbsent) {
+    return SyncCheckpointsCompanion(
+      id: Value(id),
+      epoch: Value(epoch),
+      schemaVersion: Value(schemaVersion),
+      frontierJson: Value(frontierJson),
+      registersJson: Value(registersJson),
+      projectionHash: Value(projectionHash),
+      contentHash: Value(contentHash),
+      creationCursor: Value(creationCursor),
+      eventCount: Value(eventCount),
+      isGenesis: Value(isGenesis),
+      createdAt: Value(createdAt),
+      verifiedAt: verifiedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(verifiedAt),
+    );
+  }
+
+  factory SyncCheckpointRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return SyncCheckpointRow(
+      id: serializer.fromJson<String>(json['id']),
+      epoch: serializer.fromJson<String>(json['epoch']),
+      schemaVersion: serializer.fromJson<int>(json['schemaVersion']),
+      frontierJson: serializer.fromJson<String>(json['frontierJson']),
+      registersJson: serializer.fromJson<String>(json['registersJson']),
+      projectionHash: serializer.fromJson<String>(json['projectionHash']),
+      contentHash: serializer.fromJson<String>(json['contentHash']),
+      creationCursor: serializer.fromJson<int>(json['creationCursor']),
+      eventCount: serializer.fromJson<int>(json['eventCount']),
+      isGenesis: serializer.fromJson<bool>(json['isGenesis']),
+      createdAt: serializer.fromJson<int>(json['createdAt']),
+      verifiedAt: serializer.fromJson<int?>(json['verifiedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'epoch': serializer.toJson<String>(epoch),
+      'schemaVersion': serializer.toJson<int>(schemaVersion),
+      'frontierJson': serializer.toJson<String>(frontierJson),
+      'registersJson': serializer.toJson<String>(registersJson),
+      'projectionHash': serializer.toJson<String>(projectionHash),
+      'contentHash': serializer.toJson<String>(contentHash),
+      'creationCursor': serializer.toJson<int>(creationCursor),
+      'eventCount': serializer.toJson<int>(eventCount),
+      'isGenesis': serializer.toJson<bool>(isGenesis),
+      'createdAt': serializer.toJson<int>(createdAt),
+      'verifiedAt': serializer.toJson<int?>(verifiedAt),
+    };
+  }
+
+  SyncCheckpointRow copyWith({
+    String? id,
+    String? epoch,
+    int? schemaVersion,
+    String? frontierJson,
+    String? registersJson,
+    String? projectionHash,
+    String? contentHash,
+    int? creationCursor,
+    int? eventCount,
+    bool? isGenesis,
+    int? createdAt,
+    Value<int?> verifiedAt = const Value.absent(),
+  }) => SyncCheckpointRow(
+    id: id ?? this.id,
+    epoch: epoch ?? this.epoch,
+    schemaVersion: schemaVersion ?? this.schemaVersion,
+    frontierJson: frontierJson ?? this.frontierJson,
+    registersJson: registersJson ?? this.registersJson,
+    projectionHash: projectionHash ?? this.projectionHash,
+    contentHash: contentHash ?? this.contentHash,
+    creationCursor: creationCursor ?? this.creationCursor,
+    eventCount: eventCount ?? this.eventCount,
+    isGenesis: isGenesis ?? this.isGenesis,
+    createdAt: createdAt ?? this.createdAt,
+    verifiedAt: verifiedAt.present ? verifiedAt.value : this.verifiedAt,
+  );
+  SyncCheckpointRow copyWithCompanion(SyncCheckpointsCompanion data) {
+    return SyncCheckpointRow(
+      id: data.id.present ? data.id.value : this.id,
+      epoch: data.epoch.present ? data.epoch.value : this.epoch,
+      schemaVersion: data.schemaVersion.present
+          ? data.schemaVersion.value
+          : this.schemaVersion,
+      frontierJson: data.frontierJson.present
+          ? data.frontierJson.value
+          : this.frontierJson,
+      registersJson: data.registersJson.present
+          ? data.registersJson.value
+          : this.registersJson,
+      projectionHash: data.projectionHash.present
+          ? data.projectionHash.value
+          : this.projectionHash,
+      contentHash: data.contentHash.present
+          ? data.contentHash.value
+          : this.contentHash,
+      creationCursor: data.creationCursor.present
+          ? data.creationCursor.value
+          : this.creationCursor,
+      eventCount: data.eventCount.present
+          ? data.eventCount.value
+          : this.eventCount,
+      isGenesis: data.isGenesis.present ? data.isGenesis.value : this.isGenesis,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      verifiedAt: data.verifiedAt.present
+          ? data.verifiedAt.value
+          : this.verifiedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('SyncCheckpointRow(')
+          ..write('id: $id, ')
+          ..write('epoch: $epoch, ')
+          ..write('schemaVersion: $schemaVersion, ')
+          ..write('frontierJson: $frontierJson, ')
+          ..write('registersJson: $registersJson, ')
+          ..write('projectionHash: $projectionHash, ')
+          ..write('contentHash: $contentHash, ')
+          ..write('creationCursor: $creationCursor, ')
+          ..write('eventCount: $eventCount, ')
+          ..write('isGenesis: $isGenesis, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('verifiedAt: $verifiedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    epoch,
+    schemaVersion,
+    frontierJson,
+    registersJson,
+    projectionHash,
+    contentHash,
+    creationCursor,
+    eventCount,
+    isGenesis,
+    createdAt,
+    verifiedAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is SyncCheckpointRow &&
+          other.id == this.id &&
+          other.epoch == this.epoch &&
+          other.schemaVersion == this.schemaVersion &&
+          other.frontierJson == this.frontierJson &&
+          other.registersJson == this.registersJson &&
+          other.projectionHash == this.projectionHash &&
+          other.contentHash == this.contentHash &&
+          other.creationCursor == this.creationCursor &&
+          other.eventCount == this.eventCount &&
+          other.isGenesis == this.isGenesis &&
+          other.createdAt == this.createdAt &&
+          other.verifiedAt == this.verifiedAt);
+}
+
+class SyncCheckpointsCompanion extends UpdateCompanion<SyncCheckpointRow> {
+  final Value<String> id;
+  final Value<String> epoch;
+  final Value<int> schemaVersion;
+  final Value<String> frontierJson;
+  final Value<String> registersJson;
+  final Value<String> projectionHash;
+  final Value<String> contentHash;
+  final Value<int> creationCursor;
+  final Value<int> eventCount;
+  final Value<bool> isGenesis;
+  final Value<int> createdAt;
+  final Value<int?> verifiedAt;
+  final Value<int> rowid;
+  const SyncCheckpointsCompanion({
+    this.id = const Value.absent(),
+    this.epoch = const Value.absent(),
+    this.schemaVersion = const Value.absent(),
+    this.frontierJson = const Value.absent(),
+    this.registersJson = const Value.absent(),
+    this.projectionHash = const Value.absent(),
+    this.contentHash = const Value.absent(),
+    this.creationCursor = const Value.absent(),
+    this.eventCount = const Value.absent(),
+    this.isGenesis = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.verifiedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  SyncCheckpointsCompanion.insert({
+    required String id,
+    required String epoch,
+    required int schemaVersion,
+    required String frontierJson,
+    required String registersJson,
+    required String projectionHash,
+    required String contentHash,
+    required int creationCursor,
+    required int eventCount,
+    this.isGenesis = const Value.absent(),
+    required int createdAt,
+    this.verifiedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       epoch = Value(epoch),
+       schemaVersion = Value(schemaVersion),
+       frontierJson = Value(frontierJson),
+       registersJson = Value(registersJson),
+       projectionHash = Value(projectionHash),
+       contentHash = Value(contentHash),
+       creationCursor = Value(creationCursor),
+       eventCount = Value(eventCount),
+       createdAt = Value(createdAt);
+  static Insertable<SyncCheckpointRow> custom({
+    Expression<String>? id,
+    Expression<String>? epoch,
+    Expression<int>? schemaVersion,
+    Expression<String>? frontierJson,
+    Expression<String>? registersJson,
+    Expression<String>? projectionHash,
+    Expression<String>? contentHash,
+    Expression<int>? creationCursor,
+    Expression<int>? eventCount,
+    Expression<bool>? isGenesis,
+    Expression<int>? createdAt,
+    Expression<int>? verifiedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (epoch != null) 'epoch': epoch,
+      if (schemaVersion != null) 'schema_version': schemaVersion,
+      if (frontierJson != null) 'frontier_json': frontierJson,
+      if (registersJson != null) 'registers_json': registersJson,
+      if (projectionHash != null) 'projection_hash': projectionHash,
+      if (contentHash != null) 'content_hash': contentHash,
+      if (creationCursor != null) 'creation_cursor': creationCursor,
+      if (eventCount != null) 'event_count': eventCount,
+      if (isGenesis != null) 'is_genesis': isGenesis,
+      if (createdAt != null) 'created_at': createdAt,
+      if (verifiedAt != null) 'verified_at': verifiedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  SyncCheckpointsCompanion copyWith({
+    Value<String>? id,
+    Value<String>? epoch,
+    Value<int>? schemaVersion,
+    Value<String>? frontierJson,
+    Value<String>? registersJson,
+    Value<String>? projectionHash,
+    Value<String>? contentHash,
+    Value<int>? creationCursor,
+    Value<int>? eventCount,
+    Value<bool>? isGenesis,
+    Value<int>? createdAt,
+    Value<int?>? verifiedAt,
+    Value<int>? rowid,
+  }) {
+    return SyncCheckpointsCompanion(
+      id: id ?? this.id,
+      epoch: epoch ?? this.epoch,
+      schemaVersion: schemaVersion ?? this.schemaVersion,
+      frontierJson: frontierJson ?? this.frontierJson,
+      registersJson: registersJson ?? this.registersJson,
+      projectionHash: projectionHash ?? this.projectionHash,
+      contentHash: contentHash ?? this.contentHash,
+      creationCursor: creationCursor ?? this.creationCursor,
+      eventCount: eventCount ?? this.eventCount,
+      isGenesis: isGenesis ?? this.isGenesis,
+      createdAt: createdAt ?? this.createdAt,
+      verifiedAt: verifiedAt ?? this.verifiedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (epoch.present) {
+      map['epoch'] = Variable<String>(epoch.value);
+    }
+    if (schemaVersion.present) {
+      map['schema_version'] = Variable<int>(schemaVersion.value);
+    }
+    if (frontierJson.present) {
+      map['frontier_json'] = Variable<String>(frontierJson.value);
+    }
+    if (registersJson.present) {
+      map['registers_json'] = Variable<String>(registersJson.value);
+    }
+    if (projectionHash.present) {
+      map['projection_hash'] = Variable<String>(projectionHash.value);
+    }
+    if (contentHash.present) {
+      map['content_hash'] = Variable<String>(contentHash.value);
+    }
+    if (creationCursor.present) {
+      map['creation_cursor'] = Variable<int>(creationCursor.value);
+    }
+    if (eventCount.present) {
+      map['event_count'] = Variable<int>(eventCount.value);
+    }
+    if (isGenesis.present) {
+      map['is_genesis'] = Variable<bool>(isGenesis.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<int>(createdAt.value);
+    }
+    if (verifiedAt.present) {
+      map['verified_at'] = Variable<int>(verifiedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('SyncCheckpointsCompanion(')
+          ..write('id: $id, ')
+          ..write('epoch: $epoch, ')
+          ..write('schemaVersion: $schemaVersion, ')
+          ..write('frontierJson: $frontierJson, ')
+          ..write('registersJson: $registersJson, ')
+          ..write('projectionHash: $projectionHash, ')
+          ..write('contentHash: $contentHash, ')
+          ..write('creationCursor: $creationCursor, ')
+          ..write('eventCount: $eventCount, ')
+          ..write('isGenesis: $isGenesis, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('verifiedAt: $verifiedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -9304,6 +13406,16 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $AppKvTable appKv = $AppKvTable(this);
   late final $AuditLogTable auditLog = $AuditLogTable(this);
   late final $ChangeLogTable changeLog = $ChangeLogTable(this);
+  late final $SyncChangesTable syncChanges = $SyncChangesTable(this);
+  late final $SyncRegistersTable syncRegisters = $SyncRegistersTable(this);
+  late final $SyncFrontiersTable syncFrontiers = $SyncFrontiersTable(this);
+  late final $SyncReplicaStateTable syncReplicaState = $SyncReplicaStateTable(
+    this,
+  );
+  late final $SyncQuarantineTable syncQuarantine = $SyncQuarantineTable(this);
+  late final $SyncCheckpointsTable syncCheckpoints = $SyncCheckpointsTable(
+    this,
+  );
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -9325,6 +13437,12 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     appKv,
     auditLog,
     changeLog,
+    syncChanges,
+    syncRegisters,
+    syncFrontiers,
+    syncReplicaState,
+    syncQuarantine,
+    syncCheckpoints,
   ];
 }
 
@@ -13849,6 +17967,1968 @@ typedef $$ChangeLogTableProcessedTableManager =
       ChangeLogRow,
       PrefetchHooks Function()
     >;
+typedef $$SyncChangesTableCreateCompanionBuilder =
+    SyncChangesCompanion Function({
+      required String changeId,
+      required String epoch,
+      required String actorId,
+      required int sequence,
+      required int lamport,
+      required int wallTimeMs,
+      required int schemaVersion,
+      required String contextJson,
+      required String opsJson,
+      required String envelopeJson,
+      required String contentHash,
+      Value<String> outboxState,
+      Value<int?> serverCursor,
+      required int createdAt,
+      Value<int?> acceptedAt,
+      Value<int?> rejectedAt,
+      Value<String?> rejectionCode,
+      Value<String?> rejectionReason,
+      Value<int> rowid,
+    });
+typedef $$SyncChangesTableUpdateCompanionBuilder =
+    SyncChangesCompanion Function({
+      Value<String> changeId,
+      Value<String> epoch,
+      Value<String> actorId,
+      Value<int> sequence,
+      Value<int> lamport,
+      Value<int> wallTimeMs,
+      Value<int> schemaVersion,
+      Value<String> contextJson,
+      Value<String> opsJson,
+      Value<String> envelopeJson,
+      Value<String> contentHash,
+      Value<String> outboxState,
+      Value<int?> serverCursor,
+      Value<int> createdAt,
+      Value<int?> acceptedAt,
+      Value<int?> rejectedAt,
+      Value<String?> rejectionCode,
+      Value<String?> rejectionReason,
+      Value<int> rowid,
+    });
+
+class $$SyncChangesTableFilterComposer
+    extends Composer<_$AppDatabase, $SyncChangesTable> {
+  $$SyncChangesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get changeId => $composableBuilder(
+    column: $table.changeId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get epoch => $composableBuilder(
+    column: $table.epoch,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get actorId => $composableBuilder(
+    column: $table.actorId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get sequence => $composableBuilder(
+    column: $table.sequence,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get lamport => $composableBuilder(
+    column: $table.lamport,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get wallTimeMs => $composableBuilder(
+    column: $table.wallTimeMs,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get schemaVersion => $composableBuilder(
+    column: $table.schemaVersion,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get contextJson => $composableBuilder(
+    column: $table.contextJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get opsJson => $composableBuilder(
+    column: $table.opsJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get envelopeJson => $composableBuilder(
+    column: $table.envelopeJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get contentHash => $composableBuilder(
+    column: $table.contentHash,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get outboxState => $composableBuilder(
+    column: $table.outboxState,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get serverCursor => $composableBuilder(
+    column: $table.serverCursor,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get acceptedAt => $composableBuilder(
+    column: $table.acceptedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get rejectedAt => $composableBuilder(
+    column: $table.rejectedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get rejectionCode => $composableBuilder(
+    column: $table.rejectionCode,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get rejectionReason => $composableBuilder(
+    column: $table.rejectionReason,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$SyncChangesTableOrderingComposer
+    extends Composer<_$AppDatabase, $SyncChangesTable> {
+  $$SyncChangesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get changeId => $composableBuilder(
+    column: $table.changeId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get epoch => $composableBuilder(
+    column: $table.epoch,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get actorId => $composableBuilder(
+    column: $table.actorId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get sequence => $composableBuilder(
+    column: $table.sequence,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get lamport => $composableBuilder(
+    column: $table.lamport,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get wallTimeMs => $composableBuilder(
+    column: $table.wallTimeMs,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get schemaVersion => $composableBuilder(
+    column: $table.schemaVersion,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get contextJson => $composableBuilder(
+    column: $table.contextJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get opsJson => $composableBuilder(
+    column: $table.opsJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get envelopeJson => $composableBuilder(
+    column: $table.envelopeJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get contentHash => $composableBuilder(
+    column: $table.contentHash,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get outboxState => $composableBuilder(
+    column: $table.outboxState,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get serverCursor => $composableBuilder(
+    column: $table.serverCursor,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get acceptedAt => $composableBuilder(
+    column: $table.acceptedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get rejectedAt => $composableBuilder(
+    column: $table.rejectedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get rejectionCode => $composableBuilder(
+    column: $table.rejectionCode,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get rejectionReason => $composableBuilder(
+    column: $table.rejectionReason,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$SyncChangesTableAnnotationComposer
+    extends Composer<_$AppDatabase, $SyncChangesTable> {
+  $$SyncChangesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get changeId =>
+      $composableBuilder(column: $table.changeId, builder: (column) => column);
+
+  GeneratedColumn<String> get epoch =>
+      $composableBuilder(column: $table.epoch, builder: (column) => column);
+
+  GeneratedColumn<String> get actorId =>
+      $composableBuilder(column: $table.actorId, builder: (column) => column);
+
+  GeneratedColumn<int> get sequence =>
+      $composableBuilder(column: $table.sequence, builder: (column) => column);
+
+  GeneratedColumn<int> get lamport =>
+      $composableBuilder(column: $table.lamport, builder: (column) => column);
+
+  GeneratedColumn<int> get wallTimeMs => $composableBuilder(
+    column: $table.wallTimeMs,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get schemaVersion => $composableBuilder(
+    column: $table.schemaVersion,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get contextJson => $composableBuilder(
+    column: $table.contextJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get opsJson =>
+      $composableBuilder(column: $table.opsJson, builder: (column) => column);
+
+  GeneratedColumn<String> get envelopeJson => $composableBuilder(
+    column: $table.envelopeJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get contentHash => $composableBuilder(
+    column: $table.contentHash,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get outboxState => $composableBuilder(
+    column: $table.outboxState,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get serverCursor => $composableBuilder(
+    column: $table.serverCursor,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<int> get acceptedAt => $composableBuilder(
+    column: $table.acceptedAt,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get rejectedAt => $composableBuilder(
+    column: $table.rejectedAt,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get rejectionCode => $composableBuilder(
+    column: $table.rejectionCode,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get rejectionReason => $composableBuilder(
+    column: $table.rejectionReason,
+    builder: (column) => column,
+  );
+}
+
+class $$SyncChangesTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $SyncChangesTable,
+          SyncChangeRow,
+          $$SyncChangesTableFilterComposer,
+          $$SyncChangesTableOrderingComposer,
+          $$SyncChangesTableAnnotationComposer,
+          $$SyncChangesTableCreateCompanionBuilder,
+          $$SyncChangesTableUpdateCompanionBuilder,
+          (
+            SyncChangeRow,
+            BaseReferences<_$AppDatabase, $SyncChangesTable, SyncChangeRow>,
+          ),
+          SyncChangeRow,
+          PrefetchHooks Function()
+        > {
+  $$SyncChangesTableTableManager(_$AppDatabase db, $SyncChangesTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$SyncChangesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$SyncChangesTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$SyncChangesTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> changeId = const Value.absent(),
+                Value<String> epoch = const Value.absent(),
+                Value<String> actorId = const Value.absent(),
+                Value<int> sequence = const Value.absent(),
+                Value<int> lamport = const Value.absent(),
+                Value<int> wallTimeMs = const Value.absent(),
+                Value<int> schemaVersion = const Value.absent(),
+                Value<String> contextJson = const Value.absent(),
+                Value<String> opsJson = const Value.absent(),
+                Value<String> envelopeJson = const Value.absent(),
+                Value<String> contentHash = const Value.absent(),
+                Value<String> outboxState = const Value.absent(),
+                Value<int?> serverCursor = const Value.absent(),
+                Value<int> createdAt = const Value.absent(),
+                Value<int?> acceptedAt = const Value.absent(),
+                Value<int?> rejectedAt = const Value.absent(),
+                Value<String?> rejectionCode = const Value.absent(),
+                Value<String?> rejectionReason = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => SyncChangesCompanion(
+                changeId: changeId,
+                epoch: epoch,
+                actorId: actorId,
+                sequence: sequence,
+                lamport: lamport,
+                wallTimeMs: wallTimeMs,
+                schemaVersion: schemaVersion,
+                contextJson: contextJson,
+                opsJson: opsJson,
+                envelopeJson: envelopeJson,
+                contentHash: contentHash,
+                outboxState: outboxState,
+                serverCursor: serverCursor,
+                createdAt: createdAt,
+                acceptedAt: acceptedAt,
+                rejectedAt: rejectedAt,
+                rejectionCode: rejectionCode,
+                rejectionReason: rejectionReason,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String changeId,
+                required String epoch,
+                required String actorId,
+                required int sequence,
+                required int lamport,
+                required int wallTimeMs,
+                required int schemaVersion,
+                required String contextJson,
+                required String opsJson,
+                required String envelopeJson,
+                required String contentHash,
+                Value<String> outboxState = const Value.absent(),
+                Value<int?> serverCursor = const Value.absent(),
+                required int createdAt,
+                Value<int?> acceptedAt = const Value.absent(),
+                Value<int?> rejectedAt = const Value.absent(),
+                Value<String?> rejectionCode = const Value.absent(),
+                Value<String?> rejectionReason = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => SyncChangesCompanion.insert(
+                changeId: changeId,
+                epoch: epoch,
+                actorId: actorId,
+                sequence: sequence,
+                lamport: lamport,
+                wallTimeMs: wallTimeMs,
+                schemaVersion: schemaVersion,
+                contextJson: contextJson,
+                opsJson: opsJson,
+                envelopeJson: envelopeJson,
+                contentHash: contentHash,
+                outboxState: outboxState,
+                serverCursor: serverCursor,
+                createdAt: createdAt,
+                acceptedAt: acceptedAt,
+                rejectedAt: rejectedAt,
+                rejectionCode: rejectionCode,
+                rejectionReason: rejectionReason,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$SyncChangesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $SyncChangesTable,
+      SyncChangeRow,
+      $$SyncChangesTableFilterComposer,
+      $$SyncChangesTableOrderingComposer,
+      $$SyncChangesTableAnnotationComposer,
+      $$SyncChangesTableCreateCompanionBuilder,
+      $$SyncChangesTableUpdateCompanionBuilder,
+      (
+        SyncChangeRow,
+        BaseReferences<_$AppDatabase, $SyncChangesTable, SyncChangeRow>,
+      ),
+      SyncChangeRow,
+      PrefetchHooks Function()
+    >;
+typedef $$SyncRegistersTableCreateCompanionBuilder =
+    SyncRegistersCompanion Function({
+      required String epoch,
+      required String resource,
+      required String entityId,
+      required String field,
+      required String policy,
+      required String candidatesJson,
+      Value<String?> visibleValueJson,
+      required int updatedCursor,
+      required int updatedAt,
+      Value<int> rowid,
+    });
+typedef $$SyncRegistersTableUpdateCompanionBuilder =
+    SyncRegistersCompanion Function({
+      Value<String> epoch,
+      Value<String> resource,
+      Value<String> entityId,
+      Value<String> field,
+      Value<String> policy,
+      Value<String> candidatesJson,
+      Value<String?> visibleValueJson,
+      Value<int> updatedCursor,
+      Value<int> updatedAt,
+      Value<int> rowid,
+    });
+
+class $$SyncRegistersTableFilterComposer
+    extends Composer<_$AppDatabase, $SyncRegistersTable> {
+  $$SyncRegistersTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get epoch => $composableBuilder(
+    column: $table.epoch,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get resource => $composableBuilder(
+    column: $table.resource,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get entityId => $composableBuilder(
+    column: $table.entityId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get field => $composableBuilder(
+    column: $table.field,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get policy => $composableBuilder(
+    column: $table.policy,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get candidatesJson => $composableBuilder(
+    column: $table.candidatesJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get visibleValueJson => $composableBuilder(
+    column: $table.visibleValueJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get updatedCursor => $composableBuilder(
+    column: $table.updatedCursor,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$SyncRegistersTableOrderingComposer
+    extends Composer<_$AppDatabase, $SyncRegistersTable> {
+  $$SyncRegistersTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get epoch => $composableBuilder(
+    column: $table.epoch,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get resource => $composableBuilder(
+    column: $table.resource,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get entityId => $composableBuilder(
+    column: $table.entityId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get field => $composableBuilder(
+    column: $table.field,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get policy => $composableBuilder(
+    column: $table.policy,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get candidatesJson => $composableBuilder(
+    column: $table.candidatesJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get visibleValueJson => $composableBuilder(
+    column: $table.visibleValueJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get updatedCursor => $composableBuilder(
+    column: $table.updatedCursor,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$SyncRegistersTableAnnotationComposer
+    extends Composer<_$AppDatabase, $SyncRegistersTable> {
+  $$SyncRegistersTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get epoch =>
+      $composableBuilder(column: $table.epoch, builder: (column) => column);
+
+  GeneratedColumn<String> get resource =>
+      $composableBuilder(column: $table.resource, builder: (column) => column);
+
+  GeneratedColumn<String> get entityId =>
+      $composableBuilder(column: $table.entityId, builder: (column) => column);
+
+  GeneratedColumn<String> get field =>
+      $composableBuilder(column: $table.field, builder: (column) => column);
+
+  GeneratedColumn<String> get policy =>
+      $composableBuilder(column: $table.policy, builder: (column) => column);
+
+  GeneratedColumn<String> get candidatesJson => $composableBuilder(
+    column: $table.candidatesJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get visibleValueJson => $composableBuilder(
+    column: $table.visibleValueJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get updatedCursor => $composableBuilder(
+    column: $table.updatedCursor,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+}
+
+class $$SyncRegistersTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $SyncRegistersTable,
+          SyncRegisterRow,
+          $$SyncRegistersTableFilterComposer,
+          $$SyncRegistersTableOrderingComposer,
+          $$SyncRegistersTableAnnotationComposer,
+          $$SyncRegistersTableCreateCompanionBuilder,
+          $$SyncRegistersTableUpdateCompanionBuilder,
+          (
+            SyncRegisterRow,
+            BaseReferences<_$AppDatabase, $SyncRegistersTable, SyncRegisterRow>,
+          ),
+          SyncRegisterRow,
+          PrefetchHooks Function()
+        > {
+  $$SyncRegistersTableTableManager(_$AppDatabase db, $SyncRegistersTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$SyncRegistersTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$SyncRegistersTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$SyncRegistersTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> epoch = const Value.absent(),
+                Value<String> resource = const Value.absent(),
+                Value<String> entityId = const Value.absent(),
+                Value<String> field = const Value.absent(),
+                Value<String> policy = const Value.absent(),
+                Value<String> candidatesJson = const Value.absent(),
+                Value<String?> visibleValueJson = const Value.absent(),
+                Value<int> updatedCursor = const Value.absent(),
+                Value<int> updatedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => SyncRegistersCompanion(
+                epoch: epoch,
+                resource: resource,
+                entityId: entityId,
+                field: field,
+                policy: policy,
+                candidatesJson: candidatesJson,
+                visibleValueJson: visibleValueJson,
+                updatedCursor: updatedCursor,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String epoch,
+                required String resource,
+                required String entityId,
+                required String field,
+                required String policy,
+                required String candidatesJson,
+                Value<String?> visibleValueJson = const Value.absent(),
+                required int updatedCursor,
+                required int updatedAt,
+                Value<int> rowid = const Value.absent(),
+              }) => SyncRegistersCompanion.insert(
+                epoch: epoch,
+                resource: resource,
+                entityId: entityId,
+                field: field,
+                policy: policy,
+                candidatesJson: candidatesJson,
+                visibleValueJson: visibleValueJson,
+                updatedCursor: updatedCursor,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$SyncRegistersTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $SyncRegistersTable,
+      SyncRegisterRow,
+      $$SyncRegistersTableFilterComposer,
+      $$SyncRegistersTableOrderingComposer,
+      $$SyncRegistersTableAnnotationComposer,
+      $$SyncRegistersTableCreateCompanionBuilder,
+      $$SyncRegistersTableUpdateCompanionBuilder,
+      (
+        SyncRegisterRow,
+        BaseReferences<_$AppDatabase, $SyncRegistersTable, SyncRegisterRow>,
+      ),
+      SyncRegisterRow,
+      PrefetchHooks Function()
+    >;
+typedef $$SyncFrontiersTableCreateCompanionBuilder =
+    SyncFrontiersCompanion Function({
+      required String epoch,
+      required String actorId,
+      Value<int> contiguousSequence,
+      Value<int> integratedCursor,
+      required int updatedAt,
+      Value<int> rowid,
+    });
+typedef $$SyncFrontiersTableUpdateCompanionBuilder =
+    SyncFrontiersCompanion Function({
+      Value<String> epoch,
+      Value<String> actorId,
+      Value<int> contiguousSequence,
+      Value<int> integratedCursor,
+      Value<int> updatedAt,
+      Value<int> rowid,
+    });
+
+class $$SyncFrontiersTableFilterComposer
+    extends Composer<_$AppDatabase, $SyncFrontiersTable> {
+  $$SyncFrontiersTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get epoch => $composableBuilder(
+    column: $table.epoch,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get actorId => $composableBuilder(
+    column: $table.actorId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get contiguousSequence => $composableBuilder(
+    column: $table.contiguousSequence,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get integratedCursor => $composableBuilder(
+    column: $table.integratedCursor,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$SyncFrontiersTableOrderingComposer
+    extends Composer<_$AppDatabase, $SyncFrontiersTable> {
+  $$SyncFrontiersTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get epoch => $composableBuilder(
+    column: $table.epoch,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get actorId => $composableBuilder(
+    column: $table.actorId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get contiguousSequence => $composableBuilder(
+    column: $table.contiguousSequence,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get integratedCursor => $composableBuilder(
+    column: $table.integratedCursor,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$SyncFrontiersTableAnnotationComposer
+    extends Composer<_$AppDatabase, $SyncFrontiersTable> {
+  $$SyncFrontiersTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get epoch =>
+      $composableBuilder(column: $table.epoch, builder: (column) => column);
+
+  GeneratedColumn<String> get actorId =>
+      $composableBuilder(column: $table.actorId, builder: (column) => column);
+
+  GeneratedColumn<int> get contiguousSequence => $composableBuilder(
+    column: $table.contiguousSequence,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get integratedCursor => $composableBuilder(
+    column: $table.integratedCursor,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+}
+
+class $$SyncFrontiersTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $SyncFrontiersTable,
+          SyncFrontierRow,
+          $$SyncFrontiersTableFilterComposer,
+          $$SyncFrontiersTableOrderingComposer,
+          $$SyncFrontiersTableAnnotationComposer,
+          $$SyncFrontiersTableCreateCompanionBuilder,
+          $$SyncFrontiersTableUpdateCompanionBuilder,
+          (
+            SyncFrontierRow,
+            BaseReferences<_$AppDatabase, $SyncFrontiersTable, SyncFrontierRow>,
+          ),
+          SyncFrontierRow,
+          PrefetchHooks Function()
+        > {
+  $$SyncFrontiersTableTableManager(_$AppDatabase db, $SyncFrontiersTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$SyncFrontiersTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$SyncFrontiersTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$SyncFrontiersTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> epoch = const Value.absent(),
+                Value<String> actorId = const Value.absent(),
+                Value<int> contiguousSequence = const Value.absent(),
+                Value<int> integratedCursor = const Value.absent(),
+                Value<int> updatedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => SyncFrontiersCompanion(
+                epoch: epoch,
+                actorId: actorId,
+                contiguousSequence: contiguousSequence,
+                integratedCursor: integratedCursor,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String epoch,
+                required String actorId,
+                Value<int> contiguousSequence = const Value.absent(),
+                Value<int> integratedCursor = const Value.absent(),
+                required int updatedAt,
+                Value<int> rowid = const Value.absent(),
+              }) => SyncFrontiersCompanion.insert(
+                epoch: epoch,
+                actorId: actorId,
+                contiguousSequence: contiguousSequence,
+                integratedCursor: integratedCursor,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$SyncFrontiersTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $SyncFrontiersTable,
+      SyncFrontierRow,
+      $$SyncFrontiersTableFilterComposer,
+      $$SyncFrontiersTableOrderingComposer,
+      $$SyncFrontiersTableAnnotationComposer,
+      $$SyncFrontiersTableCreateCompanionBuilder,
+      $$SyncFrontiersTableUpdateCompanionBuilder,
+      (
+        SyncFrontierRow,
+        BaseReferences<_$AppDatabase, $SyncFrontiersTable, SyncFrontierRow>,
+      ),
+      SyncFrontierRow,
+      PrefetchHooks Function()
+    >;
+typedef $$SyncReplicaStateTableCreateCompanionBuilder =
+    SyncReplicaStateCompanion Function({
+      Value<int> id,
+      Value<String?> epoch,
+      required String actorId,
+      Value<int> nextSequence,
+      Value<int> lamport,
+      Value<int> pullCursor,
+      Value<String?> checkpointId,
+      required int updatedAt,
+    });
+typedef $$SyncReplicaStateTableUpdateCompanionBuilder =
+    SyncReplicaStateCompanion Function({
+      Value<int> id,
+      Value<String?> epoch,
+      Value<String> actorId,
+      Value<int> nextSequence,
+      Value<int> lamport,
+      Value<int> pullCursor,
+      Value<String?> checkpointId,
+      Value<int> updatedAt,
+    });
+
+class $$SyncReplicaStateTableFilterComposer
+    extends Composer<_$AppDatabase, $SyncReplicaStateTable> {
+  $$SyncReplicaStateTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get epoch => $composableBuilder(
+    column: $table.epoch,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get actorId => $composableBuilder(
+    column: $table.actorId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get nextSequence => $composableBuilder(
+    column: $table.nextSequence,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get lamport => $composableBuilder(
+    column: $table.lamport,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get pullCursor => $composableBuilder(
+    column: $table.pullCursor,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get checkpointId => $composableBuilder(
+    column: $table.checkpointId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$SyncReplicaStateTableOrderingComposer
+    extends Composer<_$AppDatabase, $SyncReplicaStateTable> {
+  $$SyncReplicaStateTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get epoch => $composableBuilder(
+    column: $table.epoch,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get actorId => $composableBuilder(
+    column: $table.actorId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get nextSequence => $composableBuilder(
+    column: $table.nextSequence,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get lamport => $composableBuilder(
+    column: $table.lamport,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get pullCursor => $composableBuilder(
+    column: $table.pullCursor,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get checkpointId => $composableBuilder(
+    column: $table.checkpointId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$SyncReplicaStateTableAnnotationComposer
+    extends Composer<_$AppDatabase, $SyncReplicaStateTable> {
+  $$SyncReplicaStateTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get epoch =>
+      $composableBuilder(column: $table.epoch, builder: (column) => column);
+
+  GeneratedColumn<String> get actorId =>
+      $composableBuilder(column: $table.actorId, builder: (column) => column);
+
+  GeneratedColumn<int> get nextSequence => $composableBuilder(
+    column: $table.nextSequence,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get lamport =>
+      $composableBuilder(column: $table.lamport, builder: (column) => column);
+
+  GeneratedColumn<int> get pullCursor => $composableBuilder(
+    column: $table.pullCursor,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get checkpointId => $composableBuilder(
+    column: $table.checkpointId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+}
+
+class $$SyncReplicaStateTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $SyncReplicaStateTable,
+          SyncReplicaStateRow,
+          $$SyncReplicaStateTableFilterComposer,
+          $$SyncReplicaStateTableOrderingComposer,
+          $$SyncReplicaStateTableAnnotationComposer,
+          $$SyncReplicaStateTableCreateCompanionBuilder,
+          $$SyncReplicaStateTableUpdateCompanionBuilder,
+          (
+            SyncReplicaStateRow,
+            BaseReferences<
+              _$AppDatabase,
+              $SyncReplicaStateTable,
+              SyncReplicaStateRow
+            >,
+          ),
+          SyncReplicaStateRow,
+          PrefetchHooks Function()
+        > {
+  $$SyncReplicaStateTableTableManager(
+    _$AppDatabase db,
+    $SyncReplicaStateTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$SyncReplicaStateTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$SyncReplicaStateTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$SyncReplicaStateTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<String?> epoch = const Value.absent(),
+                Value<String> actorId = const Value.absent(),
+                Value<int> nextSequence = const Value.absent(),
+                Value<int> lamport = const Value.absent(),
+                Value<int> pullCursor = const Value.absent(),
+                Value<String?> checkpointId = const Value.absent(),
+                Value<int> updatedAt = const Value.absent(),
+              }) => SyncReplicaStateCompanion(
+                id: id,
+                epoch: epoch,
+                actorId: actorId,
+                nextSequence: nextSequence,
+                lamport: lamport,
+                pullCursor: pullCursor,
+                checkpointId: checkpointId,
+                updatedAt: updatedAt,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<String?> epoch = const Value.absent(),
+                required String actorId,
+                Value<int> nextSequence = const Value.absent(),
+                Value<int> lamport = const Value.absent(),
+                Value<int> pullCursor = const Value.absent(),
+                Value<String?> checkpointId = const Value.absent(),
+                required int updatedAt,
+              }) => SyncReplicaStateCompanion.insert(
+                id: id,
+                epoch: epoch,
+                actorId: actorId,
+                nextSequence: nextSequence,
+                lamport: lamport,
+                pullCursor: pullCursor,
+                checkpointId: checkpointId,
+                updatedAt: updatedAt,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$SyncReplicaStateTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $SyncReplicaStateTable,
+      SyncReplicaStateRow,
+      $$SyncReplicaStateTableFilterComposer,
+      $$SyncReplicaStateTableOrderingComposer,
+      $$SyncReplicaStateTableAnnotationComposer,
+      $$SyncReplicaStateTableCreateCompanionBuilder,
+      $$SyncReplicaStateTableUpdateCompanionBuilder,
+      (
+        SyncReplicaStateRow,
+        BaseReferences<
+          _$AppDatabase,
+          $SyncReplicaStateTable,
+          SyncReplicaStateRow
+        >,
+      ),
+      SyncReplicaStateRow,
+      PrefetchHooks Function()
+    >;
+typedef $$SyncQuarantineTableCreateCompanionBuilder =
+    SyncQuarantineCompanion Function({
+      Value<int> id,
+      Value<String?> epoch,
+      Value<String?> changeId,
+      Value<String?> actorId,
+      Value<int?> sequence,
+      required String source,
+      required String reasonCode,
+      required String reason,
+      Value<String?> contentHash,
+      Value<String?> envelopeJson,
+      Value<Uint8List?> originalBytes,
+      required int receivedAt,
+      Value<int?> resolvedAt,
+      Value<String?> resolution,
+    });
+typedef $$SyncQuarantineTableUpdateCompanionBuilder =
+    SyncQuarantineCompanion Function({
+      Value<int> id,
+      Value<String?> epoch,
+      Value<String?> changeId,
+      Value<String?> actorId,
+      Value<int?> sequence,
+      Value<String> source,
+      Value<String> reasonCode,
+      Value<String> reason,
+      Value<String?> contentHash,
+      Value<String?> envelopeJson,
+      Value<Uint8List?> originalBytes,
+      Value<int> receivedAt,
+      Value<int?> resolvedAt,
+      Value<String?> resolution,
+    });
+
+class $$SyncQuarantineTableFilterComposer
+    extends Composer<_$AppDatabase, $SyncQuarantineTable> {
+  $$SyncQuarantineTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get epoch => $composableBuilder(
+    column: $table.epoch,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get changeId => $composableBuilder(
+    column: $table.changeId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get actorId => $composableBuilder(
+    column: $table.actorId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get sequence => $composableBuilder(
+    column: $table.sequence,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get source => $composableBuilder(
+    column: $table.source,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get reasonCode => $composableBuilder(
+    column: $table.reasonCode,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get reason => $composableBuilder(
+    column: $table.reason,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get contentHash => $composableBuilder(
+    column: $table.contentHash,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get envelopeJson => $composableBuilder(
+    column: $table.envelopeJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<Uint8List> get originalBytes => $composableBuilder(
+    column: $table.originalBytes,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get receivedAt => $composableBuilder(
+    column: $table.receivedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get resolvedAt => $composableBuilder(
+    column: $table.resolvedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get resolution => $composableBuilder(
+    column: $table.resolution,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$SyncQuarantineTableOrderingComposer
+    extends Composer<_$AppDatabase, $SyncQuarantineTable> {
+  $$SyncQuarantineTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get epoch => $composableBuilder(
+    column: $table.epoch,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get changeId => $composableBuilder(
+    column: $table.changeId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get actorId => $composableBuilder(
+    column: $table.actorId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get sequence => $composableBuilder(
+    column: $table.sequence,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get source => $composableBuilder(
+    column: $table.source,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get reasonCode => $composableBuilder(
+    column: $table.reasonCode,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get reason => $composableBuilder(
+    column: $table.reason,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get contentHash => $composableBuilder(
+    column: $table.contentHash,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get envelopeJson => $composableBuilder(
+    column: $table.envelopeJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<Uint8List> get originalBytes => $composableBuilder(
+    column: $table.originalBytes,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get receivedAt => $composableBuilder(
+    column: $table.receivedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get resolvedAt => $composableBuilder(
+    column: $table.resolvedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get resolution => $composableBuilder(
+    column: $table.resolution,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$SyncQuarantineTableAnnotationComposer
+    extends Composer<_$AppDatabase, $SyncQuarantineTable> {
+  $$SyncQuarantineTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get epoch =>
+      $composableBuilder(column: $table.epoch, builder: (column) => column);
+
+  GeneratedColumn<String> get changeId =>
+      $composableBuilder(column: $table.changeId, builder: (column) => column);
+
+  GeneratedColumn<String> get actorId =>
+      $composableBuilder(column: $table.actorId, builder: (column) => column);
+
+  GeneratedColumn<int> get sequence =>
+      $composableBuilder(column: $table.sequence, builder: (column) => column);
+
+  GeneratedColumn<String> get source =>
+      $composableBuilder(column: $table.source, builder: (column) => column);
+
+  GeneratedColumn<String> get reasonCode => $composableBuilder(
+    column: $table.reasonCode,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get reason =>
+      $composableBuilder(column: $table.reason, builder: (column) => column);
+
+  GeneratedColumn<String> get contentHash => $composableBuilder(
+    column: $table.contentHash,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get envelopeJson => $composableBuilder(
+    column: $table.envelopeJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<Uint8List> get originalBytes => $composableBuilder(
+    column: $table.originalBytes,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get receivedAt => $composableBuilder(
+    column: $table.receivedAt,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get resolvedAt => $composableBuilder(
+    column: $table.resolvedAt,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get resolution => $composableBuilder(
+    column: $table.resolution,
+    builder: (column) => column,
+  );
+}
+
+class $$SyncQuarantineTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $SyncQuarantineTable,
+          SyncQuarantineRow,
+          $$SyncQuarantineTableFilterComposer,
+          $$SyncQuarantineTableOrderingComposer,
+          $$SyncQuarantineTableAnnotationComposer,
+          $$SyncQuarantineTableCreateCompanionBuilder,
+          $$SyncQuarantineTableUpdateCompanionBuilder,
+          (
+            SyncQuarantineRow,
+            BaseReferences<
+              _$AppDatabase,
+              $SyncQuarantineTable,
+              SyncQuarantineRow
+            >,
+          ),
+          SyncQuarantineRow,
+          PrefetchHooks Function()
+        > {
+  $$SyncQuarantineTableTableManager(
+    _$AppDatabase db,
+    $SyncQuarantineTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$SyncQuarantineTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$SyncQuarantineTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$SyncQuarantineTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<String?> epoch = const Value.absent(),
+                Value<String?> changeId = const Value.absent(),
+                Value<String?> actorId = const Value.absent(),
+                Value<int?> sequence = const Value.absent(),
+                Value<String> source = const Value.absent(),
+                Value<String> reasonCode = const Value.absent(),
+                Value<String> reason = const Value.absent(),
+                Value<String?> contentHash = const Value.absent(),
+                Value<String?> envelopeJson = const Value.absent(),
+                Value<Uint8List?> originalBytes = const Value.absent(),
+                Value<int> receivedAt = const Value.absent(),
+                Value<int?> resolvedAt = const Value.absent(),
+                Value<String?> resolution = const Value.absent(),
+              }) => SyncQuarantineCompanion(
+                id: id,
+                epoch: epoch,
+                changeId: changeId,
+                actorId: actorId,
+                sequence: sequence,
+                source: source,
+                reasonCode: reasonCode,
+                reason: reason,
+                contentHash: contentHash,
+                envelopeJson: envelopeJson,
+                originalBytes: originalBytes,
+                receivedAt: receivedAt,
+                resolvedAt: resolvedAt,
+                resolution: resolution,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<String?> epoch = const Value.absent(),
+                Value<String?> changeId = const Value.absent(),
+                Value<String?> actorId = const Value.absent(),
+                Value<int?> sequence = const Value.absent(),
+                required String source,
+                required String reasonCode,
+                required String reason,
+                Value<String?> contentHash = const Value.absent(),
+                Value<String?> envelopeJson = const Value.absent(),
+                Value<Uint8List?> originalBytes = const Value.absent(),
+                required int receivedAt,
+                Value<int?> resolvedAt = const Value.absent(),
+                Value<String?> resolution = const Value.absent(),
+              }) => SyncQuarantineCompanion.insert(
+                id: id,
+                epoch: epoch,
+                changeId: changeId,
+                actorId: actorId,
+                sequence: sequence,
+                source: source,
+                reasonCode: reasonCode,
+                reason: reason,
+                contentHash: contentHash,
+                envelopeJson: envelopeJson,
+                originalBytes: originalBytes,
+                receivedAt: receivedAt,
+                resolvedAt: resolvedAt,
+                resolution: resolution,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$SyncQuarantineTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $SyncQuarantineTable,
+      SyncQuarantineRow,
+      $$SyncQuarantineTableFilterComposer,
+      $$SyncQuarantineTableOrderingComposer,
+      $$SyncQuarantineTableAnnotationComposer,
+      $$SyncQuarantineTableCreateCompanionBuilder,
+      $$SyncQuarantineTableUpdateCompanionBuilder,
+      (
+        SyncQuarantineRow,
+        BaseReferences<_$AppDatabase, $SyncQuarantineTable, SyncQuarantineRow>,
+      ),
+      SyncQuarantineRow,
+      PrefetchHooks Function()
+    >;
+typedef $$SyncCheckpointsTableCreateCompanionBuilder =
+    SyncCheckpointsCompanion Function({
+      required String id,
+      required String epoch,
+      required int schemaVersion,
+      required String frontierJson,
+      required String registersJson,
+      required String projectionHash,
+      required String contentHash,
+      required int creationCursor,
+      required int eventCount,
+      Value<bool> isGenesis,
+      required int createdAt,
+      Value<int?> verifiedAt,
+      Value<int> rowid,
+    });
+typedef $$SyncCheckpointsTableUpdateCompanionBuilder =
+    SyncCheckpointsCompanion Function({
+      Value<String> id,
+      Value<String> epoch,
+      Value<int> schemaVersion,
+      Value<String> frontierJson,
+      Value<String> registersJson,
+      Value<String> projectionHash,
+      Value<String> contentHash,
+      Value<int> creationCursor,
+      Value<int> eventCount,
+      Value<bool> isGenesis,
+      Value<int> createdAt,
+      Value<int?> verifiedAt,
+      Value<int> rowid,
+    });
+
+class $$SyncCheckpointsTableFilterComposer
+    extends Composer<_$AppDatabase, $SyncCheckpointsTable> {
+  $$SyncCheckpointsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get epoch => $composableBuilder(
+    column: $table.epoch,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get schemaVersion => $composableBuilder(
+    column: $table.schemaVersion,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get frontierJson => $composableBuilder(
+    column: $table.frontierJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get registersJson => $composableBuilder(
+    column: $table.registersJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get projectionHash => $composableBuilder(
+    column: $table.projectionHash,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get contentHash => $composableBuilder(
+    column: $table.contentHash,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get creationCursor => $composableBuilder(
+    column: $table.creationCursor,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get eventCount => $composableBuilder(
+    column: $table.eventCount,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get isGenesis => $composableBuilder(
+    column: $table.isGenesis,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get verifiedAt => $composableBuilder(
+    column: $table.verifiedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$SyncCheckpointsTableOrderingComposer
+    extends Composer<_$AppDatabase, $SyncCheckpointsTable> {
+  $$SyncCheckpointsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get epoch => $composableBuilder(
+    column: $table.epoch,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get schemaVersion => $composableBuilder(
+    column: $table.schemaVersion,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get frontierJson => $composableBuilder(
+    column: $table.frontierJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get registersJson => $composableBuilder(
+    column: $table.registersJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get projectionHash => $composableBuilder(
+    column: $table.projectionHash,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get contentHash => $composableBuilder(
+    column: $table.contentHash,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get creationCursor => $composableBuilder(
+    column: $table.creationCursor,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get eventCount => $composableBuilder(
+    column: $table.eventCount,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get isGenesis => $composableBuilder(
+    column: $table.isGenesis,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get verifiedAt => $composableBuilder(
+    column: $table.verifiedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$SyncCheckpointsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $SyncCheckpointsTable> {
+  $$SyncCheckpointsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get epoch =>
+      $composableBuilder(column: $table.epoch, builder: (column) => column);
+
+  GeneratedColumn<int> get schemaVersion => $composableBuilder(
+    column: $table.schemaVersion,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get frontierJson => $composableBuilder(
+    column: $table.frontierJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get registersJson => $composableBuilder(
+    column: $table.registersJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get projectionHash => $composableBuilder(
+    column: $table.projectionHash,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get contentHash => $composableBuilder(
+    column: $table.contentHash,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get creationCursor => $composableBuilder(
+    column: $table.creationCursor,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get eventCount => $composableBuilder(
+    column: $table.eventCount,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get isGenesis =>
+      $composableBuilder(column: $table.isGenesis, builder: (column) => column);
+
+  GeneratedColumn<int> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<int> get verifiedAt => $composableBuilder(
+    column: $table.verifiedAt,
+    builder: (column) => column,
+  );
+}
+
+class $$SyncCheckpointsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $SyncCheckpointsTable,
+          SyncCheckpointRow,
+          $$SyncCheckpointsTableFilterComposer,
+          $$SyncCheckpointsTableOrderingComposer,
+          $$SyncCheckpointsTableAnnotationComposer,
+          $$SyncCheckpointsTableCreateCompanionBuilder,
+          $$SyncCheckpointsTableUpdateCompanionBuilder,
+          (
+            SyncCheckpointRow,
+            BaseReferences<
+              _$AppDatabase,
+              $SyncCheckpointsTable,
+              SyncCheckpointRow
+            >,
+          ),
+          SyncCheckpointRow,
+          PrefetchHooks Function()
+        > {
+  $$SyncCheckpointsTableTableManager(
+    _$AppDatabase db,
+    $SyncCheckpointsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$SyncCheckpointsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$SyncCheckpointsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$SyncCheckpointsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> epoch = const Value.absent(),
+                Value<int> schemaVersion = const Value.absent(),
+                Value<String> frontierJson = const Value.absent(),
+                Value<String> registersJson = const Value.absent(),
+                Value<String> projectionHash = const Value.absent(),
+                Value<String> contentHash = const Value.absent(),
+                Value<int> creationCursor = const Value.absent(),
+                Value<int> eventCount = const Value.absent(),
+                Value<bool> isGenesis = const Value.absent(),
+                Value<int> createdAt = const Value.absent(),
+                Value<int?> verifiedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => SyncCheckpointsCompanion(
+                id: id,
+                epoch: epoch,
+                schemaVersion: schemaVersion,
+                frontierJson: frontierJson,
+                registersJson: registersJson,
+                projectionHash: projectionHash,
+                contentHash: contentHash,
+                creationCursor: creationCursor,
+                eventCount: eventCount,
+                isGenesis: isGenesis,
+                createdAt: createdAt,
+                verifiedAt: verifiedAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String epoch,
+                required int schemaVersion,
+                required String frontierJson,
+                required String registersJson,
+                required String projectionHash,
+                required String contentHash,
+                required int creationCursor,
+                required int eventCount,
+                Value<bool> isGenesis = const Value.absent(),
+                required int createdAt,
+                Value<int?> verifiedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => SyncCheckpointsCompanion.insert(
+                id: id,
+                epoch: epoch,
+                schemaVersion: schemaVersion,
+                frontierJson: frontierJson,
+                registersJson: registersJson,
+                projectionHash: projectionHash,
+                contentHash: contentHash,
+                creationCursor: creationCursor,
+                eventCount: eventCount,
+                isGenesis: isGenesis,
+                createdAt: createdAt,
+                verifiedAt: verifiedAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$SyncCheckpointsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $SyncCheckpointsTable,
+      SyncCheckpointRow,
+      $$SyncCheckpointsTableFilterComposer,
+      $$SyncCheckpointsTableOrderingComposer,
+      $$SyncCheckpointsTableAnnotationComposer,
+      $$SyncCheckpointsTableCreateCompanionBuilder,
+      $$SyncCheckpointsTableUpdateCompanionBuilder,
+      (
+        SyncCheckpointRow,
+        BaseReferences<_$AppDatabase, $SyncCheckpointsTable, SyncCheckpointRow>,
+      ),
+      SyncCheckpointRow,
+      PrefetchHooks Function()
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -13884,4 +19964,16 @@ class $AppDatabaseManager {
       $$AuditLogTableTableManager(_db, _db.auditLog);
   $$ChangeLogTableTableManager get changeLog =>
       $$ChangeLogTableTableManager(_db, _db.changeLog);
+  $$SyncChangesTableTableManager get syncChanges =>
+      $$SyncChangesTableTableManager(_db, _db.syncChanges);
+  $$SyncRegistersTableTableManager get syncRegisters =>
+      $$SyncRegistersTableTableManager(_db, _db.syncRegisters);
+  $$SyncFrontiersTableTableManager get syncFrontiers =>
+      $$SyncFrontiersTableTableManager(_db, _db.syncFrontiers);
+  $$SyncReplicaStateTableTableManager get syncReplicaState =>
+      $$SyncReplicaStateTableTableManager(_db, _db.syncReplicaState);
+  $$SyncQuarantineTableTableManager get syncQuarantine =>
+      $$SyncQuarantineTableTableManager(_db, _db.syncQuarantine);
+  $$SyncCheckpointsTableTableManager get syncCheckpoints =>
+      $$SyncCheckpointsTableTableManager(_db, _db.syncCheckpoints);
 }

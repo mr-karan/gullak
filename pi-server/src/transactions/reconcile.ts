@@ -3,7 +3,12 @@ import { and, eq, isNull } from "drizzle-orm";
 import { accounts, transactions } from "../db/schema.ts";
 import type { NewTransaction } from "../db/schema.ts";
 import type { DbOrTx } from "../repos/changelog.ts";
-import { newId, nowMs, recordChange } from "../repos/changelog.ts";
+import {
+  newId,
+  nowMs,
+  recordChange,
+  recordCommand,
+} from "../repos/changelog.ts";
 
 // Reconciliation (#42). Port of Actual's reconcile flow, adapted to Gullak's
 // integer-minor-unit money.
@@ -108,7 +113,7 @@ export function reconcileAccount(
   let adjustmentId: string | null = null;
   let reconciledCount = 0;
 
-  db.transaction((tx) => {
+  recordCommand(db, (tx) => {
     // Adjustment first: born cleared + reconciled so it makes cleared == target
     // and is excluded from the lock sweep below (which only touches
     // cleared && !reconciled rows).
@@ -165,7 +170,10 @@ export function reconcileAccount(
       .all();
     for (const row of toLock) {
       const next = { ...row, reconciled: true, updatedAt: at };
-      tx.update(transactions).set(next).where(eq(transactions.id, row.id)).run();
+      tx.update(transactions)
+        .set(next)
+        .where(eq(transactions.id, row.id))
+        .run();
       recordChange(tx, {
         resource: "transactions",
         resourceId: row.id,
@@ -188,7 +196,10 @@ export function reconcileAccount(
         reconciledAt: at,
         updatedAt: at,
       };
-      tx.update(accounts).set(nextAccount).where(eq(accounts.id, accountId)).run();
+      tx.update(accounts)
+        .set(nextAccount)
+        .where(eq(accounts.id, accountId))
+        .run();
       recordChange(tx, {
         resource: "accounts",
         resourceId: accountId,

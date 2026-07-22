@@ -31,6 +31,12 @@ part 'database.g.dart';
     AppKv,
     AuditLog,
     ChangeLog,
+    SyncChanges,
+    SyncRegisters,
+    SyncFrontiers,
+    SyncReplicaState,
+    SyncQuarantine,
+    SyncCheckpoints,
   ],
 )
 class AppDatabase extends _$AppDatabase {
@@ -38,7 +44,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 13;
+  int get schemaVersion => 14;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -101,6 +107,7 @@ class AppDatabase extends _$AppDatabase {
         'CREATE INDEX IF NOT EXISTS idx_tx_group_parent '
         'ON transactions(group_parent_id)',
       );
+      await _createSyncV2Indexes();
     },
     onUpgrade: (m, from, to) async {
       if (from < 2) {
@@ -242,8 +249,62 @@ class AppDatabase extends _$AppDatabase {
           'ON transactions(group_parent_id)',
         );
       }
+      if (from < 14) {
+        // Protocol v2 is additive and dormant during rollout. Create its whole
+        // persistence surface in one transaction so a crash cannot leave a
+        // partially-created CRDT store. The legacy ChangeLog and rule tables
+        // remain intact until every v0.4 installation has drained.
+        await transaction(() async {
+          await m.createTable(syncChanges);
+          await m.createTable(syncRegisters);
+          await m.createTable(syncFrontiers);
+          await m.createTable(syncReplicaState);
+          await m.createTable(syncQuarantine);
+          await m.createTable(syncCheckpoints);
+          await _createSyncV2Indexes();
+        });
+      }
     },
   );
+
+  Future<void> _createSyncV2Indexes() async {
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_sync_changes_outbox '
+      'ON sync_changes(outbox_state, created_at)',
+    );
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_sync_changes_epoch_cursor '
+      'ON sync_changes(epoch, server_cursor)',
+    );
+    await customStatement(
+      'CREATE UNIQUE INDEX IF NOT EXISTS uniq_sync_changes_server_cursor '
+      'ON sync_changes(server_cursor) WHERE server_cursor IS NOT NULL',
+    );
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_sync_registers_entity '
+      'ON sync_registers(epoch, resource, entity_id)',
+    );
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_sync_registers_cursor '
+      'ON sync_registers(epoch, updated_cursor)',
+    );
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_sync_quarantine_unresolved '
+      'ON sync_quarantine(resolved_at, received_at)',
+    );
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_sync_quarantine_change '
+      'ON sync_quarantine(change_id)',
+    );
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_sync_quarantine_actor_sequence '
+      'ON sync_quarantine(actor_id, sequence)',
+    );
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_sync_checkpoints_epoch_created '
+      'ON sync_checkpoints(epoch, created_at)',
+    );
+  }
 
   Future<String?> kvGet(String key) async {
     final r = await (select(

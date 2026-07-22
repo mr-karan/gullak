@@ -4,7 +4,12 @@ import { z } from "zod";
 
 import type { AppEnv } from "../app.ts";
 import { recurrences } from "../db/schema.ts";
-import { newId, nowMs, recordChange } from "../repos/changelog.ts";
+import {
+  newId,
+  nowMs,
+  recordChange,
+  recordCommand,
+} from "../repos/changelog.ts";
 import { nameField, textField } from "./_fields.ts";
 
 const upsertSchema = z.object({
@@ -46,11 +51,14 @@ recurrencesRouter.post("/", async (c) => {
     createdAt: at,
     updatedAt: at,
   };
-  db.transaction((tx) => {
-    tx.insert(recurrences).values(row).onConflictDoUpdate({
-      target: recurrences.id,
-      set: row,
-    }).run();
+  recordCommand(db, (tx) => {
+    tx.insert(recurrences)
+      .values(row)
+      .onConflictDoUpdate({
+        target: recurrences.id,
+        set: row,
+      })
+      .run();
     recordChange(tx, {
       resource: "recurrences",
       resourceId: id,
@@ -72,7 +80,7 @@ recurrencesRouter.patch("/:id", async (c) => {
     .get();
   if (!existing) return c.json({ error: "Not found" }, 404);
   const next = { ...existing, ...partial, updatedAt: nowMs() };
-  db.transaction((tx) => {
+  recordCommand(db, (tx) => {
     tx.update(recurrences).set(next).where(eq(recurrences.id, id)).run();
     recordChange(tx, {
       resource: "recurrences",
@@ -88,7 +96,7 @@ recurrencesRouter.delete("/:id", (c) => {
   const db = c.get("db");
   const id = c.req.param("id");
   let removed = 0;
-  db.transaction((tx) => {
+  recordCommand(db, (tx) => {
     const rows = tx
       .delete(recurrences)
       .where(eq(recurrences.id, id))

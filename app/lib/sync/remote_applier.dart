@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/logger.dart';
 import '../data/db/database.dart';
 import '../state/providers.dart';
+import 'changelog_writer.dart';
 
 /// Applies server-side change-log entries to the local Drift store
 /// using last-write-wins per row by `updatedAt`. Bypasses the
@@ -47,10 +48,10 @@ class RemoteApplier {
           await _applyTag(id, op, payload, at);
         case 'transaction_tags':
           await _applyTransactionTag(id, op, payload, at);
-        case 'rules':
-          await _applyRule(id, op, payload, at);
-        case 'rule_matches':
-          await _applyRuleMatch(id, op, payload, at);
+        case 'rules' || 'rule_matches':
+          // Rules are device-local/server-owned configuration, not financial
+          // sync state. Legacy rows are intentionally consumed without apply.
+          log.i('sync: ignoring local-only resource $resource');
         case 'budgets':
           await _applyBudget(id, op, payload, at);
         case 'recurrences':
@@ -254,8 +255,20 @@ class RemoteApplier {
             amountCents: Value((payload['amountCents'] as num?)?.toInt() ?? 0),
             date: Value(payload['date'] as String? ?? ''),
             notes: Value(payload['notes'] as String?),
-            latitude: Value((payload['latitude'] as num?)?.toDouble()),
-            longitude: Value((payload['longitude'] as num?)?.toDouble()),
+            latitude: Value(
+              payload['latitude'] == null
+                  ? null
+                  : quantizeSyncCoordinate(
+                      (payload['latitude'] as num).toDouble(),
+                    ),
+            ),
+            longitude: Value(
+              payload['longitude'] == null
+                  ? null
+                  : quantizeSyncCoordinate(
+                      (payload['longitude'] as num).toDouble(),
+                    ),
+            ),
             locationName: Value(payload['locationName'] as String?),
             cleared: Value(payload['cleared'] as bool? ?? false),
             reconciled: Value(payload['reconciled'] as bool? ?? false),
@@ -379,84 +392,6 @@ class RemoteApplier {
             rolloverCents: Value(
               (payload['rolloverCents'] as num?)?.toInt() ?? 0,
             ),
-            updatedAt: Value((payload['updatedAt'] as num).toInt()),
-          ),
-        );
-  }
-
-  Future<void> _applyRule(
-    String id,
-    String op,
-    dynamic payload,
-    int? at,
-  ) async {
-    if (op == 'delete') {
-      final local = await (_db.select(
-        _db.rules,
-      )..where((t) => t.id.equals(id))).getSingleOrNull();
-      if (local != null && !_deleteWins(local.updatedAt, at)) return;
-      await (_db.delete(_db.rules)..where((t) => t.id.equals(id))).go();
-      return;
-    }
-    if (payload is! Map) return;
-    final local = await (_db.select(
-      _db.rules,
-    )..where((t) => t.id.equals(id))).getSingleOrNull();
-    if (!_isNewer(local?.updatedAt, payload['updatedAt'])) return;
-    await _db
-        .into(_db.rules)
-        .insertOnConflictUpdate(
-          RulesCompanion(
-            id: Value(id),
-            name: Value(payload['name'] as String? ?? ''),
-            enabled: Value(payload['enabled'] as bool? ?? true),
-            priority: Value((payload['priority'] as num?)?.toInt() ?? 100),
-            triggerType: Value(payload['triggerType'] as String? ?? ''),
-            triggerPayload: Value(payload['triggerPayload'] as String? ?? '{}'),
-            actionPayload: Value(payload['actionPayload'] as String? ?? '{}'),
-            createdAt: Value(
-              (payload['createdAt'] as num?)?.toInt() ??
-                  local?.createdAt ??
-                  DateTime.now().millisecondsSinceEpoch,
-            ),
-            updatedAt: Value((payload['updatedAt'] as num).toInt()),
-          ),
-        );
-  }
-
-  Future<void> _applyRuleMatch(
-    String id,
-    String op,
-    dynamic payload,
-    int? at,
-  ) async {
-    if (op == 'delete') {
-      final local = await (_db.select(
-        _db.ruleMatches,
-      )..where((t) => t.id.equals(id))).getSingleOrNull();
-      if (local != null && !_deleteWins(local.updatedAt, at)) return;
-      await (_db.delete(_db.ruleMatches)..where((t) => t.id.equals(id))).go();
-      return;
-    }
-    if (payload is! Map) return;
-    final local = await (_db.select(
-      _db.ruleMatches,
-    )..where((t) => t.id.equals(id))).getSingleOrNull();
-    if (!_isNewer(local?.updatedAt, payload['updatedAt'])) return;
-    await _db
-        .into(_db.ruleMatches)
-        .insertOnConflictUpdate(
-          RuleMatchesCompanion(
-            id: Value(id),
-            ruleId: Value(payload['ruleId'] as String? ?? ''),
-            sourceType: Value(payload['sourceType'] as String? ?? ''),
-            sourceId: Value(payload['sourceId'] as String? ?? ''),
-            transactionId: Value(payload['transactionId'] as String?),
-            matchedAt: Value(
-              (payload['matchedAt'] as num?)?.toInt() ??
-                  DateTime.now().millisecondsSinceEpoch,
-            ),
-            outcome: Value(payload['outcome'] as String? ?? 'applied'),
             updatedAt: Value((payload['updatedAt'] as num).toInt()),
           ),
         );

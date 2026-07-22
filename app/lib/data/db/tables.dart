@@ -334,3 +334,164 @@ class ChangeLog extends Table {
   TextColumn get payload => text().nullable()(); // JSON snapshot
   BoolColumn get synced => boolean().withDefault(const Constant(false))();
 }
+
+// ── Sync protocol v2: immutable causal CRDT persistence ──────────────────
+//
+// These tables are intentionally separate from the protocol-v1 ChangeLog.
+// They remain dormant until the negotiated v2 rollout; preserving both schemas
+// lets an installed v0.4 database drain its legacy outbox before cutover.
+
+@DataClassName('SyncChangeRow')
+class SyncChanges extends Table {
+  TextColumn get changeId => text()();
+  TextColumn get epoch => text()();
+  TextColumn get actorId => text()();
+  IntColumn get sequence =>
+      integer().check(const CustomExpression<bool>('sequence > 0'))();
+  IntColumn get lamport =>
+      integer().check(const CustomExpression<bool>('lamport > 0'))();
+  IntColumn get wallTimeMs => integer()();
+  IntColumn get schemaVersion =>
+      integer().check(const CustomExpression<bool>('schema_version > 0'))();
+  TextColumn get contextJson =>
+      text().check(const CustomExpression<bool>('json_valid(context_json)'))();
+  TextColumn get opsJson =>
+      text().check(const CustomExpression<bool>('json_valid(ops_json)'))();
+  TextColumn get envelopeJson =>
+      text().check(const CustomExpression<bool>('json_valid(envelope_json)'))();
+  TextColumn get contentHash => text()();
+  // pending: local outbox; accepted: server acked; remote: pulled from server;
+  // rejected: explicit server refusal retained for user-visible recovery.
+  TextColumn get outboxState => text()
+      .withDefault(const Constant('pending'))
+      .check(
+        const CustomExpression<bool>(
+          "outbox_state IN ('pending', 'accepted', 'remote', 'rejected')",
+        ),
+      )();
+  IntColumn get serverCursor => integer().nullable()();
+  IntColumn get createdAt => integer()();
+  IntColumn get acceptedAt => integer().nullable()();
+  IntColumn get rejectedAt => integer().nullable()();
+  TextColumn get rejectionCode => text().nullable()();
+  TextColumn get rejectionReason => text().nullable()();
+
+  @override
+  Set<Column> get primaryKey => {changeId};
+
+  @override
+  List<Set<Column>> get uniqueKeys => [
+    {actorId, sequence},
+  ];
+}
+
+@DataClassName('SyncRegisterRow')
+class SyncRegisters extends Table {
+  TextColumn get epoch => text()();
+  TextColumn get resource => text()();
+  TextColumn get entityId => text()();
+  TextColumn get field => text()();
+  TextColumn get policy => text()();
+  TextColumn get candidatesJson => text().check(
+    const CustomExpression<bool>('json_valid(candidates_json)'),
+  )();
+  TextColumn get visibleValueJson => text().nullable().check(
+    const CustomExpression<bool>(
+      'visible_value_json IS NULL OR json_valid(visible_value_json)',
+    ),
+  )();
+  IntColumn get updatedCursor =>
+      integer().check(const CustomExpression<bool>('updated_cursor >= 0'))();
+  IntColumn get updatedAt => integer()();
+
+  @override
+  Set<Column> get primaryKey => {epoch, resource, entityId, field};
+}
+
+@DataClassName('SyncFrontierRow')
+class SyncFrontiers extends Table {
+  TextColumn get epoch => text()();
+  TextColumn get actorId => text()();
+  IntColumn get contiguousSequence => integer()
+      .withDefault(const Constant(0))
+      .check(const CustomExpression<bool>('contiguous_sequence >= 0'))();
+  IntColumn get integratedCursor => integer()
+      .withDefault(const Constant(0))
+      .check(const CustomExpression<bool>('integrated_cursor >= 0'))();
+  IntColumn get updatedAt => integer()();
+
+  @override
+  Set<Column> get primaryKey => {epoch, actorId};
+}
+
+/// Single-row durable allocator, Lamport clock, pull cursor, and bootstrap.
+@DataClassName('SyncReplicaStateRow')
+class SyncReplicaState extends Table {
+  IntColumn get id => integer()
+      .withDefault(const Constant(1))
+      .check(const CustomExpression<bool>('id = 1'))();
+  TextColumn get epoch => text().nullable()();
+  TextColumn get actorId => text()();
+  IntColumn get nextSequence => integer()
+      .withDefault(const Constant(1))
+      .check(const CustomExpression<bool>('next_sequence > 0'))();
+  IntColumn get lamport => integer()
+      .withDefault(const Constant(0))
+      .check(const CustomExpression<bool>('lamport >= 0'))();
+  IntColumn get pullCursor => integer()
+      .withDefault(const Constant(0))
+      .check(const CustomExpression<bool>('pull_cursor >= 0'))();
+  TextColumn get checkpointId => text().nullable()();
+  IntColumn get updatedAt => integer()();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
+@DataClassName('SyncQuarantineRow')
+class SyncQuarantine extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  TextColumn get epoch => text().nullable()();
+  TextColumn get changeId => text().nullable()();
+  TextColumn get actorId => text().nullable()();
+  IntColumn get sequence => integer().nullable()();
+  TextColumn get source => text()();
+  TextColumn get reasonCode => text()();
+  TextColumn get reason => text()();
+  TextColumn get contentHash => text().nullable()();
+  TextColumn get envelopeJson => text().nullable()();
+  BlobColumn get originalBytes => blob().nullable()();
+  IntColumn get receivedAt => integer()();
+  IntColumn get resolvedAt => integer().nullable()();
+  TextColumn get resolution => text().nullable()();
+}
+
+@DataClassName('SyncCheckpointRow')
+class SyncCheckpoints extends Table {
+  TextColumn get id => text()();
+  TextColumn get epoch => text()();
+  IntColumn get schemaVersion =>
+      integer().check(const CustomExpression<bool>('schema_version > 0'))();
+  TextColumn get frontierJson =>
+      text().check(const CustomExpression<bool>('json_valid(frontier_json)'))();
+  TextColumn get registersJson => text().check(
+    const CustomExpression<bool>('json_valid(registers_json)'),
+  )();
+  TextColumn get projectionHash => text()();
+  TextColumn get contentHash => text()();
+  IntColumn get creationCursor =>
+      integer().check(const CustomExpression<bool>('creation_cursor >= 0'))();
+  IntColumn get eventCount =>
+      integer().check(const CustomExpression<bool>('event_count >= 0'))();
+  BoolColumn get isGenesis => boolean().withDefault(const Constant(false))();
+  IntColumn get createdAt => integer()();
+  IntColumn get verifiedAt => integer().nullable()();
+
+  @override
+  Set<Column> get primaryKey => {id};
+
+  @override
+  List<Set<Column>> get uniqueKeys => [
+    {epoch, creationCursor},
+  ];
+}

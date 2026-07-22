@@ -4,4 +4,6 @@
          to allow setting breakpoints, to provide hot reload, etc.
     -->
     <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- Local HTTP is intentionally permitted only for emulator/dev-server E2E. -->
+    <application android:usesCleartextTraffic="true" />
 </manifest>

@@ -6,8 +6,18 @@ import {
 } from "../ai/whatsapp_parser.ts";
 import type { AppConfig } from "../config.ts";
 import type { Db } from "../db/index.ts";
-import { accounts, agentTurns, categories, transactions } from "../db/schema.ts";
-import { newId, nowMs, recordChange } from "../repos/changelog.ts";
+import {
+  accounts,
+  agentTurns,
+  categories,
+  transactions,
+} from "../db/schema.ts";
+import {
+  newId,
+  nowMs,
+  recordChange,
+  recordCommand,
+} from "../repos/changelog.ts";
 import { learnCategory } from "../rules/learn.ts";
 import { handlePiMessage } from "./pi/engine.ts";
 import type { PiModelDeps } from "./pi/provider.ts";
@@ -60,7 +70,11 @@ const MAX_CONTEXT_BYTES = 1024;
 
 /// Render the advisory context breadcrumb, or "" if absent/invalid/oversized.
 export function renderContextLine(context: unknown): string {
-  if (context === null || typeof context !== "object" || Array.isArray(context)) {
+  if (
+    context === null ||
+    typeof context !== "object" ||
+    Array.isArray(context)
+  ) {
     return "";
   }
   let serialized: string;
@@ -69,7 +83,11 @@ export function renderContextLine(context: unknown): string {
   } catch {
     return "";
   }
-  if (!serialized || serialized === "{}" || serialized.length > MAX_CONTEXT_BYTES) {
+  if (
+    !serialized ||
+    serialized === "{}" ||
+    serialized.length > MAX_CONTEXT_BYTES
+  ) {
     return "";
   }
   return `User is currently viewing: ${serialized}`;
@@ -91,9 +109,9 @@ const HISTORY_LIMIT = 6;
 const EMPTY_REPLY =
   "Send me an expense or ask a question — I can help with both.";
 const NOOP_ACK =
-  "Got it. Send an amount like \"480 groceries\" to log, or ask \"how much have I spent this month?\".";
+  'Got it. Send an amount like "480 groceries" to log, or ask "how much have I spent this month?".';
 const CLASSIFY_FALLBACK =
-  "I didn't quite get that. Send the amount and what it was for, like \"480 groceries\".";
+  'I didn\'t quite get that. Send the amount and what it was for, like "480 groceries".';
 
 /// The routing entry point /v1/messages and the WhatsApp webhook call. Cheap
 /// deterministic paths (empty, greeting, amount-prefix log, undo-last) run FIRST
@@ -192,7 +210,7 @@ async function handleLog(
 
   if (items.length === 0) {
     const reply =
-      "I didn't catch an amount in that. Try \"480 groceries\" or \"2,800 home decor on hdfc\".";
+      'I didn\'t catch an amount in that. Try "480 groceries" or "2,800 home decor on hdfc".';
     appendTurn(db, threadId, "assistant", reply);
     return { threadId, reply };
   }
@@ -211,9 +229,10 @@ async function handleLog(
   // #39: payee/category of each booked row, collected for best-effort auto-learn
   // AFTER the write commits (so the just-booked rows are counted).
   const toLearn: { payeeName: string | null; categoryId: string | null }[] = [];
-  db.transaction((tx) => {
+  recordCommand(db, (tx) => {
     items.forEach((item, idx) => {
-      const account = resolveByHint(item.accountHint, accountList) ?? defaultAccount;
+      const account =
+        resolveByHint(item.accountHint, accountList) ?? defaultAccount;
       const category = resolveByHint(item.categoryHint, categoryList);
       const id = newId();
       // Expense is negative; income/refund/salary positive.
@@ -299,7 +318,8 @@ function resolveByHint<T extends { id: string; name: string }>(
   return (
     rows.find((r) => r.name.toLowerCase() === h) ??
     rows.find(
-      (r) => r.name.toLowerCase().includes(h) || h.includes(r.name.toLowerCase()),
+      (r) =>
+        r.name.toLowerCase().includes(h) || h.includes(r.name.toLowerCase()),
     )
   );
 }
@@ -317,7 +337,9 @@ export function isWholeGreeting(lower: string): boolean {
 
 /// Starts with an amount or a spend/receive verb → a log.
 export function isLogPrefix(lower: string): boolean {
-  return /^(\d|rs\.?|inr|₹|spent|paid|got|received|refund|salary)\b/.test(lower);
+  return /^(\d|rs\.?|inr|₹|spent|paid|got|received|refund|salary)\b/.test(
+    lower,
+  );
 }
 
 /// "undo" / "scrap that" / "delete the last one" → the deterministic undo-last.
@@ -338,7 +360,10 @@ function runUndoLast(db: Db, threadId: string): AgentResponse {
     .select()
     .from(transactions)
     .where(
-      and(eq(transactions.origin, "whatsapp"), gt(transactions.createdAt, cutoff)),
+      and(
+        eq(transactions.origin, "whatsapp"),
+        gt(transactions.createdAt, cutoff),
+      ),
     )
     .orderBy(desc(transactions.createdAt))
     .limit(1)
@@ -349,7 +374,7 @@ function runUndoLast(db: Db, threadId: string): AgentResponse {
     appendTurn(db, threadId, "assistant", reply);
     return { threadId, reply };
   }
-  db.transaction((tx) => {
+  recordCommand(db, (tx) => {
     tx.delete(transactions).where(eq(transactions.id, last.id)).run();
     recordChange(tx, {
       resource: "transactions",
@@ -374,7 +399,9 @@ export function renderSelectionLine(
   if (!Array.isArray(raw) || raw.length === 0) return "";
   const ids = [
     ...new Set(
-      raw.filter((id): id is string => typeof id === "string" && id.trim().length > 0),
+      raw.filter(
+        (id): id is string => typeof id === "string" && id.trim().length > 0,
+      ),
     ),
   ].slice(0, MAX_SELECTION_IDS);
   if (ids.length === 0) return "";
@@ -395,12 +422,16 @@ export function renderSelectionLine(
 
   const shown = rows.slice(0, MAX_SELECTION_SHOWN);
   const lines = shown.map((r) => {
-    const catName = r.categoryId ? categoryNameById(db, r.categoryId) : "uncategorised";
+    const catName = r.categoryId
+      ? categoryNameById(db, r.categoryId)
+      : "uncategorised";
     const payee = r.payeeName ?? "—";
     return `  - id=${r.id} | ${r.date} | ${payee} | ${formatMoney(Math.abs(r.amountCents))} | category: ${catName}`;
   });
   const more =
-    rows.length > shown.length ? `\n  …and ${rows.length - shown.length} more` : "";
+    rows.length > shown.length
+      ? `\n  …and ${rows.length - shown.length} more`
+      : "";
   return `The user has selected these ${rows.length} transaction${rows.length === 1 ? "" : "s"} — act on THESE when they say "these"/"them"/"the selected ones":\n${lines.join("\n")}${more}`;
 }
 
@@ -438,7 +469,7 @@ function composeBookedReply(booked: BookedExpense[]): string {
 /// strings only reach the user *through* this sanitizer.
 export function sanitizeReply(reply: string): string {
   const fallback =
-    "I didn't quite get that. Send the amount and what it was for, like \"480 groceries\".";
+    'I didn\'t quite get that. Send the amount and what it was for, like "480 groceries".';
   if (!reply || typeof reply !== "string") return fallback;
   const cleaned = reply
     // eslint-disable-next-line no-control-regex
@@ -492,7 +523,9 @@ function formatMoney(minorCents: number): string {
   const whole = Math.floor(abs / 100);
   const frac = abs % 100;
   const formatted = whole.toLocaleString("en-IN");
-  return frac === 0 ? `₹${formatted}` : `₹${formatted}.${String(frac).padStart(2, "0")}`;
+  return frac === 0
+    ? `₹${formatted}`
+    : `₹${formatted}.${String(frac).padStart(2, "0")}`;
 }
 
 // Re-export shapes used by routes that previously consumed AgentResponse.

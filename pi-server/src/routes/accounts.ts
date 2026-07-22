@@ -4,7 +4,12 @@ import { z } from "zod";
 
 import type { AppEnv } from "../app.ts";
 import { accounts } from "../db/schema.ts";
-import { newId, nowMs, recordChange } from "../repos/changelog.ts";
+import {
+  newId,
+  nowMs,
+  recordChange,
+  recordCommand,
+} from "../repos/changelog.ts";
 import { reconcileAccount } from "../transactions/reconcile.ts";
 import { nameField } from "./_fields.ts";
 
@@ -23,7 +28,10 @@ const upsertSchema = z.object({
 const reconcileSchema = z.object({
   targetBalanceCents: z.number().int(),
   createAdjustment: z.boolean().optional(),
-  asOf: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  asOf: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional(),
 });
 
 export const accountsRouter = new Hono<AppEnv>();
@@ -62,11 +70,14 @@ accountsRouter.post("/", async (c) => {
     createdAt: at,
     updatedAt: at,
   };
-  db.transaction((tx) => {
-    tx.insert(accounts).values(row).onConflictDoUpdate({
-      target: accounts.id,
-      set: row,
-    }).run();
+  recordCommand(db, (tx) => {
+    tx.insert(accounts)
+      .values(row)
+      .onConflictDoUpdate({
+        target: accounts.id,
+        set: row,
+      })
+      .run();
     recordChange(tx, {
       resource: "accounts",
       resourceId: id,
@@ -84,7 +95,7 @@ accountsRouter.patch("/:id", async (c) => {
   const existing = db.select().from(accounts).where(eq(accounts.id, id)).get();
   if (!existing) return c.json({ error: "Not found" }, 404);
   const next = { ...existing, ...partial, updatedAt: nowMs() };
-  db.transaction((tx) => {
+  recordCommand(db, (tx) => {
     tx.update(accounts).set(next).where(eq(accounts.id, id)).run();
     recordChange(tx, {
       resource: "accounts",
@@ -117,8 +128,12 @@ accountsRouter.delete("/:id", (c) => {
   const db = c.get("db");
   const id = c.req.param("id");
   let removed = 0;
-  db.transaction((tx) => {
-    const rows = tx.delete(accounts).where(eq(accounts.id, id)).returning().all();
+  recordCommand(db, (tx) => {
+    const rows = tx
+      .delete(accounts)
+      .where(eq(accounts.id, id))
+      .returning()
+      .all();
     removed = rows.length;
     if (removed > 0) {
       recordChange(tx, { resource: "accounts", resourceId: id, op: "delete" });

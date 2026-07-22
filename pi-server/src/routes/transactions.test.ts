@@ -15,7 +15,8 @@ import { computeNetWorth } from "../repos/networth.ts";
 
 const tmpDirs: string[] = [];
 afterEach(() => {
-  for (const d of tmpDirs.splice(0)) rmSync(d, { recursive: true, force: true });
+  for (const d of tmpDirs.splice(0))
+    rmSync(d, { recursive: true, force: true });
 });
 
 function makeApp() {
@@ -35,9 +36,21 @@ function makeApp() {
 
 const at = 1_700_000_000_000;
 
-function addAccount(db: Db, id: string, openingBalanceCents = 0, archived = false) {
+function addAccount(
+  db: Db,
+  id: string,
+  openingBalanceCents = 0,
+  archived = false,
+) {
   db.insert(schema.accounts)
-    .values({ id, name: id, openingBalanceCents, archived, createdAt: at, updatedAt: at })
+    .values({
+      id,
+      name: id,
+      openingBalanceCents,
+      archived,
+      createdAt: at,
+      updatedAt: at,
+    })
     .run();
 }
 
@@ -50,7 +63,15 @@ function addTxn(
   parentId: string | null = null,
 ) {
   db.insert(schema.transactions)
-    .values({ id, accountId, amountCents, date, parentId, createdAt: at, updatedAt: at })
+    .values({
+      id,
+      accountId,
+      amountCents,
+      date,
+      parentId,
+      createdAt: at,
+      updatedAt: at,
+    })
     .run();
 }
 
@@ -94,9 +115,124 @@ async function group(app: ReturnType<typeof makeApp>["app"], body: unknown) {
   });
 }
 
-async function ungroup(app: ReturnType<typeof makeApp>["app"], parentId: string) {
-  return app.request(`/v1/transactions/ungroup/${parentId}`, { method: "POST" });
+async function ungroup(
+  app: ReturnType<typeof makeApp>["app"],
+  parentId: string,
+) {
+  return app.request(`/v1/transactions/ungroup/${parentId}`, {
+    method: "POST",
+  });
 }
+
+test("linked payee rename updates canonical entity and every derived cache", async () => {
+  const { app, db } = makeApp();
+  addAccount(db, "a1");
+  db.insert(schema.payees)
+    .values({ id: "p1", name: "Payu Retail", updatedAt: at })
+    .run();
+  for (const id of ["dyson", "other"]) {
+    db.insert(schema.transactions)
+      .values({
+        id,
+        accountId: "a1",
+        payeeId: "p1",
+        payeeName: "Payu Retail",
+        amountCents: -100,
+        date: "2026-07-21",
+        createdAt: at,
+        updatedAt: at,
+      })
+      .run();
+  }
+
+  const renamed = await patchTxn(app, "dyson", { payeeName: "Dyson V15" });
+  expect(renamed.status).toBe(200);
+  expect(
+    ((await renamed.json()) as { transaction: { payeeName: string } })
+      .transaction.payeeName,
+  ).toBe("Dyson V15");
+  expect(
+    db.select().from(schema.payees).where(eq(schema.payees.id, "p1")).get()
+      ?.name,
+  ).toBe("Dyson V15");
+  expect(
+    db
+      .select()
+      .from(schema.transactions)
+      .all()
+      .map((row) => row.payeeName),
+  ).toEqual(["Dyson V15", "Dyson V15"]);
+
+  const noteEdit = await patchTxn(app, "dyson", { notes: "probe" });
+  expect(noteEdit.status).toBe(200);
+  expect(rowById(db, "dyson")?.payeeName).toBe("Dyson V15");
+  expect(
+    db
+      .select()
+      .from(schema.changeLog)
+      .all()
+      .filter((row) => row.resource === "payees"),
+  ).toHaveLength(1);
+});
+
+test("clearing a linked payee requires an explicit detach command", async () => {
+  const { app, db } = makeApp();
+  addAccount(db, "a1");
+  db.insert(schema.payees)
+    .values({ id: "p1", name: "Payu", updatedAt: at })
+    .run();
+  db.insert(schema.transactions)
+    .values({
+      id: "t1",
+      accountId: "a1",
+      payeeId: "p1",
+      payeeName: "Payu",
+      amountCents: -100,
+      date: "2026-07-21",
+      createdAt: at,
+      updatedAt: at,
+    })
+    .run();
+
+  expect((await patchTxn(app, "t1", { payeeName: null })).status).toBe(400);
+  expect(
+    (
+      await patchTxn(app, "t1", {
+        payeeId: null,
+        payeeName: "Detached label",
+      })
+    ).status,
+  ).toBe(200);
+  expect(rowById(db, "t1")).toMatchObject({
+    payeeId: null,
+    payeeName: "Detached label",
+  });
+});
+
+test("PATCH has no POST defaults that rewrite untouched fields", async () => {
+  const { app, db } = makeApp();
+  addAccount(db, "a1");
+  db.insert(schema.transactions)
+    .values({
+      id: "t1",
+      accountId: "a1",
+      amountCents: -100,
+      date: "2026-07-21",
+      notes: null,
+      cleared: true,
+      origin: "sms",
+      createdAt: at,
+      updatedAt: at,
+    })
+    .run();
+
+  expect((await patchTxn(app, "t1", { notes: "probe" })).status).toBe(200);
+  expect(rowById(db, "t1")).toMatchObject({
+    notes: "probe",
+    cleared: true,
+    origin: "sms",
+  });
+});
 
 test("group: creates a zero-amount parent and links both children", async () => {
   const { app, db } = makeApp();
@@ -111,7 +247,12 @@ test("group: creates a zero-amount parent and links both children", async () => 
   });
   expect(res.status).toBe(201);
   const body = (await res.json()) as {
-    parent: { id: string; isGroupParent: boolean; amountCents: number; origin: string };
+    parent: {
+      id: string;
+      isGroupParent: boolean;
+      amountCents: number;
+      origin: string;
+    };
     childIds: string[];
     groupTotalCents: number;
   };
@@ -146,9 +287,11 @@ test("ungroup: clears children links, deletes parent, leaves child amounts intac
   addAccount(db, "a1");
   addTxn(db, "t1", "a1", -500_00, "2026-02-01");
   addTxn(db, "t2", "a1", -300_00, "2026-02-02");
-  const parentId = ((await (
-    await group(app, { ids: ["t1", "t2"], date: "2026-02-01" })
-  ).json()) as { parent: { id: string } }).parent.id;
+  const parentId = (
+    (await (
+      await group(app, { ids: ["t1", "t2"], date: "2026-02-01" })
+    ).json()) as { parent: { id: string } }
+  ).parent.id;
 
   const res = await ungroup(app, parentId);
   expect(res.status).toBe(200);
@@ -158,12 +301,24 @@ test("ungroup: clears children links, deletes parent, leaves child amounts intac
 
   // Parent gone.
   expect(
-    db.select().from(schema.transactions).where(eq(schema.transactions.id, parentId)).get(),
+    db
+      .select()
+      .from(schema.transactions)
+      .where(eq(schema.transactions.id, parentId))
+      .get(),
   ).toBeUndefined();
 
   // Children survive, unlinked, amounts untouched.
-  const t1 = db.select().from(schema.transactions).where(eq(schema.transactions.id, "t1")).get();
-  const t2 = db.select().from(schema.transactions).where(eq(schema.transactions.id, "t2")).get();
+  const t1 = db
+    .select()
+    .from(schema.transactions)
+    .where(eq(schema.transactions.id, "t1"))
+    .get();
+  const t2 = db
+    .select()
+    .from(schema.transactions)
+    .where(eq(schema.transactions.id, "t2"))
+    .get();
   expect(t1?.groupParentId).toBeNull();
   expect(t2?.groupParentId).toBeNull();
   expect(t1?.amountCents).toBe(-500_00);
@@ -176,9 +331,11 @@ test("change_log: group emits parent+children upserts; ungroup emits child upser
   addTxn(db, "t1", "a1", -500_00, "2026-02-01");
   addTxn(db, "t2", "a1", -300_00, "2026-02-02");
 
-  const parentId = ((await (
-    await group(app, { ids: ["t1", "t2"], date: "2026-02-01" })
-  ).json()) as { parent: { id: string } }).parent.id;
+  const parentId = (
+    (await (
+      await group(app, { ids: ["t1", "t2"], date: "2026-02-01" })
+    ).json()) as { parent: { id: string } }
+  ).parent.id;
 
   const afterGroup = db.select().from(schema.changeLog).all();
   // parent upsert + t1 upsert + t2 upsert.
@@ -218,9 +375,11 @@ test("no double-count: computeNetWorth is IDENTICAL before/after group and after
 
   const before = computeNetWorth(db);
 
-  const parentId = ((await (
-    await group(app, { ids: ["t1", "t2"], date: "2026-02-01" })
-  ).json()) as { parent: { id: string } }).parent.id;
+  const parentId = (
+    (await (
+      await group(app, { ids: ["t1", "t2"], date: "2026-02-01" })
+    ).json()) as { parent: { id: string } }
+  ).parent.id;
 
   const afterGroup = computeNetWorth(db);
   expect(afterGroup).toEqual(before);
@@ -245,9 +404,11 @@ test("no double-count: /v1/summary is IDENTICAL before/after group and after ung
     };
 
   const before = await summary();
-  const parentId = ((await (
-    await group(app, { ids: ["t1", "t2"], date: "2026-02-01" })
-  ).json()) as { parent: { id: string } }).parent.id;
+  const parentId = (
+    (await (
+      await group(app, { ids: ["t1", "t2"], date: "2026-02-01" })
+    ).json()) as { parent: { id: string } }
+  ).parent.id;
   expect(await summary()).toEqual(before);
 
   await ungroup(app, parentId);
@@ -263,20 +424,30 @@ test("group rejects: <2 existing, split children, already-grouped, and group par
   addTxn(db, "split_c", "a1", -100_00, "2026-02-04", "split_p"); // split child
 
   // fewer than 2 exist
-  expect((await group(app, { ids: ["t1", "nope"], date: "2026-02-01" })).status).toBe(400);
+  expect(
+    (await group(app, { ids: ["t1", "nope"], date: "2026-02-01" })).status,
+  ).toBe(400);
 
   // a split child cannot be grouped
-  expect((await group(app, { ids: ["t1", "split_c"], date: "2026-02-01" })).status).toBe(400);
+  expect(
+    (await group(app, { ids: ["t1", "split_c"], date: "2026-02-01" })).status,
+  ).toBe(400);
 
   // group t1+t2, then try to regroup an already-grouped row
-  const parentId = ((await (
-    await group(app, { ids: ["t1", "t2"], date: "2026-02-01" })
-  ).json()) as { parent: { id: string } }).parent.id;
-  expect((await group(app, { ids: ["t1", "split_p"], date: "2026-02-01" })).status).toBe(400);
+  const parentId = (
+    (await (
+      await group(app, { ids: ["t1", "t2"], date: "2026-02-01" })
+    ).json()) as { parent: { id: string } }
+  ).parent.id;
+  expect(
+    (await group(app, { ids: ["t1", "split_p"], date: "2026-02-01" })).status,
+  ).toBe(400);
 
   // a group parent cannot be nested into another group
   addTxn(db, "t4", "a1", -10_00, "2026-02-05");
-  expect((await group(app, { ids: [parentId, "t4"], date: "2026-02-01" })).status).toBe(400);
+  expect(
+    (await group(app, { ids: [parentId, "t4"], date: "2026-02-01" })).status,
+  ).toBe(400);
 });
 
 test("ungroup on a non-parent id is 404", async () => {
@@ -300,10 +471,18 @@ test("splits still work: a split parent (parentId-based) is unaffected by groupi
   await group(app, { ids: ["g1", "g2"], date: "2026-02-11" });
   // Split rows untouched; net worth unchanged (split children still excluded,
   // group parent contributes 0).
-  const sp = db.select().from(schema.transactions).where(eq(schema.transactions.id, "sp")).get();
+  const sp = db
+    .select()
+    .from(schema.transactions)
+    .where(eq(schema.transactions.id, "sp"))
+    .get();
   expect(sp?.parentId).toBeNull();
   expect(sp?.groupParentId).toBeNull();
-  const sc1 = db.select().from(schema.transactions).where(eq(schema.transactions.id, "sc1")).get();
+  const sc1 = db
+    .select()
+    .from(schema.transactions)
+    .where(eq(schema.transactions.id, "sc1"))
+    .get();
   expect(sc1?.parentId).toBe("sp");
   expect(computeNetWorth(db)).toEqual(before);
 });
@@ -333,8 +512,11 @@ test("transfer create: yields two mirrored legs, shared group, categories nulled
     categoryId: "cat_should_be_nulled",
   });
   expect(res.status).toBe(201);
-  const primary = ((await res.json()) as { transaction: { id: string; transferGroupId: string } })
-    .transaction;
+  const primary = (
+    (await res.json()) as {
+      transaction: { id: string; transferGroupId: string };
+    }
+  ).transaction;
 
   const legs = transferLegs(db, primary.transferGroupId);
   expect(legs).toHaveLength(2);
@@ -386,15 +568,17 @@ test("transfer edit: amount/date/notes propagate to sibling, no recursion", asyn
   const { app, db } = makeApp();
   addAccount(db, "a1");
   addAccount(db, "a2");
-  const primary = ((await (
-    await postTxn(app, {
-      accountId: "a1",
-      transferAccountId: "a2",
-      amountCents: -500_00,
-      date: "2026-03-01",
-      notes: "orig",
-    })
-  ).json()) as { transaction: { id: string; transferGroupId: string } }).transaction;
+  const primary = (
+    (await (
+      await postTxn(app, {
+        accountId: "a1",
+        transferAccountId: "a2",
+        amountCents: -500_00,
+        date: "2026-03-01",
+        notes: "orig",
+      })
+    ).json()) as { transaction: { id: string; transferGroupId: string } }
+  ).transaction;
 
   const legs = transferLegs(db, primary.transferGroupId);
   const primaryLeg = legs.find((l) => l.id === primary.id)!;
@@ -445,14 +629,16 @@ test("transfer delete: removing either leg removes both + logs two deletes", asy
   const { app, db } = makeApp();
   addAccount(db, "a1");
   addAccount(db, "a2");
-  const primary = ((await (
-    await postTxn(app, {
-      accountId: "a1",
-      transferAccountId: "a2",
-      amountCents: -500_00,
-      date: "2026-03-01",
-    })
-  ).json()) as { transaction: { id: string; transferGroupId: string } }).transaction;
+  const primary = (
+    (await (
+      await postTxn(app, {
+        accountId: "a1",
+        transferAccountId: "a2",
+        amountCents: -500_00,
+        date: "2026-03-01",
+      })
+    ).json()) as { transaction: { id: string; transferGroupId: string } }
+  ).transaction;
   const legs = transferLegs(db, primary.transferGroupId);
   const siblingId = legs.find((l) => l.id !== primary.id)!.id;
 
@@ -496,14 +682,16 @@ test("non-transfer create/patch/delete still behave as before (regression)", asy
   addAccount(db, "a1");
 
   // Create: single row, single change_log upsert, no sibling.
-  const created = ((await (
-    await postTxn(app, {
-      accountId: "a1",
-      amountCents: -250_00,
-      date: "2026-03-01",
-      categoryId: "cat1",
-    })
-  ).json()) as { transaction: { id: string } }).transaction;
+  const created = (
+    (await (
+      await postTxn(app, {
+        accountId: "a1",
+        amountCents: -250_00,
+        date: "2026-03-01",
+        categoryId: "cat1",
+      })
+    ).json()) as { transaction: { id: string } }
+  ).transaction;
   const row = rowById(db, created.id)!;
   expect(row.amountCents).toBe(-250_00);
   expect(row.categoryId).toBe("cat1"); // NOT nulled — plain txn keeps its category
@@ -586,9 +774,11 @@ test("FIX 11: PATCH cannot give a group parent real money", async () => {
   addAccount(db, "a1");
   addTxn(db, "t1", "a1", -500_00, "2026-02-01");
   addTxn(db, "t2", "a1", -300_00, "2026-02-02");
-  const parentId = ((await (
-    await group(app, { ids: ["t1", "t2"], date: "2026-02-01" })
-  ).json()) as { parent: { id: string } }).parent.id;
+  const parentId = (
+    (await (
+      await group(app, { ids: ["t1", "t2"], date: "2026-02-01" })
+    ).json()) as { parent: { id: string } }
+  ).parent.id;
 
   // A non-zero amount is rejected; the parent stays at 0.
   const res = await patchTxn(app, parentId, { amountCents: -800_00 });
@@ -609,9 +799,11 @@ test("FIX 11: POST overwriting a group parent forces amountCents back to 0", asy
   addAccount(db, "a1");
   addTxn(db, "t1", "a1", -500_00, "2026-02-01");
   addTxn(db, "t2", "a1", -300_00, "2026-02-02");
-  const parentId = ((await (
-    await group(app, { ids: ["t1", "t2"], date: "2026-02-01" })
-  ).json()) as { parent: { id: string } }).parent.id;
+  const parentId = (
+    (await (
+      await group(app, { ids: ["t1", "t2"], date: "2026-02-01" })
+    ).json()) as { parent: { id: string } }
+  ).parent.id;
 
   const res = await postTxn(app, {
     id: parentId,
@@ -631,14 +823,16 @@ test("FIX 2: a reconciled transfer sibling blocks PATCH/DELETE of the unlocked l
   const { app, db } = makeApp();
   addAccount(db, "a1");
   addAccount(db, "a2");
-  const primary = ((await (
-    await postTxn(app, {
-      accountId: "a1",
-      transferAccountId: "a2",
-      amountCents: -500_00,
-      date: "2026-03-01",
-    })
-  ).json()) as { transaction: { id: string; transferGroupId: string } }).transaction;
+  const primary = (
+    (await (
+      await postTxn(app, {
+        accountId: "a1",
+        transferAccountId: "a2",
+        amountCents: -500_00,
+        date: "2026-03-01",
+      })
+    ).json()) as { transaction: { id: string; transferGroupId: string } }
+  ).transaction;
   const legs = transferLegs(db, primary.transferGroupId);
   const aLeg = legs.find((l) => l.id === primary.id)!; // unlocked
   const bLeg = legs.find((l) => l.id !== primary.id)!; // will be locked
@@ -655,7 +849,10 @@ test("FIX 2: a reconciled transfer sibling blocks PATCH/DELETE of the unlocked l
   expect(rowById(db, aLeg.id)!.amountCents).toBe(-500_00); // unchanged
 
   // force=true overrides.
-  const resF = await patchTxn(app, aLeg.id, { amountCents: -600_00, force: true });
+  const resF = await patchTxn(app, aLeg.id, {
+    amountCents: -600_00,
+    force: true,
+  });
   expect(resF.status).toBe(200);
   expect(rowById(db, aLeg.id)!.amountCents).toBe(-600_00);
 
@@ -680,16 +877,21 @@ test("FIX 9: PATCH cannot move a transfer leg to another account", async () => {
   addAccount(db, "a1");
   addAccount(db, "a2");
   addAccount(db, "a3");
-  const primary = ((await (
-    await postTxn(app, {
-      accountId: "a1",
-      transferAccountId: "a2",
-      amountCents: -500_00,
-      date: "2026-03-01",
-    })
-  ).json()) as { transaction: { id: string; transferGroupId: string } }).transaction;
+  const primary = (
+    (await (
+      await postTxn(app, {
+        accountId: "a1",
+        transferAccountId: "a2",
+        amountCents: -500_00,
+        date: "2026-03-01",
+      })
+    ).json()) as { transaction: { id: string; transferGroupId: string } }
+  ).transaction;
 
-  const res = await patchTxn(app, primary.id, { accountId: "a3", notes: "moved?" });
+  const res = await patchTxn(app, primary.id, {
+    accountId: "a3",
+    notes: "moved?",
+  });
   expect(res.status).toBe(200);
 
   const row = rowById(db, primary.id)!;
@@ -737,16 +939,18 @@ test("FIX 8: parentId/splitTotalCents are stripped on a transfer create", async 
   const { app, db } = makeApp();
   addAccount(db, "a1");
   addAccount(db, "a2");
-  const primary = ((await (
-    await postTxn(app, {
-      accountId: "a1",
-      transferAccountId: "a2",
-      amountCents: -500_00,
-      date: "2026-03-01",
-      parentId: "some-parent",
-      splitTotalCents: 999_00,
-    })
-  ).json()) as { transaction: { transferGroupId: string } }).transaction;
+  const primary = (
+    (await (
+      await postTxn(app, {
+        accountId: "a1",
+        transferAccountId: "a2",
+        amountCents: -500_00,
+        date: "2026-03-01",
+        parentId: "some-parent",
+        splitTotalCents: 999_00,
+      })
+    ).json()) as { transaction: { transferGroupId: string } }
+  ).transaction;
 
   const legs = transferLegs(db, primary.transferGroupId);
   expect(legs).toHaveLength(2);
@@ -788,13 +992,19 @@ test("#47: deleting a group parent ungroups its children (they survive, groupPar
   addAccount(db, "a1");
   addTxn(db, "g1", "a1", -5000, "2026-07-10");
   addTxn(db, "g2", "a1", -3000, "2026-07-11");
-  const parentId = ((await (
-    await app.request("/v1/transactions/group", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ ids: ["g1", "g2"], date: "2026-07-10", payeeName: "Card payment" }),
-    })
-  ).json()) as { parent: { id: string } }).parent.id;
+  const parentId = (
+    (await (
+      await app.request("/v1/transactions/group", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          ids: ["g1", "g2"],
+          date: "2026-07-10",
+          payeeName: "Card payment",
+        }),
+      })
+    ).json()) as { parent: { id: string } }
+  ).parent.id;
 
   const res = await deleteTxn(app, parentId);
   expect(res.status).toBe(200);

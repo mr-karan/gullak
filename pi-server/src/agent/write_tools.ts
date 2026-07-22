@@ -3,7 +3,12 @@ import { eq, like, sql } from "drizzle-orm";
 import type { Db } from "../db/index.ts";
 import type { NewTransaction, Transaction } from "../db/schema.ts";
 import { accounts, categories, transactions } from "../db/schema.ts";
-import { newId, nowMs, recordChange } from "../repos/changelog.ts";
+import {
+  newId,
+  nowMs,
+  recordChange,
+  recordCommand,
+} from "../repos/changelog.ts";
 import { learnCategory } from "../rules/learn.ts";
 import {
   deleteTransactionCore,
@@ -73,8 +78,19 @@ export type WriteToolData =
       skippedLocked: string[];
       previous: { id: string; categoryId: string | null }[];
     }
-  | { kind: "edit"; id: string; before: Transaction | null; after: Transaction | null; error?: string }
-  | { kind: "delete"; deleted: string[]; skippedLocked: string[]; payloads: Transaction[] }
+  | {
+      kind: "edit";
+      id: string;
+      before: Transaction | null;
+      after: Transaction | null;
+      error?: string;
+    }
+  | {
+      kind: "delete";
+      deleted: string[];
+      skippedLocked: string[];
+      payloads: Transaction[];
+    }
   | { kind: "log"; id: string | null; row: Transaction | null }
   | { kind: "restore_categories"; restored: string[] }
   | { kind: "restore_transactions"; restored: string[] }
@@ -98,7 +114,10 @@ export const WRITE_TOOL_SCHEMAS: OpenAiToolSchema[] = [
           items: { type: "string" },
           description: "Ids of the transactions to recategorize.",
         },
-        categoryName: { type: "string", description: "Target category by name, e.g. 'Food'." },
+        categoryName: {
+          type: "string",
+          description: "Target category by name, e.g. 'Food'.",
+        },
         categoryId: {
           type: ["string", "null"],
           description: "Target category id, or null to clear the category.",
@@ -115,10 +134,16 @@ export const WRITE_TOOL_SCHEMAS: OpenAiToolSchema[] = [
       type: "object",
       properties: {
         id: { type: "string", description: "The transaction id to edit." },
-        amountCents: { type: "integer", description: "New amount magnitude in paise (sign preserved)." },
+        amountCents: {
+          type: "integer",
+          description: "New amount magnitude in paise (sign preserved).",
+        },
         payeeName: { type: "string" },
         categoryName: { type: "string", description: "New category by name." },
-        categoryId: { type: ["string", "null"], description: "New category id, or null to clear." },
+        categoryId: {
+          type: ["string", "null"],
+          description: "New category id, or null to clear.",
+        },
         date: { type: "string", description: "YYYY-MM-DD." },
         notes: { type: "string" },
       },
@@ -148,8 +173,15 @@ export const WRITE_TOOL_SCHEMAS: OpenAiToolSchema[] = [
     parameters: {
       type: "object",
       properties: {
-        amountCents: { type: "integer", description: "Amount magnitude in paise." },
-        isIncome: { type: "boolean", description: "true for income/refund/salary; false (default) for an expense." },
+        amountCents: {
+          type: "integer",
+          description: "Amount magnitude in paise.",
+        },
+        isIncome: {
+          type: "boolean",
+          description:
+            "true for income/refund/salary; false (default) for an expense.",
+        },
         accountName: { type: "string" },
         accountId: { type: "string" },
         payeeName: { type: "string" },
@@ -179,7 +211,8 @@ export function runWriteTool(db: Db, call: WriteToolCall): WriteToolResult {
   // model typo ("Grocery" vs "Groceries") would otherwise silently WIPE the
   // category off every targeted row. Refuse instead so the model can correct.
   if (
-    (call.tool === "categorize_transactions" || call.tool === "edit_transaction") &&
+    (call.tool === "categorize_transactions" ||
+      call.tool === "edit_transaction") &&
     p.categoryName != null &&
     resolveCategoryId(db, p.categoryName) === null
   ) {
@@ -193,7 +226,7 @@ export function runWriteTool(db: Db, call: WriteToolCall): WriteToolResult {
       const categoryId =
         p.categoryName != null
           ? resolveCategoryId(db, p.categoryName)
-          : p.categoryId ?? null;
+          : (p.categoryId ?? null);
       return categorizeTransactions(db, p.transactionIds ?? [], categoryId);
     }
     case "edit_transaction":
@@ -225,9 +258,13 @@ function categorizeTransactions(
   const updated: string[] = [];
   const skippedLocked: string[] = [];
   const previous: { id: string; categoryId: string | null }[] = [];
-  const toLearn: { payeeId: string | null; payeeName: string | null; categoryId: string }[] = [];
+  const toLearn: {
+    payeeId: string | null;
+    payeeName: string | null;
+    categoryId: string;
+  }[] = [];
 
-  db.transaction((tx) => {
+  recordCommand(db, (tx) => {
     for (const id of unique) {
       const row = tx
         .select()
@@ -250,7 +287,11 @@ function categorizeTransactions(
       });
       updated.push(id);
       if (categoryId) {
-        toLearn.push({ payeeId: row.payeeId, payeeName: row.payeeName, categoryId });
+        toLearn.push({
+          payeeId: row.payeeId,
+          payeeName: row.payeeName,
+          categoryId,
+        });
       }
     }
   });
@@ -258,7 +299,9 @@ function categorizeTransactions(
   // Best-effort auto-learn AFTER commit so the just-categorized rows count.
   for (const l of toLearn) learnCategory(db, l);
 
-  const catLabel = categoryId ? categoryNameOf(db, categoryId) : "Uncategorised";
+  const catLabel = categoryId
+    ? categoryNameOf(db, categoryId)
+    : "Uncategorised";
   let summary: string;
   if (updated.length > 0) {
     summary = `Recategorized ${updated.length} to ${catLabel}`;
@@ -299,7 +342,13 @@ function editTransaction(
   if (!id) {
     return {
       formatted: "Tell me which transaction to edit (an id).",
-      data: { kind: "edit", id: "", before: null, after: null, error: "missing id" },
+      data: {
+        kind: "edit",
+        id: "",
+        before: null,
+        after: null,
+        error: "missing id",
+      },
     };
   }
   const existing = db
@@ -333,7 +382,13 @@ function editTransaction(
   if (!outcome.ok) {
     return {
       formatted: outcome.error,
-      data: { kind: "edit", id, before: existing, after: null, error: outcome.error },
+      data: {
+        kind: "edit",
+        id,
+        before: existing,
+        after: null,
+        error: outcome.error,
+      },
     };
   }
 
@@ -397,7 +452,7 @@ function deleteTransactions(db: Db, ids: string[]): WriteToolResult {
   const payloads: Transaction[] = [];
 
   // ONE transaction for the whole batch.
-  db.transaction((tx) => {
+  recordCommand(db, (tx) => {
     for (const id of unique) {
       const res = deleteTransactionCore(tx, id);
       if (res.status === "deleted") {
@@ -413,7 +468,8 @@ function deleteTransactions(db: Db, ids: string[]): WriteToolResult {
   let summary: string;
   if (deleted.length > 0) {
     summary = `Deleted ${deleted.length} transaction${deleted.length === 1 ? "" : "s"}`;
-    if (skippedLocked.length > 0) summary += ` (${skippedLocked.length} locked, skipped)`;
+    if (skippedLocked.length > 0)
+      summary += ` (${skippedLocked.length} locked, skipped)`;
   } else if (skippedLocked.length > 0) {
     summary = `Nothing deleted — ${skippedLocked.length} locked and skipped`;
   } else {
@@ -460,7 +516,7 @@ function logTransaction(
   const categoryId =
     p.categoryName != null
       ? resolveCategoryId(db, p.categoryName)
-      : p.categoryId ?? null;
+      : (p.categoryId ?? null);
   const magnitude = Math.abs(p.amountCents);
   const amountCents = p.isIncome ? magnitude : -magnitude;
 
@@ -495,7 +551,7 @@ function logTransaction(
     updatedAt: at,
   };
 
-  db.transaction((tx) => {
+  recordCommand(db, (tx) => {
     tx.insert(transactions).values(row).run();
     recordChange(tx, {
       resource: "transactions",
@@ -532,7 +588,7 @@ function restoreCategories(
   previous: { id: string; categoryId: string | null }[],
 ): WriteToolResult {
   const restored: string[] = [];
-  db.transaction((tx) => {
+  recordCommand(db, (tx) => {
     for (const prev of previous) {
       const row = tx
         .select()
@@ -540,8 +596,15 @@ function restoreCategories(
         .where(eq(transactions.id, prev.id))
         .get();
       if (!row) continue;
-      const next = { ...row, categoryId: prev.categoryId ?? null, updatedAt: nowMs() };
-      tx.update(transactions).set(next).where(eq(transactions.id, prev.id)).run();
+      const next = {
+        ...row,
+        categoryId: prev.categoryId ?? null,
+        updatedAt: nowMs(),
+      };
+      tx.update(transactions)
+        .set(next)
+        .where(eq(transactions.id, prev.id))
+        .run();
       recordChange(tx, {
         resource: "transactions",
         resourceId: prev.id,
@@ -559,7 +622,7 @@ function restoreCategories(
 
 function restoreTransactions(db: Db, payloads: Transaction[]): WriteToolResult {
   const restored: string[] = [];
-  db.transaction((tx) => {
+  recordCommand(db, (tx) => {
     for (const p of payloads) {
       // Bump updatedAt so the re-created row wins LWW over the earlier delete on
       // other clients.
@@ -605,7 +668,9 @@ function resolveCategoryId(db: Db, name: string | undefined): string | null {
   const row = db
     .select({ id: categories.id })
     .from(categories)
-    .where(like(sql`LOWER(${categories.name})`, `%${name.trim().toLowerCase()}%`))
+    .where(
+      like(sql`LOWER(${categories.name})`, `%${name.trim().toLowerCase()}%`),
+    )
     .limit(1)
     .get();
   return row?.id ?? null;

@@ -125,6 +125,17 @@ void main() {
     },
   );
 
+  test('legacy rule poison is consumed without touching local rules', () async {
+    final ok = await applier.apply({
+      'resource': 'rules',
+      'resourceId': 'legacy-rule',
+      'op': 'upsert',
+      'payload': {'legacy_schema': true},
+    });
+    expect(ok, isTrue);
+    expect(await db.select(db.rules).get(), isEmpty);
+  });
+
   test(
     'a null payload on an upsert (server poison-pill marker) is skipped',
     () async {

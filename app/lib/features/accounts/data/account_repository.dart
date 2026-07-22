@@ -54,10 +54,20 @@ class AccountRepository {
   final ChangeLogWriter? _changes;
   static const _uuid = Uuid();
 
-  Future<void> _logRow(String id) async {
+  Future<T> _command<T>(Future<T> Function() callback) =>
+      _changes?.command(callback) ?? _db.transaction(callback);
+
+  Future<void> _logRow(String id, {Set<String>? changedFields}) async {
     if (_changes == null) return;
     final row = await byId(id);
-    if (row != null) await _changes.upsert('accounts', id, row.toJson());
+    if (row != null) {
+      await _changes.upsert(
+        'accounts',
+        id,
+        row.toJson(),
+        changedFields: changedFields,
+      );
+    }
   }
 
   Future<List<AccountRow>> list({bool includeArchived = false}) {
@@ -92,25 +102,27 @@ class AccountRepository {
     int? reconciledBalanceCents,
     int? reconciledAt,
   }) async {
-    final id = _uuid.v4();
-    final now = DateTime.now().millisecondsSinceEpoch;
-    await _db
-        .into(_db.accounts)
-        .insert(
-          AccountsCompanion.insert(
-            id: id,
-            name: name,
-            kind: Value(kind.id),
-            openingBalanceCents: Value(openingBalanceCents),
-            reconciledBalanceCents: Value(reconciledBalanceCents),
-            reconciledAt: Value(reconciledAt),
-            onBudget: Value(onBudget ?? !kind.defaultsOffBudget),
-            createdAt: now,
-            updatedAt: now,
-          ),
-        );
-    await _logRow(id);
-    return id;
+    return _command(() async {
+      final id = _uuid.v4();
+      final now = DateTime.now().millisecondsSinceEpoch;
+      await _db
+          .into(_db.accounts)
+          .insert(
+            AccountsCompanion.insert(
+              id: id,
+              name: name,
+              kind: Value(kind.id),
+              openingBalanceCents: Value(openingBalanceCents),
+              reconciledBalanceCents: Value(reconciledBalanceCents),
+              reconciledAt: Value(reconciledAt),
+              onBudget: Value(onBudget ?? !kind.defaultsOffBudget),
+              createdAt: now,
+              updatedAt: now,
+            ),
+          );
+      await _logRow(id);
+      return id;
+    });
   }
 
   Future<void> update(
@@ -122,41 +134,59 @@ class AccountRepository {
     Object? reconciledBalanceCents = _Sentinel.value,
     Object? reconciledAt = _Sentinel.value,
   }) async {
-    final now = DateTime.now().millisecondsSinceEpoch;
-    await (_db.update(_db.accounts)..where((t) => t.id.equals(id))).write(
-      AccountsCompanion(
-        name: name == null ? const Value.absent() : Value(name),
-        kind: kind == null ? const Value.absent() : Value(kind.id),
-        openingBalanceCents: openingBalanceCents == null
-            ? const Value.absent()
-            : Value(openingBalanceCents),
-        reconciledBalanceCents: _v<int?>(reconciledBalanceCents),
-        reconciledAt: _v<int?>(reconciledAt),
-        onBudget: onBudget == null ? const Value.absent() : Value(onBudget),
-        updatedAt: Value(now),
-      ),
-    );
-    await _logRow(id);
+    return _command(() async {
+      final now = DateTime.now().millisecondsSinceEpoch;
+      await (_db.update(_db.accounts)..where((t) => t.id.equals(id))).write(
+        AccountsCompanion(
+          name: name == null ? const Value.absent() : Value(name),
+          kind: kind == null ? const Value.absent() : Value(kind.id),
+          openingBalanceCents: openingBalanceCents == null
+              ? const Value.absent()
+              : Value(openingBalanceCents),
+          reconciledBalanceCents: _v<int?>(reconciledBalanceCents),
+          reconciledAt: _v<int?>(reconciledAt),
+          onBudget: onBudget == null ? const Value.absent() : Value(onBudget),
+          updatedAt: Value(now),
+        ),
+      );
+      await _logRow(
+        id,
+        changedFields: {
+          if (name != null) 'name',
+          if (kind != null) 'kind',
+          if (openingBalanceCents != null) 'openingBalanceCents',
+          if (!identical(reconciledBalanceCents, _Sentinel.value))
+            'reconciledBalanceCents',
+          if (!identical(reconciledAt, _Sentinel.value)) 'reconciledAt',
+          if (onBudget != null) 'onBudget',
+          'updatedAt',
+        },
+      );
+    });
   }
 
   Future<void> archive(String id) async {
-    await (_db.update(_db.accounts)..where((t) => t.id.equals(id))).write(
-      AccountsCompanion(
-        archived: const Value(true),
-        updatedAt: Value(DateTime.now().millisecondsSinceEpoch),
-      ),
-    );
-    await _logRow(id);
+    return _command(() async {
+      await (_db.update(_db.accounts)..where((t) => t.id.equals(id))).write(
+        AccountsCompanion(
+          archived: const Value(true),
+          updatedAt: Value(DateTime.now().millisecondsSinceEpoch),
+        ),
+      );
+      await _logRow(id, changedFields: {'archived', 'updatedAt'});
+    });
   }
 
   Future<void> unarchive(String id) async {
-    await (_db.update(_db.accounts)..where((t) => t.id.equals(id))).write(
-      AccountsCompanion(
-        archived: const Value(false),
-        updatedAt: Value(DateTime.now().millisecondsSinceEpoch),
-      ),
-    );
-    await _logRow(id);
+    return _command(() async {
+      await (_db.update(_db.accounts)..where((t) => t.id.equals(id))).write(
+        AccountsCompanion(
+          archived: const Value(false),
+          updatedAt: Value(DateTime.now().millisecondsSinceEpoch),
+        ),
+      );
+      await _logRow(id, changedFields: {'archived', 'updatedAt'});
+    });
   }
 
   Future<void> reconcile(String id, int balanceCents) async {
@@ -170,21 +200,63 @@ class AccountRepository {
   /// Hard delete: drops the account and *also* its transactions. Use
   /// [archive] if you want to preserve history.
   Future<void> delete(String id) async {
-    final txIds = (await (_db.select(
-      _db.transactions,
-    )..where((t) => t.accountId.equals(id))).get()).map((t) => t.id).toList();
-    await _db.transaction(() async {
-      await (_db.delete(
+    return _command(() async {
+      final directTransactions = await (_db.select(
         _db.transactions,
-      )..where((t) => t.accountId.equals(id))).go();
-      await (_db.delete(_db.accounts)..where((t) => t.id.equals(id))).go();
-    });
-    if (_changes != null) {
-      for (final tid in txIds) {
-        await _changes.delete('transactions', tid);
+      )..where((t) => t.accountId.equals(id))).get();
+      final transferGroups = directTransactions
+          .map((row) => row.transferGroupId)
+          .whereType<String>()
+          .toSet();
+      final pairedTransactions = transferGroups.isEmpty
+          ? <TransactionRow>[]
+          : await (_db.select(
+              _db.transactions,
+            )..where((row) => row.transferGroupId.isIn(transferGroups))).get();
+      final txIds = {
+        ...directTransactions.map((row) => row.id),
+        ...pairedTransactions.map((row) => row.id),
+      }.toList();
+      final linkIds = txIds.isEmpty
+          ? <String>[]
+          : (await (_db.select(
+                  _db.transactionTags,
+                )..where((row) => row.transactionId.isIn(txIds))).get())
+                .map((row) => row.id)
+                .toList();
+      final recurrenceIds =
+          (await (_db.select(
+                _db.recurrences,
+              )..where((row) => row.accountId.equals(id))).get())
+              .map((row) => row.id)
+              .toList();
+      await _db.transaction(() async {
+        if (linkIds.isNotEmpty) {
+          await (_db.delete(
+            _db.transactionTags,
+          )..where((row) => row.id.isIn(linkIds))).go();
+        }
+        await (_db.delete(
+          _db.transactions,
+        )..where((t) => t.id.isIn(txIds))).go();
+        await (_db.delete(
+          _db.recurrences,
+        )..where((row) => row.accountId.equals(id))).go();
+        await (_db.delete(_db.accounts)..where((t) => t.id.equals(id))).go();
+      });
+      if (_changes != null) {
+        for (final linkId in linkIds) {
+          await _changes.delete('transaction_tags', linkId);
+        }
+        for (final tid in txIds) {
+          await _changes.delete('transactions', tid);
+        }
+        for (final recurrenceId in recurrenceIds) {
+          await _changes.delete('recurrences', recurrenceId);
+        }
+        await _changes.delete('accounts', id);
       }
-      await _changes.delete('accounts', id);
-    }
+    });
   }
 
   /// Sum of opening balance + all transactions on this account.

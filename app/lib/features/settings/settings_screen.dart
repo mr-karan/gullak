@@ -766,12 +766,17 @@ class SettingsScreen extends ConsumerWidget {
     } else {
       syncStatus.offline(result.error!);
     }
+    final details = <String>[
+      'v${result.protocol}',
+      'pushed ${result.pushed}',
+      'pulled ${result.pulled}',
+      if (result.duplicates > 0) 'duplicates ${result.duplicates}',
+      if (result.conflicts > 0) 'conflicts ${result.conflicts}',
+      if (result.quarantined > 0) 'quarantined ${result.quarantined}',
+    ];
     final msg = result.error != null
         ? 'Sync failed: ${result.error}'
-        : result.quarantined > 0
-        ? 'Pushed ${result.pushed}, pulled ${result.pulled} · '
-              '${result.quarantined} change(s) could not sync'
-        : 'Pushed ${result.pushed}, pulled ${result.pulled}';
+        : 'Sync ${details.join(' · ')}';
     showTimedSnackBar(
       messenger,
       result.error == null
