@@ -404,6 +404,14 @@ export function syncedProjectionDigest(
   options: { allowLegacyTransactionTagIds?: boolean } = {},
 ): SyncedProjectionDigest {
   validateProjectedState(db, options);
+  return rawSyncedProjectionDigest(db);
+}
+
+/** Hashes the full relational sync projection without blessing its graph.
+ * Backup proofs use this to compare an already-invalid live database with its
+ * native snapshot before a guarded repair. Cutover preparation must continue
+ * to use [syncedProjectionDigest], which validates first. */
+export function rawSyncedProjectionDigest(db: DbOrTx): SyncedProjectionDigest {
   const snapshot = snapshotProjection(db);
   return {
     hash: snapshot.hash,

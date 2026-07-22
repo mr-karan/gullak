@@ -151,6 +151,18 @@ describe("sync v2 operator guardrails", () => {
     db.insert(schema.accounts)
       .values({ id: "a1", name: "Before", kind: "checking" })
       .run();
+    db.insert(schema.transactions)
+      .values({
+        id: "t1",
+        accountId: "a1",
+        amountCents: -100,
+        date: "2026-07-22",
+        origin: "manual",
+      })
+      .run();
+    db.insert(schema.transactionTags)
+      .values({ id: "orphan", transactionId: "t1", tagId: "missing" })
+      .run();
     sqlite.exec(`VACUUM INTO '${backupPath}'`);
     const proof = {
       path: backupPath,

@@ -30,6 +30,7 @@ import {
   activatePreparedEpoch,
   auditEpochIntegrity,
   prepareGenesis,
+  rawSyncedProjectionDigest,
   syncedProjectionDigest,
 } from "./genesis.ts";
 
@@ -407,14 +408,7 @@ export function collectSyncV2Status(db: DbOrTx, configuredMode: string) {
 }
 
 function recoverableStateManifest(db: DbOrTx) {
-  const active = db
-    .select({ id: syncEpochs.id })
-    .from(syncEpochs)
-    .where(eq(syncEpochs.status, "active"))
-    .get();
-  const projection = syncedProjectionDigest(db, {
-    allowLegacyTransactionTagIds: active === undefined,
-  });
+  const projection = rawSyncedProjectionDigest(db);
   const v1Head =
     db
       .select({ value: sql<number>`coalesce(max(${changeLog.id}), 0)` })
