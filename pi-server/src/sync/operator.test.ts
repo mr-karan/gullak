@@ -449,6 +449,35 @@ describe("sync v2 operator guardrails", () => {
         dryRun: true,
       }),
     ).resolves.toMatchObject({ dryRun: true });
+
+    db.insert(schema.changeLog)
+      .values({
+        resource: "accounts",
+        resourceId: "server-edit-after-drain",
+        op: "delete",
+      })
+      .run();
+    await expect(
+      activateWithGuardrails(db, {
+        epochId: "epoch-legacy-gate",
+        confirmation: "ACTIVATE:epoch-legacy-gate",
+        backup: proof,
+        dryRun: true,
+      }),
+    ).rejects.toThrow(/drainedHead=1, currentHead=2/);
+
+    db.update(schema.syncLegacyClients)
+      .set({ drainedV1Head: 2 })
+      .where(eq(schema.syncLegacyClients.clientId, "offline-v1"))
+      .run();
+    await expect(
+      activateWithGuardrails(db, {
+        epochId: "epoch-legacy-gate",
+        confirmation: "ACTIVATE:epoch-legacy-gate",
+        backup: proof,
+        dryRun: true,
+      }),
+    ).resolves.toMatchObject({ dryRun: true });
   });
 
   test("explicit retirement removes an abandoned actor from the ACK gate", async () => {

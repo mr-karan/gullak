@@ -105,7 +105,7 @@ export function collectLegacyClientReadiness(
       row.status === "retired" ||
       (row.status === "drained" &&
         row.migratedActorId !== null &&
-        row.drainedV1Head !== null);
+        row.drainedV1Head === headCursor);
     if (!ready) {
       errors.push(
         `${row.clientId}: status=${row.status}, migratedActor=${row.migratedActorId ?? "none"}, drainedHead=${row.drainedV1Head ?? "none"}, currentHead=${headCursor}`,

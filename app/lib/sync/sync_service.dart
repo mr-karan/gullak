@@ -166,12 +166,12 @@ class SyncService {
             code: 'legacy_cutover_blocked',
           );
         }
-        final drainEpoch = await _db.kvGet(SyncV2Client.legacyDrainEpochKvKey);
-        if (capabilities.mode == 'preparing' && drainEpoch != epoch) {
+        if (capabilities.mode == 'preparing') {
           // A durable v2 actor attests the legacy outbox only after every v1
           // push has succeeded and an inclusive pull reached the exact server
-          // head. If the attestation request fails, the epoch marker remains
-          // absent and the entire drain is retried on the next sync.
+          // head. This runs on every preparing-mode reconciliation: server or
+          // other-v1 writes may advance the legacy head after an earlier
+          // attestation, and activation requires a proof at the current head.
           final legacyPush = await pushPending();
           pushed += legacyPush.pushed;
           quarantined += legacyPush.quarantined;
