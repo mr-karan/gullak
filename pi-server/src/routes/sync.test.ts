@@ -120,9 +120,9 @@ test("no key configured = open (dev mode)", async () => {
   expect((await app.request("/v1/transactions")).status).toBe(200);
 });
 
-test("gte cursor: a row at exactly the cursor boundary is returned, not skipped", async () => {
+test("gte cursor: a row at the boundary is returned, and new rows after cursor arrive too", async () => {
   const { app } = makeApp();
-  // Push two changes from phoneA. The second row lands at a known id.
+  // Push two changes — one from phoneA (self-originated), one from phoneB.
   await push(app, "phoneA", [txn({ ccid: "first" })]);
   await push(app, "phoneB", [{
     clientChangeId: "second",
@@ -131,19 +131,22 @@ test("gte cursor: a row at exactly the cursor boundary is returned, not skipped"
     op: "upsert",
     payload: { id: "t2", accountId: "a1", amountCents: -3000, date: "2026-06-30", updatedAt: 2000 },
   }]);
-  // First pull: get ALL rows, note the cursor.
+  // First pull: phoneA sees t2 (from phoneB, not self), cursor points at last scanned row.
   type ChangesBody = { changes: { resourceId: string }[]; cursor: number };
   const firstPull = (await (
     await app.request("/v1/sync/changes?since=0&clientId=phoneA")
   ).json()) as ChangesBody;
+  expect(firstPull.changes.some((c) => c.resourceId === "t2")).toBe(true);
   const cursor = firstPull.cursor;
   expect(cursor).toBeGreaterThan(0);
-  // Second pull with that exact cursor: must return zero rows (no new data).
+  // Second pull with that exact cursor: with gte, the last row is re-fetched
+  // (idempotent on the phone side). No new data expected.
   const secondPull = (await (
     await app.request(`/v1/sync/changes?since=${cursor}&clientId=phoneA`)
   ).json()) as ChangesBody;
-  expect(secondPull.changes.length).toBe(0);
-  // Now the server writes a new change AFTER the cursor was captured.
+  // gte means the last row is visible again — this is intentional.
+  expect(secondPull.changes.some((c) => c.resourceId === "t2")).toBe(true);
+  // Now push a NEW change — this must appear even though cursor hasn't changed.
   await push(app, "phoneB", [{
     clientChangeId: "third",
     resource: "transactions",
@@ -151,7 +154,6 @@ test("gte cursor: a row at exactly the cursor boundary is returned, not skipped"
     op: "upsert",
     payload: { id: "t3", accountId: "a1", amountCents: -1000, date: "2026-06-30", updatedAt: 3000 },
   }]);
-  // Third pull at the SAME cursor: the new row MUST appear (gte, not gt).
   const thirdPull = (await (
     await app.request(`/v1/sync/changes?since=${cursor}&clientId=phoneA`)
   ).json()) as ChangesBody;

@@ -39,13 +39,13 @@ syncRouter.get("/changes", (c) => {
 
   // Scan the window by id (INCLUDING the caller's own rows) so the cursor can
   // advance past self-originated rows. Self rows are filtered from `changes`
-  // below, but the cursor moves past the last scanned id — otherwise a page that
+  // below, but the cursor moves to the last scanned id — otherwise a page that
   // is entirely self-originated returns empty and the cursor never advances,
   // forcing endless re-scans from the same point.
   //
-  // Inclusive (gte) + cursor = lastScannedId + 1 prevents gaps: a row that
-  // lands at exactly the cursor boundary is never skipped. The client re-applies
-  // it idempotently (LWW upsert by id) so there is no double-count.
+  // Inclusive (gte) prevents the boundary-gap bug where a row landing exactly
+  // at the cursor is permanently skipped. The phone re-applies the last row
+  // idempotently (LWW upsert by id).
   const windowRows = db
     .select()
     .from(changeLog)
@@ -74,10 +74,11 @@ syncRouter.get("/changes", (c) => {
       return { ...row, payload: null, payloadError: true };
     }
   });
-  // Cursor points PAST the last scanned row so the next pull with the
-  // inclusive gte filter starts at the first unseen id with zero overlap.
+  // Cursor is the last scanned row id. With the inclusive gte filter,
+  // the next pull re-processes this row (safe — applies are idempotent).
+  // The phone's allApplied guard decides whether to actually advance.
   const newCursor =
-    windowRows.length > 0 ? windowRows[windowRows.length - 1]!.id + 1 : cursor;
+    windowRows.length > 0 ? windowRows[windowRows.length - 1]!.id : cursor;
   return c.json({ changes, cursor: newCursor });
 });
 
