@@ -6,7 +6,8 @@ import { AssistantPanel } from "@/components/chat/AssistantPanel";
 import { ChatProvider } from "@/components/chat/ChatProvider";
 import { SelectionProvider } from "./SelectionProvider";
 import { TopBar } from "./TopBar";
-import { MobileBottomBar, MobilePersonRow, MobileTopBar } from "./MobileNav";
+import { MobileBottomBar, MobileTopBar } from "./MobileNav";
+import { SideRail } from "./SideRail";
 import { CommandPalette } from "./CommandPalette";
 import { QuickAddDialog } from "./QuickAddDialog";
 import { ConnectDialog } from "./ConnectDialog";
@@ -36,8 +37,8 @@ export function AppShell() {
   }, []);
 
   const content = (
-    <main className="min-h-0 flex-1 overflow-y-auto">
-      <div className="mx-auto w-full max-w-6xl px-5 py-7 sm:px-8 sm:py-9">
+    <main className="app-canvas min-h-0 flex-1 overflow-y-auto">
+      <div className="app-content route-enter">
         <Outlet />
       </div>
     </main>
@@ -46,32 +47,34 @@ export function AppShell() {
   return (
     <SelectionProvider>
       <ChatProvider>
-        <div className="flex h-dvh flex-col overflow-hidden bg-paper text-foreground">
+        <div className="flex h-dvh overflow-hidden bg-paper text-foreground">
           {isDesktop ? (
             <>
-              <TopBar
+              <SideRail
                 onOpenPalette={() => setPaletteOpen(true)}
                 onOpenAssistant={() => setAssistantOpen((v) => !v)}
                 onOpenQuickAdd={() => setQuickAddOpen(true)}
               />
-              {/* The assistant is a NON-MODAL dock: off by default (full-width
-                  canvas), and when open the canvas simply makes room beside it —
-                  no scrim, both panes stay live so you can read your data while
-                  you chat. */}
-              <div className="flex min-h-0 flex-1">
-                {content}
-                {assistantOpen ? (
-                  <AssistantPanel onCollapse={() => setAssistantOpen(false)} />
-                ) : null}
+              <div className="flex min-w-0 flex-1 flex-col">
+                <TopBar
+                  onOpenPalette={() => setPaletteOpen(true)}
+                  onOpenAssistant={() => setAssistantOpen((v) => !v)}
+                  onOpenQuickAdd={() => setQuickAddOpen(true)}
+                />
+                <div className="flex min-h-0 flex-1">
+                  {content}
+                  {assistantOpen ? (
+                    <AssistantPanel onCollapse={() => setAssistantOpen(false)} />
+                  ) : null}
+                </div>
               </div>
             </>
           ) : (
-            <>
-              <MobileTopBar />
+            <div className="flex min-w-0 flex-1 flex-col">
+              <MobileTopBar onOpenQuickAdd={() => setQuickAddOpen(true)} />
               {content}
-              <MobilePersonRow />
               <MobileBottomBar />
-            </>
+            </div>
           )}
 
           <CommandPalette

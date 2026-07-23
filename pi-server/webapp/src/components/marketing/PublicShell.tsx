@@ -1,4 +1,4 @@
-import { BookOpen, Github } from "lucide-react";
+import { Github } from "lucide-react";
 import { Link, Outlet } from "react-router-dom";
 
 import { useConnection } from "@/hooks/useConnection";
@@ -9,44 +9,47 @@ export function PublicShell() {
   const { connected, openDialog } = useConnection();
 
   return (
-    <div className="min-h-dvh overflow-x-hidden bg-paper text-ink">
-      <header className="sticky top-0 z-40 border-b border-rule/80 bg-paper/82 backdrop-blur-xl">
-        <div className="mx-auto flex h-16 max-w-7xl items-center gap-5 px-5 sm:px-8">
-          <Link to="/" className="font-display text-xl tracking-tight text-ink">
-            Gullak<span className="text-brand">.</span>
+    <div className="min-h-dvh bg-paper text-ink">
+      <header className="sticky top-0 z-40 border-b border-rule bg-paper">
+        <div className="mx-auto flex h-16 max-w-[92rem] items-center px-5 sm:px-8 lg:px-12">
+          <Link
+            to="/"
+            className="font-display text-2xl font-semibold tracking-[-0.035em] text-ink outline-none"
+          >
+            Gullak<span aria-hidden className="text-brand">.</span>
           </Link>
-          <nav className="ml-auto flex items-center gap-1 text-sm text-ink-2">
+
+          <nav aria-label="Public navigation" className="ml-auto flex items-center gap-1 text-sm">
             <Link
               to="/docs"
-              className="hidden items-center gap-2 rounded-md px-3 py-2 transition-colors hover:bg-paper-3 hover:text-ink sm:flex"
+              className="hidden whitespace-nowrap px-3 py-2 font-medium text-ink-2 transition-colors duration-150 hover:text-ink sm:block"
             >
-              <BookOpen className="size-4" />
-              Docs
+              How it works
             </Link>
             <a
               href="https://github.com/mr-karan/gullak"
               target="_blank"
               rel="noreferrer"
-              aria-label="Gullak on GitHub"
-              className="grid size-9 place-items-center rounded-md transition-colors hover:bg-paper-3 hover:text-ink"
+              aria-label="Gullak source on GitHub"
+              className="hidden size-11 place-items-center text-ink-2 transition-colors duration-150 hover:text-ink sm:grid"
             >
-              <Github className="size-[18px]" />
+              <Github className="size-[18px]" strokeWidth={1.75} />
             </a>
             <ThemeToggle iconOnly />
             {connected ? (
               <Link
                 to="/overview"
-                className="ml-2 rounded-md bg-brand px-4 py-2 font-semibold text-brand-ink transition-colors hover:bg-brand-2"
+                className="ml-2 min-h-11 whitespace-nowrap rounded-md border border-brand bg-brand px-4 py-2 font-semibold text-brand-ink transition-colors duration-150 hover:border-brand-2 hover:bg-brand-2"
               >
-                Open Gullak
+                Open ledger
               </Link>
             ) : (
               <button
                 type="button"
                 onClick={openDialog}
-                className="ml-2 rounded-md bg-brand px-4 py-2 font-semibold text-brand-ink transition-colors hover:bg-brand-2"
+                className="ml-2 min-h-11 whitespace-nowrap rounded-md border border-brand bg-brand px-4 py-2 font-semibold text-brand-ink transition-colors duration-150 hover:border-brand-2 hover:bg-brand-2"
               >
-                Connect
+                Connect server
               </button>
             )}
           </nav>
@@ -56,12 +59,17 @@ export function PublicShell() {
       <Outlet />
 
       <footer className="border-t border-rule">
-        <div className="mx-auto flex max-w-7xl flex-col gap-3 px-5 py-8 text-sm text-ink-2 sm:flex-row sm:items-center sm:justify-between sm:px-8">
-          <p>Gullak is open source and self-hostable.</p>
-          <div className="flex gap-5">
-            <Link to="/docs" className="hover:text-ink">Documentation</Link>
-            <a href="https://github.com/mr-karan/gullak" className="hover:text-ink">Source</a>
-            <a href="https://github.com/mr-karan/gullak/releases" className="hover:text-ink">Releases</a>
+        <div className="mx-auto max-w-[92rem] px-5 py-14 sm:px-8 lg:px-12 lg:py-20">
+          <p className="max-w-3xl font-display text-3xl leading-tight tracking-[-0.035em] text-ink sm:text-5xl">
+            Your ledger should belong to you.
+          </p>
+          <div className="mt-10 flex flex-col gap-4 border-t border-rule pt-5 text-sm text-ink-2 sm:flex-row sm:items-center sm:justify-between">
+            <p>Open source. Local first. Self-hostable.</p>
+            <div className="flex flex-wrap gap-x-6 gap-y-2">
+              <Link to="/docs" className="quiet-link whitespace-nowrap">Documentation</Link>
+              <a href="https://github.com/mr-karan/gullak" className="quiet-link whitespace-nowrap">Source</a>
+              <a href="https://github.com/mr-karan/gullak/releases" className="quiet-link whitespace-nowrap">Releases</a>
+            </div>
           </div>
         </div>
       </footer>

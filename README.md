@@ -87,6 +87,10 @@ guidance, see **[website/docs/self-hosting.md](website/docs/self-hosting.md)**.
 
 - **Public server guide** — every self-hosted server serves a public landing
   page at `/` and a compact architecture/recovery guide at `/docs`.
+- **API reference** — each server exposes browsable Scalar documentation at
+  `/v1/docs` and its canonical OpenAPI 3.1 document at `/v1/openapi.json`.
+- **[API guide](docs/api.md)** — authentication, conventions, endpoint groups,
+  and sync-v2 usage for humans and agents.
 - **[Install](website/docs/install.md)** — F-Droid, APK sideload, build from source, SMS permission.
 - **[Self-hosting](website/docs/self-hosting.md)** — run the sync server, Docker, env reference, backups.
 - **[Contributing](CONTRIBUTING.md)** — dev setup and conventions.

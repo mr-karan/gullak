@@ -137,7 +137,7 @@ export function GoalsPage() {
 // A dashed panel for the value that isn't working toward anything yet.
 function UnallocatedCard({ cents }: { cents: number }) {
   return (
-    <section className="flex flex-col rounded-xl border border-dashed border-rule bg-card p-5">
+    <section className="flex flex-col rounded-md border border-dashed border-rule bg-card p-5">
       <p className="text-[11px] font-medium uppercase tracking-wider text-ink-2">Not yet allocated</p>
       <p className="mt-1.5 text-lg font-semibold tabular-nums tracking-tight text-ink">
         {fmtCents(cents)}
@@ -158,9 +158,9 @@ function UnallocatedCard({ cents }: { cents: number }) {
 function GoalsSkeleton() {
   return (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-      <Skeleton className="h-48 w-full rounded-xl" />
-      <Skeleton className="h-48 w-full rounded-xl" />
-      <Skeleton className="h-48 w-full rounded-xl" />
+      <Skeleton className="h-48 w-full rounded-md" />
+      <Skeleton className="h-48 w-full rounded-md" />
+      <Skeleton className="h-48 w-full rounded-md" />
     </div>
   );
 }

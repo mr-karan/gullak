@@ -20,13 +20,8 @@ import { EmptyState, ErrorState } from "@/components/states";
 import { ReconcileDialog } from "./accounts/ReconcileDialog";
 import type { Account, NetWorth, Transaction } from "@/lib/types";
 
-// ===========================================================================
-// Overview — the "Vault" proof. A bold DARK-NATIVE hero: the net-worth figure
-// huge in Clash Display over a violet glow, with an integrated net-worth
-// sparkline; a divided stat rail; then the grouped accounts table, monthly
-// cash-flow rail, and recent register — all restyled to the Vault palette via
-// shared tokens. Every data hook, route and behaviour is preserved.
-// ===========================================================================
+// Overview keeps one dominant figure, then progressively discloses the account
+// register, this month's flow, and recent activity. Data behavior is unchanged.
 
 type GroupKey = "cash" | "credit" | "investment";
 const GROUP_ORDER: GroupKey[] = ["cash", "credit", "investment"];
@@ -91,8 +86,6 @@ function useCountUp(target: number, duration = 600): number {
   return value;
 }
 
-/** A quiet staggered fade + rise on mount. Reduced-motion is handled globally
-    (durations + delays collapsed in index.css). */
 function Reveal({
   delay = 0,
   className,
@@ -102,11 +95,8 @@ function Reveal({
   className?: string;
   children: React.ReactNode;
 }) {
-  return (
-    <div className={cn("vault-reveal", className)} style={{ animationDelay: `${delay}ms` }}>
-      {children}
-    </div>
-  );
+  void delay;
+  return <div className={className}>{children}</div>;
 }
 
 // ---------------------------------------------------------------------------
@@ -234,7 +224,7 @@ export function AccountsPage() {
   );
 }
 
-// --- Sparkline: smooth area + line, brand-violet, emphasised endpoint -------
+// --- Sparkline: one restrained line with an emphasised endpoint -------------
 function smoothPath(pts: { x: number; y: number }[]): string {
   if (pts.length === 0) return "";
   if (pts.length === 1) return `M ${pts[0].x} ${pts[0].y}`;
@@ -267,19 +257,11 @@ function Sparkline({ values }: { values: number[] }) {
 
   const pts = values.map((v, i) => ({ x: n === 1 ? W : (i / (n - 1)) * W, y: yOf(v) }));
   const line = smoothPath(pts);
-  const area = `${line} L ${W} ${H} L 0 ${H} Z`;
   const lastTopPct = (yOf(values[n - 1]) / H) * 100;
 
   return (
     <div className="relative h-full w-full">
       <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="h-full w-full">
-        <defs>
-          <linearGradient id="vault-spark-fill" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" style={{ stopColor: "var(--brand)", stopOpacity: 0.32 }} />
-            <stop offset="100%" style={{ stopColor: "var(--brand)", stopOpacity: 0 }} />
-          </linearGradient>
-        </defs>
-        <path d={area} fill="url(#vault-spark-fill)" stroke="none" />
         <path
           d={line}
           fill="none"
@@ -334,7 +316,7 @@ function NetWorthHero({
     : "Liquid cash across your accounts.";
 
   return (
-    <section className="vault-hero-glow relative overflow-hidden rounded-2xl border border-rule">
+    <section className="relative overflow-hidden rounded-md border border-rule bg-card">
       {hasTrend ? (
         <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[46%] min-h-24">
           <Sparkline values={series} />
@@ -399,7 +381,7 @@ function StatRail({
   const pnlCents = netWorth.investedPnlCents;
 
   return (
-    <section className="overflow-hidden rounded-xl border border-rule bg-card">
+    <section className="overflow-hidden rounded-md border border-rule bg-card">
       <div className="grid grid-cols-3 divide-x divide-rule">
         <StatCell label="Cash" valueCents={cashCents} />
         <StatCell label="Invested" valueCents={netWorth.investedCurrentCents} />
@@ -532,7 +514,7 @@ function AccountsTable({
                         onClick={() => onReconcile(a)}
                         aria-label={`Reconcile ${a.name}`}
                         title="Reconcile against your bank balance"
-                        className="flex size-7 items-center justify-center rounded-md text-ink-2 opacity-0 transition hover:bg-paper-3 hover:text-brand focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring group-hover:opacity-100"
+                        className="flex size-8 items-center justify-center rounded-md text-ink-2 transition-colors hover:bg-paper-3 hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                       >
                         <Scale className="size-4" />
                       </button>
@@ -705,13 +687,13 @@ function RecentRegister({
 function AccountsSkeleton() {
   return (
     <div className="flex flex-col gap-4">
-      <Skeleton className="h-48 w-full rounded-2xl" />
-      <Skeleton className="h-20 w-full rounded-xl" />
+      <Skeleton className="h-48 w-full rounded-md" />
+      <Skeleton className="h-20 w-full rounded-md" />
       <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1.9fr)_minmax(0,1fr)]">
-        <Skeleton className="h-64 w-full rounded-xl" />
-        <Skeleton className="h-52 w-full rounded-xl" />
+        <Skeleton className="h-64 w-full rounded-md" />
+        <Skeleton className="h-52 w-full rounded-md" />
       </div>
-      <Skeleton className="h-72 w-full rounded-xl" />
+      <Skeleton className="h-72 w-full rounded-md" />
     </div>
   );
 }

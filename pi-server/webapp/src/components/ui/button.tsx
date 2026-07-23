@@ -14,12 +14,12 @@ const buttonVariants = cva(
     variants: {
       variant: {
         default:
-          "bg-primary text-primary-foreground hover:bg-[color-mix(in_oklch,var(--primary)_94%,black)] active:bg-[color-mix(in_oklch,var(--primary)_88%,black)] aria-pressed:bg-[color-mix(in_oklch,var(--primary)_88%,black)]",
+          "border border-primary bg-primary text-primary-foreground hover:border-brand-2 hover:bg-brand-2 active:bg-brand-2 aria-pressed:bg-brand-2",
         destructive:
-          "bg-destructive text-destructive-foreground hover:bg-[color-mix(in_oklch,var(--destructive)_92%,black)] active:bg-[color-mix(in_oklch,var(--destructive)_86%,black)]",
+          "border border-destructive bg-destructive text-destructive-foreground hover:opacity-90 active:opacity-85",
         outline:
           "border border-border bg-transparent text-foreground hover:bg-muted active:bg-paper-3",
-        ghost: "bg-transparent text-foreground hover:bg-muted active:bg-paper-3",
+        ghost: "bg-transparent text-foreground hover:bg-paper-2 active:bg-paper-3",
         link: "text-primary underline-offset-4 hover:underline active:opacity-80 p-0 h-auto",
       },
       size: {

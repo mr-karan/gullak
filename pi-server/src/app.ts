@@ -20,6 +20,7 @@ import { healthRouter } from "./routes/health.ts";
 import { holdingsRouter } from "./routes/holdings.ts";
 import { insightsRouter } from "./routes/insights.ts";
 import { netWorthRouter } from "./routes/networth.ts";
+import { createOpenApiRouter } from "./routes/openapi.ts";
 import { profilesRouter } from "./routes/profiles.ts";
 import {
   messagesRouter,
@@ -81,7 +82,12 @@ export function createApp(ctx: AppContext) {
     // can reach the Settings modal to enter one. Only the /v1/* API is gated;
     // the browser attaches the key from localStorage on those calls itself.
     if (!path.startsWith("/v1/")) return next();
-    if (path === "/v1/health" || path.endsWith("/whatsapp/webhook")) {
+    if (
+      path === "/v1/health" ||
+      path === "/v1/openapi.json" ||
+      path === "/v1/docs" ||
+      path.endsWith("/whatsapp/webhook")
+    ) {
       return next();
     }
     if (c.req.header("x-api-key") !== key) {
@@ -172,6 +178,14 @@ export function createApp(ctx: AppContext) {
   app.route("/v1/desires", desiresRouter);
   app.route("/v1/net-worth", netWorthRouter);
   app.route("/v1/profiles", profilesRouter);
+
+  // Machine-readable route contract plus a browsable Scalar reference. The
+  // path set comes from Hono's registered routes so newly mounted endpoints
+  // cannot silently disappear from the document.
+  app.route(
+    "/v1",
+    createOpenApiRouter(() => app.routes, ctx.config.version ?? "development"),
+  );
 
   // The web SPA (webapp/dist). Mounted last so it can never shadow a /v1/*
   // route; it serves the app shell, hashed static assets, and a history-mode

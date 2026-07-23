@@ -14,11 +14,11 @@ export function EmptyState({
   action?: { label: string; onClick: () => void };
 }) {
   return (
-    <div className="flex flex-col items-start gap-2 py-10">
-      <p className="text-sm text-foreground">{title}</p>
+    <div className="flex max-w-xl flex-col items-start gap-2 border-l-2 border-rule py-2 pl-5">
+      <p className="font-semibold text-foreground">{title}</p>
       {hint ? <p className="text-sm text-ink-2">{hint}</p> : null}
       {action ? (
-        <Button variant="ghost" size="sm" className="mt-1 -ml-3" onClick={action.onClick}>
+        <Button variant="outline" size="sm" className="mt-2" onClick={action.onClick}>
           {action.label}
         </Button>
       ) : null}
@@ -34,12 +34,12 @@ export function ErrorState({
   onRetry?: () => void;
 }) {
   return (
-    <div className="flex flex-col items-start gap-2 py-10">
-      <p className="text-sm text-neg">Something went wrong.</p>
+    <div className="flex max-w-xl flex-col items-start gap-2 border-l-2 border-neg py-2 pl-5">
+      <p className="font-semibold text-neg">The request failed.</p>
       <p className="text-sm text-ink-2">{message || "The request failed. Try again in a moment."}</p>
       {onRetry ? (
-        <Button variant="ghost" size="sm" className="mt-1 -ml-3" onClick={onRetry}>
-          Retry
+        <Button variant="outline" size="sm" className="mt-2" onClick={onRetry}>
+          Try again
         </Button>
       ) : null}
     </div>

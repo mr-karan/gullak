@@ -25,7 +25,7 @@ const sideClasses: Record<Side, string> = {
   right: "inset-y-0 right-0 h-full w-3/4 max-w-sm border-l",
   left: "inset-y-0 left-0 h-full w-3/4 max-w-sm border-r",
   top: "inset-x-0 top-0 h-auto border-b",
-  bottom: "inset-x-0 bottom-0 h-auto border-t rounded-t-xl",
+  bottom: "inset-x-0 bottom-0 h-auto border-t rounded-t-lg",
 };
 
 function SheetContent({
@@ -64,7 +64,7 @@ function SheetTitle({ className, ...props }: React.ComponentProps<typeof SheetPr
   return (
     <SheetPrimitive.Title
       data-slot="sheet-title"
-      className={cn("font-display text-lg tracking-tight", className)}
+      className={cn("font-display text-2xl tracking-[-0.025em]", className)}
       {...props}
     />
   );

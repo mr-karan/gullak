@@ -11,7 +11,7 @@ export function LedgerRule({
   className?: string;
   tone?: "ink" | "bind";
 }) {
-  const line = tone === "bind" ? "bg-ink/10" : "bg-ink/14";
+  const line = tone === "bind" ? "bg-sidebar-border" : "bg-rule";
   return (
     <div className={cn(className)} aria-hidden="true">
       <div className={cn("h-px w-full", line)} />

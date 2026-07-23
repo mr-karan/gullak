@@ -22,7 +22,7 @@ export function DesireCard({
   const coverUrl = useDesirePhotoUrl(desire.id, coverId);
 
   return (
-    <section className="flex flex-col overflow-hidden rounded-xl border border-rule bg-card">
+    <section className="flex flex-col overflow-hidden rounded-md border border-rule bg-card">
       <button
         type="button"
         onClick={onOpen}

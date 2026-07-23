@@ -1,0 +1,76 @@
+/* Hallmark · Gullak web tokens · editorial utility · anchor hue: teal 166 */
+:root {
+  --color-paper: oklch(98% 0.006 170);
+  --color-paper-2: oklch(96% 0.009 170);
+  --color-paper-3: oklch(92.5% 0.012 170);
+  --color-ink: oklch(20% 0.014 175);
+  --color-ink-2: oklch(47% 0.018 175);
+  --color-rule: oklch(85% 0.012 170);
+  --color-accent: oklch(49% 0.115 166);
+  --color-accent-strong: oklch(42% 0.112 166);
+  --color-accent-ink: oklch(98% 0.006 170);
+  --color-focus: oklch(55% 0.14 166);
+  --color-positive: oklch(49% 0.12 145);
+  --color-negative: oklch(54% 0.145 32);
+  --color-warning: oklch(62% 0.12 78);
+  --color-sidebar: oklch(22% 0.018 174);
+  --color-sidebar-2: oklch(27% 0.02 174);
+  --color-sidebar-ink: oklch(94% 0.008 170);
+  --color-sidebar-muted: oklch(70% 0.014 170);
+
+  --font-display-stack: "Fraunces", "Iowan Old Style", "Palatino Linotype", serif;
+  --font-body-stack: "Inter", "Avenir Next", "Segoe UI", sans-serif;
+  --font-mono-stack: "JetBrains Mono", "SFMono-Regular", monospace;
+
+  --space-3xs: 0.125rem;
+  --space-2xs: 0.25rem;
+  --space-xs: 0.5rem;
+  --space-sm: 0.75rem;
+  --space-md: 1rem;
+  --space-lg: 1.5rem;
+  --space-xl: 2.5rem;
+  --space-2xl: 4rem;
+  --space-3xl: 6rem;
+  --space-4xl: 9rem;
+
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-base: 1rem;
+  --text-md: 1.25rem;
+  --text-lg: 1.5625rem;
+  --text-xl: 1.953rem;
+  --text-2xl: 2.441rem;
+  --text-display: clamp(2.75rem, 5vw + 1rem, 5.25rem);
+
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in: cubic-bezier(0.7, 0, 0.84, 0);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --dur-micro: 120ms;
+  --dur-short: 220ms;
+  --dur-long: 420ms;
+
+  --radius-card: 0.625rem;
+  --radius-control: 0.5rem;
+  --radius-chip: 0.375rem;
+  --rule-thin: 1px;
+}
+
+:root[data-theme="dark"] {
+  --color-paper: oklch(15% 0.012 174);
+  --color-paper-2: oklch(19% 0.014 174);
+  --color-paper-3: oklch(24% 0.016 174);
+  --color-ink: oklch(94% 0.008 170);
+  --color-ink-2: oklch(70% 0.014 170);
+  --color-rule: oklch(31% 0.016 174);
+  --color-accent: oklch(72% 0.11 166);
+  --color-accent-strong: oklch(78% 0.1 166);
+  --color-accent-ink: oklch(16% 0.014 174);
+  --color-focus: oklch(76% 0.12 166);
+  --color-positive: oklch(72% 0.12 145);
+  --color-negative: oklch(70% 0.14 32);
+  --color-warning: oklch(78% 0.12 78);
+  --color-sidebar: oklch(12.5% 0.011 174);
+  --color-sidebar-2: oklch(20% 0.015 174);
+  --color-sidebar-ink: oklch(94% 0.008 170);
+  --color-sidebar-muted: oklch(68% 0.014 170);
+}

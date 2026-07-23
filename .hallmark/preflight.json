@@ -1,0 +1,9 @@
+{
+  "date": "2026-07-23",
+  "framework": "React 19 + Vite 6 + Tailwind 4",
+  "design_system": "design.md",
+  "fonts": ["Fraunces", "Inter", "JetBrains Mono"],
+  "motion": "CSS only; motion-cut",
+  "spacing": "4-point named scale",
+  "source": "pi-server/webapp"
+}

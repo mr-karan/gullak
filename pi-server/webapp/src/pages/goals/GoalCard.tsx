@@ -70,7 +70,7 @@ export function GoalCard({
   }
 
   return (
-    <section className="flex flex-col rounded-xl border border-rule bg-card p-5">
+    <section className="flex flex-col rounded-md border border-rule bg-card p-5">
       <div className="flex items-start justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2">
           <span className="text-xl">{goal.emoji || "🎯"}</span>

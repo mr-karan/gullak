@@ -5,11 +5,11 @@ import { cn } from "@/lib/utils";
 
 // Flips <html data-theme> between dark/light and persists the raw choice to
 // localStorage ("gullak_theme") — the same key the inline init in index.html
-// reads before first paint. Dark is the default (the Vault hero).
+// reads before first paint. The web ledger defaults to light.
 type Theme = "dark" | "light";
 
 function currentTheme(): Theme {
-  if (typeof document === "undefined") return "dark";
+  if (typeof document === "undefined") return "light";
   return document.documentElement.getAttribute("data-theme") === "light" ? "light" : "dark";
 }
 
@@ -44,7 +44,7 @@ export function ThemeToggle({
         aria-label={label}
         title={label}
         className={cn(
-          "grid size-9 place-items-center rounded-md text-ink-2 transition-colors outline-none hover:bg-paper-3 hover:text-ink focus-visible:ring-2 focus-visible:ring-ring",
+          "grid size-11 place-items-center rounded-md text-ink-2 transition-colors outline-none hover:bg-paper-3 hover:text-ink focus-visible:ring-2 focus-visible:ring-ring",
           className,
         )}
       >

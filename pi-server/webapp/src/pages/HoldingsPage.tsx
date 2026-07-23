@@ -150,7 +150,7 @@ function SummaryStrip({
 }) {
   const pct = investedCents ? (pnlCents / investedCents) * 100 : 0;
   return (
-    <section className="overflow-hidden rounded-xl border border-rule bg-card">
+    <section className="overflow-hidden rounded-md border border-rule bg-card">
       {/* A thin indigo cap — the one confident brand touch, structural not loud. */}
       <div className="h-1 bg-brand" aria-hidden="true" />
       <div className="grid grid-cols-3 divide-x divide-rule">
@@ -206,8 +206,8 @@ function StatCell({
 function HoldingsSkeleton() {
   return (
     <div className="flex flex-col gap-4">
-      <Skeleton className="h-24 w-full rounded-xl" />
-      <Skeleton className="h-72 w-full rounded-xl" />
+      <Skeleton className="h-24 w-full rounded-md" />
+      <Skeleton className="h-72 w-full rounded-md" />
     </div>
   );
 }

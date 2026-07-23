@@ -489,3 +489,112 @@ Risks:
   project).
 - No behavior changes to sync/SMS/AI pipelines — this spec is strictly the
   presentation layer plus the Quick Entry file split.
+
+---
+
+## 8. Web application — locked design system (2026-07-23)
+
+This section governs `pi-server/webapp`. It extends the mobile identity above;
+it does not create a second Gullak brand. Web routes preserve their information
+architecture and data behavior while replacing the former dark-violet “Vault”
+presentation.
+
+### Genre and macrostructure family
+
+- **Genre:** editorial utility — quiet, exact, and financially serious.
+- **Marketing:** Workbench, using real Gullak captures and short factual copy.
+- **Application:** Workbench, with a grouped side rail and dense ledger surfaces.
+- **Content:** Long Document, with a readable measure and persistent local index.
+
+The landing page must introduce the personal-finance product before its sync
+implementation. App pages must not use decorative enrichment. Documentation may
+use semantic diagrams, but never fake browser, phone, terminal, or product chrome.
+
+### Theme
+
+- Light is the primary presentation. Paper and ink are cool-tinted, never pure
+  white or black.
+- Teal is the only interaction accent and occupies less than five percent of a
+  viewport.
+- Green, clay, and amber are financial/status semantics, not decorative accents.
+- Dark mode preserves the same hues and increases surface lightness for elevation.
+- Gradients, glows, glass, purple, ambient grids, and ornamental shadows are banned.
+
+Canonical values live in `pi-server/webapp/tokens.css`.
+
+### Typography
+
+- **Display:** Fraunces, roman, variable weight. Use only for the wordmark,
+  landing statement, page titles, and one lead figure per screen.
+- **Body/UI:** Inter. This deliberate exception to Hallmark's default font ban
+  keeps the web and bundled mobile application in one product identity.
+- **Money/data:** JetBrains Mono with tabular numerals. Use for amounts, dates,
+  identifiers, compact metrics, and aligned numeric columns only.
+- No italic headings, gradient text, all-caps body copy, or decorative monospace.
+
+### Spacing, shape, and density
+
+- Four-point named spacing scale; components consume tokens rather than raw values.
+- App density is 7/10. Marketing density is 3/10.
+- App panels use hairline rules and square-to-soft corners. They do not float.
+- Cards are reserved for independent objects, never used as default page layout.
+- Desktop app layout uses a persistent grouped side rail. Mobile uses four primary
+  destinations and a More sheet.
+
+### Motion and interaction
+
+- Motion is 1/10 in the app and 2/10 on public pages.
+- Only opacity and transform animate, using the named exponential easings.
+- No route-wide stagger, parallax, bounce, hover scaling, or looping decoration.
+- Focus indicators appear immediately. Reduced motion collapses spatial movement.
+- Success is silent when the result is already visible. Failures name the failed
+  operation and the next recovery action.
+
+### CTA voice
+
+- Primary actions are compact teal rectangles with specific verbs.
+- Secondary actions are typographic or hairline-outlined, never filled neutral pills.
+- Buttons and navigation labels remain one line at every supported width.
+
+### What every web route must share
+
+- Gullak wordmark treatment, palette, type roles, focus ring, button shape,
+  divider language, money formatting, and loading/empty/error state structure.
+- Public routes use the same palette and typography as authenticated routes.
+- Route-specific composition may differ according to the data, but a route may not
+  introduce its own colour, font, shadow, radius, or animation language.
+
+### Web exports
+
+#### Tailwind v4 mapping
+
+`pi-server/webapp/src/index.css` maps the canonical tokens through `@theme inline`
+to `bg-paper`, `text-ink`, `border-rule`, `text-brand`, semantic money colours,
+font roles, radii, spacing, and motion utilities.
+
+#### DTCG summary
+
+```json
+{
+  "color": {
+    "paper": { "$value": "oklch(98% 0.006 170)", "$type": "color" },
+    "ink": { "$value": "oklch(20% 0.014 175)", "$type": "color" },
+    "accent": { "$value": "oklch(49% 0.115 166)", "$type": "color" }
+  },
+  "font": {
+    "display": { "$value": "Fraunces", "$type": "fontFamily" },
+    "body": { "$value": "Inter", "$type": "fontFamily" },
+    "mono": { "$value": "JetBrains Mono", "$type": "fontFamily" }
+  },
+  "space": {
+    "md": { "$value": "1rem", "$type": "dimension" },
+    "xl": { "$value": "2.5rem", "$type": "dimension" }
+  }
+}
+```
+
+#### shadcn/ui mapping
+
+`--background`, `--foreground`, `--primary`, `--primary-foreground`, `--muted`,
+`--muted-foreground`, `--border`, `--input`, `--ring`, and `--radius` are aliases
+of the canonical tokens in `tokens.css`; components must not redefine them.

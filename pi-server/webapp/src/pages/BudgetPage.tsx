@@ -147,7 +147,7 @@ function ReadyToAssignBar({
     readyToAssign > 0 ? "To assign" : readyToAssign < 0 ? "Overassigned" : "All assigned";
 
   return (
-    <section className="overflow-hidden rounded-xl border border-rule bg-card">
+    <section className="overflow-hidden rounded-md border border-rule bg-card">
       {/* A thin indigo cap — the one confident brand touch, structural not loud. */}
       <div className="h-1 bg-brand" aria-hidden="true" />
       <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3 px-5 py-4">
@@ -513,8 +513,8 @@ function AssignedCell({
 function BudgetSkeleton() {
   return (
     <div className="flex flex-col gap-4">
-      <Skeleton className="h-28 w-full rounded-xl" />
-      <Skeleton className="h-96 w-full rounded-xl" />
+      <Skeleton className="h-28 w-full rounded-md" />
+      <Skeleton className="h-96 w-full rounded-md" />
     </div>
   );
 }

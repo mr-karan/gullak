@@ -33,7 +33,7 @@ function TableHead({ className, ...props }: React.ComponentProps<"th">) {
     <th
       data-slot="table-head"
       className={cn(
-        "h-9 px-3 text-left align-middle text-xs font-medium text-muted-foreground whitespace-nowrap",
+        "h-10 px-3 text-left align-middle text-xs font-semibold text-muted-foreground whitespace-nowrap",
         className,
       )}
       {...props}

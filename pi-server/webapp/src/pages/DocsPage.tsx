@@ -1,4 +1,4 @@
-import { AlertTriangle, ArrowRight, Check, GitBranch, RefreshCw, Server, Smartphone } from "lucide-react";
+import { AlertTriangle, ArrowRight, Check, Code2, GitBranch, RefreshCw, Server, Smartphone } from "lucide-react";
 import { Link } from "react-router-dom";
 
 const toc = [
@@ -7,12 +7,13 @@ const toc = [
   ["crdt", "Causal CRDT"],
   ["conflicts", "Conflicts"],
   ["recovery", "Recovery"],
+  ["api", "API reference"],
   ["self-hosting", "Self-hosting"],
 ];
 
 export function DocsPage() {
   return (
-    <main className="mx-auto grid max-w-7xl gap-12 px-5 py-14 sm:px-8 lg:grid-cols-[220px_minmax(0,760px)] lg:justify-between lg:py-20">
+    <main className="mx-auto grid max-w-[92rem] gap-12 px-5 py-12 sm:px-8 lg:grid-cols-[13rem_minmax(0,46rem)_1fr] lg:gap-16 lg:px-12 lg:py-20">
       <aside className="hidden lg:block">
         <div className="sticky top-28">
           <p className="mb-4 text-xs font-bold uppercase tracking-[0.18em] text-ink-2">On this page</p>
@@ -26,23 +27,23 @@ export function DocsPage() {
         </div>
       </aside>
 
-      <article className="min-w-0">
+      <article className="min-w-0 lg:col-start-2">
         <header id="overview" className="scroll-mt-28 border-b border-rule pb-12">
-          <p className="text-xs font-bold uppercase tracking-[0.2em] text-brand">Architecture guide</p>
-          <h1 className="mt-5 font-display text-5xl tracking-[-0.05em] sm:text-6xl">How Gullak keeps one ledger across unreliable devices.</h1>
+          <p className="text-sm font-medium text-brand">Architecture guide</p>
+          <h1 className="mt-5 font-display text-5xl leading-[1.02] tracking-[-0.05em] sm:text-6xl">One ledger across unreliable devices.</h1>
           <p className="mt-6 text-xl leading-8 text-ink-2">
             The phone owns the interaction. The sync server merges immutable changes. Relational rows are rebuildable views of that shared history.
           </p>
           <div className="mt-8 flex flex-wrap gap-3 text-sm">
             {['Offline writes', 'Deterministic merge', 'No clock ordering', 'Explicit quarantine'].map((item) => (
-              <span key={item} className="inline-flex items-center gap-2 rounded-full border border-rule px-3 py-1.5 text-ink-2">
+              <span key={item} className="inline-flex items-center gap-2 rounded-md border border-rule px-3 py-1.5 text-ink-2">
                 <Check className="size-3.5 text-pos" /> {item}
               </span>
             ))}
           </div>
         </header>
 
-        <DocSection id="local-first" eyebrow="01" title="Local-first model">
+        <DocSection id="local-first" title="Local-first model">
           <p>
             Every user action commits to the phone’s SQLite database before networking begins. The UI reads that local projection immediately. Sync can retry later without holding the interaction open.
           </p>
@@ -52,11 +53,11 @@ export function DocsPage() {
           </p>
         </DocSection>
 
-        <DocSection id="crdt" eyebrow="02" title="A causal field CRDT, not row-level LWW">
+        <DocSection id="crdt" title="A causal field CRDT, not row-level LWW">
           <p>
             Each edit is an immutable event naming only the fields the action changed. A note edit carries <code>notes</code>; it does not resend the whole transaction. That is the fundamental protection against stale metadata overwrites.
           </p>
-          <pre className="overflow-x-auto rounded-lg border border-rule bg-paper-2 p-5 text-sm leading-7 text-ink"><code>{`{
+          <pre className="overflow-x-auto border-y border-rule bg-paper-2 px-5 py-6 text-sm leading-7 text-ink"><code>{`{
   "changeId": "phone:42",
   "context": { "phone": 41, "web": 17 },
   "ops": [
@@ -72,11 +73,11 @@ export function DocsPage() {
           </Callout>
         </DocSection>
 
-        <DocSection id="conflicts" eyebrow="03" title="Concurrent edits remain evidence">
+        <DocSection id="conflicts" title="Concurrent edits remain evidence">
           <p>
             When two replicas concurrently assign the same field, Gullak retains both causally maximal candidates. A deterministic Lamport/actor/sequence tuple selects the visible projection, so every replica displays the same value without deleting the losing fact.
           </p>
-          <div className="grid gap-px overflow-hidden rounded-lg border border-rule bg-rule sm:grid-cols-3">
+          <div className="grid gap-px overflow-hidden border border-rule bg-rule sm:grid-cols-3">
             <ConflictCell icon={Smartphone} label="Phone" value="Food" meta="phone:9" />
             <ConflictCell icon={Server} label="Web" value="Lifestyle" meta="web:4" />
             <ConflictCell icon={GitBranch} label="Projection" value="Lifestyle" meta="2 candidates retained" />
@@ -86,20 +87,46 @@ export function DocsPage() {
           </p>
         </DocSection>
 
-        <DocSection id="recovery" eyebrow="04" title="Retries, poison, and recovery">
+        <DocSection id="recovery" title="Retries, poison, and recovery">
           <ul className="space-y-4">
             <Guarantee title="Idempotent delivery">The event dot <code>(actorId, sequence)</code> is unique. Exact retries are safe; different bytes under the same dot are rejected.</Guarantee>
             <Guarantee title="Atomic pages">Events, causal frontiers, register state, and visible rows commit in one SQLite transaction.</Guarantee>
             <Guarantee title="Quarantine without wedging">Malformed events are recorded with their original bytes and reason. They are surfaced while unrelated valid events continue.</Guarantee>
             <Guarantee title="Checkpoint bootstrap">A client below retained history installs a content-hash-verified checkpoint rather than guessing across a cursor gap.</Guarantee>
           </ul>
-          <div className="mt-8 flex gap-3 rounded-lg border border-warn/30 bg-pill-warn-bg p-5 text-pill-warn-ink">
+          <div className="mt-8 flex gap-3 border-l-2 border-warn bg-pill-warn-bg px-5 py-4 text-pill-warn-ink">
             <AlertTriangle className="mt-0.5 size-5 shrink-0" />
             <p className="text-sm leading-6">CRDT convergence does not magically preserve every cross-row financial invariant. Compound actions are validated and applied atomically; invariants that are not merge-safe still require coordination or explicit rejection.</p>
           </div>
         </DocSection>
 
-        <DocSection id="self-hosting" eyebrow="05" title="Self-hosting boundary">
+        <DocSection id="api" title="An API you can inspect">
+          <p>
+            The running server generates its OpenAPI document from the routes it actually mounts. That keeps the reference aligned with the deployed surface, including the sync, ledger, wealth, import, and assistant endpoints.
+          </p>
+          <div className="border-y border-rule bg-paper-2 px-5 py-6">
+            <div className="flex items-start gap-4">
+              <Code2 className="mt-1 size-5 shrink-0 text-brand" />
+              <div>
+                <p className="font-semibold text-ink">Browse or automate</p>
+                <p className="mt-1 text-sm leading-6">Use the interactive reference to inspect requests and responses, or consume the OpenAPI JSON from scripts and client generators.</p>
+                <div className="mt-5 flex flex-wrap gap-3">
+                  <a href="/v1/docs" className="inline-flex items-center gap-2 rounded-md bg-brand px-4 py-2.5 text-sm font-semibold text-brand-ink hover:bg-brand-2">
+                    Open API reference <ArrowRight className="size-4" />
+                  </a>
+                  <a href="/v1/openapi.json" className="inline-flex items-center gap-2 rounded-md border border-rule px-4 py-2.5 font-mono text-xs font-semibold text-ink hover:bg-paper-3">
+                    /v1/openapi.json
+                  </a>
+                </div>
+              </div>
+            </div>
+          </div>
+          <p>
+            Authenticate application requests with <code>x-api-key</code>. Sync replicas additionally use their one-time-issued <code>x-sync-actor-token</code>; the reference marks the endpoints where it is required.
+          </p>
+        </DocSection>
+
+        <DocSection id="self-hosting" title="Self-hosting boundary">
           <p>
             The Flutter app stores the working ledger locally. The Hono/SQLite server accepts authenticated CRDT events, serves checkpoints, materializes the web projection, and holds optional AI provider keys. Money stays integer minor units and IDs are client-generated UUIDs.
           </p>
@@ -121,11 +148,10 @@ export function DocsPage() {
   );
 }
 
-function DocSection({ id, eyebrow, title, children }: { id: string; eyebrow: string; title: string; children: React.ReactNode }) {
+function DocSection({ id, title, children }: { id: string; title: string; children: React.ReactNode }) {
   return (
     <section id={id} className="scroll-mt-28 border-b border-rule py-14 last:border-0">
-      <p className="font-mono text-xs text-brand">{eyebrow}</p>
-      <h2 className="mt-3 font-display text-3xl tracking-[-0.035em] sm:text-4xl">{title}</h2>
+      <h2 className="font-display text-3xl tracking-[-0.035em] sm:text-4xl">{title}</h2>
       <div className="mt-6 space-y-6 text-[17px] leading-8 text-ink-2 [&_code]:rounded [&_code]:bg-paper-3 [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-sm [&_code]:text-ink">
         {children}
       </div>
@@ -135,7 +161,7 @@ function DocSection({ id, eyebrow, title, children }: { id: string; eyebrow: str
 
 function Flow() {
   return (
-    <div className="grid gap-3 rounded-lg border border-rule bg-paper-2 p-4 sm:grid-cols-[1fr_auto_1fr_auto_1fr] sm:items-center sm:p-6">
+    <div className="grid gap-3 border-y border-rule bg-paper-2 p-4 sm:grid-cols-[1fr_auto_1fr_auto_1fr] sm:items-center sm:p-6">
       <FlowNode icon={Smartphone} label="Commit locally" />
       <ArrowRight className="hidden size-4 text-ink-2 sm:block" />
       <FlowNode icon={RefreshCw} label="Exchange events" />
@@ -146,7 +172,7 @@ function Flow() {
 }
 
 function FlowNode({ icon: Icon, label }: { icon: typeof Smartphone; label: string }) {
-  return <div className="flex items-center gap-3 rounded-md bg-paper p-4 text-sm font-semibold text-ink"><Icon className="size-4 text-brand" />{label}</div>;
+  return <div className="flex items-center gap-3 p-3 text-sm font-semibold text-ink"><Icon className="size-4 text-brand" />{label}</div>;
 }
 
 function Callout({ title, children }: { title: string; children: React.ReactNode }) {
@@ -154,7 +180,7 @@ function Callout({ title, children }: { title: string; children: React.ReactNode
 }
 
 function ConflictCell({ icon: Icon, label, value, meta }: { icon: typeof Smartphone; label: string; value: string; meta: string }) {
-  return <div className="bg-paper-2 p-5"><div className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.14em] text-ink-2"><Icon className="size-4" />{label}</div><p className="mt-8 font-semibold text-ink">{value}</p><p className="mt-1 font-mono text-xs text-brand">{meta}</p></div>;
+  return <div className="bg-paper-2 p-5"><div className="flex items-center gap-2 text-sm font-semibold text-ink-2"><Icon className="size-4" />{label}</div><p className="mt-8 font-semibold text-ink">{value}</p><p className="mt-1 font-mono text-xs text-brand">{meta}</p></div>;
 }
 
 function Guarantee({ title, children }: { title: string; children: React.ReactNode }) {
@@ -162,5 +188,5 @@ function Guarantee({ title, children }: { title: string; children: React.ReactNo
 }
 
 function Boundary({ icon: Icon, title, items }: { icon: typeof Smartphone; title: string; items: string[] }) {
-  return <div className="rounded-lg border border-rule bg-paper-2 p-6"><Icon className="size-5 text-brand" /><h3 className="mt-5 font-bold text-ink">{title}</h3><ul className="mt-4 space-y-2 text-sm">{items.map((item) => <li key={item} className="flex gap-2"><span className="text-brand">—</span>{item}</li>)}</ul></div>;
+  return <div className="border-t border-rule py-5"><Icon className="size-5 text-brand" /><h3 className="mt-5 font-bold text-ink">{title}</h3><ul className="mt-4 space-y-2 text-sm">{items.map((item) => <li key={item} className="flex gap-2"><span className="text-brand">—</span>{item}</li>)}</ul></div>;
 }
