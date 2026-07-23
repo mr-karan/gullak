@@ -1,7 +1,7 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
-import type { ThreadResponse, ThreadsResponse } from "@/lib/types";
+import type { DeleteThreadsResponse, ThreadResponse, ThreadsResponse } from "@/lib/types";
 
 import { qk } from "./keys";
 
@@ -22,7 +22,29 @@ export function useThreads(enabled = true) {
     queryKey: qk.threads,
     enabled,
     staleTime: 30_000,
-    queryFn: () => api.get<ThreadsResponse>("/v1/messages/threads"),
+    queryFn: () => api.get<ThreadsResponse>("/v1/messages/threads?limit=100"),
+  });
+}
+
+/** Delete one or more complete conversations. Financial actions referenced by
+    their turns are intentionally untouched; this only removes chat history. */
+export function useDeleteThreads() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (threadIds: string[]) =>
+      api.post<DeleteThreadsResponse>("/v1/messages/threads/delete", { threadIds }),
+    onSuccess: (result) => {
+      const deleted = new Set(result.deletedThreadIds);
+      client.setQueryData<ThreadsResponse>(qk.threads, (current) =>
+        current
+          ? { threads: current.threads.filter((thread) => !deleted.has(thread.threadId)) }
+          : current,
+      );
+      for (const threadId of result.deletedThreadIds) {
+        client.removeQueries({ queryKey: qk.thread(threadId) });
+      }
+      void client.invalidateQueries({ queryKey: qk.threads });
+    },
   });
 }
 

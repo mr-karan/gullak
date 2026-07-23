@@ -113,6 +113,10 @@ const threadsQuery = z.object({
   limit: z.coerce.number().int().min(1).max(MAX_THREADS).optional(),
 });
 
+const deleteThreadsBody = z.object({
+  threadIds: z.array(z.string().min(1).max(128)).min(1).max(MAX_THREADS),
+});
+
 /// "web:1a2b" → "web"; "whatsapp:+91…" → "whatsapp"; anything else → "http".
 function threadSource(threadId: string): "web" | "whatsapp" | "http" {
   const prefix = threadId.split(":", 1)[0];
@@ -178,6 +182,30 @@ messagesRouter.get("/threads/:threadId", (c) => {
     .all();
   if (turns.length === 0) return c.json({ error: "Not found" }, 404);
   return c.json({ turns });
+});
+
+// Delete whole conversations, never financial rows. A batch endpoint keeps
+// select-all atomic at the database-statement level and avoids N HTTP calls.
+// Missing ids are harmless so a retry after a lost response is idempotent.
+messagesRouter.post("/threads/delete", async (c) => {
+  const db = c.get("db");
+  const parsed = deleteThreadsBody.parse(await c.req.json());
+  const threadIds = [...new Set(parsed.threadIds)];
+  const existing = db
+    .select({ threadId: agentTurns.threadId })
+    .from(agentTurns)
+    .where(inArray(agentTurns.threadId, threadIds))
+    .groupBy(agentTurns.threadId)
+    .all();
+  const existingIds = new Set(existing.map((row) => row.threadId));
+  const result = db
+    .delete(agentTurns)
+    .where(inArray(agentTurns.threadId, threadIds))
+    .run();
+  return c.json({
+    deletedThreadIds: threadIds.filter((threadId) => existingIds.has(threadId)),
+    deletedTurns: result.changes,
+  });
 });
 
 // Direct-action endpoint for the web UI's Undo button. Undo can't go through the

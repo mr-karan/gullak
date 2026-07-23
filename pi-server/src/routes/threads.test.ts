@@ -97,3 +97,46 @@ test("GET /v1/messages/threads/:threadId returns turns ascending; unknown id 404
   const missing = await app.request("/v1/messages/threads/web%3Anope");
   expect(missing.status).toBe(404);
 });
+
+test("POST /v1/messages/threads/delete removes selected conversations only and is retry-safe", async () => {
+  const { app, db } = makeApp();
+  seedTurn(db, "web:delete-one", "user", "Delete this", 1_000);
+  seedTurn(db, "web:delete-one", "assistant", "Okay", 2_000);
+  seedTurn(db, "web:delete-two", "user", "Delete this too", 3_000);
+  seedTurn(db, "web:keep", "user", "Keep this", 4_000);
+
+  const first = await app.request("/v1/messages/threads/delete", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      threadIds: ["web:delete-one", "web:delete-two", "web:delete-one"],
+    }),
+  });
+  expect(first.status).toBe(200);
+  expect(await first.json()).toEqual({
+    deletedThreadIds: ["web:delete-one", "web:delete-two"],
+    deletedTurns: 3,
+  });
+
+  const list = (await (await app.request("/v1/messages/threads")).json()) as {
+    threads: { threadId: string }[];
+  };
+  expect(list.threads.map((thread) => thread.threadId)).toEqual(["web:keep"]);
+
+  const retry = await app.request("/v1/messages/threads/delete", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ threadIds: ["web:delete-one"] }),
+  });
+  expect(await retry.json()).toEqual({ deletedThreadIds: [], deletedTurns: 0 });
+});
+
+test("POST /v1/messages/threads/delete rejects an empty selection", async () => {
+  const { app } = makeApp();
+  const response = await app.request("/v1/messages/threads/delete", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ threadIds: [] }),
+  });
+  expect(response.status).toBe(400);
+});

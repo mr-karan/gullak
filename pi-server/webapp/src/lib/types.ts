@@ -251,6 +251,10 @@ export interface ThreadSummary {
 export interface ThreadsResponse {
   threads: ThreadSummary[];
 }
+export interface DeleteThreadsResponse {
+  deletedThreadIds: string[];
+  deletedTurns: number;
+}
 
 /** One historical turn when resuming a thread. Plain text — no tool/action
     metadata is replayed (historical turns render as flat markdown). */

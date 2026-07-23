@@ -48,6 +48,7 @@ const SPECIAL_SUMMARIES: Record<string, string> = {
   "POST /v1/transactions/ungroup/{parentId}": "Ungroup related transactions",
   "POST /v1/messages/stream": "Stream an assistant response",
   "POST /v1/messages/action": "Apply a reviewed assistant action",
+  "POST /v1/messages/threads/delete": "Delete selected assistant conversations",
   "POST /v1/ai/sms/parse": "Parse a bank SMS into a transaction draft",
   "POST /v1/ai/sms/enrich": "Enrich an SMS transaction draft",
   "POST /v1/ai/quick-entry/parse": "Parse text or a receipt into an expense draft",

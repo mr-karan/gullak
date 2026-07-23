@@ -116,6 +116,7 @@ POST /messages
 POST /messages/stream
 GET  /messages/threads
 GET  /messages/threads/:threadId
+POST /messages/threads/delete
 POST /messages/action
 ```
 

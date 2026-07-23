@@ -1,11 +1,14 @@
 import { useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { CheckSquare2, Square, Trash2 } from "lucide-react";
 
-import { threadQueryOptions, useThreads } from "@/api/threads";
+import { threadQueryOptions, useDeleteThreads, useThreads } from "@/api/threads";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "@/components/ui/sonner";
+import type { ThreadSummary as ThreadSummaryData } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { ConfirmDialog } from "@/pages/holdings/ConfirmDialog";
 import { useChat } from "./ChatProvider";
 
 // Compact relative time ("just now", "2h ago", "3d ago") — no dep, no i18n.
@@ -29,10 +32,14 @@ function relativeTime(ms: number): string {
 // by title client-side, and resumes one on click via ChatProvider.loadThread.
 export function ThreadList({ onSelect }: { onSelect: () => void }) {
   const { data, isLoading, isError } = useThreads(true);
-  const { loadThread, threadId: activeThreadId } = useChat();
+  const { loadThread, reset, isPending, threadId: activeThreadId } = useChat();
+  const deleteThreads = useDeleteThreads();
   const client = useQueryClient();
   const [query, setQuery] = useState("");
   const [loadingId, setLoadingId] = useState<string | null>(null);
+  const [selecting, setSelecting] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(() => new Set());
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   const threads = data?.threads ?? [];
   const filtered = useMemo(() => {
@@ -40,6 +47,8 @@ export function ThreadList({ onSelect }: { onSelect: () => void }) {
     if (!q) return threads;
     return threads.filter((t) => t.title.toLowerCase().includes(q));
   }, [threads, query]);
+  const allFilteredSelected =
+    filtered.length > 0 && filtered.every((thread) => selected.has(thread.threadId));
 
   async function open(threadId: string) {
     if (loadingId) return; // one resume at a time
@@ -56,10 +65,60 @@ export function ThreadList({ onSelect }: { onSelect: () => void }) {
     }
   }
 
+  function leaveSelectionMode() {
+    setSelecting(false);
+    setSelected(new Set());
+  }
+
+  function toggle(threadId: string) {
+    setSelected((current) => {
+      const next = new Set(current);
+      if (next.has(threadId)) next.delete(threadId);
+      else next.add(threadId);
+      return next;
+    });
+  }
+
+  function toggleAllFiltered() {
+    setSelected((current) => {
+      const next = new Set(current);
+      if (allFilteredSelected) {
+        for (const thread of filtered) next.delete(thread.threadId);
+      } else {
+        for (const thread of filtered) next.add(thread.threadId);
+      }
+      return next;
+    });
+  }
+
+  async function confirmDelete() {
+    const threadIds = [...selected];
+    if (threadIds.length === 0 || deleteThreads.isPending || isPending) return;
+    try {
+      await deleteThreads.mutateAsync(threadIds);
+      if (activeThreadId && threadIds.includes(activeThreadId)) reset();
+      setConfirmOpen(false);
+      leaveSelectionMode();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Could not delete conversations";
+      toast.error(message);
+    }
+  }
+
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex flex-col gap-2 px-4 py-3">
-        <span className="text-xs font-medium tracking-wide text-ink-2 uppercase">Chats</span>
+        <div className="flex min-h-8 items-center justify-between gap-3">
+          <span className="text-xs font-medium tracking-wide text-ink-2 uppercase">Chats</span>
+          <button
+            type="button"
+            onClick={() => (selecting ? leaveSelectionMode() : setSelecting(true))}
+            disabled={isLoading || threads.length === 0 || deleteThreads.isPending}
+            className="min-h-8 whitespace-nowrap rounded-md px-2 text-xs font-semibold text-ink-2 transition-colors hover:bg-paper-3 hover:text-ink disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {selecting ? "Cancel" : "Select"}
+          </button>
+        </div>
         <Input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
@@ -68,6 +127,28 @@ export function ThreadList({ onSelect }: { onSelect: () => void }) {
           aria-label="Search conversations"
         />
       </div>
+
+      {selecting ? (
+        <div className="flex min-h-11 items-center gap-2 border-y border-rule px-4 text-xs">
+          <button
+            type="button"
+            onClick={toggleAllFiltered}
+            disabled={filtered.length === 0 || deleteThreads.isPending}
+            className="min-h-9 whitespace-nowrap rounded-md px-2 font-semibold text-ink-2 transition-colors hover:bg-paper-3 hover:text-ink disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {allFilteredSelected ? "Clear all" : "Select all"}
+          </button>
+          <span className="ml-auto whitespace-nowrap text-ink-2">{selected.size} selected</span>
+          <button
+            type="button"
+            onClick={() => setConfirmOpen(true)}
+            disabled={selected.size === 0 || deleteThreads.isPending || isPending}
+            className="inline-flex min-h-9 items-center gap-1.5 whitespace-nowrap rounded-md px-2 font-semibold text-neg transition-colors hover:bg-pill-neg-bg disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <Trash2 className="size-3.5" /> Delete
+          </button>
+        </div>
+      ) : null}
 
       <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-4">
         {isLoading ? (
@@ -94,40 +175,72 @@ export function ThreadList({ onSelect }: { onSelect: () => void }) {
               const busy = t.threadId === loadingId;
               return (
                 <li key={t.threadId}>
-                  <button
-                    type="button"
-                    onClick={() => open(t.threadId)}
-                    disabled={busy}
-                    aria-current={active ? "true" : undefined}
-                    className={cn(
-                      "flex w-full flex-col gap-0.5 rounded-md px-3 py-2 text-left transition-colors",
-                      "hover:bg-paper-3 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
-                      active && "bg-paper-3",
-                      busy && "opacity-50",
-                    )}
-                  >
-                    <span className="truncate text-sm text-ink">
-                      {t.title || "Untitled chat"}
-                    </span>
-                    <span className="flex items-center gap-1.5 text-[11px] text-ink-2">
-                      <span>{relativeTime(t.lastAt)}</span>
-                      <span aria-hidden>·</span>
-                      <span>
-                        {t.turnCount} {t.turnCount === 1 ? "message" : "messages"}
-                      </span>
-                      {t.source === "whatsapp" ? (
-                        <span className="rounded-sm bg-paper-3 px-1.5 py-0.5 text-[10px] text-ink-2">
-                          WhatsApp
-                        </span>
-                      ) : null}
-                    </span>
-                  </button>
+                  {selecting ? (
+                    <button
+                      type="button"
+                      role="checkbox"
+                      aria-checked={selected.has(t.threadId)}
+                      onClick={() => toggle(t.threadId)}
+                      className={cn(
+                        "flex w-full items-start gap-3 rounded-md px-3 py-2 text-left transition-colors",
+                        "hover:bg-paper-3 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
+                        selected.has(t.threadId) && "bg-paper-3",
+                      )}
+                    >
+                      {selected.has(t.threadId) ? (
+                        <CheckSquare2 className="mt-0.5 size-4 shrink-0 text-brand" />
+                      ) : (
+                        <Square className="mt-0.5 size-4 shrink-0 text-ink-2" />
+                      )}
+                      <ThreadSummary thread={t} />
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => open(t.threadId)}
+                      disabled={busy}
+                      aria-current={active ? "true" : undefined}
+                      className={cn(
+                        "flex w-full flex-col gap-0.5 rounded-md px-3 py-2 text-left transition-colors",
+                        "hover:bg-paper-3 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
+                        active && "bg-paper-3",
+                        busy && "opacity-50",
+                      )}
+                    >
+                      <ThreadSummary thread={t} />
+                    </button>
+                  )}
                 </li>
               );
             })}
           </ul>
         )}
       </div>
+      <ConfirmDialog
+        open={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        title={`Delete ${selected.size} ${selected.size === 1 ? "conversation" : "conversations"}?`}
+        description="This removes the selected chat history. Transactions and other financial records created from those conversations are not deleted."
+        confirmLabel={deleteThreads.isPending ? "Deleting…" : "Delete"}
+        onConfirm={() => void confirmDelete()}
+        pending={deleteThreads.isPending}
+      />
     </div>
+  );
+}
+
+function ThreadSummary({ thread }: { thread: ThreadSummaryData }) {
+  return (
+    <span className="min-w-0 flex-1">
+      <span className="block truncate text-sm text-ink">{thread.title || "Untitled chat"}</span>
+      <span className="flex items-center gap-1.5 text-[11px] text-ink-2">
+        <span>{relativeTime(thread.lastAt)}</span>
+        <span aria-hidden>·</span>
+        <span>{thread.turnCount} {thread.turnCount === 1 ? "message" : "messages"}</span>
+        {thread.source === "whatsapp" ? (
+          <span className="rounded-sm bg-paper-3 px-1.5 py-0.5 text-[10px] text-ink-2">WhatsApp</span>
+        ) : null}
+      </span>
+    </span>
   );
 }
